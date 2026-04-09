@@ -1,12 +1,12 @@
 /*
  * CollectionPage: 50枚カードコレクション画面
  * カテゴリタブ + レア度フィルタ付き
- * レア度別カード枠: N=グレー, R=青, SR=金, SSR=虹/紫
+ * レア度別カード枠: N=グレー, R=青, SR=金, SSR=虹/紫（CSS実装）
  * ファンタジーRPG風ダークブルー＋ゴールドアクセント
  */
 import { useState, useMemo } from 'react';
 import { COLLECTION_CARDS } from '@/lib/cardData';
-import { CARD_RARITY_COLORS, CARD_CATEGORY_INFO, CARD_CATEGORY_IMAGES } from '@/lib/constants';
+import { CARD_RARITY_COLORS, CARD_CATEGORY_INFO } from '@/lib/constants';
 import type { CollectionCard, CollectionRarity } from '@/lib/types';
 
 const categoryTabs = [
@@ -26,32 +26,10 @@ const rarityTabs: { id: string; label: string }[] = [
   { id: 'SSR', label: 'SSR' },
 ];
 
-// レア度別の枠スタイル
-function getCardBorderStyle(rarity: CollectionRarity, owned: boolean) {
-  if (!owned) return { border: '2px solid rgba(255,255,255,0.06)' };
-  const color = CARD_RARITY_COLORS[rarity];
-  switch (rarity) {
-    case 'SSR':
-      return {
-        border: `2px solid ${color}`,
-        boxShadow: `0 0 12px ${color}55, 0 0 24px ${color}22, 0 2px 8px rgba(0,0,0,0.4)`,
-      };
-    case 'SR':
-      return {
-        border: `2px solid ${color}cc`,
-        boxShadow: `0 0 8px ${color}33, 0 2px 8px rgba(0,0,0,0.3)`,
-      };
-    case 'R':
-      return {
-        border: `2px solid ${color}99`,
-        boxShadow: `0 2px 6px rgba(0,0,0,0.3)`,
-      };
-    default:
-      return {
-        border: `2px solid ${color}66`,
-        boxShadow: `0 1px 4px rgba(0,0,0,0.2)`,
-      };
-  }
+// レア度別のカード枠CSSクラス名を取得
+function getCardFrameClass(rarity: CollectionRarity, owned: boolean): string {
+  if (!owned) return 'card-frame-locked';
+  return `card-frame-${rarity.toLowerCase()}`;
 }
 
 // レア度バッジの背景
@@ -133,7 +111,7 @@ export default function CollectionPage() {
       {/* レア度フィルタ */}
       <div className="flex gap-1 overflow-x-auto pb-3 mb-4" style={{ scrollbarWidth: 'none' }}>
         {rarityTabs.map((tab) => {
-          const color = tab.id !== 'all' ? CARD_RARITY_COLORS[tab.id] : '#ffd700';
+          const color = tab.id !== 'all' ? CARD_RARITY_COLORS[tab.id as CollectionRarity] : '#ffd700';
           return (
             <button key={tab.id} onClick={() => setActiveRarity(tab.id)}
               className="flex-shrink-0 px-2.5 py-1 rounded-md text-[10px] font-bold transition-all"
@@ -153,16 +131,12 @@ export default function CollectionPage() {
       <div className="grid grid-cols-3 gap-2.5">
         {filteredCards.map((card, i) => {
           const owned = ownedCardIds.has(card.id);
-          const borderStyle = getCardBorderStyle(card.rarity, owned);
+          const frameClass = getCardFrameClass(card.rarity, owned);
           return (
             <button key={card.id} onClick={() => owned ? setSelectedCard(card) : null}
-              className="rounded-xl overflow-hidden transition-all duration-200 animate-slide-up relative"
+              className={`rounded-xl overflow-hidden transition-all duration-200 animate-slide-up relative ${frameClass}`}
               style={{
                 animationDelay: `${i * 30}ms`,
-                ...borderStyle,
-                background: owned
-                  ? 'linear-gradient(135deg, rgba(21,29,59,0.95), rgba(14,20,45,0.95))'
-                  : 'rgba(255,255,255,0.02)',
                 opacity: owned ? 1 : 0.35,
                 filter: owned ? 'none' : 'grayscale(1)',
               }}>
@@ -222,12 +196,7 @@ export default function CollectionPage() {
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6"
           style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(4px)' }}
           onClick={() => setSelectedCard(null)}>
-          <div className="w-full max-w-[280px] rounded-2xl overflow-hidden animate-bounce-in relative"
-            style={{
-              border: `3px solid ${CARD_RARITY_COLORS[selectedCard.rarity]}`,
-              boxShadow: `0 0 30px ${CARD_RARITY_COLORS[selectedCard.rarity]}44, 0 0 60px ${CARD_RARITY_COLORS[selectedCard.rarity]}22, 0 8px 32px rgba(0,0,0,0.5)`,
-              background: 'linear-gradient(135deg, rgba(21,29,59,0.98), rgba(11,17,40,0.98))',
-            }}
+          <div className={`w-full max-w-[280px] rounded-2xl overflow-hidden animate-bounce-in relative card-frame-modal-${selectedCard.rarity.toLowerCase()}`}
             onClick={(e) => e.stopPropagation()}>
             {/* 角の装飾 */}
             <div className="absolute top-1 left-1 w-3 h-3 border-t-2 border-l-2 rounded-tl-sm" style={{ borderColor: `${CARD_RARITY_COLORS[selectedCard.rarity]}88` }} />
@@ -273,8 +242,92 @@ export default function CollectionPage() {
         </div>
       )}
 
-      {/* SSR用シマーアニメーション */}
+      {/* カード枠スタイル定義 */}
       <style>{`
+        /* N（ノーマル）: シンプルなグレー枠 */
+        .card-frame-n {
+          border: 2px solid #9ca3af;
+          box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+          background: linear-gradient(135deg, rgba(21,29,59,0.95), rgba(14,20,45,0.95));
+        }
+
+        /* R（レア）: ブルー枠 */
+        .card-frame-r {
+          border: 2px solid #3b82f6;
+          box-shadow: 0 0 8px rgba(59,130,246,0.3), 0 2px 6px rgba(0,0,0,0.3);
+          background: linear-gradient(135deg, rgba(21,29,59,0.95), rgba(14,20,45,0.95));
+        }
+
+        /* SR（スーパーレア）: ゴールド枠 */
+        .card-frame-sr {
+          border: 3px solid #f59e0b;
+          box-shadow: 0 0 12px rgba(245,158,11,0.4), 0 0 24px rgba(245,158,11,0.15), 0 2px 8px rgba(0,0,0,0.3);
+          background: linear-gradient(135deg, rgba(21,29,59,0.95), rgba(14,20,45,0.95));
+          position: relative;
+        }
+
+        .card-frame-sr::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          border: 1px solid rgba(245,158,11,0.3);
+          border-radius: 0.75rem;
+          pointer-events: none;
+          margin: 2px;
+        }
+
+        /* SSR（スーパースーパーレア）: 虹色枠 */
+        .card-frame-ssr {
+          border: 3px solid;
+          border-image: linear-gradient(135deg, #a855f7, #ec4899, #8b5cf6) 1;
+          box-shadow: 0 0 16px rgba(168,85,247,0.5), 0 0 32px rgba(236,72,153,0.2), 0 2px 8px rgba(0,0,0,0.4);
+          background: linear-gradient(135deg, rgba(21,29,59,0.95), rgba(14,20,45,0.95));
+          position: relative;
+        }
+
+        .card-frame-ssr::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(135deg, rgba(168,85,247,0.1), rgba(236,72,153,0.05), rgba(139,92,246,0.1));
+          border-radius: 0.75rem;
+          pointer-events: none;
+          animation: shimmer 3s ease-in-out infinite;
+        }
+
+        /* 未所持カード */
+        .card-frame-locked {
+          border: 2px solid rgba(255,255,255,0.06);
+          box-shadow: none;
+          background: rgba(255,255,255,0.02);
+        }
+
+        /* モーダル用カード枠 */
+        .card-frame-modal-n {
+          border: 2px solid #9ca3af;
+          box-shadow: 0 0 30px rgba(156,163,175,0.3), 0 8px 32px rgba(0,0,0,0.5);
+          background: linear-gradient(135deg, rgba(21,29,59,0.98), rgba(11,17,40,0.98));
+        }
+
+        .card-frame-modal-r {
+          border: 2px solid #3b82f6;
+          box-shadow: 0 0 30px rgba(59,130,246,0.4), 0 0 60px rgba(59,130,246,0.15), 0 8px 32px rgba(0,0,0,0.5);
+          background: linear-gradient(135deg, rgba(21,29,59,0.98), rgba(11,17,40,0.98));
+        }
+
+        .card-frame-modal-sr {
+          border: 3px solid #f59e0b;
+          box-shadow: 0 0 30px rgba(245,158,11,0.4), 0 0 60px rgba(245,158,11,0.2), 0 8px 32px rgba(0,0,0,0.5);
+          background: linear-gradient(135deg, rgba(21,29,59,0.98), rgba(11,17,40,0.98));
+        }
+
+        .card-frame-modal-ssr {
+          border: 3px solid;
+          border-image: linear-gradient(135deg, #a855f7, #ec4899, #8b5cf6) 1;
+          box-shadow: 0 0 30px rgba(168,85,247,0.5), 0 0 60px rgba(168,85,247,0.25), 0 8px 32px rgba(0,0,0,0.5);
+          background: linear-gradient(135deg, rgba(21,29,59,0.98), rgba(11,17,40,0.98));
+        }
+
         @keyframes shimmer {
           0%, 100% { opacity: 0.3; }
           50% { opacity: 0.8; }
