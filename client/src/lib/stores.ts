@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { User, GameResult } from './types';
+import type { User, GameResult, AvatarType } from './types';
 import { MOCK_USER } from './mockData';
 
 // User Store
@@ -7,6 +7,7 @@ interface UserState {
   user: User;
   setUser: (user: User) => void;
   setNickname: (nickname: string) => void;
+  setAvatarType: (avatarType: AvatarType) => void;
   updateAlt: (amount: number) => void;
   addTotalAlt: (amount: number) => void;
 }
@@ -16,6 +17,8 @@ export const useUserStore = create<UserState>((set) => ({
   setUser: (user) => set({ user }),
   setNickname: (nickname) =>
     set((state) => ({ user: { ...state.user, nickname } })),
+  setAvatarType: (avatarType) =>
+    set((state) => ({ user: { ...state.user, avatarType } })),
   updateAlt: (amount) =>
     set((state) => ({
       user: {

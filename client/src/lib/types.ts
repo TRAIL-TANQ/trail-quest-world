@@ -35,11 +35,14 @@ export interface GameResult {
 // User types
 export type ClassId = 'kids' | 'starter' | 'basic' | 'advance' | 'limitless';
 
+export type AvatarType = 'boy' | 'girl';
+
 export interface User {
   id: string;
   nickname: string;
   classId: ClassId;
   avatarUrl: string;
+  avatarType: AvatarType;
   titleId?: string;
   level: number;
   totalAlt: number;

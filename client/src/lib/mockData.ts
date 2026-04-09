@@ -5,6 +5,7 @@ export const MOCK_USER: User = {
   nickname: 'さとる',
   classId: 'basic',
   avatarUrl: '',
+  avatarType: 'boy',
   titleId: 'beginner',
   level: 5,
   totalAlt: 1240,

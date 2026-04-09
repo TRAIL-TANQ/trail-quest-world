@@ -1,19 +1,23 @@
 /*
- * LoginPage: Fantasy RPG adventurer registration
- * Gold ornate styling with character art
+ * LoginPage: Fantasy RPG adventurer registration with avatar selection
+ * Gold ornate styling with character art + boy/girl toggle
  */
 import { useState } from 'react';
 import { useLocation } from 'wouter';
 import { useUserStore } from '@/lib/stores';
 import { IMAGES } from '@/lib/constants';
+import type { AvatarType } from '@/lib/types';
 
 export default function LoginPage() {
   const [, navigate] = useLocation();
   const setNickname = useUserStore((s) => s.setNickname);
+  const setAvatarType = useUserStore((s) => s.setAvatarType);
   const [name, setName] = useState('');
+  const [selectedAvatar, setSelectedAvatar] = useState<AvatarType>('boy');
 
   const handleStart = () => {
     if (name.trim()) setNickname(name.trim());
+    setAvatarType(selectedAvatar);
     navigate('/');
   };
 
@@ -26,18 +30,70 @@ export default function LoginPage() {
         <div className="absolute inset-0" style={{ background: 'radial-gradient(circle at 50% 40%, rgba(255,215,0,0.06), transparent 70%)' }} />
       </div>
 
-      <div className="relative z-10 w-full max-w-[320px]">
+      <div className="relative z-10 w-full max-w-[340px]">
         {/* Logo area */}
-        <div className="text-center mb-6">
-          <div className="w-20 h-20 mx-auto mb-3 rounded-full overflow-hidden"
-            style={{ border: '3px solid rgba(255,215,0,0.4)', boxShadow: '0 0 20px rgba(255,215,0,0.2)' }}>
-            <img src={IMAGES.CHARACTER} alt="" className="w-full h-full object-cover object-top" />
-          </div>
+        <div className="text-center mb-5">
           <h1 className="text-2xl font-bold mb-1" style={{ color: '#ffd700', textShadow: '0 0 20px rgba(255,215,0,0.3)', fontFamily: 'var(--font-cinzel), serif' }}>
             TRAIL QUEST
           </h1>
           <p className="text-sm tracking-[0.3em]" style={{ color: 'rgba(255,215,0,0.5)', fontFamily: 'var(--font-cinzel), serif' }}>WORLD</p>
           <p className="text-xs text-amber-200/30 mt-2">進むたびに強くなる 学びのゲームワールド</p>
+        </div>
+
+        {/* Avatar Selection */}
+        <div className="mb-4">
+          <label className="text-xs font-bold block mb-3 text-amber-200/50 text-center">キャラクターを選ぼう</label>
+          <div className="flex justify-center gap-5">
+            {/* Boy */}
+            <button
+              onClick={() => setSelectedAvatar('boy')}
+              className="relative flex flex-col items-center transition-all duration-300"
+              style={{ transform: selectedAvatar === 'boy' ? 'scale(1.05)' : 'scale(0.95)', opacity: selectedAvatar === 'boy' ? 1 : 0.5 }}
+            >
+              <div className="w-24 h-24 rounded-full overflow-hidden relative"
+                style={{
+                  border: selectedAvatar === 'boy' ? '3px solid #ffd700' : '3px solid rgba(255,215,0,0.15)',
+                  boxShadow: selectedAvatar === 'boy' ? '0 0 20px rgba(255,215,0,0.4), 0 0 40px rgba(255,215,0,0.1)' : 'none',
+                  transition: 'all 0.3s ease',
+                }}>
+                <img src={IMAGES.CHARACTER_BOY} alt="男の子" className="w-full h-full object-cover object-top" />
+              </div>
+              {selectedAvatar === 'boy' && (
+                <div className="absolute -top-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center text-xs"
+                  style={{ background: 'linear-gradient(135deg, #ffd700, #d4a500)', color: '#0b1128', boxShadow: '0 2px 8px rgba(255,215,0,0.4)' }}>
+                  ✓
+                </div>
+              )}
+              <span className="text-xs mt-2 font-medium" style={{ color: selectedAvatar === 'boy' ? '#ffd700' : 'rgba(255,215,0,0.35)' }}>
+                男の子
+              </span>
+            </button>
+
+            {/* Girl */}
+            <button
+              onClick={() => setSelectedAvatar('girl')}
+              className="relative flex flex-col items-center transition-all duration-300"
+              style={{ transform: selectedAvatar === 'girl' ? 'scale(1.05)' : 'scale(0.95)', opacity: selectedAvatar === 'girl' ? 1 : 0.5 }}
+            >
+              <div className="w-24 h-24 rounded-full overflow-hidden relative"
+                style={{
+                  border: selectedAvatar === 'girl' ? '3px solid #ffd700' : '3px solid rgba(255,215,0,0.15)',
+                  boxShadow: selectedAvatar === 'girl' ? '0 0 20px rgba(255,215,0,0.4), 0 0 40px rgba(255,215,0,0.1)' : 'none',
+                  transition: 'all 0.3s ease',
+                }}>
+                <img src={IMAGES.CHARACTER_GIRL} alt="女の子" className="w-full h-full object-cover object-top" />
+              </div>
+              {selectedAvatar === 'girl' && (
+                <div className="absolute -top-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center text-xs"
+                  style={{ background: 'linear-gradient(135deg, #ffd700, #d4a500)', color: '#0b1128', boxShadow: '0 2px 8px rgba(255,215,0,0.4)' }}>
+                  ✓
+                </div>
+              )}
+              <span className="text-xs mt-2 font-medium" style={{ color: selectedAvatar === 'girl' ? '#ffd700' : 'rgba(255,215,0,0.35)' }}>
+                女の子
+              </span>
+            </button>
+          </div>
         </div>
 
         {/* Input card */}
@@ -75,7 +131,7 @@ export default function LoginPage() {
           </button>
 
           <p className="text-center text-[10px] text-amber-200/20 mt-3">
-            ニックネームは後から変更できます
+            ニックネームとキャラクターは後から変更できます
           </p>
         </div>
       </div>

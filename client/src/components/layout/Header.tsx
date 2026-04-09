@@ -33,7 +33,7 @@ export default function Header() {
           }}
         >
           <img
-            src={IMAGES.CHARACTER}
+            src={user.avatarType === 'girl' ? IMAGES.CHARACTER_GIRL : IMAGES.CHARACTER_BOY}
             alt="avatar"
             className="w-full h-full object-cover object-top"
           />
