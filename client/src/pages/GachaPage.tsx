@@ -1,14 +1,21 @@
 /*
  * GachaPage: Fantasy RPG gacha with treasure chest image buttons
- * Gold ornate styling + full animation system (shake → burst → flip → reveal)
- * CollectionStore連携: 引いたカードをコレクションに自動反映
+ * - 天井システム: ノーマル50回/プレミアム30回でSSR確定
+ * - 10連機能: 10枚一括引き（SR以上1枚確定）
+ * - ガチャ履歴: 過去100件の引き結果を表示
+ * Gold ornate styling + full animation system
  */
 import { useState, useMemo, useCallback } from 'react';
 import { GACHA_COSTS, RARITY_LABELS, RARITY_COLORS, RARITY_STARS, IMAGES } from '@/lib/constants';
 import { COLLECTION_CARDS, GACHA_RARITY_RATES } from '@/lib/cardData';
 import { useUserStore, useGachaStore, useCollectionStore } from '@/lib/stores';
+import type { GachaHistoryEntry } from '@/lib/stores';
 import type { CollectionCard, CollectionRarity } from '@/lib/types';
 import { toast } from 'sonner';
+
+// --- Constants ---
+const PITY_LIMIT_NORMAL = 50;   // ノーマル天井
+const PITY_LIMIT_PREMIUM = 30;  // プレミアム天井
 
 // コレクションカードをガチャ排出用にレア度別プールに分類
 const CARD_POOLS: Record<CollectionRarity, CollectionCard[]> = {
@@ -17,26 +24,6 @@ const CARD_POOLS: Record<CollectionRarity, CollectionCard[]> = {
   SR: COLLECTION_CARDS.filter((c) => c.rarity === 'SR'),
   SSR: COLLECTION_CARDS.filter((c) => c.rarity === 'SSR'),
 };
-
-function rollCollectionCard(premium: boolean): CollectionCard {
-  const rand = Math.random();
-  let rarity: CollectionRarity;
-  if (premium) {
-    // プレミアム: SSR 15%, SR 35%, R 50% (N排出なし)
-    if (rand < 0.15) rarity = 'SSR';
-    else if (rand < 0.50) rarity = 'SR';
-    else rarity = 'R';
-  } else {
-    // ノーマル: SSR 1%, SR 9%, R 30%, N 60%
-    if (rand < GACHA_RARITY_RATES.SSR) rarity = 'SSR';
-    else if (rand < GACHA_RARITY_RATES.SSR + GACHA_RARITY_RATES.SR) rarity = 'SR';
-    else if (rand < GACHA_RARITY_RATES.SSR + GACHA_RARITY_RATES.SR + GACHA_RARITY_RATES.R) rarity = 'R';
-    else rarity = 'N';
-  }
-  const pool = CARD_POOLS[rarity];
-  if (pool.length === 0) return COLLECTION_CARDS[Math.floor(Math.random() * COLLECTION_CARDS.length)];
-  return pool[Math.floor(Math.random() * pool.length)];
-}
 
 const RARITY_COLOR_MAP: Record<CollectionRarity, string> = {
   N: '#9ca3af',
@@ -53,21 +40,51 @@ const categoryEmoji: Record<string, string> = {
   discovery: '🔭',
 };
 
-type GachaPhase = 'idle' | 'shake' | 'burst' | 'flip' | 'reveal';
+function pickFromPool(rarity: CollectionRarity): CollectionCard {
+  const pool = CARD_POOLS[rarity];
+  if (pool.length === 0) return COLLECTION_CARDS[Math.floor(Math.random() * COLLECTION_CARDS.length)];
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function rollRarity(premium: boolean, pityCount: number): CollectionRarity {
+  const rand = Math.random();
+  if (premium) {
+    // プレミアム天井: 30回でSSR確定
+    if (pityCount >= PITY_LIMIT_PREMIUM - 1) return 'SSR';
+    if (rand < 0.15) return 'SSR';
+    if (rand < 0.50) return 'SR';
+    return 'R';
+  } else {
+    // ノーマル天井: 50回でSSR確定
+    if (pityCount >= PITY_LIMIT_NORMAL - 1) return 'SSR';
+    if (rand < GACHA_RARITY_RATES.SSR) return 'SSR';
+    if (rand < GACHA_RARITY_RATES.SSR + GACHA_RARITY_RATES.SR) return 'SR';
+    if (rand < GACHA_RARITY_RATES.SSR + GACHA_RARITY_RATES.SR + GACHA_RARITY_RATES.R) return 'R';
+    return 'N';
+  }
+}
+
+type GachaPhase = 'idle' | 'shake' | 'burst' | 'flip' | 'reveal' | 'multi_reveal';
 
 export default function GachaPage() {
   const user = useUserStore((s) => s.user);
   const updateAlt = useUserStore((s) => s.updateAlt);
   const pityCount = useGachaStore((s) => s.pityCount);
+  const premiumPityCount = useGachaStore((s) => s.premiumPityCount);
   const incrementPity = useGachaStore((s) => s.incrementPity);
   const resetPity = useGachaStore((s) => s.resetPity);
+  const addHistory = useGachaStore((s) => s.addHistory);
+  const history = useGachaStore((s) => s.history);
+  const addCards = useCollectionStore((s) => s.addCards);
   const addCard = useCollectionStore((s) => s.addCard);
   const ownedCardIds = useCollectionStore((s) => s.ownedCardIds);
 
   const [phase, setPhase] = useState<GachaPhase>('idle');
   const [pulledCard, setPulledCard] = useState<CollectionCard | null>(null);
+  const [pulledCards, setPulledCards] = useState<CollectionCard[]>([]);
   const [gachaType, setGachaType] = useState<'normal' | 'premium'>('normal');
   const [isDuplicate, setIsDuplicate] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   const burstParticles = useMemo(() =>
     Array.from({ length: 20 }, (_, i) => {
@@ -76,40 +93,121 @@ export default function GachaPage() {
       return { id: i, tx: Math.cos(angle) * dist, ty: Math.sin(angle) * dist, delay: Math.random() * 0.3, size: 3 + Math.random() * 5 };
     }), []);
 
+  // 1回引き
   const handlePull = useCallback((type: 'normal' | 'premium') => {
     const cost = type === 'normal' ? GACHA_COSTS.NORMAL : GACHA_COSTS.PREMIUM;
     if (user.currentAlt < cost) { toast.error('ALTが足りません'); return; }
-    if (phase !== 'idle' && phase !== 'reveal') return;
+    if (phase !== 'idle' && phase !== 'reveal' && phase !== 'multi_reveal') return;
 
     updateAlt(-cost);
     setGachaType(type);
     setPulledCard(null);
+    setPulledCards([]);
     setIsDuplicate(false);
     setPhase('shake');
 
-    const card = rollCollectionCard(type === 'premium');
-    const isSSR = card.rarity === 'SSR';
-    const isSR = card.rarity === 'SR';
+    const currentPity = type === 'premium' ? premiumPityCount : pityCount;
+    const rarity = rollRarity(type === 'premium', currentPity);
+    const card = pickFromPool(rarity);
 
-    if (isSSR || isSR) { resetPity(); } else { incrementPity(); }
+    if (rarity === 'SSR' || rarity === 'SR') {
+      resetPity(type === 'premium');
+    } else {
+      incrementPity(type === 'premium');
+    }
 
-    // コレクションに追加（重複チェック）
     const alreadyOwned = ownedCardIds.has(card.id);
     setIsDuplicate(alreadyOwned);
     addCard(card.id);
 
+    // 履歴に追加
+    addHistory({
+      id: `${Date.now()}-${Math.random()}`,
+      card,
+      gachaType: type,
+      timestamp: Date.now(),
+      isDuplicate: alreadyOwned,
+    });
+
+    const isSSR = rarity === 'SSR';
+    const isSR = rarity === 'SR';
     const burstDuration = isSSR ? 2000 : isSR ? 1500 : 800;
     setTimeout(() => { setPulledCard(card); setPhase('burst'); }, 500);
     setTimeout(() => setPhase('flip'), 500 + burstDuration);
     setTimeout(() => setPhase('reveal'), 500 + burstDuration + 600);
-  }, [user.currentAlt, phase, updateAlt, incrementPity, resetPity, addCard, ownedCardIds]);
+  }, [user.currentAlt, phase, updateAlt, pityCount, premiumPityCount, incrementPity, resetPity, addCard, addHistory, ownedCardIds]);
 
-  const handleDismiss = () => { setPhase('idle'); setPulledCard(null); };
+  // 10連引き
+  const handlePull10 = useCallback((type: 'normal' | 'premium') => {
+    const cost = (type === 'normal' ? GACHA_COSTS.NORMAL : GACHA_COSTS.PREMIUM) * 10;
+    if (user.currentAlt < cost) { toast.error('ALTが足りません'); return; }
+    if (phase !== 'idle' && phase !== 'reveal' && phase !== 'multi_reveal') return;
+
+    updateAlt(-cost);
+    setGachaType(type);
+    setPulledCard(null);
+    setPhase('shake');
+
+    let currentPity = type === 'premium' ? premiumPityCount : pityCount;
+    const cards: CollectionCard[] = [];
+    let hasSROrAbove = false;
+
+    for (let i = 0; i < 10; i++) {
+      // 10枚目はSR以上確定（プレミアムはSR以上、ノーマルはSR以上）
+      let rarity: CollectionRarity;
+      if (i === 9 && !hasSROrAbove) {
+        // 最後の1枚でSR以上確定
+        rarity = type === 'premium'
+          ? (Math.random() < 0.30 ? 'SSR' : 'SR')
+          : (Math.random() < 0.10 ? 'SSR' : 'SR');
+        resetPity(type === 'premium');
+        currentPity = 0;
+      } else {
+        rarity = rollRarity(type === 'premium', currentPity);
+        if (rarity === 'SSR' || rarity === 'SR') {
+          hasSROrAbove = true;
+          resetPity(type === 'premium');
+          currentPity = 0;
+        } else {
+          currentPity++;
+        }
+      }
+      cards.push(pickFromPool(rarity));
+    }
+
+    // ストアのpityを最終値に更新
+    if (type === 'premium') {
+      // premiumPityCountを現在値から更新
+      for (let i = 0; i < currentPity; i++) incrementPity(true);
+    } else {
+      for (let i = 0; i < currentPity; i++) incrementPity(false);
+    }
+
+    const cardIds = cards.map((c) => c.id);
+    addCards(cardIds);
+
+    // 履歴に追加（10枚）
+    cards.forEach((card) => {
+      addHistory({
+        id: `${Date.now()}-${Math.random()}`,
+        card,
+        gachaType: type,
+        timestamp: Date.now(),
+        isDuplicate: ownedCardIds.has(card.id),
+      });
+    });
+
+    setPulledCards(cards);
+    setTimeout(() => setPhase('multi_reveal'), 1000);
+  }, [user.currentAlt, phase, updateAlt, pityCount, premiumPityCount, incrementPity, resetPity, addCards, addHistory, ownedCardIds]);
+
+  const handleDismiss = () => { setPhase('idle'); setPulledCard(null); setPulledCards([]); };
 
   const rarityColor = pulledCard ? RARITY_COLOR_MAP[pulledCard.rarity] : '#ffd700';
   const isSSR = pulledCard?.rarity === 'SSR';
   const isHighRarity = pulledCard && (pulledCard.rarity === 'SR' || pulledCard.rarity === 'SSR');
-  const pityRemaining = 50 - pityCount;
+  const pityRemaining = PITY_LIMIT_NORMAL - pityCount;
+  const premiumPityRemaining = PITY_LIMIT_PREMIUM - premiumPityCount;
 
   return (
     <div className="relative min-h-full">
@@ -120,39 +218,77 @@ export default function GachaPage() {
       </div>
 
       <div className="relative z-10 px-4 pt-4 pb-4">
-        {/* Title + ALT */}
+        {/* Title + ALT + History Button */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <span className="text-xl">🎰</span>
             <h1 className="text-lg font-bold" style={{ color: '#ffd700', textShadow: '0 0 10px rgba(255,215,0,0.3)' }}>ガチャ</h1>
           </div>
-          <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg"
-            style={{ background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.2)' }}>
-            <div className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-[7px] font-bold"
-              style={{ background: 'linear-gradient(135deg, #ffd700, #f0a500)', color: '#0b1128' }}>A</div>
-            <span className="text-xs font-bold font-[var(--font-orbitron)]" style={{ color: '#ffd700' }}>{user.currentAlt.toLocaleString()}</span>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg"
+              style={{ background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.2)' }}>
+              <div className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-[7px] font-bold"
+                style={{ background: 'linear-gradient(135deg, #ffd700, #f0a500)', color: '#0b1128' }}>A</div>
+              <span className="text-xs font-bold font-[var(--font-orbitron)]" style={{ color: '#ffd700' }}>{user.currentAlt.toLocaleString()}</span>
+            </div>
+            <button
+              onClick={() => setShowHistory(!showHistory)}
+              className="w-7 h-7 rounded-lg flex items-center justify-center transition-all"
+              style={showHistory
+                ? { background: 'rgba(255,215,0,0.15)', border: '1px solid rgba(255,215,0,0.4)' }
+                : { background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>
+              <span className="text-sm">📜</span>
+            </button>
           </div>
         </div>
 
-        {/* Animation Area (shake / burst / flip / reveal) */}
+        {/* 履歴パネル */}
+        {showHistory && (
+          <div className="mb-4 rounded-xl overflow-hidden" style={{ background: 'rgba(11,17,40,0.95)', border: '1px solid rgba(255,215,0,0.15)' }}>
+            <div className="px-3 py-2 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(255,215,0,0.1)' }}>
+              <p className="text-[11px] font-bold text-amber-200/70">ガチャ履歴（直近{Math.min(history.length, 20)}件）</p>
+              <span className="text-[10px] text-amber-200/30">{history.length}件</span>
+            </div>
+            {history.length === 0 ? (
+              <div className="py-6 text-center">
+                <p className="text-[11px] text-amber-200/30">まだガチャを引いていません</p>
+              </div>
+            ) : (
+              <div className="max-h-48 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+                {history.slice(0, 20).map((entry) => (
+                  <div key={entry.id} className="flex items-center gap-2 px-3 py-1.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                    <img src={entry.card.imageUrl} alt={entry.card.name} className="w-7 h-9 object-cover rounded" style={{ border: `1px solid ${RARITY_COLOR_MAP[entry.card.rarity]}55` }} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-bold text-amber-100 truncate">{entry.card.name}</p>
+                      <p className="text-[9px] text-amber-200/30">{entry.gachaType === 'premium' ? 'プレミアム' : 'ノーマル'}</p>
+                    </div>
+                    <div className="flex flex-col items-end gap-0.5">
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: `${RARITY_COLOR_MAP[entry.card.rarity]}25`, color: RARITY_COLOR_MAP[entry.card.rarity] }}>
+                        {entry.card.rarity}
+                      </span>
+                      {entry.isDuplicate && <span className="text-[8px] text-amber-200/25">重複</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Animation Area */}
         {(phase === 'shake' || phase === 'burst' || phase === 'flip' || phase === 'reveal') && (
           <div className="flex items-center justify-center" style={{ minHeight: '360px' }}>
             {/* SHAKE PHASE */}
             {phase === 'shake' && (
               <div className="text-center">
-                <div className="w-44 h-44 mx-auto flex items-center justify-center"
-                  style={{ animation: 'shake 0.5s ease-in-out' }}>
-                  <img
-                    src={gachaType === 'premium' ? IMAGES.GACHA_PREMIUM_BTN : IMAGES.GACHA_NORMAL_BTN}
-                    alt="宝箱"
-                    className="w-40 h-40 object-contain"
-                    style={{ filter: 'drop-shadow(0 0 20px rgba(255,215,0,0.4))' }}
-                  />
+                <div className="w-44 h-44 mx-auto flex items-center justify-center" style={{ animation: 'shake 0.5s ease-in-out' }}>
+                  <img src={gachaType === 'premium' ? IMAGES.GACHA_PREMIUM_BTN : IMAGES.GACHA_NORMAL_BTN} alt="宝箱"
+                    className="w-40 h-40 object-contain" style={{ filter: 'drop-shadow(0 0 20px rgba(255,215,0,0.4))' }} />
                 </div>
               </div>
             )}
 
-            {/* BURST PHASE - Rarity reveal */}
+            {/* BURST PHASE */}
             {phase === 'burst' && pulledCard && (
               <div className="relative flex items-center justify-center" style={{ width: '280px', height: '280px' }}>
                 {isSSR && (
@@ -202,7 +338,7 @@ export default function GachaPage() {
               </div>
             )}
 
-            {/* REVEAL PHASE */}
+            {/* REVEAL PHASE (1枚) */}
             {phase === 'reveal' && pulledCard && (
               <div className="text-center" style={{ animation: 'scale-in 0.3s ease-out' }}>
                 <div className="mb-3 flex items-center justify-center gap-2">
@@ -216,7 +352,6 @@ export default function GachaPage() {
                     </span>
                   )}
                 </div>
-                {/* カード画像（枠付き） */}
                 <div className="w-52 mx-auto rounded-xl overflow-hidden relative"
                   style={{
                     border: isSSR ? '2px solid transparent' : `2px solid ${rarityColor}`,
@@ -224,16 +359,12 @@ export default function GachaPage() {
                     animation: isSSR ? 'rainbow-border 2s linear infinite' : `glow-pulse 2s ease-in-out infinite`,
                     '--glow-color': rarityColor,
                   } as React.CSSProperties}>
-                  {/* 角の装飾 */}
                   <div className="absolute top-1 left-1 w-2.5 h-2.5 border-t-2 border-l-2 rounded-tl-sm z-10" style={{ borderColor: `${rarityColor}88` }} />
                   <div className="absolute top-1 right-1 w-2.5 h-2.5 border-t-2 border-r-2 rounded-tr-sm z-10" style={{ borderColor: `${rarityColor}88` }} />
                   <div className="absolute bottom-1 left-1 w-2.5 h-2.5 border-b-2 border-l-2 rounded-bl-sm z-10" style={{ borderColor: `${rarityColor}88` }} />
                   <div className="absolute bottom-1 right-1 w-2.5 h-2.5 border-b-2 border-r-2 rounded-br-sm z-10" style={{ borderColor: `${rarityColor}88` }} />
-
-                  {/* カード画像 */}
                   <div className="relative" style={{ aspectRatio: '3/4' }}>
                     <img src={pulledCard.imageUrl} alt={pulledCard.name} className="w-full h-full object-cover" />
-                    {/* スパークルエフェクト（高レア度のみ） */}
                     {isHighRarity && Array.from({ length: 8 }).map((_, i) => (
                       <div key={i} className="absolute w-1 h-1 rounded-full" style={{
                         background: rarityColor,
@@ -243,8 +374,6 @@ export default function GachaPage() {
                       }} />
                     ))}
                   </div>
-
-                  {/* カード名 */}
                   <div className="px-3 py-2 text-center" style={{ background: `linear-gradient(to top, rgba(11,17,40,0.95), rgba(11,17,40,0.7))`, borderTop: `1px solid ${rarityColor}33` }}>
                     <div className="flex justify-center gap-0.5 mb-1">
                       {Array.from({ length: pulledCard.rarity === 'SSR' ? 4 : pulledCard.rarity === 'SR' ? 3 : pulledCard.rarity === 'R' ? 2 : 1 }).map((_, i) => (
@@ -255,121 +384,164 @@ export default function GachaPage() {
                     <p className="text-[10px] text-amber-200/50 mt-0.5">{categoryEmoji[pulledCard.category]} {pulledCard.description.slice(0, 30)}…</p>
                   </div>
                 </div>
-
-                {isDuplicate && (
-                  <p className="text-xs text-amber-200/40 mt-2">すでに持っているカードです</p>
-                )}
-
+                {isDuplicate && <p className="text-xs text-amber-200/40 mt-2">すでに持っているカードです</p>}
                 <button onClick={handleDismiss} className="rpg-btn rpg-btn-gold mt-4 px-8 py-2.5">OK</button>
               </div>
             )}
           </div>
         )}
 
+        {/* 10連REVEAL PHASE */}
+        {phase === 'multi_reveal' && pulledCards.length > 0 && (
+          <div style={{ animation: 'scale-in 0.3s ease-out' }}>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-bold text-amber-200/70">10連結果</p>
+              <div className="flex gap-1">
+                {(['SSR', 'SR', 'R', 'N'] as CollectionRarity[]).map((r) => {
+                  const cnt = pulledCards.filter((c) => c.rarity === r).length;
+                  if (cnt === 0) return null;
+                  return (
+                    <span key={r} className="text-[9px] font-bold px-1.5 py-0.5 rounded"
+                      style={{ background: `${RARITY_COLOR_MAP[r]}20`, color: RARITY_COLOR_MAP[r], border: `1px solid ${RARITY_COLOR_MAP[r]}40` }}>
+                      {r}×{cnt}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="grid grid-cols-5 gap-1.5 mb-4">
+              {pulledCards.map((card, i) => {
+                const rc = RARITY_COLOR_MAP[card.rarity];
+                const isNew = !ownedCardIds.has(card.id);
+                return (
+                  <div key={i} className="relative rounded-lg overflow-hidden"
+                    style={{
+                      border: `2px solid ${rc}`,
+                      boxShadow: card.rarity === 'SSR' ? `0 0 10px ${rc}66` : card.rarity === 'SR' ? `0 0 6px ${rc}44` : 'none',
+                      animation: `scale-in 0.3s ease-out ${i * 0.05}s both`,
+                    }}>
+                    <div style={{ aspectRatio: '3/4' }}>
+                      <img src={card.imageUrl} alt={card.name} className="w-full h-full object-cover" />
+                    </div>
+                    <div className="absolute top-0.5 left-0.5">
+                      <span className="text-[7px] font-bold px-1 py-0.5 rounded" style={{ background: `${rc}cc`, color: '#fff' }}>{card.rarity}</span>
+                    </div>
+                    {isNew && (
+                      <div className="absolute top-0.5 right-0.5">
+                        <span className="text-[7px] font-bold px-1 py-0.5 rounded" style={{ background: 'rgba(34,197,94,0.9)', color: '#fff' }}>NEW</span>
+                      </div>
+                    )}
+                    <div className="px-0.5 py-0.5 text-center" style={{ background: 'rgba(11,17,40,0.85)', borderTop: `1px solid ${rc}33` }}>
+                      <p className="text-[7px] font-bold text-amber-100 truncate">{card.name}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <button onClick={handleDismiss} className="rpg-btn rpg-btn-gold w-full py-2.5">OK</button>
+          </div>
+        )}
+
         {/* IDLE STATE - Treasure Chest Buttons */}
-        {(phase === 'idle') && !pulledCard && (
-          <div className="space-y-5 mt-2">
-            {/* Title area */}
-            <div className="text-center mb-2">
-              <p className="text-sm text-amber-200/60">宝箱をタップしてカードをゲット！</p>
-              <p className="text-[10px] text-amber-200/30 mt-1">あと{pityRemaining}回で★3確定</p>
+        {phase === 'idle' && (
+          <div className="space-y-4 mt-2">
+            {/* 天井カウンター */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-lg px-3 py-2 text-center" style={{ background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.15)' }}>
+                <p className="text-[9px] text-blue-300/50 mb-0.5">ノーマル天井まで</p>
+                <p className="text-sm font-bold text-blue-300">あと{pityRemaining}回</p>
+                <div className="h-1 rounded-full mt-1 overflow-hidden" style={{ background: 'rgba(59,130,246,0.15)' }}>
+                  <div className="h-full rounded-full" style={{ width: `${(pityCount / PITY_LIMIT_NORMAL) * 100}%`, background: 'linear-gradient(90deg, #3b82f6, #60a5fa)' }} />
+                </div>
+              </div>
+              <div className="rounded-lg px-3 py-2 text-center" style={{ background: 'rgba(255,215,0,0.06)', border: '1px solid rgba(255,215,0,0.15)' }}>
+                <p className="text-[9px] text-amber-200/50 mb-0.5">プレミアム天井まで</p>
+                <p className="text-sm font-bold" style={{ color: '#ffd700' }}>あと{premiumPityRemaining}回</p>
+                <div className="h-1 rounded-full mt-1 overflow-hidden" style={{ background: 'rgba(255,215,0,0.15)' }}>
+                  <div className="h-full rounded-full" style={{ width: `${(premiumPityCount / PITY_LIMIT_PREMIUM) * 100}%`, background: 'linear-gradient(90deg, #f59e0b, #ffd700)' }} />
+                </div>
+              </div>
             </div>
 
-            {/* Two treasure chest buttons side by side */}
+            {/* Title area */}
+            <div className="text-center">
+              <p className="text-sm text-amber-200/60">宝箱をタップしてカードをゲット！</p>
+            </div>
+
+            {/* Two treasure chest buttons */}
             <div className="grid grid-cols-2 gap-4">
               {/* Normal Gacha */}
-              <button
-                onClick={() => handlePull('normal')}
-                disabled={user.currentAlt < GACHA_COSTS.NORMAL}
-                className="group relative flex flex-col items-center transition-all active:scale-95 disabled:opacity-30"
-              >
-                <div className="relative w-full aspect-square rounded-2xl overflow-hidden mb-2"
-                  style={{
-                    background: 'linear-gradient(135deg, rgba(59,130,246,0.08), rgba(59,130,246,0.02))',
-                    border: '2px solid rgba(59,130,246,0.3)',
-                    boxShadow: '0 0 20px rgba(59,130,246,0.1), inset 0 0 20px rgba(59,130,246,0.05)',
-                  }}>
-                  <img
-                    src={IMAGES.GACHA_NORMAL_BTN}
-                    alt="ノーマルガチャ"
-                    className="w-full h-full object-contain p-2 transition-transform group-hover:scale-105 group-active:scale-95"
-                    style={{ filter: 'drop-shadow(0 4px 12px rgba(59,130,246,0.3))' }}
-                  />
-                  <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                    style={{ background: 'linear-gradient(135deg, transparent 30%, rgba(255,255,255,0.08) 50%, transparent 70%)' }} />
-                </div>
-                <p className="text-xs font-bold text-blue-300 mb-1">ノーマルガチャ</p>
-                <p className="text-[10px] text-amber-200/30 mb-1.5">N〜SR カード</p>
-                <div className="flex items-center gap-1 px-3 py-1 rounded-lg"
-                  style={{ background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.2)' }}>
-                  <div className="w-3 h-3 rounded-full flex items-center justify-center text-[6px] font-bold"
-                    style={{ background: 'linear-gradient(135deg, #ffd700, #f0a500)', color: '#0b1128' }}>A</div>
-                  <span className="text-xs font-bold" style={{ color: '#ffd700' }}>{GACHA_COSTS.NORMAL}</span>
-                </div>
-              </button>
+              <div className="flex flex-col gap-2">
+                <button onClick={() => handlePull('normal')} disabled={user.currentAlt < GACHA_COSTS.NORMAL}
+                  className="group relative flex flex-col items-center transition-all active:scale-95 disabled:opacity-30">
+                  <div className="relative w-full aspect-square rounded-2xl overflow-hidden mb-2"
+                    style={{ background: 'linear-gradient(135deg, rgba(59,130,246,0.08), rgba(59,130,246,0.02))', border: '2px solid rgba(59,130,246,0.3)', boxShadow: '0 0 20px rgba(59,130,246,0.1)' }}>
+                    <img src={IMAGES.GACHA_NORMAL_BTN} alt="ノーマルガチャ" className="w-full h-full object-contain p-2 transition-transform group-hover:scale-105" style={{ filter: 'drop-shadow(0 4px 12px rgba(59,130,246,0.3))' }} />
+                  </div>
+                  <p className="text-xs font-bold text-blue-300 mb-1">ノーマル×1</p>
+                  <div className="flex items-center gap-1 px-3 py-1 rounded-lg" style={{ background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.2)' }}>
+                    <div className="w-3 h-3 rounded-full flex items-center justify-center text-[6px] font-bold" style={{ background: 'linear-gradient(135deg, #ffd700, #f0a500)', color: '#0b1128' }}>A</div>
+                    <span className="text-xs font-bold" style={{ color: '#ffd700' }}>{GACHA_COSTS.NORMAL}</span>
+                  </div>
+                </button>
+                <button onClick={() => handlePull10('normal')} disabled={user.currentAlt < GACHA_COSTS.NORMAL * 10}
+                  className="group flex items-center justify-center gap-1.5 py-2 rounded-xl transition-all active:scale-95 disabled:opacity-30"
+                  style={{ background: 'linear-gradient(135deg, rgba(59,130,246,0.12), rgba(59,130,246,0.05))', border: '1px solid rgba(59,130,246,0.3)' }}>
+                  <span className="text-[10px] font-bold text-blue-300">10連</span>
+                  <div className="flex items-center gap-0.5">
+                    <div className="w-2.5 h-2.5 rounded-full flex items-center justify-center text-[5px] font-bold" style={{ background: 'linear-gradient(135deg, #ffd700, #f0a500)', color: '#0b1128' }}>A</div>
+                    <span className="text-[10px] font-bold" style={{ color: '#ffd700' }}>{GACHA_COSTS.NORMAL * 10}</span>
+                  </div>
+                  <span className="text-[8px] text-blue-300/60 ml-0.5">SR確定</span>
+                </button>
+              </div>
 
               {/* Premium Gacha */}
-              <button
-                onClick={() => handlePull('premium')}
-                disabled={user.currentAlt < GACHA_COSTS.PREMIUM}
-                className="group relative flex flex-col items-center transition-all active:scale-95 disabled:opacity-30"
-              >
-                <div className="relative w-full aspect-square rounded-2xl overflow-hidden mb-2"
-                  style={{
-                    background: 'linear-gradient(135deg, rgba(255,215,0,0.08), rgba(168,85,247,0.05))',
-                    border: '2px solid rgba(255,215,0,0.4)',
-                    boxShadow: '0 0 24px rgba(255,215,0,0.15), 0 0 48px rgba(168,85,247,0.08), inset 0 0 20px rgba(255,215,0,0.05)',
-                    animation: 'glow-pulse 3s ease-in-out infinite',
-                    '--glow-color': '#ffd700',
-                  } as React.CSSProperties}>
-                  <img
-                    src={IMAGES.GACHA_PREMIUM_BTN}
-                    alt="プレミアムガチャ"
-                    className="w-full h-full object-contain p-1 transition-transform group-hover:scale-105 group-active:scale-95"
-                    style={{ filter: 'drop-shadow(0 4px 16px rgba(255,215,0,0.4))' }}
-                  />
-                  <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                    style={{ background: 'linear-gradient(135deg, transparent 30%, rgba(255,255,255,0.1) 50%, transparent 70%)' }} />
-                  <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded text-[8px] font-bold"
-                    style={{ background: 'linear-gradient(135deg, #ffd700, #f0a500)', color: '#0b1128' }}>
-                    PREMIUM
+              <div className="flex flex-col gap-2">
+                <button onClick={() => handlePull('premium')} disabled={user.currentAlt < GACHA_COSTS.PREMIUM}
+                  className="group relative flex flex-col items-center transition-all active:scale-95 disabled:opacity-30">
+                  <div className="relative w-full aspect-square rounded-2xl overflow-hidden mb-2"
+                    style={{ background: 'linear-gradient(135deg, rgba(255,215,0,0.08), rgba(168,85,247,0.05))', border: '2px solid rgba(255,215,0,0.4)', boxShadow: '0 0 24px rgba(255,215,0,0.15)', animation: 'glow-pulse 3s ease-in-out infinite', '--glow-color': '#ffd700' } as React.CSSProperties}>
+                    <img src={IMAGES.GACHA_PREMIUM_BTN} alt="プレミアムガチャ" className="w-full h-full object-contain p-1 transition-transform group-hover:scale-105" style={{ filter: 'drop-shadow(0 4px 16px rgba(255,215,0,0.4))' }} />
+                    <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded text-[8px] font-bold" style={{ background: 'linear-gradient(135deg, #ffd700, #f0a500)', color: '#0b1128' }}>PREMIUM</div>
                   </div>
-                </div>
-                <p className="text-xs font-bold" style={{ color: '#ffd700' }}>プレミアムガチャ</p>
-                <p className="text-[10px] text-amber-200/30 mb-1.5">SR・SSR 確率UP！</p>
-                <div className="flex items-center gap-1 px-3 py-1 rounded-lg"
-                  style={{ background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.2)' }}>
-                  <div className="w-3 h-3 rounded-full flex items-center justify-center text-[6px] font-bold"
-                    style={{ background: 'linear-gradient(135deg, #ffd700, #f0a500)', color: '#0b1128' }}>A</div>
-                  <span className="text-xs font-bold" style={{ color: '#ffd700' }}>{GACHA_COSTS.PREMIUM}</span>
-                </div>
-              </button>
+                  <p className="text-xs font-bold mb-1" style={{ color: '#ffd700' }}>プレミアム×1</p>
+                  <div className="flex items-center gap-1 px-3 py-1 rounded-lg" style={{ background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.2)' }}>
+                    <div className="w-3 h-3 rounded-full flex items-center justify-center text-[6px] font-bold" style={{ background: 'linear-gradient(135deg, #ffd700, #f0a500)', color: '#0b1128' }}>A</div>
+                    <span className="text-xs font-bold" style={{ color: '#ffd700' }}>{GACHA_COSTS.PREMIUM}</span>
+                  </div>
+                </button>
+                <button onClick={() => handlePull10('premium')} disabled={user.currentAlt < GACHA_COSTS.PREMIUM * 10}
+                  className="group flex items-center justify-center gap-1.5 py-2 rounded-xl transition-all active:scale-95 disabled:opacity-30"
+                  style={{ background: 'linear-gradient(135deg, rgba(255,215,0,0.12), rgba(168,85,247,0.08))', border: '1px solid rgba(255,215,0,0.35)' }}>
+                  <span className="text-[10px] font-bold" style={{ color: '#ffd700' }}>10連</span>
+                  <div className="flex items-center gap-0.5">
+                    <div className="w-2.5 h-2.5 rounded-full flex items-center justify-center text-[5px] font-bold" style={{ background: 'linear-gradient(135deg, #ffd700, #f0a500)', color: '#0b1128' }}>A</div>
+                    <span className="text-[10px] font-bold" style={{ color: '#ffd700' }}>{GACHA_COSTS.PREMIUM * 10}</span>
+                  </div>
+                  <span className="text-[8px] text-amber-200/50 ml-0.5">SR確定</span>
+                </button>
+              </div>
             </div>
 
             {/* Rarity table */}
-            <div className="rounded-xl p-3 mt-2" style={{ background: 'rgba(255,215,0,0.04)', border: '1px solid rgba(255,215,0,0.1)' }}>
+            <div className="rounded-xl p-3" style={{ background: 'rgba(255,215,0,0.04)', border: '1px solid rgba(255,215,0,0.1)' }}>
               <div className="grid grid-cols-2 gap-3">
-                {/* ノーマル排出率 */}
                 <div>
                   <p className="text-[10px] text-blue-300/70 font-bold mb-1.5 text-center">ノーマル</p>
                   {(['SSR', 'SR', 'R', 'N'] as CollectionRarity[]).map((r) => (
                     <div key={r} className="flex items-center justify-between mb-0.5">
                       <span className="text-[10px] font-bold" style={{ color: RARITY_COLOR_MAP[r] }}>{r}</span>
-                      <span className="text-[10px] text-amber-200/40">
-                        {r === 'SSR' ? '1%' : r === 'SR' ? '9%' : r === 'R' ? '30%' : '60%'}
-                      </span>
+                      <span className="text-[10px] text-amber-200/40">{r === 'SSR' ? '1%' : r === 'SR' ? '9%' : r === 'R' ? '30%' : '60%'}</span>
                     </div>
                   ))}
                 </div>
-                {/* プレミアム排出率 */}
                 <div>
                   <p className="text-[10px] font-bold mb-1.5 text-center" style={{ color: '#ffd700' }}>プレミアム</p>
                   {(['SSR', 'SR', 'R'] as CollectionRarity[]).map((r) => (
                     <div key={r} className="flex items-center justify-between mb-0.5">
                       <span className="text-[10px] font-bold" style={{ color: RARITY_COLOR_MAP[r] }}>{r}</span>
-                      <span className="text-[10px] text-amber-200/40">
-                        {r === 'SSR' ? '15%' : r === 'SR' ? '35%' : '50%'}
-                      </span>
+                      <span className="text-[10px] text-amber-200/40">{r === 'SSR' ? '15%' : r === 'SR' ? '35%' : '50%'}</span>
                     </div>
                   ))}
                   <div className="flex items-center justify-between mb-0.5">

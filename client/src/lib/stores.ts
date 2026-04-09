@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { User, GameResult, AvatarType } from './types';
+import type { User, GameResult, AvatarType, CollectionCard } from './types';
 import { MOCK_USER } from './mockData';
 
 // User Store
@@ -111,23 +111,42 @@ export const useCollectionStore = create<CollectionState>((set, get) => ({
   ownedCount: () => get().ownedCardIds.size,
 }));
 
+// Gacha History Entry
+export interface GachaHistoryEntry {
+  id: string;
+  card: CollectionCard;
+  gachaType: 'normal' | 'premium';
+  timestamp: number;
+  isDuplicate: boolean;
+}
+
 // Gacha Store
 interface GachaState {
   isAnimating: boolean;
   lastPulledCard: string | null;
-  pityCount: number;
+  pityCount: number;         // ノーマル用天井カウント
+  premiumPityCount: number;  // プレミアム用天井カウント
+  history: GachaHistoryEntry[];
   setAnimating: (animating: boolean) => void;
   setLastPulledCard: (cardId: string | null) => void;
-  incrementPity: () => void;
-  resetPity: () => void;
+  incrementPity: (premium: boolean) => void;
+  resetPity: (premium: boolean) => void;
+  addHistory: (entry: GachaHistoryEntry) => void;
 }
 
 export const useGachaStore = create<GachaState>((set) => ({
   isAnimating: false,
   lastPulledCard: null,
   pityCount: 0,
+  premiumPityCount: 0,
+  history: [],
   setAnimating: (isAnimating) => set({ isAnimating }),
   setLastPulledCard: (lastPulledCard) => set({ lastPulledCard }),
-  incrementPity: () => set((s) => ({ pityCount: s.pityCount + 1 })),
-  resetPity: () => set({ pityCount: 0 }),
+  incrementPity: (premium) => premium
+    ? set((s) => ({ premiumPityCount: s.premiumPityCount + 1 }))
+    : set((s) => ({ pityCount: s.pityCount + 1 })),
+  resetPity: (premium) => premium
+    ? set({ premiumPityCount: 0 })
+    : set({ pityCount: 0 }),
+  addHistory: (entry) => set((s) => ({ history: [entry, ...s.history].slice(0, 100) })),
 }));
