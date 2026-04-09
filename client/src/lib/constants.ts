@@ -83,9 +83,9 @@ export const IMAGES = {
   AVATAR_PRINCESS_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/shop-avatar-princess_b1903ac4.png',
   // Avatar full body - 8 characters
   AVATAR_SAMURAI_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/shop-avatar-samurai-full-v2-BF6VN29n4hjS5DmZhckyAw.png',
-  AVATAR_WITCH_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/shop-avatar-witch-full-7U6EYGx877ghQUxQSFGLhk.png',
+  AVATAR_WITCH_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-witch-v2-clean-LNnMFY4wfy5JaBtG56E2Gp.png',
   AVATAR_PIRATE_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/shop-avatar-pirate-full-v2-Ff5HtkVQKoEk2axfEqKdzZ.png',
-  AVATAR_ANGEL_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/shop-avatar-angel-full-NvH3ghR8K9yCU5SDGSovtY.png',
+  AVATAR_ANGEL_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-angel-v2-clean-SHJ6p5GfxmzuDMw8XpXDjp.png',
   AVATAR_DRAGON_KNIGHT_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/shop-avatar-dragon-knight-full-v2-CQ2tHTsozBKZCY3LWEsmMk.png',
   AVATAR_NINJA_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/shop-avatar-ninja-full-6bBF8kQyFdQtWHKaxbUjzR.png',
   AVATAR_SCIENTIST_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/shop-avatar-scientist-full-v2-3rZDZowSoAGab56fo47Svn.png',
