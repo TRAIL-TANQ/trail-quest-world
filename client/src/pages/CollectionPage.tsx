@@ -1,12 +1,14 @@
 /*
  * CollectionPage: 50枚カードコレクション画面
- * カテゴリタブ + レア度フィルタ付き
- * レア度別カード枠: N=グレー, R=青, SR=金, SSR=虹/紫（CSS実装）
+ * - CollectionStore連携: ガチャで引いたカードが自動反映
+ * - カード詳細モーダル: フリップアニメーション＋レア度別エフェクト
+ * - コンプリート率: カテゴリ別進捗バー表示
  * ファンタジーRPG風ダークブルー＋ゴールドアクセント
  */
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { COLLECTION_CARDS } from '@/lib/cardData';
 import { CARD_RARITY_COLORS, CARD_CATEGORY_INFO } from '@/lib/constants';
+import { useCollectionStore } from '@/lib/stores';
 import type { CollectionCard, CollectionRarity } from '@/lib/types';
 
 const categoryTabs = [
@@ -26,13 +28,14 @@ const rarityTabs: { id: string; label: string }[] = [
   { id: 'SSR', label: 'SSR' },
 ];
 
-// レア度別のカード枠CSSクラス名を取得
-function getCardFrameClass(rarity: CollectionRarity, owned: boolean): string {
-  if (!owned) return 'card-frame-locked';
-  return `card-frame-${rarity.toLowerCase()}`;
-}
+const CATEGORY_CARDS: Record<string, CollectionCard[]> = {
+  great_people: COLLECTION_CARDS.filter((c) => c.category === 'great_people'),
+  creatures: COLLECTION_CARDS.filter((c) => c.category === 'creatures'),
+  world_heritage: COLLECTION_CARDS.filter((c) => c.category === 'world_heritage'),
+  inventions: COLLECTION_CARDS.filter((c) => c.category === 'inventions'),
+  discovery: COLLECTION_CARDS.filter((c) => c.category === 'discovery'),
+};
 
-// レア度バッジの背景
 function getRarityBadgeStyle(rarity: CollectionRarity) {
   const color = CARD_RARITY_COLORS[rarity];
   if (rarity === 'SSR') {
@@ -55,13 +58,113 @@ function getRarityBadgeStyle(rarity: CollectionRarity) {
   };
 }
 
+function getRarityBorderStyle(rarity: CollectionRarity) {
+  const c = CARD_RARITY_COLORS[rarity];
+  if (rarity === 'SSR') return { border: '2px solid transparent', backgroundImage: 'linear-gradient(rgba(11,17,40,1), rgba(11,17,40,1)), linear-gradient(135deg, #a855f7, #ec4899, #3b82f6, #22c55e, #a855f7)', backgroundOrigin: 'border-box', backgroundClip: 'padding-box, border-box', boxShadow: `0 0 16px rgba(168,85,247,0.5)` };
+  if (rarity === 'SR') return { border: `2px solid ${c}`, boxShadow: `0 0 12px ${c}55` };
+  if (rarity === 'R') return { border: `2px solid ${c}`, boxShadow: `0 0 8px ${c}33` };
+  return { border: `2px solid ${c}55`, boxShadow: 'none' };
+}
+
+// カード詳細モーダル
+function CardModal({ card, onClose }: { card: CollectionCard; onClose: () => void }) {
+  const [flipped, setFlipped] = useState(false);
+  const rarityColor = CARD_RARITY_COLORS[card.rarity];
+  const isSSR = card.rarity === 'SSR';
+  const stars = card.rarity === 'SSR' ? 4 : card.rarity === 'SR' ? 3 : card.rarity === 'R' ? 2 : 1;
+
+  useEffect(() => {
+    const t = setTimeout(() => setFlipped(true), 100);
+    return () => clearTimeout(t);
+  }, []);
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center p-6"
+      style={{ background: 'rgba(0,0,0,0.88)', backdropFilter: 'blur(6px)' }}
+      onClick={onClose}
+    >
+      <div
+        className="relative"
+        style={{ perspective: '1000px', width: '260px' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* フリップコンテナ */}
+        <div
+          style={{
+            transformStyle: 'preserve-3d',
+            transition: 'transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
+            transform: flipped ? 'rotateY(0deg)' : 'rotateY(-90deg)',
+          }}
+        >
+          <div
+            className="rounded-2xl overflow-hidden relative"
+            style={{ ...getRarityBorderStyle(card.rarity) }}
+          >
+            {/* 角の装飾 */}
+            <div className="absolute top-1.5 left-1.5 w-3 h-3 border-t-2 border-l-2 z-10" style={{ borderColor: `${rarityColor}88` }} />
+            <div className="absolute top-1.5 right-1.5 w-3 h-3 border-t-2 border-r-2 z-10" style={{ borderColor: `${rarityColor}88` }} />
+            <div className="absolute bottom-1.5 left-1.5 w-3 h-3 border-b-2 border-l-2 z-10" style={{ borderColor: `${rarityColor}88` }} />
+            <div className="absolute bottom-1.5 right-1.5 w-3 h-3 border-b-2 border-r-2 z-10" style={{ borderColor: `${rarityColor}88` }} />
+
+            {/* カテゴリ＋レア度ヘッダー */}
+            <div className="px-4 py-2 flex items-center justify-between"
+              style={{ background: `linear-gradient(135deg, ${rarityColor}20, transparent)`, borderBottom: `1px solid ${rarityColor}33` }}>
+              <span className="text-[10px] text-amber-200/50">
+                {CARD_CATEGORY_INFO[card.category]?.emoji} {CARD_CATEGORY_INFO[card.category]?.label}
+              </span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded" style={getRarityBadgeStyle(card.rarity)}>
+                {card.rarity}
+              </span>
+            </div>
+
+            {/* カード画像 */}
+            <div className="relative">
+              <img src={card.imageUrl} alt={card.name} className="w-full aspect-[3/4] object-cover" />
+              {/* SSRシマーエフェクト */}
+              {isSSR && (
+                <div className="absolute inset-0 pointer-events-none"
+                  style={{ background: 'linear-gradient(135deg, rgba(168,85,247,0.15), rgba(236,72,153,0.08), rgba(139,92,246,0.15))', animation: 'shimmer 3s ease-in-out infinite' }} />
+              )}
+              {/* SRスパークル */}
+              {(card.rarity === 'SR' || isSSR) && Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="absolute w-1 h-1 rounded-full pointer-events-none" style={{
+                  background: rarityColor,
+                  top: `${10 + (i * 15)}%`, left: `${5 + (i * 16)}%`,
+                  animation: `sparkle ${1 + i * 0.3}s ease-in-out ${i * 0.2}s infinite`,
+                  boxShadow: `0 0 4px ${rarityColor}`,
+                }} />
+              ))}
+            </div>
+
+            {/* カード情報フッター */}
+            <div className="px-4 pb-4 pt-3 text-center"
+              style={{ background: 'linear-gradient(to top, rgba(11,17,40,0.98), rgba(21,29,59,0.95))', borderTop: `1px solid ${rarityColor}33` }}>
+              <div className="flex justify-center gap-0.5 mb-1.5">
+                {Array.from({ length: stars }).map((_, i) => (
+                  <span key={i} className="text-sm" style={{ color: rarityColor }}>★</span>
+                ))}
+              </div>
+              <h3 className="text-base font-bold text-amber-100 mb-2">{card.name}</h3>
+              <p className="text-[11px] text-amber-200/55 mb-4 leading-relaxed">{card.description}</p>
+              <button onClick={onClose} className="rpg-btn rpg-btn-gold w-full">閉じる</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function CollectionPage() {
   const [activeCategory, setActiveCategory] = useState('all');
   const [activeRarity, setActiveRarity] = useState('all');
   const [selectedCard, setSelectedCard] = useState<CollectionCard | null>(null);
+  const [showProgress, setShowProgress] = useState(false);
 
-  // デモ用: 最初の20枚を所持済みとする
-  const ownedCardIds = useMemo(() => new Set(COLLECTION_CARDS.slice(0, 20).map((c) => c.id)), []);
+  // CollectionStoreから所持カードを取得（ガチャと連携）
+  const ownedCardIds = useCollectionStore((s) => s.ownedCardIds);
+  const ownedCount = ownedCardIds.size;
 
   const filteredCards = useMemo(() => {
     return COLLECTION_CARDS.filter((c) => {
@@ -71,12 +174,21 @@ export default function CollectionPage() {
     });
   }, [activeCategory, activeRarity]);
 
-  const ownedCount = COLLECTION_CARDS.filter((c) => ownedCardIds.has(c.id)).length;
+  // カテゴリ別コンプリート率
+  const categoryProgress = useMemo(() => {
+    return Object.entries(CATEGORY_CARDS).map(([catId, cards]) => {
+      const owned = cards.filter((c) => ownedCardIds.has(c.id)).length;
+      const total = cards.length;
+      const pct = Math.round((owned / total) * 100);
+      const info = CARD_CATEGORY_INFO[catId];
+      return { catId, label: info?.label ?? catId, emoji: info?.emoji ?? '📦', owned, total, pct };
+    });
+  }, [ownedCardIds]);
 
   return (
     <div className="px-4 pt-4 pb-4">
       {/* ヘッダー */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg flex items-center justify-center"
             style={{ background: 'linear-gradient(135deg, #a855f7, #7c3aed)', boxShadow: '0 0 10px rgba(168,85,247,0.3)' }}>
@@ -84,13 +196,70 @@ export default function CollectionPage() {
           </div>
           <h1 className="text-lg font-bold" style={{ color: '#ffd700', textShadow: '0 0 10px rgba(255,215,0,0.2)' }}>カードコレクション</h1>
         </div>
-        <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg"
-          style={{ background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.2)' }}>
-          <span className="text-[10px] text-amber-200/40">所持</span>
-          <span className="text-xs font-bold" style={{ color: '#ffd700' }}>{ownedCount}</span>
-          <span className="text-[10px] text-amber-200/30">/{COLLECTION_CARDS.length}</span>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg"
+            style={{ background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.2)' }}>
+            <span className="text-[10px] text-amber-200/40">所持</span>
+            <span className="text-xs font-bold" style={{ color: '#ffd700' }}>{ownedCount}</span>
+            <span className="text-[10px] text-amber-200/30">/{COLLECTION_CARDS.length}</span>
+          </div>
+          <button
+            onClick={() => setShowProgress(!showProgress)}
+            className="w-7 h-7 rounded-lg flex items-center justify-center transition-all"
+            style={showProgress
+              ? { background: 'rgba(255,215,0,0.15)', border: '1px solid rgba(255,215,0,0.4)' }
+              : { background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>
+            <span className="text-sm">📊</span>
+          </button>
         </div>
       </div>
+
+      {/* コンプリート率パネル */}
+      {showProgress && (
+        <div className="mb-4 rounded-xl p-3 space-y-2.5"
+          style={{ background: 'rgba(255,215,0,0.04)', border: '1px solid rgba(255,215,0,0.12)' }}>
+          <p className="text-[10px] text-amber-200/50 font-bold mb-2">カテゴリ別コンプリート率</p>
+          {categoryProgress.map(({ catId, label, emoji, owned, total, pct }) => (
+            <div key={catId}>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[11px] text-amber-200/70">{emoji} {label}</span>
+                <span className="text-[10px] font-bold" style={{ color: pct === 100 ? '#22c55e' : '#ffd700' }}>
+                  {owned}/{total} ({pct}%)
+                </span>
+              </div>
+              <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.07)' }}>
+                <div
+                  className="h-full rounded-full transition-all duration-700"
+                  style={{
+                    width: `${pct}%`,
+                    background: pct === 100
+                      ? 'linear-gradient(90deg, #22c55e, #16a34a)'
+                      : 'linear-gradient(90deg, #f59e0b, #ffd700)',
+                  }}
+                />
+              </div>
+            </div>
+          ))}
+          {/* 全体コンプリート率 */}
+          <div className="pt-2 border-t border-amber-200/10">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[11px] font-bold text-amber-200/80">🏆 全体</span>
+              <span className="text-[10px] font-bold" style={{ color: '#ffd700' }}>
+                {ownedCount}/{COLLECTION_CARDS.length} ({Math.round((ownedCount / COLLECTION_CARDS.length) * 100)}%)
+              </span>
+            </div>
+            <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.07)' }}>
+              <div
+                className="h-full rounded-full transition-all duration-700"
+                style={{
+                  width: `${Math.round((ownedCount / COLLECTION_CARDS.length) * 100)}%`,
+                  background: 'linear-gradient(90deg, #a855f7, #ffd700)',
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* カテゴリタブ */}
       <div className="flex gap-1 overflow-x-auto pb-2 mb-2" style={{ scrollbarWidth: 'none' }}>
@@ -131,51 +300,45 @@ export default function CollectionPage() {
       <div className="grid grid-cols-3 gap-2.5">
         {filteredCards.map((card, i) => {
           const owned = ownedCardIds.has(card.id);
-          const frameClass = getCardFrameClass(card.rarity, owned);
+          const rarityColor = CARD_RARITY_COLORS[card.rarity];
           return (
-            <button key={card.id} onClick={() => owned ? setSelectedCard(card) : null}
-              className={`rounded-xl overflow-hidden transition-all duration-200 animate-slide-up relative ${frameClass}`}
+            <button
+              key={card.id}
+              onClick={() => owned ? setSelectedCard(card) : undefined}
+              className="rounded-xl overflow-hidden transition-all duration-200 relative"
               style={{
                 animationDelay: `${i * 30}ms`,
                 opacity: owned ? 1 : 0.35,
                 filter: owned ? 'none' : 'grayscale(1)',
-              }}>
+                ...(owned ? getRarityBorderStyle(card.rarity) : { border: '2px solid rgba(255,255,255,0.06)' }),
+              }}
+            >
               {/* カード画像 */}
               <div className="aspect-[3/4] relative overflow-hidden">
                 {owned ? (
-                  <img
-                    src={card.imageUrl}
-                    alt={card.name}
-                    className="w-full h-full object-cover"
-                    loading="lazy"
-                  />
+                  <img src={card.imageUrl} alt={card.name} className="w-full h-full object-cover" loading="lazy" />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center"
-                    style={{ background: 'rgba(10,15,35,0.8)' }}>
+                  <div className="w-full h-full flex items-center justify-center" style={{ background: 'rgba(10,15,35,0.8)' }}>
                     <span className="text-3xl opacity-30">❓</span>
                   </div>
                 )}
                 {/* レア度バッジ */}
                 {owned && (
                   <div className="absolute top-1 right-1">
-                    <span className="text-[9px] px-1.5 py-0.5 rounded font-bold"
-                      style={getRarityBadgeStyle(card.rarity)}>
+                    <span className="text-[9px] px-1.5 py-0.5 rounded font-bold" style={getRarityBadgeStyle(card.rarity)}>
                       {card.rarity}
                     </span>
                   </div>
                 )}
-                {/* SSRの虹エフェクト */}
+                {/* SSRシマーエフェクト */}
                 {owned && card.rarity === 'SSR' && (
                   <div className="absolute inset-0 pointer-events-none"
-                    style={{
-                      background: 'linear-gradient(135deg, rgba(168,85,247,0.1), rgba(236,72,153,0.05), rgba(139,92,246,0.1))',
-                      animation: 'shimmer 3s ease-in-out infinite',
-                    }} />
+                    style={{ background: 'linear-gradient(135deg, rgba(168,85,247,0.1), rgba(236,72,153,0.05), rgba(139,92,246,0.1))', animation: 'shimmer 3s ease-in-out infinite' }} />
                 )}
               </div>
               {/* カード名 */}
               <div className="px-1.5 py-1.5 text-center"
-                style={{ borderTop: `1px solid ${owned ? CARD_RARITY_COLORS[card.rarity] + '25' : 'rgba(255,255,255,0.04)'}` }}>
+                style={{ borderTop: `1px solid ${owned ? rarityColor + '25' : 'rgba(255,255,255,0.04)'}`, background: 'rgba(11,17,40,0.7)' }}>
                 <p className="text-[10px] font-bold text-amber-100 truncate">{owned ? card.name : '???'}</p>
               </div>
             </button>
@@ -192,99 +355,16 @@ export default function CollectionPage() {
       )}
 
       {/* カード詳細モーダル */}
-      {selectedCard && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6"
-          style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(4px)' }}
-          onClick={() => setSelectedCard(null)}>
-          <div className={`w-full max-w-[280px] rounded-2xl overflow-hidden animate-bounce-in relative card-frame-modal-${selectedCard.rarity.toLowerCase()}`}
-            onClick={(e) => e.stopPropagation()}>
-            {/* 角の装飾 */}
-            <div className="absolute top-1 left-1 w-3 h-3 border-t-2 border-l-2 rounded-tl-sm" style={{ borderColor: `${CARD_RARITY_COLORS[selectedCard.rarity]}88` }} />
-            <div className="absolute top-1 right-1 w-3 h-3 border-t-2 border-r-2 rounded-tr-sm" style={{ borderColor: `${CARD_RARITY_COLORS[selectedCard.rarity]}88` }} />
-            <div className="absolute bottom-1 left-1 w-3 h-3 border-b-2 border-l-2 rounded-bl-sm" style={{ borderColor: `${CARD_RARITY_COLORS[selectedCard.rarity]}88` }} />
-            <div className="absolute bottom-1 right-1 w-3 h-3 border-b-2 border-r-2 rounded-br-sm" style={{ borderColor: `${CARD_RARITY_COLORS[selectedCard.rarity]}88` }} />
+      {selectedCard && <CardModal card={selectedCard} onClose={() => setSelectedCard(null)} />}
 
-            {/* レア度ヘッダー */}
-            <div className="px-4 py-2 flex items-center justify-between"
-              style={{ background: `linear-gradient(135deg, ${CARD_RARITY_COLORS[selectedCard.rarity]}25, transparent)`, borderBottom: `1px solid ${CARD_RARITY_COLORS[selectedCard.rarity]}33` }}>
-              <span className="text-[10px] text-amber-200/50">
-                {CARD_CATEGORY_INFO[selectedCard.category]?.emoji} {CARD_CATEGORY_INFO[selectedCard.category]?.label}
-              </span>
-              <span className="text-xs font-bold px-2 py-0.5 rounded"
-                style={getRarityBadgeStyle(selectedCard.rarity)}>
-                {selectedCard.rarity}
-              </span>
-            </div>
-
-            {/* カード画像 */}
-            <div className="relative">
-              <img
-                src={selectedCard.imageUrl}
-                alt={selectedCard.name}
-                className="w-full aspect-[3/4] object-cover"
-              />
-              {selectedCard.rarity === 'SSR' && (
-                <div className="absolute inset-0 pointer-events-none"
-                  style={{
-                    background: 'linear-gradient(135deg, rgba(168,85,247,0.15), rgba(236,72,153,0.08), rgba(139,92,246,0.15))',
-                    animation: 'shimmer 3s ease-in-out infinite',
-                  }} />
-              )}
-            </div>
-
-            {/* カード情報 */}
-            <div className="px-4 pb-4 pt-3 text-center">
-              <h3 className="text-lg font-bold text-amber-100 mb-2">{selectedCard.name}</h3>
-              <p className="text-xs text-amber-200/55 mb-4 leading-relaxed">{selectedCard.description}</p>
-              <button onClick={() => setSelectedCard(null)} className="rpg-btn rpg-btn-gold w-full">閉じる</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* カード枠スタイル定義 */}
       <style>{`
-        /* 共通カード枠スタイル - 枠は画像に含まれているのでCSSはシンプルに */
-        .card-frame-n,
-        .card-frame-r,
-        .card-frame-sr,
-        .card-frame-ssr {
-          border: none;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-          background: transparent;
-          position: relative;
-        }
-
-        /* SSR（スーパースーパーレア）: 虹色グラデーション枠 */
-        .card-frame-ssr {
-          box-shadow: 0 0 12px rgba(168,85,247,0.4), 0 0 24px rgba(168,85,247,0.15), 0 2px 8px rgba(0,0,0,0.3);
-        }
-
-        /* 未所持カード */
-        .card-frame-locked {
-          border: 3px solid rgba(255,255,255,0.06);
-          box-shadow: none;
-          background: rgba(255,255,255,0.02);
-        }
-
-        /* モーダル用カード枠 */
-        .card-frame-modal-n,
-        .card-frame-modal-r,
-        .card-frame-modal-sr,
-        .card-frame-modal-ssr {
-          border: none;
-          box-shadow: 0 0 30px rgba(0,0,0,0.5), 0 8px 32px rgba(0,0,0,0.7);
-          background: linear-gradient(135deg, rgba(21,29,59,0.98), rgba(11,17,40,0.98));
-          position: relative;
-        }
-
-        .card-frame-modal-ssr {
-          box-shadow: 0 0 30px rgba(168,85,247,0.4), 0 0 60px rgba(168,85,247,0.2), 0 8px 32px rgba(0,0,0,0.7);
-        }
-
         @keyframes shimmer {
           0%, 100% { opacity: 0.3; }
           50% { opacity: 0.8; }
+        }
+        @keyframes sparkle {
+          0%, 100% { opacity: 0; transform: scale(0.5); }
+          50% { opacity: 1; transform: scale(1.2); }
         }
       `}</style>
     </div>

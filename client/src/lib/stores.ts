@@ -91,6 +91,26 @@ export const useGameStore = create<GameState>((set) => ({
   setShowResult: (showResult) => set({ showResult }),
 }));
 
+// Collection Store
+interface CollectionState {
+  ownedCardIds: Set<string>;
+  addCard: (cardId: string) => void;
+  addCards: (cardIds: string[]) => void;
+  hasCard: (cardId: string) => boolean;
+  ownedCount: () => number;
+}
+
+export const useCollectionStore = create<CollectionState>((set, get) => ({
+  // デモ用: 最初の5枚を初期所持
+  ownedCardIds: new Set(['card-001', 'card-002', 'card-003', 'card-011', 'card-016']),
+  addCard: (cardId) =>
+    set((state) => ({ ownedCardIds: new Set(Array.from(state.ownedCardIds).concat(cardId)) })),
+  addCards: (cardIds) =>
+    set((state) => ({ ownedCardIds: new Set(Array.from(state.ownedCardIds).concat(cardIds)) })),
+  hasCard: (cardId) => get().ownedCardIds.has(cardId),
+  ownedCount: () => get().ownedCardIds.size,
+}));
+
 // Gacha Store
 interface GachaState {
   isAnimating: boolean;
