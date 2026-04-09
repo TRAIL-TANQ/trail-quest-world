@@ -101,6 +101,13 @@ export const IMAGES = {
   AVATAR_WITCH_CHIBI_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-witch-chibi-nobg_d8795e50.png',
   AVATAR_ANGEL_CHIBI_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-angel-chibi-TzB6zpTHLshyCmuXYddQhp.webp',
   AVATAR_ANGEL_CHIBI_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/angel-chibi-clean_4a835ac9.png',
+  // New female characters - fairy, mermaid, ice mage
+  AVATAR_FAIRY_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-fairy-VrXdcWE9At3CuR2JzfGvGw.webp',
+  AVATAR_FAIRY_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-fairy-hUy98q9t6PHW7L3sUEuGuX.png',
+  AVATAR_MERMAID_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-mermaid-2cLTD6gmoUhe9gFQxmbAK9.webp',
+  AVATAR_MERMAID_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-mermaid-W3eMXMAL535y4UpxxhGvGj.png',
+  AVATAR_ICE_MAGE_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-ice-mage-62nnnV8WFVasd6sF59Phh3.webp',
+  AVATAR_ICE_MAGE_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-ice-mage-7dMra5fnsoaoGesYrWpg62.png',
 } as const;
 
 // Avatar items for shop - maps avatar IDs to their image URLs
@@ -117,6 +124,9 @@ export const AVATAR_ITEMS: Record<string, { icon: string; full: string }> = {
   'avatar-princess-chibi': { icon: IMAGES.AVATAR_PRINCESS_CHIBI_ICON, full: IMAGES.AVATAR_PRINCESS_CHIBI_FULL },
   'avatar-witch-chibi': { icon: IMAGES.AVATAR_WITCH_CHIBI_ICON, full: IMAGES.AVATAR_WITCH_CHIBI_FULL },
   'avatar-angel-chibi': { icon: IMAGES.AVATAR_ANGEL_CHIBI_ICON, full: IMAGES.AVATAR_ANGEL_CHIBI_FULL },
+  'avatar-fairy': { icon: IMAGES.AVATAR_FAIRY_ICON, full: IMAGES.AVATAR_FAIRY_FULL },
+  'avatar-mermaid': { icon: IMAGES.AVATAR_MERMAID_ICON, full: IMAGES.AVATAR_MERMAID_FULL },
+  'avatar-ice-mage': { icon: IMAGES.AVATAR_ICE_MAGE_ICON, full: IMAGES.AVATAR_ICE_MAGE_FULL },
 };
 
 export const CATEGORY_TABS = [
