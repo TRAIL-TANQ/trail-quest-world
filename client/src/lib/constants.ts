@@ -87,18 +87,15 @@ export const IMAGES = {
   AVATAR_PIRATE_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/shop-avatar-pirate-full-v2-Ff5HtkVQKoEk2axfEqKdzZ.png',
   AVATAR_ANGEL_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/shop-avatar-angel-full-NvH3ghR8K9yCU5SDGSovtY.png',
   AVATAR_DRAGON_KNIGHT_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/shop-avatar-dragon-knight-full-v2-CQ2tHTsozBKZCY3LWEsmMk.png',
-  AVATAR_NINJA_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/shop-avatar-ninja-full-6bBF8kQyFdQtWHKaxbUjzR.png',
+  AVATAR_NINJA_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-ninja-v3-B4hi3wYVcB9deFdfskwg9y.png',
   AVATAR_SCIENTIST_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/shop-avatar-scientist-full-v2-3rZDZowSoAGab56fo47Svn.png',
-  AVATAR_PRINCESS_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/shop-avatar-princess-full-9Z7JE87nqzrVUrhrJVBMBn.png',
-  // Chibi (deformed) versions - ninja, princess, witch, angel
-  AVATAR_NINJA_CHIBI_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-ninja-chibi-9vKE7XSTjLjU4Rw2itgpKJ.webp',
-  AVATAR_NINJA_CHIBI_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-ninja-chibi-YCXNGM3xgZuTavUATsQLCc.png',
-  AVATAR_PRINCESS_CHIBI_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-princess-chibi-v2-XZYR4KJ9Ym5gqM39eeDCMt.webp',
-  AVATAR_PRINCESS_CHIBI_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-princess-chibi-v2-LrS6JprRWQLTaJHPkvYEg8.png',
+  // Chibi (deformed) versions - princess, witch, angel (new v3 images)
+  AVATAR_PRINCESS_CHIBI_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-princess-v3-bcPWsoXERUsAdBhbKphwkK.webp',
+  AVATAR_PRINCESS_CHIBI_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-princess-v3-KvYEUDfa4ZTqK9zwPDXWQE.png',
   AVATAR_WITCH_CHIBI_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-witch-chibi-v2-c8v8DXenmLpan4g9pA9hZL.webp',
   AVATAR_WITCH_CHIBI_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-witch-chibi-v2-MKEMfmDayxqbtK5JkrG6Fy.png',
-  AVATAR_ANGEL_CHIBI_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-angel-chibi-TzB6zpTHLshyCmuXYddQhp.webp',
-  AVATAR_ANGEL_CHIBI_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-angel-chibi-U32arQ8NJ76vHW4xSetBVe.png',
+  AVATAR_ANGEL_CHIBI_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-angel-v3-ajfpCB2pZxBSnZsn9d6N8G.webp',
+  AVATAR_ANGEL_CHIBI_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-angel-v3-XxrrEtRkyFMvjc75waBndK.png',
 } as const;
 
 // Avatar items for shop - maps avatar IDs to their image URLs
@@ -110,8 +107,6 @@ export const AVATAR_ITEMS: Record<string, { icon: string; full: string }> = {
   'avatar-dragon-knight': { icon: IMAGES.AVATAR_DRAGON_KNIGHT_ICON, full: IMAGES.AVATAR_DRAGON_KNIGHT_FULL },
   'avatar-ninja': { icon: IMAGES.AVATAR_NINJA_ICON, full: IMAGES.AVATAR_NINJA_FULL },
   'avatar-scientist': { icon: IMAGES.AVATAR_SCIENTIST_ICON, full: IMAGES.AVATAR_SCIENTIST_FULL },
-  'avatar-princess': { icon: IMAGES.AVATAR_PRINCESS_ICON, full: IMAGES.AVATAR_PRINCESS_FULL },
-  'avatar-ninja-chibi': { icon: IMAGES.AVATAR_NINJA_CHIBI_ICON, full: IMAGES.AVATAR_NINJA_CHIBI_FULL },
   'avatar-princess-chibi': { icon: IMAGES.AVATAR_PRINCESS_CHIBI_ICON, full: IMAGES.AVATAR_PRINCESS_CHIBI_FULL },
   'avatar-witch-chibi': { icon: IMAGES.AVATAR_WITCH_CHIBI_ICON, full: IMAGES.AVATAR_WITCH_CHIBI_FULL },
   'avatar-angel-chibi': { icon: IMAGES.AVATAR_ANGEL_CHIBI_ICON, full: IMAGES.AVATAR_ANGEL_CHIBI_FULL },

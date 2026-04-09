@@ -161,8 +161,6 @@ export const MOCK_SHOP_ITEMS: ShopItem[] = [
   { id: 'avatar-dragon-knight', name: 'ドラゴンナイト', category: 'avatar', price: 800, imageUrl: '', description: 'ドラゴンに乗る勇者', owned: false },
   { id: 'avatar-ninja', name: '忍者', category: 'avatar', price: 550, imageUrl: '', description: '素早い忍者のアバター', owned: false },
   { id: 'avatar-scientist', name: '科学者', category: 'avatar', price: 400, imageUrl: '', description: '知識豊かな科学者のアバター', owned: false },
-  { id: 'avatar-princess', name: '姫', category: 'avatar', price: 700, imageUrl: '', description: '優雅な姫のアバター', owned: false },
-  { id: 'avatar-ninja-chibi', name: '忍者', category: 'avatar', price: 550, imageUrl: '', description: '影に潜む忍のアバター', owned: false },
   { id: 'avatar-princess-chibi', name: '姫', category: 'avatar', price: 700, imageUrl: '', description: '優雅な姫のアバター', owned: false },
   { id: 'avatar-witch-chibi', name: '魔女', category: 'avatar', price: 500, imageUrl: '', description: '賢い魔女のアバター', owned: false },
   { id: 'avatar-angel-chibi', name: '天使', category: 'avatar', price: 450, imageUrl: '', description: '優しい天使のアバター', owned: false },
