@@ -1,5 +1,5 @@
 /*
- * CollectionPage: 50枚カードコレクション画面
+ * CollectionPage: 100枚カードコレクション画面
  * - CollectionStore連携: ガチャで引いたカードが自動反映
  * - NEWバッジ: 初取得カードに表示
  * - ソート機能: レア度順・取得順・名前順
