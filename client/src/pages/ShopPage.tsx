@@ -131,7 +131,7 @@ export default function ShopPage() {
                   <div className="aspect-square flex items-center justify-center relative overflow-hidden"
                     style={{ background: `radial-gradient(circle, ${tabColor}08, transparent)` }}>
                     {avatarImages ? (
-                      <img src={avatarImages.icon} alt={item.name} className="w-full h-full object-cover" />
+                      <img src={avatarImages.full} alt={item.name} className="w-full h-full object-contain" />
                     ) : (
                       <span className="text-4xl">👤</span>
                     )}
