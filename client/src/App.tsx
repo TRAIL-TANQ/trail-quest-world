@@ -1,7 +1,6 @@
 /*
- * TRAIL QUEST WORLD - Royal Adventurer's Guild Aesthetic
- * Dark navy background (#0b1128) + Royal gold (#ffd700) accents
- * Fantasy RPG guild hall UI with ornate frames and badges
+ * TRAIL QUEST WORLD - Dark UI × Neon Game Center
+ * Background: #0F172A | Surface: #1E293B | Primary: #4F46E5 | ALT: #F59E0B
  */
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -18,10 +17,12 @@ import CollectionPage from "./pages/CollectionPage";
 import ShopPage from "./pages/ShopPage";
 import MyPage from "./pages/MyPage";
 import ResultPage from "./pages/ResultPage";
+import LoginPage from "./pages/LoginPage";
 
 function Router() {
   return (
     <Switch>
+      <Route path="/login" component={LoginPage} />
       <Route path="/games/:gameId" component={GamePlayPage} />
       <Route path="/result" component={ResultPage} />
       <Route>
@@ -35,8 +36,8 @@ function Router() {
             <Route path="/shop" component={ShopPage} />
             <Route path="/mypage" component={MyPage} />
             <Route>
-              <div className="flex items-center justify-center min-h-screen">
-                <p className="gold-text text-xl">ページが見つかりません</p>
+              <div className="flex items-center justify-center min-h-[60vh]">
+                <p className="text-lg font-bold" style={{ color: '#94A3B8' }}>ページが見つかりません</p>
               </div>
             </Route>
           </Switch>

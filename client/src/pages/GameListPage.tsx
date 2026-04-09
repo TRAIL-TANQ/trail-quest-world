@@ -1,154 +1,89 @@
 /*
- * GameListPage: Category-based game list
- * Guild quest board style with ornate game cards, rich gold frames
+ * GameListPage: Dark UI × Neon - Category tabs + 2-column game card grid
  */
 import { useState } from 'react';
 import { Link } from 'wouter';
-import { GAME_CATEGORIES, IMAGES } from '@/lib/constants';
 import { MOCK_GAMES } from '@/lib/mockData';
+import { CATEGORY_TABS } from '@/lib/constants';
+import { Coins, Star } from 'lucide-react';
 
 export default function GameListPage() {
-  const [activeCategory, setActiveCategory] = useState<string>('all');
+  const [activeTab, setActiveTab] = useState('all');
 
-  const filteredGames = activeCategory === 'all'
+  const filteredGames = activeTab === 'all'
     ? MOCK_GAMES
-    : MOCK_GAMES.filter((g) => g.category === activeCategory);
+    : MOCK_GAMES.filter((g) => g.category === activeTab);
 
   return (
-    <div className="relative min-h-full">
-      {/* Background */}
-      <div className="absolute inset-0 z-0">
-        <img src={IMAGES.GAME_CARDS_BG} alt="" className="w-full h-full object-cover" style={{ filter: 'brightness(0.25) saturate(0.7)' }} />
-        <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(11,17,40,0.7) 0%, rgba(11,17,40,0.95) 100%)' }} />
-      </div>
+    <div className="px-4 py-4">
+      <h1 className="text-lg font-bold mb-3" style={{ color: '#F8FAFC' }}>ゲーム一覧</h1>
 
-      <div className="relative z-10 px-4 pt-4 pb-4">
-        {/* Title */}
-        <div className="flex items-center gap-2 mb-4">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center"
-            style={{
-              background: 'linear-gradient(135deg, #ffd700, #f0a500)',
-              boxShadow: '0 0 10px rgba(255,215,0,0.3)',
-            }}
-          >
-            <span className="text-lg">🎮</span>
-          </div>
-          <h1 className="text-lg font-bold" style={{ color: '#ffd700', textShadow: '0 0 10px rgba(255,215,0,0.2)' }}>
-            ゲーム一覧
-          </h1>
-          <div className="flex-1 h-px" style={{ background: 'linear-gradient(90deg, rgba(255,215,0,0.3), transparent)' }} />
-        </div>
-
-        {/* Category Tabs */}
-        <div className="flex gap-1.5 overflow-x-auto pb-3 mb-4" style={{ scrollbarWidth: 'none' }}>
-          <button
-            onClick={() => setActiveCategory('all')}
-            className="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
-            style={activeCategory === 'all' ? {
-              background: 'linear-gradient(135deg, rgba(255,215,0,0.2), rgba(255,215,0,0.08))',
-              color: '#ffd700',
-              border: '1px solid rgba(255,215,0,0.35)',
-              boxShadow: '0 0 10px rgba(255,215,0,0.1)',
-            } : {
-              background: 'rgba(255,255,255,0.05)',
-              color: 'rgba(255,255,255,0.4)',
-              border: '1px solid rgba(255,255,255,0.08)',
-            }}
-          >
-            すべて
-          </button>
-          {GAME_CATEGORIES.map((cat) => (
+      {/* Category Tabs */}
+      <div className="flex gap-2 overflow-x-auto pb-3 mb-4" style={{ scrollbarWidth: 'none' }}>
+        {CATEGORY_TABS.map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
             <button
-              key={cat.id}
-              onClick={() => setActiveCategory(cat.id)}
-              className="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1"
-              style={activeCategory === cat.id ? {
-                background: `linear-gradient(135deg, ${cat.color}33, ${cat.color}15)`,
-                color: cat.color,
-                border: `1px solid ${cat.color}55`,
-                boxShadow: `0 0 8px ${cat.color}22`,
-              } : {
-                background: 'rgba(255,255,255,0.05)',
-                color: 'rgba(255,255,255,0.4)',
-                border: '1px solid rgba(255,255,255,0.08)',
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className="shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all active:scale-95"
+              style={{
+                background: isActive ? '#4F46E5' : 'rgba(255,255,255,0.05)',
+                color: isActive ? '#F8FAFC' : '#94A3B8',
+                border: isActive ? '1px solid rgba(79,70,229,0.5)' : '1px solid rgba(255,255,255,0.06)',
+                boxShadow: isActive ? '0 0 12px rgba(79,70,229,0.3)' : 'none',
               }}
             >
-              <span>{cat.emoji}</span>
-              {cat.label}
+              {tab.emoji} {tab.label}
             </button>
-          ))}
-        </div>
+          );
+        })}
+      </div>
 
-        {/* Game Cards */}
-        <div className="space-y-2.5">
-          {filteredGames.map((game, i) => {
-            const cat = GAME_CATEGORIES.find((c) => c.id === game.category);
-            const catColor = cat?.color || '#666';
-            return (
-              <Link key={game.id} href={`/games/${game.id}`}>
-                <div
-                  className="rounded-xl overflow-hidden transition-all duration-200 hover:scale-[1.01] active:scale-[0.98] card-shine animate-slide-up relative"
-                  style={{
-                    animationDelay: `${i * 60}ms`,
-                    background: 'linear-gradient(135deg, rgba(21,29,59,0.95), rgba(14,20,45,0.95))',
-                    border: `1.5px solid ${catColor}33`,
-                    boxShadow: `0 2px 12px rgba(0,0,0,0.3), inset 0 0 20px ${catColor}05`,
-                  }}
-                >
-                  {/* Corner decorations */}
-                  <div className="absolute top-0 left-0 w-2 h-2 border-t border-l" style={{ borderColor: `${catColor}55` }} />
-                  <div className="absolute top-0 right-0 w-2 h-2 border-t border-r" style={{ borderColor: `${catColor}55` }} />
-
-                  <div className="flex items-center p-3 gap-3">
-                    {/* Game Icon */}
-                    <div
-                      className="w-14 h-14 rounded-xl flex items-center justify-center text-2xl flex-shrink-0 relative"
-                      style={{
-                        background: `linear-gradient(135deg, ${catColor}25, ${catColor}0a)`,
-                        border: `1.5px solid ${catColor}40`,
-                        boxShadow: `0 0 10px ${catColor}15`,
-                      }}
-                    >
-                      {game.emoji}
-                    </div>
-
-                    {/* Game Info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <h3 className="text-sm font-bold text-amber-100 truncate">{game.title}</h3>
-                      </div>
-                      <p className="text-[11px] text-amber-200/45 mb-1.5 line-clamp-1">{game.description}</p>
-                      <div className="flex items-center gap-2">
-                        {/* Difficulty */}
-                        <div className="flex gap-0.5">
-                          {Array.from({ length: 5 }).map((_, si) => (
-                            <span key={si} className="text-[8px]" style={{ color: si < game.difficulty ? '#ffd700' : 'rgba(255,255,255,0.12)' }}>★</span>
-                          ))}
-                        </div>
-                        <span className="text-[10px] text-amber-200/20">|</span>
-                        <span className="text-[10px] text-amber-200/40">約{game.estimatedMinutes}分</span>
-                      </div>
-                    </div>
-
-                    {/* ALT Reward */}
-                    <div className="flex flex-col items-center flex-shrink-0">
-                      <div className="w-9 h-9 rounded-full flex items-center justify-center mb-0.5"
-                        style={{
-                          background: 'linear-gradient(135deg, #ffd700, #d4a500)',
-                          boxShadow: '0 0 10px rgba(255,215,0,0.3), 0 2px 4px rgba(0,0,0,0.3)',
-                        }}
-                      >
-                        <span className="text-[11px] font-bold" style={{ color: '#0b1128' }}>A</span>
-                      </div>
-                      <span className="text-[10px] font-bold" style={{ color: '#ffd700' }}>+{game.altReward}</span>
-                    </div>
-                  </div>
+      {/* Game Cards Grid */}
+      <div className="grid grid-cols-2 gap-3">
+        {filteredGames.map((game, i) => (
+          <Link key={game.id} href={`/games/${game.id}`}>
+            <div
+              className="rounded-xl overflow-hidden transition-all active:scale-95"
+              style={{
+                background: '#1E293B',
+                border: '1px solid rgba(255,255,255,0.06)',
+                animation: `slide-up 0.3s ${i * 50}ms ease-out both`,
+              }}
+            >
+              <div
+                className="h-24 flex items-center justify-center relative"
+                style={{
+                  background: `linear-gradient(135deg, ${getCategoryColor(game.category)}15, ${getCategoryColor(game.category)}08)`,
+                }}
+              >
+                <span className="text-4xl">{game.emoji}</span>
+                <div className="absolute top-2 right-2 flex items-center gap-0.5">
+                  {Array.from({ length: game.difficulty }).map((_, j) => (
+                    <Star key={j} className="w-2.5 h-2.5 fill-current" style={{ color: '#F59E0B' }} />
+                  ))}
                 </div>
-              </Link>
-            );
-          })}
-        </div>
+              </div>
+              <div className="p-3">
+                <p className="text-xs font-bold mb-1 truncate" style={{ color: '#F8FAFC' }}>{game.title}</p>
+                <div className="flex items-center gap-1">
+                  <Coins className="w-3 h-3" style={{ color: '#F59E0B' }} />
+                  <span className="text-[10px] font-bold" style={{ color: '#F59E0B' }}>+{game.altReward} ALT</span>
+                </div>
+              </div>
+            </div>
+          </Link>
+        ))}
       </div>
     </div>
   );
+}
+
+function getCategoryColor(category: string): string {
+  const map: Record<string, string> = {
+    math: '#F59E0B', inquiry: '#8B5CF6', puzzle: '#10B981',
+    japanese: '#EC4899', social: '#EF4444', science: '#06B6D4',
+  };
+  return map[category] || '#4F46E5';
 }

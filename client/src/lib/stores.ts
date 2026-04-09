@@ -6,6 +6,7 @@ import { MOCK_USER } from './mockData';
 interface UserState {
   user: User;
   setUser: (user: User) => void;
+  setNickname: (nickname: string) => void;
   updateAlt: (amount: number) => void;
   addTotalAlt: (amount: number) => void;
 }
@@ -13,6 +14,8 @@ interface UserState {
 export const useUserStore = create<UserState>((set) => ({
   user: MOCK_USER,
   setUser: (user) => set({ user }),
+  setNickname: (nickname) =>
+    set((state) => ({ user: { ...state.user, nickname } })),
   updateAlt: (amount) =>
     set((state) => ({
       user: {
