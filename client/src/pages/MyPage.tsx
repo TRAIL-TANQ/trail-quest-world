@@ -2,11 +2,12 @@
  * MyPage: Profile, statistics, settings
  * Fantasy adventurer's guild card style, ornate profile frame
  * Includes avatar change, Level Up & ALT effect test buttons
+ * Shows equipped shop avatar if one is equipped
  */
 import { useState } from 'react';
 import { useUserStore, useAltStore } from '@/lib/stores';
 import { calculateLevel } from '@/lib/level';
-import { IMAGES, CLASS_LIST } from '@/lib/constants';
+import { IMAGES, CLASS_LIST, AVATAR_ITEMS } from '@/lib/constants';
 import { Link } from 'wouter';
 import LevelUpModal from '@/components/effects/LevelUpModal';
 import type { AvatarType } from '@/lib/types';
@@ -15,13 +16,20 @@ export default function MyPage() {
   const user = useUserStore((s) => s.user);
   const addTotalAlt = useUserStore((s) => s.addTotalAlt);
   const setAvatarType = useUserStore((s) => s.setAvatarType);
+  const equipAvatar = useUserStore((s) => s.equipAvatar);
   const triggerEarnEffect = useAltStore((s) => s.triggerEarnEffect);
   const levelInfo = calculateLevel(user.totalAlt);
   const classLabel = CLASS_LIST.find((c) => c.id === user.classId)?.label || user.classId;
   const [showLevelUp, setShowLevelUp] = useState(false);
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
 
-  const avatarImage = user.avatarType === 'girl' ? IMAGES.CHARACTER_GIRL : IMAGES.CHARACTER_BOY;
+  // Get current avatar image (equipped shop avatar or default)
+  const getAvatarIcon = () => {
+    if (user.equippedAvatarId && AVATAR_ITEMS[user.equippedAvatarId]) {
+      return AVATAR_ITEMS[user.equippedAvatarId].icon;
+    }
+    return user.avatarType === 'girl' ? IMAGES.CHARACTER_GIRL : IMAGES.CHARACTER_BOY;
+  };
 
   const stats = [
     { label: 'プレイ回数', value: '42', icon: '🎮' },
@@ -34,6 +42,7 @@ export default function MyPage() {
 
   const handleAvatarSelect = (type: AvatarType) => {
     setAvatarType(type);
+    equipAvatar(null); // Reset equipped shop avatar when selecting default
     setShowAvatarPicker(false);
   };
 
@@ -70,7 +79,7 @@ export default function MyPage() {
             <button onClick={() => setShowAvatarPicker(true)} className="relative group flex-shrink-0">
               <div className="w-16 h-16 rounded-full overflow-hidden relative"
                 style={{ border: '3px solid #ffd700', boxShadow: '0 0 12px rgba(255,215,0,0.4), 0 0 24px rgba(255,215,0,0.15)' }}>
-                <img src={avatarImage} alt="avatar" className="w-full h-full object-cover object-top" />
+                <img src={getAvatarIcon()} alt="avatar" className="w-full h-full object-cover object-top" />
               </div>
               <div className="absolute inset-0 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity"
                 style={{ background: 'rgba(0,0,0,0.5)' }}>
@@ -210,38 +219,38 @@ export default function MyPage() {
             <div className="flex justify-center gap-6">
               {/* Boy */}
               <button onClick={() => handleAvatarSelect('boy')} className="flex flex-col items-center gap-2 transition-all duration-300"
-                style={{ transform: user.avatarType === 'boy' ? 'scale(1.05)' : 'scale(0.95)', opacity: user.avatarType === 'boy' ? 1 : 0.5 }}>
+                style={{ transform: user.avatarType === 'boy' && !user.equippedAvatarId ? 'scale(1.05)' : 'scale(0.95)', opacity: user.avatarType === 'boy' && !user.equippedAvatarId ? 1 : 0.5 }}>
                 <div className="w-20 h-20 rounded-full overflow-hidden relative"
                   style={{
-                    border: user.avatarType === 'boy' ? '3px solid #ffd700' : '3px solid rgba(255,215,0,0.15)',
-                    boxShadow: user.avatarType === 'boy' ? '0 0 16px rgba(255,215,0,0.4)' : 'none',
+                    border: user.avatarType === 'boy' && !user.equippedAvatarId ? '3px solid #ffd700' : '3px solid rgba(255,215,0,0.15)',
+                    boxShadow: user.avatarType === 'boy' && !user.equippedAvatarId ? '0 0 16px rgba(255,215,0,0.4)' : 'none',
                     transition: 'all 0.3s ease',
                   }}>
                   <img src={IMAGES.CHARACTER_BOY} alt="男の子" className="w-full h-full object-cover object-top" />
                 </div>
-                {user.avatarType === 'boy' && (
+                {user.avatarType === 'boy' && !user.equippedAvatarId && (
                   <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-[10px]"
                     style={{ background: 'linear-gradient(135deg, #ffd700, #d4a500)', color: '#0b1128' }}>✓</div>
                 )}
-                <span className="text-xs font-medium" style={{ color: user.avatarType === 'boy' ? '#ffd700' : 'rgba(255,215,0,0.35)' }}>男の子</span>
+                <span className="text-xs font-medium" style={{ color: user.avatarType === 'boy' && !user.equippedAvatarId ? '#ffd700' : 'rgba(255,215,0,0.35)' }}>男の子</span>
               </button>
 
               {/* Girl */}
               <button onClick={() => handleAvatarSelect('girl')} className="flex flex-col items-center gap-2 transition-all duration-300"
-                style={{ transform: user.avatarType === 'girl' ? 'scale(1.05)' : 'scale(0.95)', opacity: user.avatarType === 'girl' ? 1 : 0.5 }}>
+                style={{ transform: user.avatarType === 'girl' && !user.equippedAvatarId ? 'scale(1.05)' : 'scale(0.95)', opacity: user.avatarType === 'girl' && !user.equippedAvatarId ? 1 : 0.5 }}>
                 <div className="w-20 h-20 rounded-full overflow-hidden relative"
                   style={{
-                    border: user.avatarType === 'girl' ? '3px solid #ffd700' : '3px solid rgba(255,215,0,0.15)',
-                    boxShadow: user.avatarType === 'girl' ? '0 0 16px rgba(255,215,0,0.4)' : 'none',
+                    border: user.avatarType === 'girl' && !user.equippedAvatarId ? '3px solid #ffd700' : '3px solid rgba(255,215,0,0.15)',
+                    boxShadow: user.avatarType === 'girl' && !user.equippedAvatarId ? '0 0 16px rgba(255,215,0,0.4)' : 'none',
                     transition: 'all 0.3s ease',
                   }}>
                   <img src={IMAGES.CHARACTER_GIRL} alt="女の子" className="w-full h-full object-cover object-top" />
                 </div>
-                {user.avatarType === 'girl' && (
+                {user.avatarType === 'girl' && !user.equippedAvatarId && (
                   <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-[10px]"
                     style={{ background: 'linear-gradient(135deg, #ffd700, #d4a500)', color: '#0b1128' }}>✓</div>
                 )}
-                <span className="text-xs font-medium" style={{ color: user.avatarType === 'girl' ? '#ffd700' : 'rgba(255,215,0,0.35)' }}>女の子</span>
+                <span className="text-xs font-medium" style={{ color: user.avatarType === 'girl' && !user.equippedAvatarId ? '#ffd700' : 'rgba(255,215,0,0.35)' }}>女の子</span>
               </button>
             </div>
 

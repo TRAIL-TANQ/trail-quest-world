@@ -2,9 +2,10 @@
  * HomePage: World Map style layout - Royal Adventurer's Guild Aesthetic
  * Fantasy landscape background with game category quest markers
  * Character display, daily login streak, featured quests
+ * Shows equipped shop avatar full-body image if one is equipped
  */
 import { Link } from 'wouter';
-import { IMAGES, GAME_CATEGORIES } from '@/lib/constants';
+import { IMAGES, GAME_CATEGORIES, AVATAR_ITEMS } from '@/lib/constants';
 import { useUserStore } from '@/lib/stores';
 import { calculateLevel } from '@/lib/level';
 
@@ -20,6 +21,14 @@ const categoryBgColors: Record<string, [string, string]> = {
 export default function HomePage() {
   const user = useUserStore((s) => s.user);
   const levelInfo = calculateLevel(user.totalAlt);
+
+  // Determine which full-body avatar to show
+  const getFullBodyAvatar = () => {
+    if (user.equippedAvatarId && AVATAR_ITEMS[user.equippedAvatarId]) {
+      return AVATAR_ITEMS[user.equippedAvatarId].full;
+    }
+    return user.avatarType === 'girl' ? IMAGES.CHARACTER_GIRL : IMAGES.CHARACTER_BOY;
+  };
 
   return (
     <div className="relative min-h-full">
@@ -58,7 +67,7 @@ export default function HomePage() {
           {/* Character + Welcome Card */}
           <div className="flex items-end gap-3">
             <div className="w-28 h-36 flex-shrink-0 animate-float relative">
-              <img src={user.avatarType === 'girl' ? IMAGES.CHARACTER_GIRL : IMAGES.CHARACTER_BOY} alt="character"
+              <img src={getFullBodyAvatar()} alt="character"
                 className="w-full h-full object-contain drop-shadow-[0_4px_16px_rgba(255,215,0,0.3)]" />
               <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-20 h-4 rounded-full blur-md"
                 style={{ background: 'rgba(255,215,0,0.15)' }} />

@@ -10,9 +10,11 @@ interface UserState {
   setAvatarType: (avatarType: AvatarType) => void;
   updateAlt: (amount: number) => void;
   addTotalAlt: (amount: number) => void;
+  purchaseAvatar: (avatarId: string, price: number) => boolean;
+  equipAvatar: (avatarId: string | null) => void;
 }
 
-export const useUserStore = create<UserState>((set) => ({
+export const useUserStore = create<UserState>((set, get) => ({
   user: MOCK_USER,
   setUser: (user) => set({ user }),
   setNickname: (nickname) =>
@@ -34,6 +36,21 @@ export const useUserStore = create<UserState>((set) => ({
         currentAlt: state.user.currentAlt + amount,
       },
     })),
+  purchaseAvatar: (avatarId: string, price: number) => {
+    const { user } = get();
+    if (user.currentAlt < price) return false;
+    if (user.purchasedAvatarIds.includes(avatarId)) return false;
+    set({
+      user: {
+        ...user,
+        currentAlt: user.currentAlt - price,
+        purchasedAvatarIds: [...user.purchasedAvatarIds, avatarId],
+      },
+    });
+    return true;
+  },
+  equipAvatar: (avatarId: string | null) =>
+    set((state) => ({ user: { ...state.user, equippedAvatarId: avatarId } })),
 }));
 
 // ALT Effect Store

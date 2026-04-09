@@ -43,6 +43,8 @@ export interface User {
   classId: ClassId;
   avatarUrl: string;
   avatarType: AvatarType;
+  equippedAvatarId: string | null;
+  purchasedAvatarIds: string[];
   titleId?: string;
   level: number;
   totalAlt: number;

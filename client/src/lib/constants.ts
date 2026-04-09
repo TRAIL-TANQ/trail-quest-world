@@ -92,6 +92,18 @@ export const IMAGES = {
   AVATAR_PRINCESS_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/shop-avatar-princess-full-9Z7JE87nqzrVUrhrJVBMBn.png',
 } as const;
 
+// Avatar items for shop - maps avatar IDs to their image URLs
+export const AVATAR_ITEMS: Record<string, { icon: string; full: string }> = {
+  'avatar-samurai': { icon: IMAGES.AVATAR_SAMURAI_ICON, full: IMAGES.AVATAR_SAMURAI_FULL },
+  'avatar-witch': { icon: IMAGES.AVATAR_WITCH_ICON, full: IMAGES.AVATAR_WITCH_FULL },
+  'avatar-pirate': { icon: IMAGES.AVATAR_PIRATE_ICON, full: IMAGES.AVATAR_PIRATE_FULL },
+  'avatar-angel': { icon: IMAGES.AVATAR_ANGEL_ICON, full: IMAGES.AVATAR_ANGEL_FULL },
+  'avatar-dragon-knight': { icon: IMAGES.AVATAR_DRAGON_KNIGHT_ICON, full: IMAGES.AVATAR_DRAGON_KNIGHT_FULL },
+  'avatar-ninja': { icon: IMAGES.AVATAR_NINJA_ICON, full: IMAGES.AVATAR_NINJA_FULL },
+  'avatar-scientist': { icon: IMAGES.AVATAR_SCIENTIST_ICON, full: IMAGES.AVATAR_SCIENTIST_FULL },
+  'avatar-princess': { icon: IMAGES.AVATAR_PRINCESS_ICON, full: IMAGES.AVATAR_PRINCESS_FULL },
+};
+
 export const CATEGORY_TABS = [
   { id: 'all', label: '全て', emoji: '🎯' },
   { id: 'math', label: '算数', emoji: '🔢' },

@@ -1,14 +1,23 @@
 /*
  * Header: RPG-style top bar with character avatar, level, XP bar, ALT balance
  * Gold frame on dark navy, ornate styling with decorative elements
+ * Shows equipped shop avatar icon if one is equipped, otherwise default boy/girl
  */
 import { useUserStore } from '@/lib/stores';
 import { calculateLevel } from '@/lib/level';
-import { IMAGES } from '@/lib/constants';
+import { IMAGES, AVATAR_ITEMS } from '@/lib/constants';
 
 export default function Header() {
   const user = useUserStore((s) => s.user);
   const levelInfo = calculateLevel(user.totalAlt);
+
+  // Determine which avatar icon to show
+  const getAvatarIcon = () => {
+    if (user.equippedAvatarId && AVATAR_ITEMS[user.equippedAvatarId]) {
+      return AVATAR_ITEMS[user.equippedAvatarId].icon;
+    }
+    return user.avatarType === 'girl' ? IMAGES.CHARACTER_GIRL : IMAGES.CHARACTER_BOY;
+  };
 
   return (
     <header className="sticky top-0 z-50 w-full">
@@ -33,7 +42,7 @@ export default function Header() {
           }}
         >
           <img
-            src={user.avatarType === 'girl' ? IMAGES.CHARACTER_GIRL : IMAGES.CHARACTER_BOY}
+            src={getAvatarIcon()}
             alt="avatar"
             className="w-full h-full object-cover object-top"
           />
