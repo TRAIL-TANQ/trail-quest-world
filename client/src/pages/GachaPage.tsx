@@ -22,11 +22,10 @@ function rollCollectionCard(premium: boolean): CollectionCard {
   const rand = Math.random();
   let rarity: CollectionRarity;
   if (premium) {
-    // プレミアム: SSR 3%, SR 15%, R 42%, N 40%
-    if (rand < 0.03) rarity = 'SSR';
-    else if (rand < 0.18) rarity = 'SR';
-    else if (rand < 0.60) rarity = 'R';
-    else rarity = 'N';
+    // プレミアム: SSR 15%, SR 35%, R 50% (N排出なし)
+    if (rand < 0.15) rarity = 'SSR';
+    else if (rand < 0.50) rarity = 'SR';
+    else rarity = 'R';
   } else {
     // ノーマル: SSR 1%, SR 9%, R 30%, N 60%
     if (rand < GACHA_RARITY_RATES.SSR) rarity = 'SSR';
@@ -349,16 +348,35 @@ export default function GachaPage() {
 
             {/* Rarity table */}
             <div className="rounded-xl p-3 mt-2" style={{ background: 'rgba(255,215,0,0.04)', border: '1px solid rgba(255,215,0,0.1)' }}>
-              <p className="text-[10px] text-amber-200/50 text-center mb-2">排出率</p>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                {(['SSR', 'SR', 'R', 'N'] as CollectionRarity[]).map((r) => (
-                  <div key={r} className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold" style={{ color: RARITY_COLOR_MAP[r] }}>{r}</span>
-                    <span className="text-[10px] text-amber-200/40">
-                      {r === 'SSR' ? '1%' : r === 'SR' ? '9%' : r === 'R' ? '30%' : '60%'}
-                    </span>
+              <div className="grid grid-cols-2 gap-3">
+                {/* ノーマル排出率 */}
+                <div>
+                  <p className="text-[10px] text-blue-300/70 font-bold mb-1.5 text-center">ノーマル</p>
+                  {(['SSR', 'SR', 'R', 'N'] as CollectionRarity[]).map((r) => (
+                    <div key={r} className="flex items-center justify-between mb-0.5">
+                      <span className="text-[10px] font-bold" style={{ color: RARITY_COLOR_MAP[r] }}>{r}</span>
+                      <span className="text-[10px] text-amber-200/40">
+                        {r === 'SSR' ? '1%' : r === 'SR' ? '9%' : r === 'R' ? '30%' : '60%'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                {/* プレミアム排出率 */}
+                <div>
+                  <p className="text-[10px] font-bold mb-1.5 text-center" style={{ color: '#ffd700' }}>プレミアム</p>
+                  {(['SSR', 'SR', 'R'] as CollectionRarity[]).map((r) => (
+                    <div key={r} className="flex items-center justify-between mb-0.5">
+                      <span className="text-[10px] font-bold" style={{ color: RARITY_COLOR_MAP[r] }}>{r}</span>
+                      <span className="text-[10px] text-amber-200/40">
+                        {r === 'SSR' ? '15%' : r === 'SR' ? '35%' : '50%'}
+                      </span>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="text-[10px] font-bold" style={{ color: RARITY_COLOR_MAP['N'] }}>N</span>
+                    <span className="text-[10px]" style={{ color: '#22c55e' }}>なし</span>
                   </div>
-                ))}
+                </div>
               </div>
             </div>
           </div>
