@@ -8,7 +8,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { GACHA_COSTS, RARITY_LABELS, RARITY_COLORS, RARITY_STARS, IMAGES } from '@/lib/constants';
 import { COLLECTION_CARDS, GACHA_RARITY_RATES } from '@/lib/cardData';
-import { useUserStore, useGachaStore, useCollectionStore } from '@/lib/stores';
+import { useUserStore, useGachaStore, useCollectionStore, useMissionStore } from '@/lib/stores';
 import type { GachaHistoryEntry } from '@/lib/stores';
 import type { CollectionCard, CollectionRarity } from '@/lib/types';
 import { toast } from 'sonner';
@@ -78,6 +78,7 @@ export default function GachaPage() {
   const addCards = useCollectionStore((s) => s.addCards);
   const addCard = useCollectionStore((s) => s.addCard);
   const ownedCardIds = useCollectionStore((s) => s.ownedCardIds);
+  const updateMissionProgress = useMissionStore((s) => s.updateProgress);
 
   const [phase, setPhase] = useState<GachaPhase>('idle');
   const [pulledCard, setPulledCard] = useState<CollectionCard | null>(null);
@@ -119,6 +120,10 @@ export default function GachaPage() {
     const alreadyOwned = ownedCardIds.has(card.id);
     setIsDuplicate(alreadyOwned);
     addCard(card.id);
+
+    // ミッション進捗更新
+    updateMissionProgress(type === 'premium' ? 'mission-004' : 'mission-002', 1);
+    if (rarity === 'SR' || rarity === 'SSR') updateMissionProgress('mission-005', 1);
 
     // 履歴に追加
     addHistory({
@@ -185,6 +190,11 @@ export default function GachaPage() {
 
     const cardIds = cards.map((c) => c.id);
     addCards(cardIds);
+
+    // ミッション進捗更新（10連）
+    updateMissionProgress(type === 'premium' ? 'mission-004' : 'mission-002', 10);
+    const srAboveCount = cards.filter((c) => c.rarity === 'SR' || c.rarity === 'SSR').length;
+    if (srAboveCount > 0) updateMissionProgress('mission-005', 1);
 
     // 履歴に追加（10枚）
     cards.forEach((card) => {

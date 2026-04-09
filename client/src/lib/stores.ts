@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { User, GameResult, AvatarType, CollectionCard } from './types';
-import { MOCK_USER } from './mockData';
+import { MOCK_USER, MOCK_DAILY_MISSIONS } from './mockData';
 
 // User Store
 interface UserState {
@@ -143,6 +143,63 @@ export const useCollectionStore = create<CollectionState>((set, get) => ({
       return { newCardIds: next };
     }),
   clearAllNew: () => set({ newCardIds: new Set<string>() }),
+}));
+
+// Mission Store
+export interface MissionEntry {
+  id: string;
+  title: string;
+  description: string;
+  reward: number;
+  category: string;
+  progress: number;
+  target: number;
+  completed: boolean;
+  claimed: boolean;
+  completedAt?: number;
+}
+
+interface MissionState {
+  missions: MissionEntry[];
+  completedHistory: MissionEntry[];
+  updateProgress: (missionId: string, delta: number) => boolean; // returns true if newly completed
+  claimReward: (missionId: string) => number; // returns reward amount
+  resetDaily: () => void;
+}
+
+export const useMissionStore = create<MissionState>((set, get) => ({
+  missions: MOCK_DAILY_MISSIONS.map((m) => ({ ...m, completed: false, claimed: false })),
+  completedHistory: [],
+  updateProgress: (missionId, delta) => {
+    let newlyCompleted = false;
+    set((state) => ({
+      missions: state.missions.map((m) => {
+        if (m.id !== missionId || m.completed) return m;
+        const newProgress = Math.min(m.progress + delta, m.target);
+        const justCompleted = newProgress >= m.target;
+        if (justCompleted) newlyCompleted = true;
+        return { ...m, progress: newProgress, completed: justCompleted, completedAt: justCompleted ? Date.now() : undefined };
+      }),
+    }));
+    return newlyCompleted;
+  },
+  claimReward: (missionId) => {
+    let reward = 0;
+    set((state) => {
+      const mission = state.missions.find((m) => m.id === missionId);
+      if (!mission || !mission.completed || mission.claimed) return state;
+      reward = mission.reward;
+      return {
+        missions: state.missions.map((m) => m.id === missionId ? { ...m, claimed: true } : m),
+        completedHistory: [{ ...mission, claimed: true }, ...state.completedHistory].slice(0, 50),
+      };
+    });
+    return reward;
+  },
+  resetDaily: () =>
+    set({
+      missions: MOCK_DAILY_MISSIONS.map((m) => ({ ...m, completed: false, claimed: false })),
+    }),
 }));
 
 // Gacha History Entry
