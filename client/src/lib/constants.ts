@@ -152,13 +152,21 @@ export const CARD_RARITY_COLORS: Record<string, string> = {
   SSR: '#A855F7',  // Purple/Rainbow
 };
 
-// Card category display info (representative images per category)
+// Card rarity representative images (used for all cards of same rarity)
+export const CARD_RARITY_IMAGES: Record<string, string> = {
+  N: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-v2-n-kPu7ZFuWT2GeTf2MLdEJCw.webp',
+  R: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-v2-r-mZgBL7gwn7vCxTHa746Sig.webp',
+  SR: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-v2-sr-XySLx9ch4Rk6tDm6eDiAdS.webp',
+  SSR: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-v2-ssr-na7Dp8Tm8JQba5nGvv2f3V.webp',
+};
+
+// Card category display info (representative images per category - deprecated, use CARD_RARITY_IMAGES instead)
 export const CARD_CATEGORY_IMAGES: Record<string, string> = {
-  great_people: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-rep-greatpeople-RpcZ373Z2p9EBjHLHZcSMr.webp',
-  creatures: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-rep-creatures-4jeoxSULEbSgU5qG2WqnSm.webp',
-  world_heritage: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-rep-heritage-aqbSNJQssvZWPnm58JMhpP.webp',
-  inventions: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-rep-inventions-Voi9cf8tbBi8achiFohKea.webp',
-  discovery: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-rep-discovery-25cUS7nweeKMMbRak5vuBt.webp',
+  great_people: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-rep-sr-LMx2AHbGgNtTL85NAiybHj.webp',
+  creatures: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-rep-sr-LMx2AHbGgNtTL85NAiybHj.webp',
+  world_heritage: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-rep-sr-LMx2AHbGgNtTL85NAiybHj.webp',
+  inventions: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-rep-n-HvgDEr3VJJJWWzEB9mtuRQ.webp',
+  discovery: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-rep-ssr-aFRkQBrpWBfRMaXSxKo9Lj.webp',
 };
 
 export const CARD_CATEGORY_INFO: Record<string, { label: string; emoji: string }> = {

@@ -244,48 +244,20 @@ export default function CollectionPage() {
 
       {/* カード枠スタイル定義 */}
       <style>{`
-        /* 共通カード枠スタイル */
+        /* 共通カード枠スタイル - 枠は画像に含まれているのでCSSはシンプルに */
         .card-frame-n,
         .card-frame-r,
         .card-frame-sr,
         .card-frame-ssr {
-          border: 3px solid;
+          border: none;
           box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-          background: linear-gradient(135deg, rgba(21,29,59,0.95), rgba(14,20,45,0.95));
+          background: transparent;
           position: relative;
-        }
-
-        /* N（ノーマル）: グレー枠 */
-        .card-frame-n {
-          border-color: #9ca3af;
-        }
-
-        /* R（レア）: 薄いゴールド枠 */
-        .card-frame-r {
-          border-color: #d4a574;
-        }
-
-        /* SR（スーパーレア）: 濃いゴールド枠 */
-        .card-frame-sr {
-          border-color: #f59e0b;
         }
 
         /* SSR（スーパースーパーレア）: 虹色グラデーション枠 */
         .card-frame-ssr {
-          border: 3px solid;
-          border-image: linear-gradient(135deg, #a855f7, #ec4899, #8b5cf6, #f59e0b) 1;
           box-shadow: 0 0 12px rgba(168,85,247,0.4), 0 0 24px rgba(168,85,247,0.15), 0 2px 8px rgba(0,0,0,0.3);
-        }
-
-        /* SSR内側装飾線 */
-        .card-frame-ssr::before {
-          content: '';
-          position: absolute;
-          inset: 0;
-          border: 1px solid rgba(168,85,247,0.5);
-          border-radius: 0.75rem;
-          pointer-events: none;
-          margin: 3px;
         }
 
         /* 未所持カード */
@@ -300,39 +272,14 @@ export default function CollectionPage() {
         .card-frame-modal-r,
         .card-frame-modal-sr,
         .card-frame-modal-ssr {
-          border: 3px solid;
+          border: none;
           box-shadow: 0 0 30px rgba(0,0,0,0.5), 0 8px 32px rgba(0,0,0,0.7);
           background: linear-gradient(135deg, rgba(21,29,59,0.98), rgba(11,17,40,0.98));
           position: relative;
         }
 
-        .card-frame-modal-n {
-          border-color: #9ca3af;
-        }
-
-        .card-frame-modal-r {
-          border-color: #d4a574;
-        }
-
-        .card-frame-modal-sr {
-          border-color: #f59e0b;
-        }
-
         .card-frame-modal-ssr {
-          border: 3px solid;
-          border-image: linear-gradient(135deg, #a855f7, #ec4899, #8b5cf6, #f59e0b) 1;
           box-shadow: 0 0 30px rgba(168,85,247,0.4), 0 0 60px rgba(168,85,247,0.2), 0 8px 32px rgba(0,0,0,0.7);
-        }
-
-        /* モーダルSSR内側装飾線 */
-        .card-frame-modal-ssr::before {
-          content: '';
-          position: absolute;
-          inset: 0;
-          border: 1px solid rgba(168,85,247,0.5);
-          border-radius: 1rem;
-          pointer-events: none;
-          margin: 3px;
         }
 
         @keyframes shimmer {
