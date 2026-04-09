@@ -50,8 +50,8 @@ export default function AltEarnEffect() {
       <div
         className="text-2xl font-extrabold"
         style={{
-          color: '#F59E0B',
-          textShadow: '0 0 16px rgba(245,158,11,0.6), 0 2px 4px rgba(0,0,0,0.5)',
+          color: '#ffd700',
+          textShadow: '0 0 16px rgba(255,215,0,0.6), 0 2px 4px rgba(0,0,0,0.5)',
           animation: 'coin-float 1.5s ease-out forwards',
         }}
       >
@@ -64,8 +64,8 @@ export default function AltEarnEffect() {
           key={p.id}
           className="absolute w-2.5 h-2.5 rounded-full"
           style={{
-            background: '#F59E0B',
-            boxShadow: '0 0 6px rgba(245,158,11,0.6)',
+            background: '#ffd700',
+            boxShadow: '0 0 6px rgba(255,215,0,0.6)',
             '--tx': `${p.tx}px`,
             '--ty': `${p.ty}px`,
             animation: `coin-burst 0.8s ${p.delay}s ease-out forwards`,

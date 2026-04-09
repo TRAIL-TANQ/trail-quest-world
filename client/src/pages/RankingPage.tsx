@@ -1,116 +1,117 @@
 /*
- * RankingPage: Dark UI × Neon - Daily/Weekly/Monthly tabs + ranking list
+ * RankingPage: Daily/Weekly/Monthly ranking tabs
+ * Colosseum background, gold trophy styling, ornate ranking list
  */
 import { useState } from 'react';
+import { IMAGES } from '@/lib/constants';
 import { MOCK_RANKINGS } from '@/lib/mockData';
-import { Trophy, Coins } from 'lucide-react';
+import { useUserStore } from '@/lib/stores';
 
-const TABS = [
+const tabs = [
   { id: 'daily', label: 'デイリー' },
   { id: 'weekly', label: 'ウィークリー' },
   { id: 'monthly', label: 'マンスリー' },
 ];
 
-const RANK_COLORS: Record<number, string> = {
-  1: '#F59E0B',
-  2: '#94A3B8',
-  3: '#CD7F32',
-};
+const medalColors = ['#ffd700', '#c0c0c0', '#cd7f32'];
+const medalEmoji = ['🥇', '🥈', '🥉'];
 
 export default function RankingPage() {
   const [activeTab, setActiveTab] = useState('daily');
+  const user = useUserStore((s) => s.user);
 
   return (
-    <div className="px-4 py-4">
-      <h1 className="text-lg font-bold mb-3" style={{ color: '#F8FAFC' }}>ランキング</h1>
+    <div className="relative min-h-full">
+      <div className="absolute inset-0 z-0">
+        <img src={IMAGES.RANKING_BG} alt="" className="w-full h-full object-cover" style={{ filter: 'brightness(0.25) saturate(0.7)' }} />
+        <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(11,17,40,0.6) 0%, rgba(11,17,40,0.95) 100%)' }} />
+      </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 p-1 rounded-xl mb-4" style={{ background: 'rgba(255,255,255,0.03)' }}>
-        {TABS.map((tab) => {
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className="flex-1 py-2 rounded-lg text-xs font-semibold transition-all"
-              style={{
-                background: isActive ? '#4F46E5' : 'transparent',
-                color: isActive ? '#F8FAFC' : '#94A3B8',
-                boxShadow: isActive ? '0 0 12px rgba(79,70,229,0.3)' : 'none',
-              }}
-            >
+      <div className="relative z-10 px-4 pt-4 pb-4">
+        <div className="flex items-center gap-2 mb-4">
+          <span className="text-xl">🏆</span>
+          <h1 className="text-lg font-bold" style={{ color: '#ffd700', textShadow: '0 0 10px rgba(255,215,0,0.3)' }}>ランキング</h1>
+        </div>
+
+        <div className="flex gap-1 mb-4 p-1 rounded-xl"
+          style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,215,0,0.15)' }}>
+          {tabs.map((tab) => (
+            <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+              className="flex-1 py-2 rounded-lg text-xs font-bold transition-all"
+              style={activeTab === tab.id ? {
+                background: 'linear-gradient(135deg, #ffd700, #f0a500)',
+                color: '#0b1128', boxShadow: '0 2px 8px rgba(255,215,0,0.3)',
+              } : { color: 'rgba(255,255,255,0.4)' }}>
               {tab.label}
             </button>
-          );
-        })}
-      </div>
-
-      {/* My Rank Banner */}
-      <div
-        className="rounded-xl p-3 mb-4 flex items-center gap-3"
-        style={{
-          background: 'linear-gradient(135deg, rgba(79,70,229,0.15), rgba(79,70,229,0.05))',
-          border: '1px solid rgba(79,70,229,0.2)',
-        }}
-      >
-        <div className="w-10 h-10 rounded-full flex items-center justify-center text-lg shrink-0" style={{ background: 'linear-gradient(135deg, #4F46E5, #7C3AED)' }}>
-          🧑‍🎓
+          ))}
         </div>
-        <div className="flex-1">
-          <p className="text-xs font-bold" style={{ color: '#F8FAFC' }}>あなたの順位</p>
-          <p className="text-[10px]" style={{ color: '#94A3B8' }}>もっとプレイして上を目指そう！</p>
-        </div>
-        <div className="text-right">
-          <p className="text-xl font-black" style={{ color: '#A5B4FC' }}>4位</p>
-          <div className="flex items-center gap-0.5">
-            <Coins className="w-3 h-3" style={{ color: '#F59E0B' }} />
-            <span className="text-[10px] font-bold" style={{ color: '#F59E0B' }}>170 ALT</span>
-          </div>
-        </div>
-      </div>
 
-      {/* Ranking List */}
-      <div className="space-y-2">
-        {MOCK_RANKINGS.map((entry, i) => {
-          const rank = i + 1;
-          const isTop3 = rank <= 3;
-          const rankColor = RANK_COLORS[rank] || '#94A3B8';
+        <div className="flex items-center justify-between mb-3 px-1">
+          <span className="text-[10px] text-amber-200/40">
+            {activeTab === 'daily' ? '残り 06:00 JST' : activeTab === 'weekly' ? '残り 3日' : '残り 22日'}
+          </span>
+          <span className="text-[10px] text-amber-200/40">参加者 {MOCK_RANKINGS.length * 12}人</span>
+        </div>
 
-          return (
-            <div
-              key={entry.userId}
-              className="rounded-xl p-3 flex items-center gap-3"
+        <div className="gold-frame rounded-xl overflow-hidden">
+          {MOCK_RANKINGS.map((entry, i) => (
+            <div key={entry.rank} className="flex items-center gap-3 px-3 py-2.5 transition-all animate-slide-up"
               style={{
-                background: isTop3 ? `linear-gradient(135deg, ${rankColor}10, ${rankColor}05)` : '#1E293B',
-                border: isTop3 ? `1px solid ${rankColor}30` : '1px solid rgba(255,255,255,0.06)',
-              }}
-            >
-              <div className="w-8 text-center shrink-0">
-                {isTop3 ? (
-                  <Trophy className="w-5 h-5 mx-auto" style={{ color: rankColor }} />
-                ) : (
-                  <span className="text-sm font-bold" style={{ color: '#94A3B8' }}>{rank}</span>
-                )}
+                animationDelay: `${i * 50}ms`,
+                borderBottom: i < MOCK_RANKINGS.length - 1 ? '1px solid rgba(255,215,0,0.08)' : 'none',
+                background: entry.rank <= 3 ? `linear-gradient(90deg, ${medalColors[entry.rank - 1]}11, transparent)` : 'transparent',
+              }}>
+              <div className="w-8 text-center flex-shrink-0">
+                {entry.rank <= 3 ? <span className="text-xl">{medalEmoji[entry.rank - 1]}</span>
+                  : <span className="text-sm font-bold text-amber-200/40">{entry.rank}</span>}
               </div>
-              <div
-                className="w-9 h-9 rounded-full flex items-center justify-center text-sm shrink-0"
+              <div className="w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center text-lg"
                 style={{
-                  background: isTop3 ? `${rankColor}20` : 'rgba(255,255,255,0.05)',
-                  border: isTop3 ? `1px solid ${rankColor}40` : '1px solid rgba(255,255,255,0.06)',
-                }}
-              >
-                👤
-              </div>
+                  background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
+                  border: entry.rank <= 3 ? `2px solid ${medalColors[entry.rank - 1]}` : '1px solid rgba(255,255,255,0.1)',
+                }}>👤</div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold truncate" style={{ color: '#F8FAFC' }}>{entry.nickname}</p>
+                <p className="text-sm font-bold text-amber-100 truncate">{entry.nickname}</p>
+                <p className="text-[10px] text-amber-200/40">Lv.{entry.level}</p>
               </div>
-              <div className="flex items-center gap-1 shrink-0">
-                <Coins className="w-3.5 h-3.5" style={{ color: '#F59E0B' }} />
-                <span className="text-sm font-bold tabular-nums" style={{ color: '#F59E0B' }}>{entry.score}</span>
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <span className="text-sm font-bold font-[var(--font-orbitron)]" style={{ color: '#ffd700' }}>{entry.score}</span>
+                <span className="text-[10px]" style={{ color: '#ffd700' }}>ALT</span>
               </div>
             </div>
-          );
-        })}
+          ))}
+        </div>
+
+        <div className="mt-3 gold-frame rounded-xl p-3">
+          <div className="flex items-center gap-3">
+            <div className="w-8 text-center"><span className="text-sm font-bold text-amber-200/40">12</span></div>
+            <div className="w-9 h-9 rounded-full flex-shrink-0 overflow-hidden"
+              style={{ border: '2px solid #ffd700', boxShadow: '0 0 8px rgba(255,215,0,0.3)' }}>
+              <img src={IMAGES.CHARACTER} alt="" className="w-full h-full object-cover object-top" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-bold text-amber-100">{user.nickname} <span className="text-[10px] text-amber-300">（あなた）</span></p>
+              <p className="text-[10px] text-amber-200/40">Lv.{user.level}</p>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="text-sm font-bold font-[var(--font-orbitron)]" style={{ color: '#ffd700' }}>{user.currentAlt}</span>
+              <span className="text-[10px]" style={{ color: '#ffd700' }}>ALT</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-3 gold-frame-thin rounded-xl p-3">
+          <p className="text-[10px] text-amber-200/40 mb-2 font-bold">🎁 ランキング報酬</p>
+          <div className="space-y-1">
+            {[['🥇 1位', '300'], ['🥈 2位', '200'], ['🥉 3位', '100']].map(([label, alt]) => (
+              <div key={label} className="flex items-center justify-between text-[11px]">
+                <span className="text-amber-200/60">{label}</span>
+                <span style={{ color: '#ffd700' }}>{alt} ALT</span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );

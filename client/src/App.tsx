@@ -1,6 +1,6 @@
 /*
- * TRAIL QUEST WORLD - Dark UI × Neon Game Center
- * Background: #0F172A | Surface: #1E293B | Primary: #4F46E5 | ALT: #F59E0B
+ * TRAIL QUEST WORLD - Royal Adventurer's Guild Aesthetic
+ * Dark Navy (#0b1128) + Gold (#ffd700) + Ornate Frames
  */
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -37,7 +37,7 @@ function Router() {
             <Route path="/mypage" component={MyPage} />
             <Route>
               <div className="flex items-center justify-center min-h-[60vh]">
-                <p className="text-lg font-bold" style={{ color: '#94A3B8' }}>ページが見つかりません</p>
+                <p className="text-lg font-bold gold-text">ページが見つかりません</p>
               </div>
             </Route>
           </Switch>

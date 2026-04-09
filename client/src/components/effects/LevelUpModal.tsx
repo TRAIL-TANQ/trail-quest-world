@@ -20,7 +20,7 @@ interface GoldParticle {
 }
 
 export default function LevelUpModal({ isOpen, onClose, newLevel, title }: LevelUpModalProps) {
-  const [phase, setPhase] = useState(0); // 0=hidden, 1=bg, 2=text, 3=level, 4=title, 5=particles+ok
+  const [phase, setPhase] = useState(0);
 
   const particles = useMemo<GoldParticle[]>(() => {
     const arr: GoldParticle[] = [];
@@ -42,10 +42,7 @@ export default function LevelUpModal({ isOpen, onClose, newLevel, title }: Level
   }, []);
 
   useEffect(() => {
-    if (!isOpen) {
-      setPhase(0);
-      return;
-    }
+    if (!isOpen) { setPhase(0); return; }
     setPhase(1);
     const t1 = setTimeout(() => setPhase(2), 200);
     const t2 = setTimeout(() => setPhase(3), 700);
@@ -57,100 +54,69 @@ export default function LevelUpModal({ isOpen, onClose, newLevel, title }: Level
   if (!isOpen && phase === 0) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-[200] flex items-center justify-center"
-      style={{
-        background: phase >= 1 ? 'rgba(0,0,0,0.85)' : 'transparent',
-        transition: 'background 0.3s ease',
-      }}
-    >
+    <div className="fixed inset-0 z-[200] flex items-center justify-center"
+      style={{ background: phase >= 1 ? 'rgba(0,0,0,0.85)' : 'transparent', transition: 'background 0.3s ease' }}>
       {/* Flash effect */}
       {phase === 2 && (
-        <div
-          className="absolute inset-0"
-          style={{
-            background: 'radial-gradient(circle, rgba(245,158,11,0.3) 0%, transparent 70%)',
-            animation: 'flash 0.6s ease-out forwards',
-          }}
-        />
+        <div className="absolute inset-0"
+          style={{ background: 'radial-gradient(circle, rgba(255,215,0,0.3) 0%, transparent 70%)', animation: 'flash 0.6s ease-out forwards' }} />
       )}
 
       {/* Gold particles */}
       {phase >= 5 && particles.map((p) => (
-        <div
-          key={p.id}
-          className="absolute rounded-full"
+        <div key={p.id} className="absolute rounded-full"
           style={{
-            left: `${p.x}%`,
-            top: `${p.y}%`,
-            width: p.size,
-            height: p.size,
-            background: '#F59E0B',
-            boxShadow: '0 0 6px rgba(245,158,11,0.5)',
-            '--px': `${p.px}px`,
-            '--py': `${p.py}px`,
-            animation: `particle-fly ${p.duration}s ${p.delay}s ease-out infinite`,
-            opacity: 0,
-          } as React.CSSProperties}
-        />
+            left: `${p.x}%`, top: `${p.y}%`, width: p.size, height: p.size,
+            background: '#ffd700', boxShadow: '0 0 6px rgba(255,215,0,0.5)',
+            '--px': `${p.px}px`, '--py': `${p.py}px`,
+            animation: `particle-fly ${p.duration}s ${p.delay}s ease-out infinite`, opacity: 0,
+          } as React.CSSProperties} />
       ))}
 
       <div className="relative flex flex-col items-center gap-4 px-8">
         {/* LEVEL UP! text */}
         {phase >= 2 && (
-          <div
-            className="text-4xl font-black tracking-widest"
+          <div className="text-4xl font-black tracking-widest"
             style={{
-              color: '#F59E0B',
-              textShadow: '0 0 20px rgba(245,158,11,0.6), 0 0 40px rgba(245,158,11,0.3), 0 2px 4px rgba(0,0,0,0.5)',
+              color: '#ffd700',
+              textShadow: '0 0 20px rgba(255,215,0,0.6), 0 0 40px rgba(255,215,0,0.3), 0 2px 4px rgba(0,0,0,0.5)',
               animation: 'level-up-text 0.6s ease-out forwards',
-            }}
-          >
+              fontFamily: 'var(--font-cinzel), serif',
+            }}>
             LEVEL UP!
           </div>
         )}
 
         {/* Level number */}
         {phase >= 3 && (
-          <div
-            className="text-6xl font-black"
+          <div className="text-6xl font-black font-[var(--font-orbitron)]"
             style={{
-              color: '#F8FAFC',
-              textShadow: '0 0 16px rgba(79,70,229,0.5), 0 2px 4px rgba(0,0,0,0.5)',
+              color: '#fde68a',
+              textShadow: '0 0 16px rgba(255,215,0,0.5), 0 2px 4px rgba(0,0,0,0.5)',
               animation: 'bounce-in 0.5s ease-out forwards',
-            }}
-          >
+            }}>
             Lv. {newLevel}
           </div>
         )}
 
         {/* Title */}
         {phase >= 4 && (
-          <div
-            className="text-lg font-bold px-6 py-2 rounded-full"
+          <div className="text-lg font-bold px-6 py-2 rounded-full"
             style={{
-              background: 'rgba(79,70,229,0.2)',
-              border: '1px solid rgba(79,70,229,0.4)',
-              color: '#A5B4FC',
+              background: 'rgba(255,215,0,0.1)',
+              border: '1px solid rgba(255,215,0,0.3)',
+              color: '#fde68a',
               animation: 'scale-in 0.3s ease-out forwards',
-            }}
-          >
+            }}>
             {title}
           </div>
         )}
 
         {/* OK button */}
         {phase >= 5 && (
-          <button
-            onClick={onClose}
-            className="mt-6 px-10 py-3 rounded-lg text-base font-bold transition-all active:scale-95"
-            style={{
-              background: 'linear-gradient(135deg, #4F46E5, #6366F1)',
-              color: '#F8FAFC',
-              boxShadow: '0 4px 12px rgba(79,70,229,0.4)',
-              animation: 'scale-in 0.3s ease-out forwards',
-            }}
-          >
+          <button onClick={onClose}
+            className="rpg-btn rpg-btn-gold mt-6 px-10 py-3 text-base"
+            style={{ animation: 'scale-in 0.3s ease-out forwards' }}>
             OK
           </button>
         )}
@@ -158,11 +124,8 @@ export default function LevelUpModal({ isOpen, onClose, newLevel, title }: Level
 
       {/* Close button */}
       {phase >= 5 && (
-        <button
-          onClick={onClose}
-          className="absolute top-8 right-6 p-2 rounded-full active:scale-90"
-          style={{ color: '#94A3B8' }}
-        >
+        <button onClick={onClose} className="absolute top-8 right-6 p-2 rounded-full active:scale-90"
+          style={{ color: 'rgba(255,215,0,0.4)' }}>
           <X className="w-5 h-5" />
         </button>
       )}

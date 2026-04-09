@@ -1,213 +1,251 @@
 /*
- * HomePage: Dark UI × Neon color game center feel
- * Profile card, ALT balance, level progress, daily missions, quick access
+ * HomePage: World Map style layout - Royal Adventurer's Guild Aesthetic
+ * Fantasy landscape background with game category quest markers
+ * Character display, daily login streak, featured quests
  */
+import { Link } from 'wouter';
+import { IMAGES, GAME_CATEGORIES } from '@/lib/constants';
 import { useUserStore } from '@/lib/stores';
 import { calculateLevel } from '@/lib/level';
-import { Link } from 'wouter';
-import { Coins, Zap, Flame, ChevronRight, Sparkles, Target, TrendingUp } from 'lucide-react';
 
-const DAILY_MISSIONS = [
-  { id: 1, name: 'ゲームを3回プレイ', reward: 30, progress: 1, total: 3, emoji: '🎮' },
-  { id: 2, name: 'ランキングTOP10に入る', reward: 50, progress: 0, total: 1, emoji: '🏆' },
-  { id: 3, name: 'ガチャを1回引く', reward: 20, progress: 0, total: 1, emoji: '🎰' },
-];
-
-const QUICK_ACCESS = [
-  { label: '人気', emoji: '🔥', color: '#EF4444', path: '/games' },
-  { label: '新着', emoji: '✨', color: '#8B5CF6', path: '/games' },
-  { label: '挑戦中', emoji: '⚔️', color: '#F59E0B', path: '/games' },
-];
+const categoryIcons: Record<string, string> = {
+  math: '🔢', inquiry: '💡', puzzle: '🧩', japanese: '📝', social: '🏯', science: '🔬',
+};
+const categoryBgColors: Record<string, [string, string]> = {
+  math: ['#f59e0b', '#d97706'], inquiry: ['#8b5cf6', '#7c3aed'],
+  puzzle: ['#22c55e', '#16a34a'], japanese: ['#ec4899', '#db2777'],
+  social: ['#ef4444', '#dc2626'], science: ['#06b6d4', '#0891b2'],
+};
 
 export default function HomePage() {
   const user = useUserStore((s) => s.user);
   const levelInfo = calculateLevel(user.totalAlt);
 
   return (
-    <div className="px-4 py-4 space-y-4">
-      {/* Profile Card */}
-      <div
-        className="rounded-xl p-4 flex items-center gap-3"
-        style={{
-          background: '#1E293B',
-          border: '1px solid rgba(255,255,255,0.06)',
-        }}
-      >
-        <div
-          className="w-14 h-14 rounded-full flex items-center justify-center text-2xl shrink-0"
-          style={{
-            background: 'linear-gradient(135deg, #4F46E5, #7C3AED)',
-            boxShadow: '0 0 16px rgba(79,70,229,0.3)',
-          }}
-        >
-          🧑‍🎓
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="text-base font-bold" style={{ color: '#F8FAFC' }}>{user.nickname}</span>
-            <span
-              className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-              style={{ background: 'rgba(79,70,229,0.2)', color: '#A5B4FC', border: '1px solid rgba(79,70,229,0.3)' }}
-            >
-              Lv.{levelInfo.level}
-            </span>
-          </div>
-          <p className="text-xs mt-0.5" style={{ color: '#94A3B8' }}>{levelInfo.title}</p>
-          <div className="flex items-center gap-1 mt-1">
-            <Flame className="w-3 h-3" style={{ color: '#EF4444' }} />
-            <span className="text-[10px] font-medium" style={{ color: '#94A3B8' }}>
-              {user.streakDays}日連続ログイン
-            </span>
-          </div>
-        </div>
+    <div className="relative min-h-full">
+      {/* World Map Background */}
+      <div className="absolute inset-0 z-0">
+        <img src={IMAGES.HERO_BG} alt="world map" className="w-full h-full object-cover"
+          style={{ filter: 'brightness(0.35) saturate(0.8)' }} />
+        <div className="absolute inset-0" style={{
+          background: 'linear-gradient(180deg, rgba(11,17,40,0.5) 0%, rgba(11,17,40,0.75) 30%, rgba(11,17,40,0.92) 100%)',
+        }} />
+        <div className="absolute top-0 left-0 right-0 h-32" style={{
+          background: 'radial-gradient(ellipse at top, rgba(255,215,0,0.06) 0%, transparent 70%)',
+        }} />
       </div>
 
-      {/* ALT Balance + Level Progress */}
-      <div
-        className="rounded-xl p-4"
-        style={{
-          background: '#1E293B',
-          border: '1px solid rgba(255,255,255,0.06)',
-        }}
-      >
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <Coins className="w-5 h-5" style={{ color: '#F59E0B' }} />
-            <span className="text-xs font-medium" style={{ color: '#94A3B8' }}>ALT残高</span>
+      {/* Content */}
+      <div className="relative z-10 px-4 pt-3 pb-4">
+        {/* Hero Section with Character */}
+        <div className="relative mb-5">
+          <div className="text-center mb-3 relative">
+            <div className="flex items-center justify-center gap-3 mb-1">
+              <div className="h-px flex-1 max-w-[40px]" style={{
+                background: 'linear-gradient(90deg, transparent, rgba(255,215,0,0.5))',
+              }} />
+              <h1 className="text-xl font-bold font-[var(--font-cinzel)] tracking-[0.15em]"
+                style={{ color: '#ffd700', textShadow: '0 0 20px rgba(255,215,0,0.4), 0 2px 4px rgba(0,0,0,0.8)' }}>
+                TRAIL QUEST WORLD
+              </h1>
+              <div className="h-px flex-1 max-w-[40px]" style={{
+                background: 'linear-gradient(90deg, rgba(255,215,0,0.5), transparent)',
+              }} />
+            </div>
+            <p className="text-amber-200/60 text-[11px] tracking-wider">遊ぶたびに強くなる 学びのゲームワールド</p>
           </div>
-          <span className="text-2xl font-black tabular-nums" style={{ color: '#F59E0B' }}>
-            {user.currentAlt.toLocaleString()}
-          </span>
-        </div>
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-medium" style={{ color: '#94A3B8' }}>
-              Lv.{levelInfo.level} → Lv.{levelInfo.level + 1}
-            </span>
-            <span className="text-[10px] font-medium" style={{ color: '#94A3B8' }}>
-              {Math.round(levelInfo.progress * 100)}%
-            </span>
-          </div>
-          <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
-            <div
-              className="h-full rounded-full transition-all duration-500"
-              style={{
-                width: `${levelInfo.progress * 100}%`,
-                background: 'linear-gradient(90deg, #4F46E5, #10B981)',
-                boxShadow: '0 0 8px rgba(79,70,229,0.4)',
-              }}
-            />
-          </div>
-          {levelInfo.nextLevelAlt && (
-            <p className="text-[10px]" style={{ color: '#64748B' }}>
-              あと {levelInfo.nextLevelAlt - user.totalAlt} ALT で次のレベル
-            </p>
-          )}
-        </div>
-      </div>
 
-      {/* Daily Missions */}
-      <div>
-        <div className="flex items-center gap-2 mb-2">
-          <Target className="w-4 h-4" style={{ color: '#4F46E5' }} />
-          <h2 className="text-sm font-bold" style={{ color: '#F8FAFC' }}>今日のミッション</h2>
-        </div>
-        <div className="space-y-2">
-          {DAILY_MISSIONS.map((m) => (
-            <div
-              key={m.id}
-              className="rounded-xl p-3 flex items-center gap-3"
-              style={{
-                background: '#1E293B',
-                border: '1px solid rgba(255,255,255,0.06)',
-              }}
-            >
-              <span className="text-xl">{m.emoji}</span>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold" style={{ color: '#F8FAFC' }}>{m.name}</p>
-                <div className="flex items-center gap-2 mt-1">
-                  <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
-                    <div
-                      className="h-full rounded-full"
-                      style={{
-                        width: `${(m.progress / m.total) * 100}%`,
-                        background: m.progress >= m.total ? '#10B981' : '#4F46E5',
-                      }}
-                    />
-                  </div>
-                  <span className="text-[10px] font-medium" style={{ color: '#94A3B8' }}>
-                    {m.progress}/{m.total}
+          {/* Character + Welcome Card */}
+          <div className="flex items-end gap-3">
+            <div className="w-28 h-36 flex-shrink-0 animate-float relative">
+              <img src={IMAGES.CHARACTER} alt="character"
+                className="w-full h-full object-contain drop-shadow-[0_4px_16px_rgba(255,215,0,0.3)]" />
+              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-20 h-4 rounded-full blur-md"
+                style={{ background: 'rgba(255,215,0,0.15)' }} />
+            </div>
+            <div className="flex-1 mb-3">
+              <div className="rounded-xl p-3 relative overflow-hidden"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(21,29,59,0.95), rgba(14,20,45,0.95))',
+                  border: '2px solid rgba(255,215,0,0.35)',
+                  boxShadow: 'inset 0 0 20px rgba(255,215,0,0.05), 0 4px 16px rgba(0,0,0,0.4)',
+                }}>
+                <div className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 rounded-tl-sm" style={{ borderColor: 'rgba(255,215,0,0.6)' }} />
+                <div className="absolute top-0 right-0 w-3 h-3 border-t-2 border-r-2 rounded-tr-sm" style={{ borderColor: 'rgba(255,215,0,0.6)' }} />
+                <div className="absolute bottom-0 left-0 w-3 h-3 border-b-2 border-l-2 rounded-bl-sm" style={{ borderColor: 'rgba(255,215,0,0.6)' }} />
+                <div className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 rounded-br-sm" style={{ borderColor: 'rgba(255,215,0,0.6)' }} />
+
+                <p className="text-amber-100 text-sm font-bold mb-1">おかえり、{user.nickname}！</p>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-amber-200/50 text-xs">連続ログイン</span>
+                  <span className="text-amber-300 font-bold text-sm">{user.streakDays}日目</span>
+                  <span className="text-lg">🔥</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                    style={{
+                      background: 'linear-gradient(135deg, rgba(255,215,0,0.2), rgba(255,215,0,0.08))',
+                      border: '1px solid rgba(255,215,0,0.35)', color: '#ffd700',
+                    }}>
+                    Lv.{levelInfo.level}
                   </span>
+                  <span className="text-[10px] text-amber-200/50">{levelInfo.title}</span>
                 </div>
               </div>
-              <div className="flex items-center gap-0.5 shrink-0">
-                <Coins className="w-3 h-3" style={{ color: '#F59E0B' }} />
-                <span className="text-xs font-bold" style={{ color: '#F59E0B' }}>+{m.reward}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Daily Mission Banner */}
+        <div className="mb-5 rounded-xl overflow-hidden relative"
+          style={{
+            background: 'linear-gradient(135deg, rgba(34,197,94,0.12), rgba(34,197,94,0.03))',
+            border: '1.5px solid rgba(34,197,94,0.25)',
+            boxShadow: '0 2px 12px rgba(0,0,0,0.3), inset 0 0 20px rgba(34,197,94,0.03)',
+          }}>
+          <div className="px-3 py-2.5 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-lg flex items-center justify-center"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(34,197,94,0.2), rgba(34,197,94,0.1))',
+                  border: '1px solid rgba(34,197,94,0.3)',
+                }}>
+                <span className="text-lg">📋</span>
+              </div>
+              <div>
+                <p className="text-emerald-300 text-xs font-bold">デイリーミッション</p>
+                <p className="text-emerald-200/50 text-[10px]">ゲームを3回クリアしよう</p>
               </div>
             </div>
-          ))}
+            <div className="flex items-center gap-1 px-2 py-1 rounded-lg"
+              style={{ background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.2)' }}>
+              <span className="text-xs font-bold" style={{ color: '#ffd700' }}>+15</span>
+              <span className="text-[9px]" style={{ color: '#ffd700' }}>ALT</span>
+            </div>
+          </div>
+          <div className="px-3 pb-2.5">
+            <div className="w-full h-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.08)' }}>
+              <div className="h-full rounded-full transition-all duration-700" style={{
+                width: '33%', background: 'linear-gradient(90deg, #22c55e, #4ade80)',
+                boxShadow: '0 0 8px rgba(34,197,94,0.5)',
+              }} />
+            </div>
+            <p className="text-emerald-200/40 text-[9px] mt-1 text-right">1/3 完了</p>
+          </div>
         </div>
-      </div>
 
-      {/* Quick Access */}
-      <div>
-        <div className="flex items-center gap-2 mb-2">
-          <Zap className="w-4 h-4" style={{ color: '#F59E0B' }} />
-          <h2 className="text-sm font-bold" style={{ color: '#F8FAFC' }}>クイックアクセス</h2>
+        {/* Quest Board - Game Categories */}
+        <div className="mb-5">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-7 h-7 rounded-lg flex items-center justify-center"
+              style={{
+                background: 'linear-gradient(135deg, #ffd700, #f0a500)',
+                boxShadow: '0 0 10px rgba(255,215,0,0.3), 0 2px 4px rgba(0,0,0,0.3)',
+              }}>
+              <span className="text-sm">⚔️</span>
+            </div>
+            <h2 className="text-base font-bold" style={{ color: '#ffd700', textShadow: '0 0 8px rgba(255,215,0,0.2)' }}>クエストボード</h2>
+            <div className="flex-1 h-px" style={{ background: 'linear-gradient(90deg, rgba(255,215,0,0.3), transparent)' }} />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2.5">
+            {GAME_CATEGORIES.map((cat, i) => {
+              const [c1] = categoryBgColors[cat.id] || ['#666', '#555'];
+              return (
+                <Link key={cat.id} href="/games">
+                  <div
+                    className="rounded-xl p-3 transition-all duration-200 hover:scale-[1.02] active:scale-[0.97] card-shine relative overflow-hidden animate-slide-up"
+                    style={{
+                      animationDelay: `${i * 70}ms`,
+                      background: 'linear-gradient(135deg, rgba(21,29,59,0.92), rgba(14,20,45,0.95))',
+                      border: `1.5px solid ${c1}44`,
+                      boxShadow: `0 2px 12px rgba(0,0,0,0.3), inset 0 0 20px ${c1}08`,
+                    }}>
+                    <div className="absolute top-0 right-0 w-16 h-16 rounded-full blur-2xl opacity-20"
+                      style={{ background: c1, transform: 'translate(30%, -30%)' }} />
+                    <div className="flex items-center gap-2.5 mb-2 relative">
+                      <div className="w-10 h-10 rounded-lg flex items-center justify-center"
+                        style={{
+                          background: `linear-gradient(135deg, ${c1}33, ${c1}22)`,
+                          border: `1px solid ${c1}55`, boxShadow: `0 0 8px ${c1}22`,
+                        }}>
+                        <span className="text-xl">{categoryIcons[cat.id] || cat.emoji}</span>
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-[13px] font-bold text-amber-100">{cat.label}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between relative">
+                      <span className="text-[10px] text-amber-200/40">タップして挑戦</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold"
+                        style={{ background: `${c1}22`, color: c1, border: `1px solid ${c1}33` }}>
+                        +10 ALT
+                      </span>
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
         </div>
-        <div className="grid grid-cols-3 gap-2">
-          {QUICK_ACCESS.map((qa) => (
-            <Link key={qa.label} href={qa.path}>
-              <div
-                className="rounded-xl p-3 flex flex-col items-center gap-1.5 transition-all active:scale-95"
+
+        {/* Quick Actions */}
+        <div className="grid grid-cols-3 gap-2 mb-5">
+          {[
+            { href: '/ranking', icon: '🏆', label: 'ランキング', color: '#ffd700' },
+            { href: '/collection', icon: '🃏', label: 'コレクション', color: '#a855f7' },
+            { href: '/shop', icon: '🛒', label: 'ショップ', color: '#22c55e' },
+          ].map((item) => (
+            <Link key={item.href} href={item.href}>
+              <div className="rounded-xl p-3 text-center transition-all hover:scale-[1.03] active:scale-[0.97] relative overflow-hidden"
                 style={{
-                  background: '#1E293B',
-                  border: '1px solid rgba(255,255,255,0.06)',
-                }}
-              >
-                <span className="text-2xl">{qa.emoji}</span>
-                <span className="text-xs font-semibold" style={{ color: '#F8FAFC' }}>{qa.label}</span>
+                  background: 'linear-gradient(135deg, rgba(21,29,59,0.9), rgba(14,20,45,0.9))',
+                  border: `1.5px solid ${item.color}33`,
+                  boxShadow: `0 2px 8px rgba(0,0,0,0.3), inset 0 0 15px ${item.color}05`,
+                }}>
+                <span className="text-2xl block mb-1.5">{item.icon}</span>
+                <span className="text-[11px] text-amber-200/60 font-bold">{item.label}</span>
               </div>
             </Link>
           ))}
         </div>
-      </div>
 
-      {/* Feature Cards */}
-      <div className="space-y-2">
-        <Link href="/gacha">
-          <div
-            className="rounded-xl p-4 flex items-center gap-3 transition-all active:scale-[0.98]"
-            style={{
-              background: 'linear-gradient(135deg, rgba(79,70,229,0.15), rgba(139,92,246,0.1))',
-              border: '1px solid rgba(79,70,229,0.2)',
-            }}
-          >
-            <Sparkles className="w-6 h-6 shrink-0" style={{ color: '#A5B4FC' }} />
-            <div className="flex-1">
-              <p className="text-sm font-bold" style={{ color: '#F8FAFC' }}>ガチャを引こう！</p>
-              <p className="text-[10px]" style={{ color: '#94A3B8' }}>レアカードをゲットしよう</p>
-            </div>
-            <ChevronRight className="w-4 h-4" style={{ color: '#64748B' }} />
-          </div>
-        </Link>
+        {/* News */}
+        <div className="rounded-xl p-3 relative overflow-hidden"
+          style={{
+            background: 'linear-gradient(135deg, rgba(21,29,59,0.95), rgba(14,20,45,0.95))',
+            border: '1.5px solid rgba(255,215,0,0.2)',
+            boxShadow: 'inset 0 0 20px rgba(255,215,0,0.03), 0 2px 12px rgba(0,0,0,0.3)',
+          }}>
+          <div className="absolute top-0 left-0 w-2.5 h-2.5 border-t-2 border-l-2" style={{ borderColor: 'rgba(255,215,0,0.4)' }} />
+          <div className="absolute top-0 right-0 w-2.5 h-2.5 border-t-2 border-r-2" style={{ borderColor: 'rgba(255,215,0,0.4)' }} />
+          <div className="absolute bottom-0 left-0 w-2.5 h-2.5 border-b-2 border-l-2" style={{ borderColor: 'rgba(255,215,0,0.4)' }} />
+          <div className="absolute bottom-0 right-0 w-2.5 h-2.5 border-b-2 border-r-2" style={{ borderColor: 'rgba(255,215,0,0.4)' }} />
 
-        <Link href="/ranking">
-          <div
-            className="rounded-xl p-4 flex items-center gap-3 transition-all active:scale-[0.98]"
-            style={{
-              background: 'linear-gradient(135deg, rgba(245,158,11,0.1), rgba(234,88,12,0.05))',
-              border: '1px solid rgba(245,158,11,0.15)',
-            }}
-          >
-            <TrendingUp className="w-6 h-6 shrink-0" style={{ color: '#F59E0B' }} />
-            <div className="flex-1">
-              <p className="text-sm font-bold" style={{ color: '#F8FAFC' }}>ランキング</p>
-              <p className="text-[10px]" style={{ color: '#94A3B8' }}>今の順位をチェック</p>
-            </div>
-            <ChevronRight className="w-4 h-4" style={{ color: '#64748B' }} />
+          <div className="flex items-center gap-2 mb-2.5">
+            <span className="text-sm">📢</span>
+            <h3 className="text-sm font-bold text-amber-200">お知らせ</h3>
+            <div className="flex-1 h-px" style={{ background: 'linear-gradient(90deg, rgba(255,215,0,0.2), transparent)' }} />
           </div>
-        </Link>
+          <div className="space-y-2">
+            {[
+              { date: '04/09', text: '新ゲーム「探究クエスト」が追加されました！', isNew: true },
+              { date: '04/07', text: '期間限定ガチャ開催中！レジェンドカード確率UP', isNew: true },
+              { date: '04/01', text: '春のALTキャンペーン実施中', isNew: false },
+            ].map((news, i) => (
+              <div key={i} className="flex items-start gap-2 text-xs">
+                <span className="text-amber-400/50 flex-shrink-0 text-[11px]">{news.date}</span>
+                {news.isNew && (
+                  <span className="text-[8px] px-1 py-0.5 rounded font-bold flex-shrink-0"
+                    style={{ background: 'rgba(239,68,68,0.2)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)' }}>
+                    NEW
+                  </span>
+                )}
+                <span className="text-amber-100/70">{news.text}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
