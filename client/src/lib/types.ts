@@ -71,6 +71,19 @@ export interface AltTransaction {
 export type CardCategory = 'great_person' | 'creature' | 'heritage' | 'invention' | 'trail';
 export type CardRarity = 1 | 2 | 3 | 4 | 5 | 6;
 
+// Collection card types
+export type CollectionCategory = 'great_people' | 'creatures' | 'world_heritage' | 'inventions' | 'discovery';
+export type CollectionRarity = 'N' | 'R' | 'SR' | 'SSR';
+
+export interface CollectionCard {
+  id: string;
+  name: string;
+  category: CollectionCategory;
+  rarity: CollectionRarity;
+  description: string;
+  imageUrl: string;
+}
+
 export interface GachaCard {
   id: string;
   name: string;

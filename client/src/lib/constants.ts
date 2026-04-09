@@ -127,3 +127,44 @@ export const CATEGORY_TABS = [
   { id: 'inquiry', label: '探究', emoji: '💡' },
   { id: 'puzzle', label: 'パズル', emoji: '🧩' },
 ] as const;
+
+// Card collection categories and rarity types
+export const CARD_CATEGORIES = {
+  GREAT_PEOPLE: 'great_people',
+  CREATURES: 'creatures',
+  WORLD_HERITAGE: 'world_heritage',
+  INVENTIONS: 'inventions',
+  DISCOVERY: 'discovery',
+} as const;
+
+export const CARD_RARITY = {
+  N: 'N',
+  R: 'R',
+  SR: 'SR',
+  SSR: 'SSR',
+} as const;
+
+// Card rarity colors for display
+export const CARD_RARITY_COLORS: Record<string, string> = {
+  N: '#9CA3AF',    // Gray
+  R: '#3B82F6',    // Blue
+  SR: '#F59E0B',   // Gold
+  SSR: '#A855F7',  // Purple/Rainbow
+};
+
+// Card category display info (representative images per category)
+export const CARD_CATEGORY_IMAGES: Record<string, string> = {
+  great_people: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-rep-greatpeople-RpcZ373Z2p9EBjHLHZcSMr.webp',
+  creatures: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-rep-creatures-4jeoxSULEbSgU5qG2WqnSm.webp',
+  world_heritage: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-rep-heritage-aqbSNJQssvZWPnm58JMhpP.webp',
+  inventions: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-rep-inventions-Voi9cf8tbBi8achiFohKea.webp',
+  discovery: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-rep-discovery-25cUS7nweeKMMbRak5vuBt.webp',
+};
+
+export const CARD_CATEGORY_INFO: Record<string, { label: string; emoji: string }> = {
+  great_people: { label: '偉人', emoji: '👤' },
+  creatures: { label: '生き物', emoji: '🦖' },
+  world_heritage: { label: '世界遺産', emoji: '🏛️' },
+  inventions: { label: '発明', emoji: '💡' },
+  discovery: { label: '探究', emoji: '🔭' },
+};
