@@ -156,7 +156,7 @@ export const MOCK_SHOP_ITEMS: ShopItem[] = [
   { id: 'avatar-ninja-v2', name: '忍者（成長版）', category: 'avatar', price: 550, imageUrl: '', description: '影に潜む忍のアバター', owned: false },
   { id: 'avatar-angel-v2', name: '天使（成長版）', category: 'avatar', price: 450, imageUrl: '', description: '優しい天使のアバター', owned: false },
   { id: 'avatar-princess-v2', name: '姫（成長版）', category: 'avatar', price: 700, imageUrl: '', description: '優雅な姫のアバター', owned: false },
-  { id: 'avatar-witch-adult', name: '魔女（大人）', category: 'avatar', price: 500, imageUrl: '', description: '優雅な大人の魔女のアバター', owned: false },
+  { id: 'avatar-witch-adult', name: '魔女（成長版）', category: 'avatar', price: 500, imageUrl: '', description: '魔法を操る魔女のアバター', owned: false },
   { id: 'title-explorer', name: '冒険王', category: 'title', price: 300, imageUrl: '', description: '称号: 冒険王', owned: false },
   { id: 'title-scholar', name: '知識の探究者', category: 'title', price: 300, imageUrl: '', description: '称号: 知識の探究者', owned: true },
   { id: 'title-legend', name: '伝説のクエスター', category: 'title', price: 1000, imageUrl: '', description: '称号: 伝説のクエスター', owned: false },

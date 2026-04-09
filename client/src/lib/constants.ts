@@ -94,12 +94,12 @@ export const IMAGES = {
   AVATAR_NINJA_V2_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/shop-ninja-v2-face-crop-5wUTPRPwdEbnsiFPpV2Azn.webp',
   AVATAR_ANGEL_V2_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/shop-angel-v2-face-crop-jnTanfV8EARarcQXMSPdGP.webp',
   AVATAR_PRINCESS_V2_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/shop-princess-v2-face-crop-Cd9Pj5JkThK59KPHZotwGi.webp',
-  AVATAR_WITCH_ADULT_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/shop-witch-v5-face-crop-XakBwswDJ3n6d8x57qZxGF.webp',
+  AVATAR_WITCH_ADULT_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/shop-witch-v2-face-crop_1fa169d6.png',
   // New characters - full body (user provided)
   AVATAR_NINJA_V2_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/shop-ninja-v2-5wUTPRPwdEbnsiFPpV2Azn.webp',
   AVATAR_ANGEL_V2_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/shop-angel-v2-jnTanfV8EARarcQXMSPdGP.webp',
   AVATAR_PRINCESS_V2_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/shop-princess-v2-Cd9Pj5JkThK59KPHZotwGi.webp',
-  AVATAR_WITCH_ADULT_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/shop-witch-v5-XakBwswDJ3n6d8x57qZxGF.webp',
+  AVATAR_WITCH_ADULT_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/shop-witch-v2_13166f5e.png',
 } as const;
 
 // Avatar items for shop - maps avatar IDs to their image URLs
