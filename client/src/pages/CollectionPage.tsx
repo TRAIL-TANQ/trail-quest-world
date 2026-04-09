@@ -260,39 +260,16 @@ export default function CollectionPage() {
 
         /* SR（スーパーレア）: ゴールド枠 */
         .card-frame-sr {
-          border: 3px solid #f59e0b;
-          box-shadow: 0 0 12px rgba(245,158,11,0.4), 0 0 24px rgba(245,158,11,0.15), 0 2px 8px rgba(0,0,0,0.3);
+          border: 2px solid #f59e0b;
+          box-shadow: 0 0 8px rgba(245,158,11,0.3), 0 2px 6px rgba(0,0,0,0.3);
           background: linear-gradient(135deg, rgba(21,29,59,0.95), rgba(14,20,45,0.95));
-          position: relative;
-        }
-
-        .card-frame-sr::before {
-          content: '';
-          position: absolute;
-          inset: 0;
-          border: 1px solid rgba(245,158,11,0.3);
-          border-radius: 0.75rem;
-          pointer-events: none;
-          margin: 2px;
         }
 
         /* SSR（スーパースーパーレア）: 虹色枠 */
         .card-frame-ssr {
-          border: 3px solid;
-          border-image: linear-gradient(135deg, #a855f7, #ec4899, #8b5cf6) 1;
-          box-shadow: 0 0 16px rgba(168,85,247,0.5), 0 0 32px rgba(236,72,153,0.2), 0 2px 8px rgba(0,0,0,0.4);
+          border: 2px solid #a855f7;
+          box-shadow: 0 0 12px rgba(168,85,247,0.4), 0 0 24px rgba(168,85,247,0.15), 0 2px 6px rgba(0,0,0,0.3);
           background: linear-gradient(135deg, rgba(21,29,59,0.95), rgba(14,20,45,0.95));
-          position: relative;
-        }
-
-        .card-frame-ssr::after {
-          content: '';
-          position: absolute;
-          inset: 0;
-          background: linear-gradient(135deg, rgba(168,85,247,0.1), rgba(236,72,153,0.05), rgba(139,92,246,0.1));
-          border-radius: 0.75rem;
-          pointer-events: none;
-          animation: shimmer 3s ease-in-out infinite;
         }
 
         /* 未所持カード */
@@ -316,15 +293,14 @@ export default function CollectionPage() {
         }
 
         .card-frame-modal-sr {
-          border: 3px solid #f59e0b;
-          box-shadow: 0 0 30px rgba(245,158,11,0.4), 0 0 60px rgba(245,158,11,0.2), 0 8px 32px rgba(0,0,0,0.5);
+          border: 2px solid #f59e0b;
+          box-shadow: 0 0 30px rgba(245,158,11,0.3), 0 0 60px rgba(245,158,11,0.15), 0 8px 32px rgba(0,0,0,0.5);
           background: linear-gradient(135deg, rgba(21,29,59,0.98), rgba(11,17,40,0.98));
         }
 
         .card-frame-modal-ssr {
-          border: 3px solid;
-          border-image: linear-gradient(135deg, #a855f7, #ec4899, #8b5cf6) 1;
-          box-shadow: 0 0 30px rgba(168,85,247,0.5), 0 0 60px rgba(168,85,247,0.25), 0 8px 32px rgba(0,0,0,0.5);
+          border: 2px solid #a855f7;
+          box-shadow: 0 0 30px rgba(168,85,247,0.3), 0 0 60px rgba(168,85,247,0.15), 0 8px 32px rgba(0,0,0,0.5);
           background: linear-gradient(135deg, rgba(21,29,59,0.98), rgba(11,17,40,0.98));
         }
 
