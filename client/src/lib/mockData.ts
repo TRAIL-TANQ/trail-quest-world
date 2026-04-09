@@ -131,6 +131,15 @@ export const MOCK_CARDS: GachaCard[] = [
   { id: 'c020', name: '九尾の狐', category: 'creature', rarity: 5, description: '九本の尻尾を持つ妖狐。', imageUrl: '' },
 ];
 
+// Daily Missions
+export const MOCK_DAILY_MISSIONS = [
+  { id: 'mission-001', title: 'ゲームを3回クリア', description: 'ゲームを3回クリアしよう', reward: 15, category: 'game', progress: 1, target: 3 },
+  { id: 'mission-002', title: 'ガチャを1回引く', description: 'ノーマルガチャを1回引こう', reward: 10, category: 'gacha', progress: 0, target: 1 },
+  { id: 'mission-003', title: 'カードをコレクションで確認', description: 'コレクション画面でカードを確認しよう', reward: 5, category: 'collection', progress: 0, target: 1 },
+  { id: 'mission-004', title: 'プレミアムガチャを1回引く', description: 'プレミアムガチャに挑戦しよう', reward: 20, category: 'gacha', progress: 0, target: 1 },
+  { id: 'mission-005', title: 'SR以上を引く', description: 'SR以上のレアカードを引こう', reward: 30, category: 'gacha', progress: 0, target: 1 },
+];
+
 export const MOCK_RANKINGS: RankingEntry[] = [
   { rank: 1, userId: 'u1', nickname: 'いけだ', avatarUrl: '', score: 520, level: 8 },
   { rank: 2, userId: 'u2', nickname: 'あおら', avatarUrl: '', score: 380, level: 6 },

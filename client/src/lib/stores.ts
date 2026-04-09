@@ -94,21 +94,55 @@ export const useGameStore = create<GameState>((set) => ({
 // Collection Store
 interface CollectionState {
   ownedCardIds: Set<string>;
+  newCardIds: Set<string>;      // 未確認のNEWカード
+  acquiredOrder: string[];      // 取得順リスト
   addCard: (cardId: string) => void;
   addCards: (cardIds: string[]) => void;
   hasCard: (cardId: string) => boolean;
   ownedCount: () => number;
+  clearNew: (cardId: string) => void;
+  clearAllNew: () => void;
 }
 
 export const useCollectionStore = create<CollectionState>((set, get) => ({
   // デモ用: 最初の5枚を初期所持
   ownedCardIds: new Set(['card-001', 'card-002', 'card-003', 'card-011', 'card-016']),
+  newCardIds: new Set<string>(),
+  acquiredOrder: ['card-001', 'card-002', 'card-003', 'card-011', 'card-016'],
   addCard: (cardId) =>
-    set((state) => ({ ownedCardIds: new Set(Array.from(state.ownedCardIds).concat(cardId)) })),
+    set((state) => {
+      const alreadyOwned = state.ownedCardIds.has(cardId);
+      return {
+        ownedCardIds: new Set(Array.from(state.ownedCardIds).concat(cardId)),
+        newCardIds: alreadyOwned ? state.newCardIds : new Set(Array.from(state.newCardIds).concat(cardId)),
+        acquiredOrder: alreadyOwned ? state.acquiredOrder : [...state.acquiredOrder, cardId],
+      };
+    }),
   addCards: (cardIds) =>
-    set((state) => ({ ownedCardIds: new Set(Array.from(state.ownedCardIds).concat(cardIds)) })),
+    set((state) => {
+      const newIds: string[] = [];
+      const newOrder: string[] = [];
+      cardIds.forEach((id) => {
+        if (!state.ownedCardIds.has(id)) {
+          newIds.push(id);
+          newOrder.push(id);
+        }
+      });
+      return {
+        ownedCardIds: new Set(Array.from(state.ownedCardIds).concat(cardIds)),
+        newCardIds: new Set(Array.from(state.newCardIds).concat(newIds)),
+        acquiredOrder: [...state.acquiredOrder, ...newOrder],
+      };
+    }),
   hasCard: (cardId) => get().ownedCardIds.has(cardId),
   ownedCount: () => get().ownedCardIds.size,
+  clearNew: (cardId) =>
+    set((state) => {
+      const next = new Set(Array.from(state.newCardIds));
+      next.delete(cardId);
+      return { newCardIds: next };
+    }),
+  clearAllNew: () => set({ newCardIds: new Set<string>() }),
 }));
 
 // Gacha History Entry

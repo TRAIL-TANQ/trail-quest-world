@@ -1,6 +1,8 @@
 /*
  * CollectionPage: 50枚カードコレクション画面
  * - CollectionStore連携: ガチャで引いたカードが自動反映
+ * - NEWバッジ: 初取得カードに表示
+ * - ソート機能: レア度順・取得順・名前順
  * - カード詳細モーダル: フリップアニメーション＋レア度別エフェクト
  * - コンプリート率: カテゴリ別進捗バー表示
  * ファンタジーRPG風ダークブルー＋ゴールドアクセント
@@ -26,6 +28,13 @@ const rarityTabs: { id: string; label: string }[] = [
   { id: 'R', label: 'R' },
   { id: 'SR', label: 'SR' },
   { id: 'SSR', label: 'SSR' },
+];
+
+const sortTabs = [
+  { id: 'default', label: 'デフォルト' },
+  { id: 'rarity', label: 'レア度順' },
+  { id: 'acquired', label: '取得順' },
+  { id: 'name', label: '名前順' },
 ];
 
 const CATEGORY_CARDS: Record<string, CollectionCard[]> = {
@@ -69,6 +78,7 @@ function getRarityBorderStyle(rarity: CollectionRarity) {
 // カード詳細モーダル
 function CardModal({ card, onClose }: { card: CollectionCard; onClose: () => void }) {
   const [flipped, setFlipped] = useState(false);
+  const clearNew = useCollectionStore((s) => s.clearNew);
   const rarityColor = CARD_RARITY_COLORS[card.rarity];
   const isSSR = card.rarity === 'SSR';
   const stars = card.rarity === 'SSR' ? 4 : card.rarity === 'SR' ? 3 : card.rarity === 'R' ? 2 : 1;
@@ -78,11 +88,16 @@ function CardModal({ card, onClose }: { card: CollectionCard; onClose: () => voi
     return () => clearTimeout(t);
   }, []);
 
+  const handleClose = () => {
+    clearNew(card.id);
+    onClose();
+  };
+
   return (
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center p-6"
       style={{ background: 'rgba(0,0,0,0.88)', backdropFilter: 'blur(6px)' }}
-      onClick={onClose}
+      onClick={handleClose}
     >
       <div
         className="relative"
@@ -147,7 +162,7 @@ function CardModal({ card, onClose }: { card: CollectionCard; onClose: () => voi
               </div>
               <h3 className="text-base font-bold text-amber-100 mb-2">{card.name}</h3>
               <p className="text-[11px] text-amber-200/55 mb-4 leading-relaxed">{card.description}</p>
-              <button onClick={onClose} className="rpg-btn rpg-btn-gold w-full">閉じる</button>
+              <button onClick={handleClose} className="rpg-btn rpg-btn-gold w-full">閉じる</button>
             </div>
           </div>
         </div>
@@ -159,20 +174,39 @@ function CardModal({ card, onClose }: { card: CollectionCard; onClose: () => voi
 export default function CollectionPage() {
   const [activeCategory, setActiveCategory] = useState('all');
   const [activeRarity, setActiveRarity] = useState('all');
+  const [activeSort, setActiveSort] = useState('default');
   const [selectedCard, setSelectedCard] = useState<CollectionCard | null>(null);
   const [showProgress, setShowProgress] = useState(false);
 
-  // CollectionStoreから所持カードを取得（ガチャと連携）
+  // CollectionStoreから所持カード・NEW状態を取得
   const ownedCardIds = useCollectionStore((s) => s.ownedCardIds);
+  const newCardIds = useCollectionStore((s) => s.newCardIds);
+  const acquiredOrder = useCollectionStore((s) => s.acquiredOrder);
   const ownedCount = ownedCardIds.size;
 
   const filteredCards = useMemo(() => {
-    return COLLECTION_CARDS.filter((c) => {
+    let cards = COLLECTION_CARDS.filter((c) => {
       if (activeCategory !== 'all' && c.category !== activeCategory) return false;
       if (activeRarity !== 'all' && c.rarity !== activeRarity) return false;
       return true;
     });
-  }, [activeCategory, activeRarity]);
+
+    // ソート処理
+    if (activeSort === 'rarity') {
+      const rarityOrder: Record<CollectionRarity, number> = { SSR: 0, SR: 1, R: 2, N: 3 };
+      cards.sort((a, b) => rarityOrder[a.rarity] - rarityOrder[b.rarity]);
+    } else if (activeSort === 'acquired') {
+      cards.sort((a, b) => {
+        const aIdx = acquiredOrder.indexOf(a.id);
+        const bIdx = acquiredOrder.indexOf(b.id);
+        return (aIdx === -1 ? 999 : aIdx) - (bIdx === -1 ? 999 : bIdx);
+      });
+    } else if (activeSort === 'name') {
+      cards.sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+    }
+
+    return cards;
+  }, [activeCategory, activeRarity, activeSort, acquiredOrder]);
 
   // カテゴリ別コンプリート率
   const categoryProgress = useMemo(() => {
@@ -278,7 +312,7 @@ export default function CollectionPage() {
       </div>
 
       {/* レア度フィルタ */}
-      <div className="flex gap-1 overflow-x-auto pb-3 mb-4" style={{ scrollbarWidth: 'none' }}>
+      <div className="flex gap-1 overflow-x-auto pb-2 mb-2" style={{ scrollbarWidth: 'none' }}>
         {rarityTabs.map((tab) => {
           const color = tab.id !== 'all' ? CARD_RARITY_COLORS[tab.id as CollectionRarity] : '#ffd700';
           return (
@@ -296,10 +330,27 @@ export default function CollectionPage() {
         })}
       </div>
 
+      {/* ソートタブ */}
+      <div className="flex gap-1 overflow-x-auto pb-3 mb-4" style={{ scrollbarWidth: 'none' }}>
+        {sortTabs.map((tab) => (
+          <button key={tab.id} onClick={() => setActiveSort(tab.id)}
+            className="flex-shrink-0 px-2.5 py-1 rounded-md text-[10px] font-bold transition-all"
+            style={activeSort === tab.id ? {
+              background: 'rgba(168,85,247,0.2)',
+              color: '#d8b4fe', border: '1px solid rgba(168,85,247,0.5)',
+            } : {
+              background: 'rgba(255,255,255,0.03)', color: 'rgba(255,255,255,0.3)', border: '1px solid rgba(255,255,255,0.06)',
+            }}>
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       {/* カードグリッド */}
       <div className="grid grid-cols-3 gap-2.5">
         {filteredCards.map((card, i) => {
           const owned = ownedCardIds.has(card.id);
+          const isNew = newCardIds.has(card.id);
           const rarityColor = CARD_RARITY_COLORS[card.rarity];
           return (
             <button
@@ -327,6 +378,20 @@ export default function CollectionPage() {
                   <div className="absolute top-1 right-1">
                     <span className="text-[9px] px-1.5 py-0.5 rounded font-bold" style={getRarityBadgeStyle(card.rarity)}>
                       {card.rarity}
+                    </span>
+                  </div>
+                )}
+                {/* NEWバッジ */}
+                {owned && isNew && (
+                  <div className="absolute top-1 left-1">
+                    <span className="text-[9px] px-1.5 py-0.5 rounded font-bold"
+                      style={{
+                        background: 'linear-gradient(135deg, #ef4444, #dc2626)',
+                        color: '#fff',
+                        textShadow: '0 0 4px rgba(239,68,68,0.5)',
+                        animation: 'pulse 2s ease-in-out infinite',
+                      }}>
+                      NEW
                     </span>
                   </div>
                 )}
@@ -365,6 +430,10 @@ export default function CollectionPage() {
         @keyframes sparkle {
           0%, 100% { opacity: 0; transform: scale(0.5); }
           50% { opacity: 1; transform: scale(1.2); }
+        }
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.6; }
         }
       `}</style>
     </div>
