@@ -359,8 +359,8 @@ export default function CollectionPage() {
               className="rounded-xl overflow-hidden transition-all duration-200 relative"
               style={{
                 animationDelay: `${i * 30}ms`,
-                opacity: owned ? 1 : 0.35,
-                filter: owned ? 'none' : 'grayscale(1)',
+                opacity: owned ? 1 : (card.rarity === 'SSR' ? 0.35 : 0.7),
+                filter: 'none',
                 ...(owned ? getRarityBorderStyle(card.rarity) : { border: '2px solid rgba(255,255,255,0.06)' }),
               }}
             >
@@ -368,10 +368,12 @@ export default function CollectionPage() {
               <div className="aspect-[3/4] relative overflow-hidden">
                 {owned ? (
                   <img src={card.imageUrl} alt={card.name} className="w-full h-full object-cover" loading="lazy" />
-                ) : (
+                ) : card.rarity === 'SSR' ? (
                   <div className="w-full h-full flex items-center justify-center" style={{ background: 'rgba(10,15,35,0.8)' }}>
                     <span className="text-3xl opacity-30">❓</span>
                   </div>
+                ) : (
+                  <img src={card.imageUrl} alt={card.name} className="w-full h-full object-cover" loading="lazy" style={{ filter: 'grayscale(1) brightness(0.5)' }} />
                 )}
                 {/* レア度バッジ */}
                 {owned && (
