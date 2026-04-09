@@ -1,20 +1,35 @@
-# Design Merge: RPG Gold + Gacha Animations
+# Avatar Shop Completion
 
-## Tasks
-- [ ] Restore RPG gold/navy CSS theme (index.css)
-- [ ] Restore ornate Header with level bar, EXP, avatar
-- [ ] Restore ornate BottomNav with gold styling
-- [ ] Restore PageShell with RPG styling (keep AltEarnEffect)
-- [ ] Restore HomePage with world map / quest board style
-- [ ] Restore GameListPage with ornate RPG cards
-- [ ] Merge GamePlayPage: RPG styling + keep game start screen
-- [ ] Merge GachaPage: RPG styling + keep rarity animations
-- [ ] Restore RankingPage with RPG ornate styling
-- [ ] Restore CollectionPage with RPG card frames
-- [ ] Restore ShopPage with RPG merchant styling
-- [ ] Merge MyPage: RPG styling + keep level up test button
-- [ ] Merge ResultPage: RPG styling + keep score animation
-- [ ] Keep LoginPage with RPG gold styling
-- [ ] Keep AltEarnEffect component
-- [ ] Keep LevelUpModal component
-- [ ] Verify TypeScript + build
+## Style Rule
+All avatar images MUST match initial character style:
+- Child/young adventurer body proportions (NOT adult)
+- Goggle-equipped hat/headgear
+- Bright, energetic expressions (can vary per character)
+- Fantasy RPG adventure gear
+- Transparent/simple background
+
+## Phase 1: Icon Images (face close-up, 5 costumes)
+- [ ] Knight icon
+- [ ] Mage icon
+- [ ] Ninja icon
+- [ ] Dragon Rider icon
+- [ ] Fairy icon
+
+## Phase 2: Full-body Images (5 costumes)
+- [ ] Knight full
+- [ ] Mage full
+- [ ] Ninja full
+- [ ] Dragon Rider full
+- [ ] Fairy full
+
+## Phase 3: Code Updates
+- [ ] Update IMAGES constants with new URLs
+- [ ] Update types/stores for costume-based avatar
+- [ ] Update ShopPage with purchase/equip flow
+- [ ] Update Header to show equipped costume
+- [ ] Update HomePage to show equipped costume
+- [ ] Verify build passes
+
+## Phase 4: Deploy
+- [ ] Save checkpoint
+- [ ] Deploy

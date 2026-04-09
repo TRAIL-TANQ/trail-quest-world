@@ -143,11 +143,14 @@ export const MOCK_RANKINGS: RankingEntry[] = [
 ];
 
 export const MOCK_SHOP_ITEMS: ShopItem[] = [
-  { id: 'avatar-knight', name: '騎士アバター', category: 'avatar', price: 500, imageUrl: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-knight-C7YjVb4XQ2T5tbZdp6q58D.webp', description: '勇敢な騎士のアバター', owned: false },
-  { id: 'avatar-mage', name: '魔法使いアバター', category: 'avatar', price: 500, imageUrl: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-mage-aeGcRymTydQQiWhNvM2dTa.webp', description: '賢い魔法使いのアバター', owned: false },
-  { id: 'avatar-ninja', name: '忍者アバター', category: 'avatar', price: 300, imageUrl: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-ninja-jQTiof93V9CjMdkW6v3AMU.webp', description: '素早い忍者のアバター', owned: true },
-  { id: 'avatar-dragon', name: 'ドラゴンライダー', category: 'avatar', price: 800, imageUrl: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-dragon-rider-2xjucXNBdMGHTARkpqRhZi.webp', description: 'ドラゴンに乗る勇者', owned: false },
-  { id: 'avatar-fairy', name: '妖精アバター', category: 'avatar', price: 400, imageUrl: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-fairy-a7SYi4Vz3guZP5dPUVM65q.webp', description: '可愛い妖精のアバター', owned: false },
+  { id: 'avatar-samurai', name: '侍', category: 'avatar', price: 500, imageUrl: '', description: '勇敢な侍のアバター', owned: false },
+  { id: 'avatar-witch', name: '魔女', category: 'avatar', price: 500, imageUrl: '', description: '賢い魔女のアバター', owned: false },
+  { id: 'avatar-pirate', name: '海賊', category: 'avatar', price: 600, imageUrl: '', description: '冒険好きな海賊のアバター', owned: false },
+  { id: 'avatar-angel', name: '天使', category: 'avatar', price: 450, imageUrl: '', description: '優しい天使のアバター', owned: false },
+  { id: 'avatar-dragon-knight', name: 'ドラゴンナイト', category: 'avatar', price: 800, imageUrl: '', description: 'ドラゴンに乗る勇者', owned: true },
+  { id: 'avatar-ninja', name: '忍者', category: 'avatar', price: 550, imageUrl: '', description: '素早い忍者のアバター', owned: false },
+  { id: 'avatar-scientist', name: '科学者', category: 'avatar', price: 400, imageUrl: '', description: '知識豊かな科学者のアバター', owned: false },
+  { id: 'avatar-princess', name: '姫', category: 'avatar', price: 700, imageUrl: '', description: '優雅な姫のアバター', owned: false },
   { id: 'title-explorer', name: '冒険王', category: 'title', price: 300, imageUrl: '', description: '称号: 冒険王', owned: false },
   { id: 'title-scholar', name: '知識の探究者', category: 'title', price: 300, imageUrl: '', description: '称号: 知識の探究者', owned: true },
   { id: 'title-legend', name: '伝説のクエスター', category: 'title', price: 1000, imageUrl: '', description: '称号: 伝説のクエスター', owned: false },

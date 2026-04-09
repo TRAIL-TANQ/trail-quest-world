@@ -1,7 +1,7 @@
 /*
  * ShopPage: Avatar/Title/Item shop tabs
  * Fantasy merchant shop style with gold pricing, ornate item cards
- * Avatar tab now displays actual character images with purchase/equip functionality
+ * Avatar tab displays character images with purchase/equip functionality
  */
 import { useState } from 'react';
 import { MOCK_SHOP_ITEMS } from '@/lib/mockData';
@@ -17,11 +17,14 @@ const shopTabs = [
 
 // Map avatar IDs to their image URLs
 const avatarImageMap: Record<string, { icon: string; full: string }> = {
-  'avatar-knight': { icon: IMAGES.AVATAR_KNIGHT_ICON, full: IMAGES.AVATAR_KNIGHT_FULL },
-  'avatar-mage': { icon: IMAGES.AVATAR_MAGE_ICON, full: IMAGES.AVATAR_MAGE_FULL },
+  'avatar-samurai': { icon: IMAGES.AVATAR_SAMURAI_ICON, full: IMAGES.AVATAR_SAMURAI_FULL },
+  'avatar-witch': { icon: IMAGES.AVATAR_WITCH_ICON, full: IMAGES.AVATAR_WITCH_FULL },
+  'avatar-pirate': { icon: IMAGES.AVATAR_PIRATE_ICON, full: IMAGES.AVATAR_PIRATE_FULL },
+  'avatar-angel': { icon: IMAGES.AVATAR_ANGEL_ICON, full: IMAGES.AVATAR_ANGEL_FULL },
+  'avatar-dragon-knight': { icon: IMAGES.AVATAR_DRAGON_KNIGHT_ICON, full: IMAGES.AVATAR_DRAGON_KNIGHT_FULL },
   'avatar-ninja': { icon: IMAGES.AVATAR_NINJA_ICON, full: IMAGES.AVATAR_NINJA_FULL },
-  'avatar-dragon': { icon: IMAGES.AVATAR_DRAGON_RIDER_ICON, full: IMAGES.AVATAR_DRAGON_RIDER_FULL },
-  'avatar-fairy': { icon: IMAGES.AVATAR_FAIRY_ICON, full: IMAGES.AVATAR_FAIRY_FULL },
+  'avatar-scientist': { icon: IMAGES.AVATAR_SCIENTIST_ICON, full: IMAGES.AVATAR_SCIENTIST_FULL },
+  'avatar-princess': { icon: IMAGES.AVATAR_PRINCESS_ICON, full: IMAGES.AVATAR_PRINCESS_FULL },
 };
 
 const titleEmojis = ['👑', '📚', '🌟'];
@@ -45,13 +48,16 @@ export default function ShopPage() {
   };
 
   const handleEquipAvatar = (avatarId: string) => {
-    // Map avatar IDs to avatar types
+    // Map avatar IDs to avatar types for display
     const avatarTypeMap: Record<string, 'boy' | 'girl'> = {
-      'avatar-knight': 'boy',
-      'avatar-mage': 'girl',
+      'avatar-samurai': 'boy',
+      'avatar-witch': 'girl',
+      'avatar-pirate': 'boy',
+      'avatar-angel': 'girl',
+      'avatar-dragon-knight': 'boy',
       'avatar-ninja': 'boy',
-      'avatar-dragon': 'boy',
-      'avatar-fairy': 'girl',
+      'avatar-scientist': 'boy',
+      'avatar-princess': 'girl',
     };
     
     const avatarType = avatarTypeMap[avatarId];
