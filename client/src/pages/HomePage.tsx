@@ -66,7 +66,7 @@ export default function HomePage() {
 
           {/* Character + Welcome Card */}
           <div className="flex items-end gap-3">
-            <div className="w-28 h-36 flex-shrink-0 animate-float relative">
+            <div className="w-36 h-44 flex-shrink-0 animate-float relative">
               <img src={getFullBodyAvatar()} alt="character"
                 className="w-full h-full object-contain drop-shadow-[0_4px_16px_rgba(255,215,0,0.3)]" />
               <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-20 h-4 rounded-full blur-md"
