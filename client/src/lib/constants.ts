@@ -163,6 +163,28 @@ export const IMAGES = {
   AVATAR_SHADOW_MAGE_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-shadow-mage-v2-Yw95nG8LeGikNqsKNsHtQZ.png',
   AVATAR_BLACKSMITH_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-blacksmith-v2-KjTD6ydHSFh54EThBZKA6W.webp',
   AVATAR_BLACKSMITH_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-blacksmith-v2-f8avX4EpsHXE3TBvWHU4nE.png',
+  // Batch 4 - female characters
+  AVATAR_ASTRONOMER_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-astronomer-mJGWCezLy7tjwVtjsWyZ8x.webp',
+  AVATAR_ASTRONOMER_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-astronomer-DEkkA99rZdQ8yYfFoUL53G.png',
+  AVATAR_HERBALIST_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-herbalist-NTPpaCKe75NkT38NNheDrF.webp',
+  AVATAR_HERBALIST_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-herbalist-7MQz96ybykfSGoWhhVAgis.png',
+  AVATAR_SONGSTRESS_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-songstress-cQFH5u42ZMd6TLgjDceNcF.webp',
+  AVATAR_SONGSTRESS_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-songstress-Z9aiGhZtLY9LV5Prh7xSxn.png',
+  AVATAR_CLOCKMAKER_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-clockmaker-9qTJ5HMzDpsUsD946gxNRm.webp',
+  AVATAR_CLOCKMAKER_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-clockmaker-go6eTrVXCws9nsb5FAbt4J.png',
+  AVATAR_SNOW_RABBIT_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-snow-rabbit-8ZorYhKGpFXGXfMELwruHL.webp',
+  AVATAR_SNOW_RABBIT_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-snow-rabbit-UeFMxm9BAb7FbRKMWHbirf.png',
+  // Batch 4 - male characters
+  AVATAR_HUNTER_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-hunter_c473fd94.png',
+  AVATAR_HUNTER_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-hunter_c473fd94.png',
+  AVATAR_NAVIGATOR_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-navigator_9f0fb90d.png',
+  AVATAR_NAVIGATOR_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-navigator_9f0fb90d.png',
+  AVATAR_BEAST_TAMER_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-beast-tamer_2009444c.png',
+  AVATAR_BEAST_TAMER_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-beast-tamer_2009444c.png',
+  AVATAR_STONEMASON_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-stonemason-B4Cd58MCtNo9ttgLXoquBB.webp',
+  AVATAR_STONEMASON_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-stonemason-7s8e8KdTgvQH9SkpafvMG5.png',
+  AVATAR_STAR_KNIGHT_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-star-knight-LwuD8ncLKwfzcWvhpy5Xvw.webp',
+  AVATAR_STAR_KNIGHT_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-star-knight-6pgyoUJG7x4HjegxajAYH3.png',
 } as const;
 
 // Avatar items for shop - maps avatar IDs to their image URLs
@@ -207,6 +229,16 @@ export const AVATAR_ITEMS: Record<string, { icon: string; full: string }> = {
   'avatar-thunder-warrior': { icon: IMAGES.AVATAR_THUNDER_WARRIOR_ICON, full: IMAGES.AVATAR_THUNDER_WARRIOR_FULL },
   'avatar-shadow-mage': { icon: IMAGES.AVATAR_SHADOW_MAGE_ICON, full: IMAGES.AVATAR_SHADOW_MAGE_FULL },
   'avatar-blacksmith': { icon: IMAGES.AVATAR_BLACKSMITH_ICON, full: IMAGES.AVATAR_BLACKSMITH_FULL },
+  'avatar-astronomer': { icon: IMAGES.AVATAR_ASTRONOMER_ICON, full: IMAGES.AVATAR_ASTRONOMER_FULL },
+  'avatar-herbalist': { icon: IMAGES.AVATAR_HERBALIST_ICON, full: IMAGES.AVATAR_HERBALIST_FULL },
+  'avatar-songstress': { icon: IMAGES.AVATAR_SONGSTRESS_ICON, full: IMAGES.AVATAR_SONGSTRESS_FULL },
+  'avatar-clockmaker': { icon: IMAGES.AVATAR_CLOCKMAKER_ICON, full: IMAGES.AVATAR_CLOCKMAKER_FULL },
+  'avatar-snow-rabbit': { icon: IMAGES.AVATAR_SNOW_RABBIT_ICON, full: IMAGES.AVATAR_SNOW_RABBIT_FULL },
+  'avatar-hunter': { icon: IMAGES.AVATAR_HUNTER_ICON, full: IMAGES.AVATAR_HUNTER_FULL },
+  'avatar-navigator': { icon: IMAGES.AVATAR_NAVIGATOR_ICON, full: IMAGES.AVATAR_NAVIGATOR_FULL },
+  'avatar-beast-tamer': { icon: IMAGES.AVATAR_BEAST_TAMER_ICON, full: IMAGES.AVATAR_BEAST_TAMER_FULL },
+  'avatar-stonemason': { icon: IMAGES.AVATAR_STONEMASON_ICON, full: IMAGES.AVATAR_STONEMASON_FULL },
+  'avatar-star-knight': { icon: IMAGES.AVATAR_STAR_KNIGHT_ICON, full: IMAGES.AVATAR_STAR_KNIGHT_FULL },
 };
 
 export const CATEGORY_TABS = [
