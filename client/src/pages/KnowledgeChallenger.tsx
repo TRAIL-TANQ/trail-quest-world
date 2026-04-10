@@ -3,7 +3,7 @@
  * フラッグ奪い合い方式のカードバトルゲーム
  * Dark Navy + Gold RPG aesthetic
  */
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useLocation } from 'wouter';
 import { useUserStore, useGameStore, useAltStore } from '@/lib/stores';
 import {
@@ -13,6 +13,7 @@ import {
   RARITY_INFO,
   createInitialDeck,
   createAIDeck,
+  ALL_BATTLE_CARDS,
 } from '@/lib/knowledgeCards';
 import {
   type GameState,
@@ -32,6 +33,9 @@ export default function KnowledgeChallenger() {
 
   const [screen, setScreen] = useState<ScreenPhase>('title');
   const [gameState, setGameState] = useState<GameState | null>(null);
+  const [imagesPreloaded, setImagesPreloaded] = useState(false);
+  const [preloadProgress, setPreloadProgress] = useState(0);
+  const imageCache = useRef<Map<string, HTMLImageElement>>(new Map());
   const [selectedQuiz, setSelectedQuiz] = useState<Quiz | null>(null);
   const [quizTimer, setQuizTimer] = useState(10);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
@@ -40,6 +44,33 @@ export default function KnowledgeChallenger() {
   const [showCardReveal, setShowCardReveal] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef(0);
+
+  // Preload all card images on mount
+  useEffect(() => {
+    const urls = ALL_BATTLE_CARDS
+      .map(c => c.imageUrl)
+      .filter(Boolean);
+    let loaded = 0;
+    const total = urls.length;
+    if (total === 0) { setImagesPreloaded(true); return; }
+
+    urls.forEach(url => {
+      if (imageCache.current.has(url)) {
+        loaded++;
+        setPreloadProgress(Math.round((loaded / total) * 100));
+        if (loaded >= total) setImagesPreloaded(true);
+        return;
+      }
+      const img = new Image();
+      img.onload = img.onerror = () => {
+        loaded++;
+        setPreloadProgress(Math.round((loaded / total) * 100));
+        if (loaded >= total) setImagesPreloaded(true);
+      };
+      img.src = url;
+      imageCache.current.set(url, img);
+    });
+  }, []);
 
   // Start game
   const startGame = useCallback(() => {
@@ -219,8 +250,20 @@ export default function KnowledgeChallenger() {
             </div>
           </div>
 
+          {!imagesPreloaded && (
+            <div className="mb-3">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[10px] text-amber-200/50">カード画像を読み込み中...</span>
+                <span className="text-[10px] text-amber-200/50">{preloadProgress}%</span>
+              </div>
+              <div className="h-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.08)' }}>
+                <div className="h-full rounded-full transition-all duration-300"
+                  style={{ width: `${preloadProgress}%`, background: 'linear-gradient(90deg, #ffd700, #ffaa00)' }} />
+              </div>
+            </div>
+          )}
           <button onClick={startGame} className="rpg-btn rpg-btn-green w-full text-lg py-3.5 mb-2">
-            ⚔️ バトル開始！
+            {imagesPreloaded ? '⚔️ バトル開始！' : `⏳ 読み込み中... ${preloadProgress}%`}
           </button>
           <button onClick={() => navigate('/games')} className="text-amber-200/35 text-xs hover:text-amber-200/60 transition-colors py-2">
             ← ゲーム一覧に戻る
@@ -518,6 +561,7 @@ export default function KnowledgeChallenger() {
 function CardDisplay({ card, isDefense }: { card: BattleCard; isDefense?: boolean }) {
   const catInfo = CATEGORY_INFO[card.category];
   const rarInfo = RARITY_INFO[card.rarity];
+  const [imgLoaded, setImgLoaded] = useState(false);
 
   return (
     <div className="inline-block rounded-xl p-0 relative overflow-hidden"
@@ -528,9 +572,24 @@ function CardDisplay({ card, isDefense }: { card: BattleCard; isDefense?: boolea
         width: '160px',
         height: '200px',
       }}>
+      {/* Placeholder while loading */}
+      {!imgLoaded && (
+        <div className="absolute inset-0 flex items-center justify-center animate-pulse"
+          style={{ background: `linear-gradient(135deg, ${catInfo.color}15, rgba(14,20,45,0.95))` }}>
+          <span className="text-4xl opacity-40">{catInfo.emoji}</span>
+        </div>
+      )}
       {/* Card Image */}
       {card.imageUrl && (
-        <img src={card.imageUrl} alt={card.name} className="w-full h-full object-cover" />
+        <img
+          src={card.imageUrl}
+          alt={card.name}
+          className={`w-full h-full object-cover transition-opacity duration-300 ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
+          loading="eager"
+          decoding="async"
+          onLoad={() => setImgLoaded(true)}
+          onError={() => setImgLoaded(true)}
+        />
       )}
       
       {/* Overlay Info */}
