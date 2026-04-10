@@ -141,6 +141,28 @@ export const IMAGES = {
   AVATAR_BEASTMAN_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-beastman-5uczRLrudH2rzjckU2W82t.png',
   AVATAR_SAGE_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-sage-36UAEdBtdwBRcJ6BDEHomX.webp',
   AVATAR_SAGE_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-sage-7hfyG7z5GnP8Up4PcZrMhP.png',
+  // Batch 3 - female characters
+  AVATAR_DRAGON_RIDER_GIRL_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-dragon-rider-girl-4wkwmRs7q93zB69YzqLeqW.webp',
+  AVATAR_DRAGON_RIDER_GIRL_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-dragon-rider-girl-muvM2DBmrYs3cTmK5TjWwf.png',
+  AVATAR_ASTROLOGER_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-astrologer-Gv9jLmgw4u3Gs73ogjjtYW.webp',
+  AVATAR_ASTROLOGER_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-astrologer-3CxrQkVQAuqDwN3B8CuNn7.png',
+  AVATAR_WIND_MAGE_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-wind-mage-TbQG6SzJAuMENYtdXzuoBM.webp',
+  AVATAR_WIND_MAGE_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-wind-mage-3MLLcP5eBHUacnzJktqdRP.png',
+  AVATAR_PUPPETEER_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-puppeteer-iNqG9HVxrMtmNYGUF4AdE5.webp',
+  AVATAR_PUPPETEER_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-puppeteer-TY2N5mm82t7tYo3r9ZeKsv.png',
+  AVATAR_FLAME_DANCER_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-flame-dancer-MwbHLqrZ4GfdSoHPkuZ9Bw.webp',
+  AVATAR_FLAME_DANCER_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-flame-dancer-gFc6xKEMiyzkJ7qhVpTnAz.png',
+  // Batch 3 - male characters
+  AVATAR_PIRATE_PRINCE_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-pirate-prince-o9ChxULHYgfZNBhWnksMZc.webp',
+  AVATAR_PIRATE_PRINCE_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-pirate-prince-4GDEkbD9g9QZ9R2Hk3aNHL.png',
+  AVATAR_DESERT_TRAVELER_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-desert-traveler-kSRfKNnU9ec4juyaLva3wF.webp',
+  AVATAR_DESERT_TRAVELER_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-desert-traveler-fgaPQkKMnKndHApXDXmLne.png',
+  AVATAR_THUNDER_WARRIOR_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-thunder-warrior-JQngjM6JKByKKJGp4L2Wnx.webp',
+  AVATAR_THUNDER_WARRIOR_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-thunder-warrior-RrVZocZv4eVBMbmE5X3hAA.png',
+  AVATAR_SHADOW_MAGE_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-shadow-mage-7GNwadZk2RWVc5VzRnZjWC.webp',
+  AVATAR_SHADOW_MAGE_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-shadow-mage-GmPYQcCSv8fLjm93PYt5mb.png',
+  AVATAR_BLACKSMITH_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-blacksmith-QonmYsSY2WNjLEQoc7sK6M.webp',
+  AVATAR_BLACKSMITH_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-blacksmith-jacCkRyAY5Tpp5HATPa4w8.png',
 } as const;
 
 // Avatar items for shop - maps avatar IDs to their image URLs
@@ -175,6 +197,16 @@ export const AVATAR_ITEMS: Record<string, { icon: string; full: string }> = {
   'avatar-assassin': { icon: IMAGES.AVATAR_ASSASSIN_ICON, full: IMAGES.AVATAR_ASSASSIN_FULL },
   'avatar-beastman': { icon: IMAGES.AVATAR_BEASTMAN_ICON, full: IMAGES.AVATAR_BEASTMAN_FULL },
   'avatar-sage': { icon: IMAGES.AVATAR_SAGE_ICON, full: IMAGES.AVATAR_SAGE_FULL },
+  'avatar-dragon-rider-girl': { icon: IMAGES.AVATAR_DRAGON_RIDER_GIRL_ICON, full: IMAGES.AVATAR_DRAGON_RIDER_GIRL_FULL },
+  'avatar-astrologer': { icon: IMAGES.AVATAR_ASTROLOGER_ICON, full: IMAGES.AVATAR_ASTROLOGER_FULL },
+  'avatar-wind-mage': { icon: IMAGES.AVATAR_WIND_MAGE_ICON, full: IMAGES.AVATAR_WIND_MAGE_FULL },
+  'avatar-puppeteer': { icon: IMAGES.AVATAR_PUPPETEER_ICON, full: IMAGES.AVATAR_PUPPETEER_FULL },
+  'avatar-flame-dancer': { icon: IMAGES.AVATAR_FLAME_DANCER_ICON, full: IMAGES.AVATAR_FLAME_DANCER_FULL },
+  'avatar-pirate-prince': { icon: IMAGES.AVATAR_PIRATE_PRINCE_ICON, full: IMAGES.AVATAR_PIRATE_PRINCE_FULL },
+  'avatar-desert-traveler': { icon: IMAGES.AVATAR_DESERT_TRAVELER_ICON, full: IMAGES.AVATAR_DESERT_TRAVELER_FULL },
+  'avatar-thunder-warrior': { icon: IMAGES.AVATAR_THUNDER_WARRIOR_ICON, full: IMAGES.AVATAR_THUNDER_WARRIOR_FULL },
+  'avatar-shadow-mage': { icon: IMAGES.AVATAR_SHADOW_MAGE_ICON, full: IMAGES.AVATAR_SHADOW_MAGE_FULL },
+  'avatar-blacksmith': { icon: IMAGES.AVATAR_BLACKSMITH_ICON, full: IMAGES.AVATAR_BLACKSMITH_FULL },
 };
 
 export const CATEGORY_TABS = [
