@@ -28,6 +28,12 @@ import {
   processQuizAnswer,
   aiTurn,
 } from '@/lib/knowledgeEngine';
+import {
+  processQuizResult,
+  fetchChildStatus,
+  type QuizRewardResult,
+  type ChildStatus,
+} from '@/lib/quizService';
 
 type ScreenPhase = 'title' | 'playing' | 'result';
 
@@ -57,6 +63,26 @@ export default function KnowledgeChallenger() {
 
   // Winning card glow effect
   const [showWinGlow, setShowWinGlow] = useState(false);
+
+  // Supabase ALT/XP tracking
+  const userId = useUserStore((s) => s.user.id);
+  const [altBalance, setAltBalance] = useState<number | null>(null);
+  const [xpTotal, setXpTotal] = useState<number>(0);
+  const [xpLevel, setXpLevel] = useState<number>(1);
+  const [consecutiveCorrect, setConsecutiveCorrect] = useState(0);
+  const [altRewardPopup, setAltRewardPopup] = useState<{ alt: number; xp: number; streak: boolean; rarity: boolean; key: number } | null>(null);
+  const altPopupKey = useRef(0);
+
+  // Fetch ALT balance from Supabase on mount
+  useEffect(() => {
+    fetchChildStatus(userId).then((status) => {
+      if (status) {
+        setAltBalance(status.alt_points);
+        setXpTotal(status.xp);
+        setXpLevel(status.level);
+      }
+    });
+  }, [userId]);
 
   // Preload all card images on mount
   useEffect(() => {
@@ -152,6 +178,19 @@ export default function KnowledgeChallenger() {
     if (!gameState) return;
     setSelectedAnswer(-1);
     setShowResult(true);
+    // 不正解: 連続正解リセット
+    setConsecutiveCorrect(0);
+    // Supabase保存（タイムアウト = 不正解）
+    if (gameState.playerCard) {
+      processQuizResult({
+        childId: userId,
+        quizId: `${gameState.playerCard.id}-timeout`,
+        selectedIndex: -1,
+        isCorrect: false,
+        consecutiveCorrect: 0,
+        cardRarity: gameState.playerCard.rarity,
+      });
+    }
     setTimeout(() => {
       const newState = processQuizAnswer(gameState, false);
       setGameState(newState);
@@ -162,7 +201,7 @@ export default function KnowledgeChallenger() {
       if (newState.phase === 'ai_turn') processAITurn(newState);
       else if (newState.phase === 'game_over') setTimeout(() => setScreen('result'), 1500);
     }, 1500);
-  }, [gameState]);
+  }, [gameState, userId]);
 
   /* ---------- Answer quiz ---------- */
   const handleAnswer = useCallback(
@@ -172,6 +211,46 @@ export default function KnowledgeChallenger() {
       setSelectedAnswer(answerIndex);
       setShowResult(true);
       const correct = answerIndex === selectedQuiz.correctIndex;
+
+      // 連続正解トラッキング
+      const newConsecutive = correct ? consecutiveCorrect + 1 : 0;
+      setConsecutiveCorrect(newConsecutive);
+
+      // Supabase保存（非同期、UIはブロックしない）
+      if (gameState.playerCard) {
+        processQuizResult({
+          childId: userId,
+          quizId: `${gameState.playerCard.id}-q${Math.floor(Math.random() * 1000)}`,
+          selectedIndex: answerIndex,
+          isCorrect: correct,
+          consecutiveCorrect: newConsecutive,
+          cardRarity: gameState.playerCard.rarity,
+        }).then((reward) => {
+          if (reward) {
+            // ALT残高を更新
+            setAltBalance(reward.newAltTotal);
+            setXpTotal(reward.newXpTotal);
+            setXpLevel(reward.newLevel);
+            // ローカルストアも同期
+            if (reward.altEarned > 0) {
+              addTotalAlt(reward.altEarned);
+            }
+            // ALT報酬ポップアップ
+            if (reward.altEarned > 0) {
+              altPopupKey.current++;
+              setAltRewardPopup({
+                alt: reward.altEarned,
+                xp: reward.xpEarned,
+                streak: reward.streakBonus,
+                rarity: reward.rarityBonus,
+                key: altPopupKey.current,
+              });
+              setTimeout(() => setAltRewardPopup(null), 2500);
+            }
+          }
+        });
+      }
+
       setTimeout(() => {
         const newState = processQuizAnswer(gameState, correct);
         setGameState(newState);
@@ -184,7 +263,7 @@ export default function KnowledgeChallenger() {
         else if (newState.phase === 'game_over') setTimeout(() => setScreen('result'), 1500);
       }, 1800);
     },
-    [gameState, selectedQuiz, selectedAnswer],
+    [gameState, selectedQuiz, selectedAnswer, consecutiveCorrect, userId, addTotalAlt],
   );
 
   /* ---------- AI turn ---------- */
@@ -410,6 +489,56 @@ export default function KnowledgeChallenger() {
         <div className="text-center">
           <p className="text-[8px] text-amber-200/35">山札</p>
           <p className="text-sm font-bold text-amber-100">{gameState.player.deck.length}</p>
+        </div>
+        <div className="text-center relative">
+          <p className="text-[8px] text-amber-200/35">ALT</p>
+          <p className="text-sm font-bold" style={{ color: '#ffd700' }}>
+            {altBalance !== null ? altBalance.toLocaleString() : '---'}
+          </p>
+          {/* ALT報酬ポップアップ */}
+          {altRewardPopup && (
+            <div
+              key={altRewardPopup.key}
+              className="absolute -bottom-14 left-1/2 z-50 pointer-events-none whitespace-nowrap"
+              style={{
+                animation: 'altRewardFloat 2.5s ease-out forwards',
+                transform: 'translateX(-50%)',
+              }}
+            >
+              <div className="rounded-lg px-2.5 py-1.5" style={{
+                background: 'linear-gradient(135deg, rgba(255,215,0,0.25), rgba(255,170,0,0.2))',
+                border: '1px solid rgba(255,215,0,0.5)',
+                boxShadow: '0 0 16px rgba(255,215,0,0.3)',
+              }}>
+                <span className="text-sm font-black" style={{ color: '#ffd700', textShadow: '0 0 8px rgba(255,215,0,0.5)' }}>
+                  +{altRewardPopup.alt} ALT
+                </span>
+                {altRewardPopup.streak && (
+                  <span className="text-[9px] ml-1 font-bold text-orange-300">連続ボーナス!</span>
+                )}
+                {altRewardPopup.rarity && (
+                  <span className="text-[9px] ml-1 font-bold text-purple-300">高難度!</span>
+                )}
+              </div>
+              {altRewardPopup.xp > 0 && (
+                <p className="text-[9px] text-green-400 font-bold mt-0.5 text-center">+{altRewardPopup.xp} XP</p>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+      {/* Streak & XP sub-bar */}
+      <div className="px-3 py-1 flex items-center justify-between" style={{ background: 'rgba(0,0,0,0.25)', borderBottom: '1px solid rgba(255,215,0,0.08)' }}>
+        <div className="flex items-center gap-2">
+          {consecutiveCorrect >= 2 && (
+            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: 'rgba(255,170,0,0.2)', color: '#ffaa00', border: '1px solid rgba(255,170,0,0.3)' }}>
+              🔥 {consecutiveCorrect}連続正解!
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-[9px] text-amber-200/40">Lv.{xpLevel}</span>
+          <span className="text-[9px] text-amber-200/40">XP: {xpTotal}</span>
         </div>
       </div>
 
@@ -701,6 +830,17 @@ export default function KnowledgeChallenger() {
         }
         .animate-win-badge {
           animation: winBadgePulse 0.8s ease-in-out infinite;
+        }
+        @keyframes altRewardFloat {
+          0%   { opacity: 0; transform: translateX(-50%) translateY(0) scale(0.7); }
+          15%  { opacity: 1; transform: translateX(-50%) translateY(-4px) scale(1.1); }
+          30%  { opacity: 1; transform: translateX(-50%) translateY(-8px) scale(1); }
+          80%  { opacity: 1; transform: translateX(-50%) translateY(-12px) scale(1); }
+          100% { opacity: 0; transform: translateX(-50%) translateY(-20px) scale(0.9); }
+        }
+        @keyframes streakPulse {
+          0%, 100% { opacity: 0.8; }
+          50%      { opacity: 1; transform: scale(1.05); }
         }
       `}</style>
     </div>
