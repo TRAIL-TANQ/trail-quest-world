@@ -92,6 +92,11 @@ export default function KnowledgeChallenger() {
   const [flagMoveAnim, setFlagMoveAnim] = useState<'toPlayer' | 'toAi' | null>(null);
   const [aiPowerPopKey, setAiPowerPopKey] = useState(0);
 
+  // Nuke / SSR cinematics
+  const [showNukeFlash, setShowNukeFlash] = useState(false);
+  const [showNukeFailed, setShowNukeFailed] = useState(false);
+  const [showSSRReveal, setShowSSRReveal] = useState(false);
+
   // Battle log expanded
   const [logExpanded, setLogExpanded] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
@@ -162,15 +167,47 @@ export default function KnowledgeChallenger() {
     if (!gameState || gameState.phase !== 'player_draw') return;
     const newState = playerDrawCard(gameState);
     setGameState(newState);
+
+    // SSR reveal effect
+    if (newState.ssrRevealSide === 'player') {
+      setShowSSRReveal(true);
+      setTimeout(() => setShowSSRReveal(false), 1500);
+    }
+
+    // Nuke combo effects
+    if (newState.nukeAnimation === 'triggered') {
+      setShowNukeFlash(true);
+      setTimeout(() => setShowNukeFlash(false), 2800);
+      triggerWinEffect('player');
+      triggerAttackSlide();
+      // After nuke animation, continue to AI turn or game over
+      if (newState.phase === 'ai_turn') {
+        setTimeout(() => processAITurn(newState), 3000);
+      } else if (newState.phase === 'game_over') {
+        setTimeout(() => {
+          setShowGameOverOverlay(true);
+          setTimeout(() => setScreen('result'), 2500);
+        }, 2800);
+      }
+      return;
+    }
+    if (newState.nukeAnimation === 'failed') {
+      setShowNukeFailed(true);
+      setTimeout(() => setShowNukeFailed(false), 1500);
+    }
+
     if (newState.phase === 'quiz' && newState.playerCard) {
-      const quizzes = newState.playerCard.quizzes;
-      const quiz = quizzes[Math.floor(Math.random() * quizzes.length)];
-      setSelectedQuiz(quiz);
-      setQuizTimer(10);
-      setSelectedAnswer(null);
-      setShowResult(false);
-      setShowCardReveal(true);
-      setTimeout(() => setShowCardReveal(false), 800);
+      const quizStartDelay = newState.nukeAnimation === 'failed' ? 1500 : 0;
+      setTimeout(() => {
+        const quizzes = newState.playerCard!.quizzes;
+        const quiz = quizzes[Math.floor(Math.random() * quizzes.length)];
+        setSelectedQuiz(quiz);
+        setQuizTimer(10);
+        setSelectedAnswer(null);
+        setShowResult(false);
+        setShowCardReveal(true);
+        setTimeout(() => setShowCardReveal(false), 800);
+      }, quizStartDelay);
     }
     if (newState.phase === 'game_over') {
       setShowGameOverOverlay(true);
@@ -601,6 +638,37 @@ export default function KnowledgeChallenger() {
 
       {/* Side Burst */}
       {sideBurst && <div className={`kc-side-burst kc-side-burst-${sideBurst}`} />}
+
+      {/* ===== Nuke Trigger Cinematic ===== */}
+      {showNukeFlash && (
+        <>
+          <div className="kc-nuke-whiteflash" />
+          <div className="kc-nuke-shockwave" />
+          <div className="kc-nuke-overlay">
+            <div className="kc-nuke-cloud">☁️</div>
+            <div className="kc-nuke-mushroom">💥</div>
+            <div className="kc-nuke-title">☢️ 原子爆弾 発動！</div>
+            <div className="kc-nuke-sub">マンハッタン計画 + トリニティ実験</div>
+          </div>
+        </>
+      )}
+
+      {/* ===== Nuke Failed (不発) ===== */}
+      {showNukeFailed && (
+        <div className="kc-nuke-failed">
+          <span className="kc-nuke-failed-text">💨 不発...条件カードが揃っていない</span>
+        </div>
+      )}
+
+      {/* ===== SSR Reveal Cinematic ===== */}
+      {showSSRReveal && (
+        <div className="kc-ssr-reveal">
+          <div className="kc-ssr-lightning-l">⚡</div>
+          <div className="kc-ssr-lightning-r">⚡</div>
+          <div className="kc-ssr-halo" />
+          <div className="kc-ssr-text">✨ SSR ✨</div>
+        </div>
+      )}
 
       {showGameOverOverlay && (
         <div className="kc-game-over-overlay">
@@ -1079,6 +1147,214 @@ export default function KnowledgeChallenger() {
           50% { opacity: 1; transform: scale(1.4); color: #ffd700; text-shadow: 0 0 12px rgba(255,215,0,0.8); }
           100% { opacity: 1; transform: scale(1); }
         }
+
+        /* ===== Nuke Cinematic ===== */
+        .kc-nuke-whiteflash {
+          position: absolute; inset: 0; z-index: 200;
+          background: #fff;
+          pointer-events: none;
+          animation: kcNukeWhite 2.8s ease-out forwards;
+        }
+        @keyframes kcNukeWhite {
+          0%   { opacity: 0; }
+          5%   { opacity: 1; }
+          20%  { opacity: 1; }
+          40%  { opacity: 0.5; }
+          100% { opacity: 0; }
+        }
+        .kc-nuke-shockwave {
+          position: absolute; top: 50%; left: 50%; z-index: 201;
+          width: 20px; height: 20px; border-radius: 50%;
+          border: 4px solid rgba(255,220,50,0.9);
+          transform: translate(-50%, -50%);
+          pointer-events: none;
+          animation: kcNukeShock 2.5s cubic-bezier(.2,.6,.3,1) forwards;
+        }
+        @keyframes kcNukeShock {
+          0%   { opacity: 0; width: 20px; height: 20px; border-width: 4px; }
+          10%  { opacity: 1; }
+          80%  { opacity: 0.5; }
+          100% { opacity: 0; width: 1200px; height: 1200px; border-width: 1px; border-color: rgba(255,100,0,0.1); }
+        }
+        .kc-nuke-overlay {
+          position: absolute; inset: 0; z-index: 202;
+          display: flex; flex-direction: column; align-items: center; justify-content: center;
+          pointer-events: none;
+          animation: kcNukeFade 2.8s ease-out forwards;
+        }
+        @keyframes kcNukeFade {
+          0%   { opacity: 0; }
+          25%  { opacity: 1; }
+          85%  { opacity: 1; }
+          100% { opacity: 0; }
+        }
+        .kc-nuke-cloud {
+          font-size: 3rem;
+          animation: kcNukeCloud 2.8s ease-out forwards;
+        }
+        @keyframes kcNukeCloud {
+          0%   { opacity: 0; transform: translateY(80px) scale(0.4); }
+          30%  { opacity: 1; transform: translateY(0) scale(1.8); }
+          100% { opacity: 0.7; transform: translateY(-40px) scale(2.5); }
+        }
+        .kc-nuke-mushroom {
+          font-size: 5rem;
+          margin-top: -20px;
+          animation: kcNukeMushroom 2.8s ease-out forwards;
+        }
+        @keyframes kcNukeMushroom {
+          0%   { opacity: 0; transform: scale(0.2) rotate(-8deg); filter: brightness(3) hue-rotate(20deg); }
+          20%  { opacity: 1; transform: scale(1.8) rotate(3deg); filter: brightness(2) hue-rotate(-15deg); }
+          60%  { transform: scale(1.6) rotate(0); filter: brightness(1.4); }
+          100% { opacity: 0.8; transform: scale(1.4); filter: brightness(1); }
+        }
+        .kc-nuke-title {
+          font-size: 2.2rem;
+          font-weight: 900;
+          color: #ff3300;
+          text-shadow: 0 0 20px rgba(255,50,0,0.9), 0 0 40px rgba(255,100,0,0.6), 0 4px 0 rgba(0,0,0,0.7);
+          margin-top: 12px;
+          letter-spacing: 0.08em;
+          animation: kcNukeTitle 2.8s cubic-bezier(.17,.67,.35,1.4) both;
+        }
+        @keyframes kcNukeTitle {
+          0%   { opacity: 0; transform: scale(0.1) rotate(-5deg); }
+          30%  { opacity: 1; transform: scale(1.4) rotate(2deg); }
+          50%  { transform: scale(1.05) rotate(0); }
+          80%  { opacity: 1; transform: scale(1.1); }
+          100% { opacity: 0; transform: scale(1.3); }
+        }
+        .kc-nuke-sub {
+          font-size: 0.85rem;
+          font-weight: 700;
+          color: #ffd700;
+          text-shadow: 0 0 10px rgba(255,215,0,0.8);
+          margin-top: 6px;
+          animation: kcNukeSub 2.8s ease-out both;
+        }
+        @keyframes kcNukeSub {
+          0%, 30% { opacity: 0; transform: translateY(10px); }
+          45%     { opacity: 1; transform: translateY(0); }
+          80%     { opacity: 1; }
+          100%    { opacity: 0; }
+        }
+
+        /* ===== Nuke Failed ===== */
+        .kc-nuke-failed {
+          position: absolute; inset: 0; z-index: 65;
+          display: flex; align-items: center; justify-content: center;
+          pointer-events: none;
+          background: radial-gradient(ellipse at center, rgba(100,100,100,0.25), transparent 60%);
+          animation: kcNukeFailedFade 1.5s ease-out forwards;
+        }
+        @keyframes kcNukeFailedFade {
+          0%, 80% { opacity: 1; }
+          100%    { opacity: 0; }
+        }
+        .kc-nuke-failed-text {
+          font-size: 1.2rem;
+          font-weight: 900;
+          color: #9ca3af;
+          text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+          animation: kcNukeFailedText 1.5s ease-out;
+        }
+        @keyframes kcNukeFailedText {
+          0%   { opacity: 0; transform: scale(0.8); }
+          20%  { opacity: 1; transform: scale(1.1); }
+          40%  { transform: scale(1); }
+          100% { opacity: 0.6; transform: scale(1); }
+        }
+
+        /* ===== SSR Reveal ===== */
+        .kc-ssr-reveal {
+          position: absolute; inset: 0; z-index: 80;
+          display: flex; align-items: center; justify-content: center;
+          pointer-events: none;
+          animation: kcSsrFade 1.5s ease-out forwards;
+        }
+        @keyframes kcSsrFade {
+          0%   { opacity: 0; background: rgba(255,215,0,0); }
+          20%  { opacity: 1; background: rgba(255,215,0,0.15); }
+          70%  { opacity: 1; background: rgba(255,215,0,0.08); }
+          100% { opacity: 0; background: transparent; }
+        }
+        .kc-ssr-lightning-l, .kc-ssr-lightning-r {
+          position: absolute;
+          font-size: 5rem;
+          color: #ffd700;
+          text-shadow: 0 0 20px rgba(255,215,0,0.9), 0 0 40px rgba(255,255,255,0.7);
+          filter: drop-shadow(0 0 12px rgba(255,215,0,0.9));
+        }
+        .kc-ssr-lightning-l { left: 20%; top: 20%; animation: kcSsrLightningL 1.5s ease-out; }
+        .kc-ssr-lightning-r { right: 20%; top: 20%; animation: kcSsrLightningR 1.5s ease-out; }
+        @keyframes kcSsrLightningL {
+          0%   { opacity: 0; transform: translate(-40px, -40px) scale(0.5) rotate(-20deg); }
+          20%  { opacity: 1; transform: translate(0, 0) scale(1.3) rotate(-10deg); }
+          40%  { transform: translate(4px, 4px) scale(1) rotate(0deg); }
+          60%  { opacity: 1; }
+          100% { opacity: 0; transform: scale(1.2); }
+        }
+        @keyframes kcSsrLightningR {
+          0%   { opacity: 0; transform: translate(40px, -40px) scale(0.5) rotate(20deg); }
+          20%  { opacity: 1; transform: translate(0, 0) scale(1.3) rotate(10deg); }
+          40%  { transform: translate(-4px, 4px) scale(1) rotate(0deg); }
+          60%  { opacity: 1; }
+          100% { opacity: 0; transform: scale(1.2); }
+        }
+        .kc-ssr-halo {
+          position: absolute; top: 50%; left: 50%;
+          width: 200px; height: 200px; border-radius: 50%;
+          background: radial-gradient(circle, rgba(255,255,255,0.6) 0%, rgba(255,215,0,0.4) 40%, transparent 70%);
+          transform: translate(-50%, -50%);
+          animation: kcSsrHalo 1.5s ease-out;
+        }
+        @keyframes kcSsrHalo {
+          0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.3); }
+          30%  { opacity: 1; transform: translate(-50%, -50%) scale(1.4); }
+          100% { opacity: 0; transform: translate(-50%, -50%) scale(2.2); }
+        }
+        .kc-ssr-text {
+          position: relative; z-index: 2;
+          font-size: 2.5rem;
+          font-weight: 900;
+          background: linear-gradient(135deg, #ffd700, #fff, #ffd700, #ec4899, #a855f7);
+          background-size: 300% 300%;
+          -webkit-background-clip: text;
+          background-clip: text;
+          color: transparent;
+          text-shadow: 0 0 30px rgba(255,215,0,0.6);
+          letter-spacing: 0.1em;
+          animation: kcSsrText 1.5s cubic-bezier(.17,.67,.35,1.4) both, kcSsrGradient 1.5s linear infinite;
+        }
+        @keyframes kcSsrText {
+          0%   { opacity: 0; transform: scale(0.2) rotate(-10deg); }
+          25%  { opacity: 1; transform: scale(1.5) rotate(3deg); }
+          45%  { transform: scale(1.1) rotate(0); }
+          80%  { opacity: 1; transform: scale(1.15); }
+          100% { opacity: 0; transform: scale(1.3) translateY(-10px); }
+        }
+        @keyframes kcSsrGradient {
+          0%   { background-position: 0% 50%; }
+          100% { background-position: 100% 50%; }
+        }
+
+        /* ===== SSR Rainbow Card Border ===== */
+        .kc-card-ssr {
+          position: relative;
+        }
+        .kc-card-ssr::before {
+          content: '';
+          position: absolute; inset: -3px;
+          border-radius: 14px;
+          background: linear-gradient(135deg, #ffd700, #ec4899, #a855f7, #3b82f6, #22c55e, #ffd700);
+          background-size: 300% 300%;
+          z-index: -1;
+          animation: kcSsrBorder 3s linear infinite;
+        }
+        @keyframes kcSsrBorder {
+          0%   { background-position: 0% 50%; }
+          100% { background-position: 300% 50%; }
+        }
       `}</style>
     </div>
   );
@@ -1163,7 +1439,7 @@ function CardDisplay({ card, isDefense, isWinner, size }: { card: BattleCard; is
   const w = size === 'sm' ? 80 : 140;
   const h = size === 'sm' ? 100 : 175;
   return (
-    <div className={`inline-block rounded-xl p-0 relative overflow-hidden ${isWinner ? 'kc-win-glow' : ''}`} style={{ background: 'linear-gradient(135deg, rgba(21,29,59,0.95), rgba(14,20,45,0.95))', border: `2px solid ${isWinner ? 'rgba(255,215,0,0.8)' : isDefense ? 'rgba(100,180,255,0.5)' : `${catInfo.color}55`}`, boxShadow: isWinner ? '0 0 20px rgba(255,215,0,0.5), 0 0 40px rgba(255,215,0,0.2), 0 4px 16px rgba(0,0,0,0.4)' : isDefense ? '0 0 12px rgba(100,180,255,0.2), 0 4px 16px rgba(0,0,0,0.4)' : `0 4px 16px rgba(0,0,0,0.4), inset 0 0 20px ${catInfo.color}08`, width: `${w}px`, height: `${h}px` }}>
+    <div className={`inline-block rounded-xl p-0 relative overflow-hidden ${isWinner ? 'kc-win-glow' : ''} ${card.rarity === 'SSR' ? 'kc-card-ssr' : ''}`} style={{ background: 'linear-gradient(135deg, rgba(21,29,59,0.95), rgba(14,20,45,0.95))', border: `2px solid ${isWinner ? 'rgba(255,215,0,0.8)' : card.rarity === 'SSR' ? 'transparent' : isDefense ? 'rgba(100,180,255,0.5)' : `${catInfo.color}55`}`, boxShadow: isWinner ? '0 0 20px rgba(255,215,0,0.5), 0 0 40px rgba(255,215,0,0.2), 0 4px 16px rgba(0,0,0,0.4)' : card.rarity === 'SSR' ? '0 0 18px rgba(255,215,0,0.45), 0 0 32px rgba(236,72,153,0.25), 0 4px 16px rgba(0,0,0,0.4)' : isDefense ? '0 0 12px rgba(100,180,255,0.2), 0 4px 16px rgba(0,0,0,0.4)' : `0 4px 16px rgba(0,0,0,0.4), inset 0 0 20px ${catInfo.color}08`, width: `${w}px`, height: `${h}px` }}>
       {!imgLoaded && (
         <div className="absolute inset-0 flex items-center justify-center animate-pulse" style={{ background: `linear-gradient(135deg, ${catInfo.color}15, rgba(14,20,45,0.95))` }}>
           <span className={`${size === 'sm' ? 'text-2xl' : 'text-4xl'} opacity-40`}>{catInfo.emoji}</span>

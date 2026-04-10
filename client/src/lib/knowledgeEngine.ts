@@ -3,6 +3,7 @@
  * フラッグ奪い合い方式のカードバトルロジック
  */
 import type { BattleCard, CardCategory } from './knowledgeCards';
+import { COMBO_CARD_IDS } from './knowledgeCards';
 
 export interface BenchSlot {
   category: CardCategory;
@@ -42,6 +43,10 @@ export interface GameState {
   lastAddedPower: number;           // 最後に加算されたパワー（演出用）
   winningCard: BattleCard | null;   // 勝ち残りカード（演出用）
   winningCardSide: 'player' | 'ai' | null; // どちら側の勝利か
+  // Nuke combo state
+  nukeAnimation: 'triggered' | 'failed' | null;
+  isolationZone: BattleCard[];       // 隔離されたAIカード
+  ssrRevealSide: 'player' | 'ai' | null; // SSR公開演出トリガー
 }
 
 function shuffleDeck(deck: BattleCard[]): BattleCard[] {
@@ -80,7 +85,22 @@ export function initGameState(playerDeck: BattleCard[], aiDeck: BattleCard[]): G
     lastAddedPower: 0,
     winningCard: null,
     winningCardSide: null,
+    nukeAnimation: null,
+    isolationZone: [],
+    ssrRevealSide: null,
   };
+}
+
+// Check if a bench contains cards matching given names (from bench slots)
+function benchHasCardNames(bench: BenchSlot[], names: string[]): boolean {
+  const benchNames = new Set<string>();
+  for (const slot of bench) {
+    for (const card of slot.cards) {
+      // Strip player/ai prefix from id to match by original id base
+      benchNames.add(card.name);
+    }
+  }
+  return names.every(n => benchNames.has(n));
 }
 
 function canAddToBench(bench: BenchSlot[]): boolean {
@@ -153,6 +173,74 @@ export function playerDrawCard(state: GameState): GameState {
 
   const newDeck = [...state.player.deck];
   const drawnCard = newDeck.shift()!;
+  const isSSRReveal = drawnCard.rarity === 'SSR';
+
+  // ===== Nuke Combo Check =====
+  // 原子爆弾を公開したとき、ベンチに「マンハッタン計画」「トリニティ実験」があれば発動
+  if (drawnCard.specialEffect === 'nuke_trigger' && drawnCard.comboRequires) {
+    const comboReady = benchHasCardNames(state.player.bench, drawnCard.comboRequires);
+    if (comboReady) {
+      // 発動成功：相手の場を破壊 + 相手デッキ上から5枚を隔離
+      const aiDeck = [...state.ai.deck];
+      const isolated = aiDeck.splice(0, 5);
+      const newIsolation = [...state.isolationZone, ...isolated];
+      const destroyedDefender = state.aiCard;
+      // AIの新防衛カードを引く（デッキがあれば）
+      const newAIDefender = aiDeck.length > 0 ? aiDeck.shift()! : null;
+
+      const nukeLog = [
+        ...state.log,
+        `☢️ 原子爆弾 発動！コンボ成立：マンハッタン計画 + トリニティ実験`,
+        destroyedDefender ? `💥 ${destroyedDefender.name}を破壊！` : '💥 相手の場を破壊！',
+        `🗑️ 相手デッキ上から${isolated.length}枚を隔離スペースに送った`,
+      ];
+
+      // AIベンチがオーバーしないかチェックしてから戻す
+      // プレイヤーはフラッグをまだ奪っていない（defender破壊のみ）—次のAIターンへ
+      return {
+        ...state,
+        phase: newAIDefender ? 'ai_turn' : 'game_over',
+        player: { ...state.player, deck: newDeck },
+        ai: { ...state.ai, deck: aiDeck },
+        playerCard: drawnCard, // 原子爆弾がプレイヤーの防衛に
+        aiCard: newAIDefender,
+        flagHolder: newAIDefender ? 'player' : 'player', // プレイヤーがフラッグを奪取
+        playerPowerTotal: 0,
+        aiPowerTotal: 0,
+        isolationZone: newIsolation,
+        nukeAnimation: 'triggered',
+        ssrRevealSide: 'player',
+        message: newAIDefender
+          ? `☢️ 原子爆弾発動！相手の場を破壊し、デッキ上から5枚を隔離！`
+          : `☢️ 原子爆弾で相手を壊滅！勝利！`,
+        log: nukeLog,
+        winningCard: drawnCard,
+        winningCardSide: 'player',
+        winner: newAIDefender ? null : 'player',
+        quizAnswered: true,
+        quizCorrect: true,
+        lastAddedPower: drawnCard.power,
+        playerAttackCards: [...state.playerAttackCards, drawnCard],
+      };
+    } else {
+      // 不発
+      return {
+        ...state,
+        phase: 'quiz',
+        player: { ...state.player, deck: newDeck },
+        playerCard: drawnCard,
+        quizAnswered: false,
+        quizCorrect: null,
+        effectApplied: false,
+        nukeAnimation: 'failed',
+        ssrRevealSide: isSSRReveal ? 'player' : null,
+        message: `不発...条件カードが揃っていない。基本パワー${drawnCard.power}として扱う。`,
+        log: [...state.log, `☢️ 原子爆弾を公開したが不発...（条件カード不足）`],
+        winningCard: null,
+        winningCardSide: null,
+      };
+    }
+  }
 
   return {
     ...state,
@@ -162,6 +250,8 @@ export function playerDrawCard(state: GameState): GameState {
     quizAnswered: false,
     quizCorrect: null,
     effectApplied: false,
+    nukeAnimation: null,
+    ssrRevealSide: isSSRReveal ? 'player' : null,
     message: `${drawnCard.name}をめくった！クイズに答えよう！`,
     log: [...state.log, `プレイヤーが${drawnCard.name}（パワー${drawnCard.power}）をめくった`],
     winningCard: null,

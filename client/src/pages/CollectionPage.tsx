@@ -205,7 +205,10 @@ export default function CollectionPage() {
       cards.sort((a, b) => a.name.localeCompare(b.name, 'ja'));
     }
 
-    return cards;
+    // Always pin SSR cards to the top (特別表示)
+    const ssrCards = cards.filter(c => c.rarity === 'SSR');
+    const rest = cards.filter(c => c.rarity !== 'SSR');
+    return [...ssrCards, ...rest];
   }, [activeCategory, activeRarity, activeSort, acquiredOrder]);
 
   // カテゴリ別コンプリート率

@@ -9,6 +9,8 @@ import type { CollectionCard, CollectionCategory } from './types';
 export type CardCategory = 'great_person' | 'creature' | 'heritage' | 'invention' | 'discovery';
 export type CardRarity = 'N' | 'R' | 'SR' | 'SSR';
 
+export type SpecialEffect = 'nuke_trigger' | 'nuke_ingredient_manhattan' | 'nuke_ingredient_trinity';
+
 export interface BattleCard {
   id: string;
   name: string;
@@ -20,7 +22,17 @@ export interface BattleCard {
   correctBonus: number;
   imageUrl: string;
   description: string;
+  specialEffect?: SpecialEffect;
+  comboRequires?: string[];    // Names of bench cards required for combo trigger
+  fromTheBench?: boolean;      // Effect active while on bench
 }
+
+// Combo card IDs for detection
+export const COMBO_CARD_IDS = {
+  MANHATTAN: 'card-101',
+  TRINITY: 'card-102',
+  NUKE: 'card-103',
+} as const;
 
 export interface Quiz {
   question: string;
@@ -565,6 +577,22 @@ const QUIZ_DATA: Record<string, Quiz[]> = {
     { question: '光合成に必要なものは？', choices: ['水と酸素', '光と二酸化炭素と水', '土と肥料', '風と雨'], correctIndex: 1 },
     { question: '光合成が行われる場所は？', choices: ['根', '茎', '葉緑体', '花'], correctIndex: 2 },
   ],
+  // ===== コンボカード =====
+  'card-101': [
+    { question: 'マンハッタン計画を主導した国は？', choices: ['アメリカ', 'ドイツ', 'ソ連', 'イギリス'], correctIndex: 0 },
+    { question: 'マンハッタン計画の科学責任者は誰？', choices: ['アインシュタイン', 'オッペンハイマー', 'フェルミ', 'ボーア'], correctIndex: 1 },
+    { question: 'マンハッタン計画が実施された時期は？', choices: ['第一次世界大戦', '第二次世界大戦', '冷戦初期', 'ベトナム戦争'], correctIndex: 1 },
+  ],
+  'card-102': [
+    { question: '世界初の核実験「トリニティ実験」が行われた年は？', choices: ['1945年', '1939年', '1950年', '1942年'], correctIndex: 0 },
+    { question: 'トリニティ実験が行われた場所は？', choices: ['ネバダ砂漠', 'ニューメキシコ州の砂漠', 'アラスカ', 'ハワイ'], correctIndex: 1 },
+    { question: 'トリニティ実験で作られた爆弾の名前は？', choices: ['リトルボーイ', 'ファットマン', 'ガジェット', 'ツァーリ'], correctIndex: 2 },
+  ],
+  'card-103': [
+    { question: '原子爆弾が実戦で使用された都市は？', choices: ['広島と長崎', '東京と大阪', 'ベルリンとミュンヘン', 'ロンドンとパリ'], correctIndex: 0 },
+    { question: '広島に原爆が投下された日は？', choices: ['1945年8月6日', '1945年8月9日', '1945年8月15日', '1945年7月16日'], correctIndex: 0 },
+    { question: '原子爆弾のエネルギー源は？', choices: ['化学反応', '核分裂', '核融合', '電磁波'], correctIndex: 1 },
+  ],
 };
 
 // Effect descriptions by category
@@ -605,9 +633,31 @@ const CATEGORY_EFFECTS: Record<CardCategory, Record<CardRarity, string>> = {
 function toBattleCard(cc: CollectionCard): BattleCard {
   const category = CATEGORY_MAP[cc.category];
   const rarity = cc.rarity as CardRarity;
-  const power = RARITY_POWER[rarity];
+  let power = RARITY_POWER[rarity];
   const correctBonus = RARITY_BONUS[rarity];
-  const effectDescription = CATEGORY_EFFECTS[category][rarity];
+  let effectDescription = CATEGORY_EFFECTS[category][rarity];
+  let specialEffect: SpecialEffect | undefined;
+  let comboRequires: string[] | undefined;
+  let fromTheBench = false;
+
+  // Combo card overrides
+  if (cc.id === COMBO_CARD_IDS.MANHATTAN) {
+    power = 3;
+    specialEffect = 'nuke_ingredient_manhattan';
+    fromTheBench = true;
+    effectDescription = 'From the bench: 「原子爆弾」の発動条件。ベンチにある限り効果継続。';
+  } else if (cc.id === COMBO_CARD_IDS.TRINITY) {
+    power = 3;
+    specialEffect = 'nuke_ingredient_trinity';
+    fromTheBench = true;
+    effectDescription = 'From the bench: 「原子爆弾」の発動条件。ベンチにある限り効果継続。';
+  } else if (cc.id === COMBO_CARD_IDS.NUKE) {
+    power = 2;
+    specialEffect = 'nuke_trigger';
+    comboRequires = ['マンハッタン計画', 'トリニティ実験'];
+    effectDescription = '公開時発動：ベンチに「マンハッタン計画」と「トリニティ実験」がある場合、相手の場を破壊し、相手デッキ上から5枚を隔離。条件不足時は不発（基本パワー2）。';
+  }
+
   const quizzes = QUIZ_DATA[cc.id] || [
     { question: `${cc.name}について正しいのは？`, choices: [cc.description, '宇宙で発見された', '1000年前に消えた', '南極にある'], correctIndex: 0 },
     { question: `${cc.name}のカテゴリは？`, choices: [CATEGORY_INFO[category].label, '未知', '伝説', '架空'], correctIndex: 0 },
@@ -625,6 +675,9 @@ function toBattleCard(cc: CollectionCard): BattleCard {
     correctBonus,
     imageUrl: cc.imageUrl,
     description: cc.description,
+    specialEffect,
+    comboRequires,
+    fromTheBench,
   };
 }
 
@@ -671,6 +724,21 @@ const INITIAL_CARDS: BattleCard[] = [
   },
 ];
 
+// Enforce SSR deck limit (max 1 SSR per deck)
+function enforceSSRLimit(deck: BattleCard[], pool: BattleCard[], prefix: string): BattleCard[] {
+  const ssrCount = deck.filter(c => c.rarity === 'SSR').length;
+  if (ssrCount <= 1) return deck;
+  // Keep only the first SSR, replace rest with non-SSR cards
+  let kept = false;
+  const nonSSRPool = pool.filter(c => c.rarity !== 'SSR');
+  return deck.map((c, idx) => {
+    if (c.rarity !== 'SSR') return c;
+    if (!kept) { kept = true; return c; }
+    const replacement = nonSSRPool[idx % nonSSRPool.length];
+    return { ...replacement, id: `${prefix}-${replacement.id}-r${idx}` };
+  });
+}
+
 // Build initial deck from COLLECTION_CARDS (6 cards, balanced categories)
 export function createInitialDeck(): BattleCard[] {
   const shuffled = [...ALL_BATTLE_CARDS].sort(() => Math.random() - 0.5);
@@ -689,7 +757,7 @@ export function createInitialDeck(): BattleCard[] {
     const card = shuffled[Math.floor(Math.random() * shuffled.length)];
     deck.push({ ...card, id: `player-extra-${deck.length}` });
   }
-  return deck;
+  return enforceSSRLimit(deck, ALL_BATTLE_CARDS, 'player');
 }
 
 // AI deck: uses random cards from collection
@@ -710,7 +778,7 @@ export function createAIDeck(): BattleCard[] {
     const card = shuffled[Math.floor(Math.random() * shuffled.length)];
     deck.push({ ...card, id: `ai-extra-${deck.length}` });
   }
-  return deck;
+  return enforceSSRLimit(deck, ALL_BATTLE_CARDS, 'ai');
 }
 
 // Legacy exports for compatibility
