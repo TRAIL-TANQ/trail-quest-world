@@ -167,9 +167,16 @@ export default function MyPage() {
             <span className="text-amber-200/25 text-sm">→</span>
           </div>
         </Link>
+        <Link href="/admin">
+          <div className="rounded-xl p-3 flex items-center justify-between transition-all hover:scale-[1.01] active:scale-[0.99]"
+            style={{ background: 'linear-gradient(135deg, rgba(245,158,11,0.08), rgba(245,158,11,0.03))', border: '1px solid rgba(245,158,11,0.2)' }}>
+            <div className="flex items-center gap-2"><span>⚙️</span><span className="text-sm text-amber-100">管理者ダッシュボード</span></div>
+            <span className="text-amber-200/25 text-sm">→</span>
+          </div>
+        </Link>
         <div className="rounded-xl p-3 flex items-center justify-between opacity-40"
           style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
-          <div className="flex items-center gap-2"><span>⚙️</span><span className="text-sm text-amber-100">設定</span></div>
+          <div className="flex items-center gap-2"><span>🔧</span><span className="text-sm text-amber-100">設定</span></div>
           <span className="text-[10px] text-amber-200/25">Coming Soon</span>
         </div>
       </div>

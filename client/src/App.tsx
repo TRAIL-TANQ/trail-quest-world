@@ -18,6 +18,7 @@ import ShopPage from "./pages/ShopPage";
 import MyPage from "./pages/MyPage";
 import ResultPage from "./pages/ResultPage";
 import LoginPage from "./pages/LoginPage";
+import AdminPage from "./pages/AdminPage";
 
 function Router() {
   return (
@@ -35,6 +36,7 @@ function Router() {
             <Route path="/collection" component={CollectionPage} />
             <Route path="/shop" component={ShopPage} />
             <Route path="/mypage" component={MyPage} />
+            <Route path="/admin" component={AdminPage} />
             <Route>
               <div className="flex items-center justify-center min-h-[60vh]">
                 <p className="text-lg font-bold gold-text">ページが見つかりません</p>

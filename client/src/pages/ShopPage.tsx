@@ -6,6 +6,7 @@
 import { useState } from 'react';
 import { MOCK_SHOP_ITEMS } from '@/lib/mockData';
 import { useUserStore } from '@/lib/stores';
+import { useShopOrderStore } from '@/lib/shopOrderStore';
 import { IMAGES, AVATAR_ITEMS } from '@/lib/constants';
 import { toast } from 'sonner';
 
@@ -25,7 +26,10 @@ export default function ShopPage() {
   const purchaseAvatar = useUserStore((s) => s.purchaseAvatar);
   const equipAvatar = useUserStore((s) => s.equipAvatar);
 
-  const filteredItems = MOCK_SHOP_ITEMS.filter((item) => item.category === activeTab);
+  const orderedAvatars = useShopOrderStore((s) => s.getOrderedAvatars);
+  const filteredItems = activeTab === 'avatar'
+    ? orderedAvatars()
+    : MOCK_SHOP_ITEMS.filter((item) => item.category === activeTab);
   const activeTabData = shopTabs.find(t => t.id === activeTab);
 
   const isAvatarOwned = (avatarId: string) => {
