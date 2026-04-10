@@ -24,9 +24,10 @@ export interface GameState {
   player: PlayerState;
   ai: PlayerState;
   flagHolder: FlagHolder;
-  defenseCard: BattleCard | null;
-  currentCard: BattleCard | null;
-  attackPowerTotal: number;
+  playerCard: BattleCard | null;  // プレイヤーの防衛カード
+  aiCard: BattleCard | null;      // AIの防衛カード
+  playerPowerTotal: number;
+  aiPowerTotal: number;
   round: number;
   message: string;
   winner: 'player' | 'ai' | null;
@@ -51,32 +52,32 @@ function shuffleDeck(deck: BattleCard[]): BattleCard[] {
 export function initGameState(playerDeck: BattleCard[], aiDeck: BattleCard[]): GameState {
   const shuffledPlayer = shuffleDeck(playerDeck);
   const shuffledAI = shuffleDeck(aiDeck);
-  const aiDefenseCard = shuffledAI.shift()!;
+  const aiInitialCard = shuffledAI.shift()!;
 
   return {
     phase: 'player_draw',
     player: { deck: shuffledPlayer, bench: [], attackStack: [], isAI: false },
     ai: { deck: shuffledAI, bench: [], attackStack: [], isAI: true },
     flagHolder: 'ai',
-    defenseCard: aiDefenseCard,
-    currentCard: null,
-    attackPowerTotal: 0,
+    playerCard: null,
+    aiCard: aiInitialCard,
+    playerPowerTotal: 0,
+    aiPowerTotal: 0,
     round: 1,
     message: 'あなたの攻撃ターン！山札からカードをめくろう！',
     winner: null,
     quizAnswered: false,
     quizCorrect: null,
     effectApplied: false,
-    log: [`ラウンド1開始！AIの防衛カード: ${aiDefenseCard.name}（パワー${aiDefenseCard.power}）`],
+    log: [`ラウンド1開始！AIの防衛カード: ${aiInitialCard.name}（パワー${aiInitialCard.power}）`],
     aiAttackCards: [],
     aiAttackTotal: 0,
   };
 }
 
-function canAddToBench(bench: BenchSlot[], card: BattleCard): boolean {
-  const existingSlot = bench.find(s => s.category === card.category);
-  if (existingSlot) return true;
-  return bench.length < 6;
+function canAddToBench(bench: BenchSlot[]): boolean {
+  // ベンチに5種類以上あると満杯
+  return bench.length < 5;
 }
 
 function addToBench(bench: BenchSlot[], card: BattleCard): BenchSlot[] {
@@ -113,7 +114,7 @@ function calculatePower(card: BattleCard, quizCorrect: boolean, bench: BenchSlot
       }
     } else if (category === 'creature') {
       if (rarity === 'SR') {
-        const emptySlots = 6 - bench.length;
+        const emptySlots = 5 - bench.length;
         if (emptySlots <= 2) power += 4;
       }
     } else if (category === 'heritage') {
@@ -149,7 +150,7 @@ export function playerDrawCard(state: GameState): GameState {
     ...state,
     phase: 'quiz',
     player: { ...state.player, deck: newDeck },
-    currentCard: drawnCard,
+    playerCard: drawnCard,
     quizAnswered: false,
     quizCorrect: null,
     effectApplied: false,
@@ -159,82 +160,82 @@ export function playerDrawCard(state: GameState): GameState {
 }
 
 export function processQuizAnswer(state: GameState, correct: boolean): GameState {
-  if (!state.currentCard) return state;
+  if (!state.playerCard || !state.aiCard) return state;
 
-  const card = state.currentCard;
-  const isAttacking = state.flagHolder !== 'player';
-  const effectivePower = calculatePower(card, correct, state.player.bench, !isAttacking);
+  const playerCard = state.playerCard;
+  const aiCard = state.aiCard;
+  const isPlayerAttacking = state.flagHolder === 'ai';
 
-  const newAttackStack = [...state.player.attackStack, card];
-  const newAttackTotal = state.attackPowerTotal + effectivePower;
+  // プレイヤーのカード効果を計算
+  const playerEffectivePower = calculatePower(playerCard, correct, state.player.bench, !isPlayerAttacking);
+  const newPlayerPowerTotal = state.playerPowerTotal + playerEffectivePower;
 
   const logEntry = correct
-    ? `クイズ正解！${card.name}のパワー: ${effectivePower}（ボーナス+${card.correctBonus}）`
-    : `不正解...${card.name}のパワー: ${effectivePower}`;
+    ? `クイズ正解！${playerCard.name}のパワー: ${playerEffectivePower}（ボーナス+${playerCard.correctBonus}）`
+    : `不正解...${playerCard.name}のパワー: ${playerEffectivePower}`;
 
   const newLog = [...state.log, logEntry];
 
-  if (isAttacking) {
-    const defPower = state.defenseCard ? state.defenseCard.power : 0;
+  if (isPlayerAttacking) {
+    // プレイヤーが攻撃中
+    const aiPower = aiCard.power;
 
-    if (newAttackTotal > defPower) {
-      const cardsToAIBench = state.defenseCard ? [state.defenseCard] : [];
+    if (newPlayerPowerTotal > aiPower) {
+      // プレイヤー勝利 - AIのカードをベンチに送る
       let newAIBench = [...state.ai.bench.map(s => ({ ...s, cards: [...s.cards] }))];
-
-      for (const c of cardsToAIBench) {
-        if (!canAddToBench(newAIBench, c)) {
-          return {
-            ...state, phase: 'game_over', winner: 'player',
-            message: 'AIのベンチが満杯！あなたの勝ちです！',
-            log: [...newLog, 'AIのベンチがいっぱいになった！'],
-          };
-        }
-        newAIBench = addToBench(newAIBench, c);
+      
+      if (!canAddToBench(newAIBench)) {
+        return {
+          ...state, phase: 'game_over', winner: 'player',
+          message: 'AIのベンチが満杯！あなたの勝ちです！',
+          log: [...newLog, 'AIのベンチが5種類になった！'],
+        };
       }
+      newAIBench = addToBench(newAIBench, aiCard);
 
-      const attackCardsForBench = newAttackStack.slice(0, -1);
+      // プレイヤーの使用済みカードをベンチに送る
       let newPlayerBench = [...state.player.bench.map(s => ({ ...s, cards: [...s.cards] }))];
-
-      for (const c of attackCardsForBench) {
-        if (!canAddToBench(newPlayerBench, c)) {
+      for (const c of state.player.attackStack) {
+        if (!canAddToBench(newPlayerBench)) {
           return {
             ...state, phase: 'game_over', winner: 'ai',
             message: 'あなたのベンチが満杯！負けです...',
-            log: [...newLog, 'プレイヤーのベンチがいっぱいになった！'],
+            log: [...newLog, 'プレイヤーのベンチが5種類になった！'],
           };
         }
         newPlayerBench = addToBench(newPlayerBench, c);
       }
 
-      const winningCard = newAttackStack[newAttackStack.length - 1];
-
+      // プレイヤーのカードが新しい防衛カードに
       return {
         ...state,
         phase: 'ai_turn',
         player: { ...state.player, bench: newPlayerBench, attackStack: [] },
         ai: { ...state.ai, bench: newAIBench, attackStack: [] },
         flagHolder: 'player',
-        defenseCard: winningCard,
-        currentCard: null,
-        attackPowerTotal: 0,
+        playerCard: playerCard,
+        aiCard: null,
+        playerPowerTotal: 0,
+        aiPowerTotal: 0,
         quizAnswered: true,
         quizCorrect: correct,
-        message: `フラッグ奪取！${winningCard.name}が防衛カードに！AIのターン！`,
-        log: [...newLog, `プレイヤーがフラッグを奪った！防衛カード: ${winningCard.name}`],
+        message: `フラッグ奪取！${playerCard.name}が防衛カードに！AIのターン！`,
+        log: [...newLog, `プレイヤーがフラッグを奪った！防衛カード: ${playerCard.name}`],
         aiAttackCards: [],
         aiAttackTotal: 0,
       };
     } else {
+      // プレイヤーはまだ負けていない - 次のカードを重ねる
       return {
         ...state,
         phase: 'player_draw',
-        player: { ...state.player, attackStack: newAttackStack },
-        currentCard: null,
-        attackPowerTotal: newAttackTotal,
+        player: { ...state.player, attackStack: [...state.player.attackStack, playerCard] },
+        playerCard: null,
+        playerPowerTotal: newPlayerPowerTotal,
         quizAnswered: true,
         quizCorrect: correct,
-        message: `パワー合計: ${newAttackTotal} / 防衛: ${defPower} — もっとカードが必要！`,
-        log: [...newLog, `攻撃パワー合計: ${newAttackTotal} vs 防衛: ${defPower}`],
+        message: `パワー合計: ${newPlayerPowerTotal} / 防衛: ${aiPower} — もっとカードが必要！`,
+        log: [...newLog, `攻撃パワー合計: ${newPlayerPowerTotal} vs 防衛: ${aiPower}`],
       };
     }
   }
@@ -251,17 +252,18 @@ export function aiTurn(state: GameState): GameState {
     };
   }
 
-  const defPower = state.defenseCard ? state.defenseCard.power : 0;
+  const playerCardPower = state.playerCard ? state.playerCard.power : 0;
   let aiDeck = [...state.ai.deck];
-  let aiAttackStack: BattleCard[] = [];
+  let aiAttackCards: BattleCard[] = [];
   let aiAttackTotal = 0;
   let newLog = [...state.log];
   let newAIBench = [...state.ai.bench.map(s => ({ ...s, cards: [...s.cards] }))];
   let newPlayerBench = [...state.player.bench.map(s => ({ ...s, cards: [...s.cards] }))];
 
-  while (aiAttackTotal <= defPower && aiDeck.length > 0) {
+  // AIが攻撃 - プレイヤーのカードを倒すまでカードを重ねる
+  while (aiAttackTotal <= playerCardPower && aiDeck.length > 0) {
     const drawnCard = aiDeck.shift()!;
-    aiAttackStack.push(drawnCard);
+    aiAttackCards.push(drawnCard);
 
     const aiCorrect = Math.random() < 0.4;
     const effectivePower = calculatePower(drawnCard, aiCorrect, newAIBench, false);
@@ -269,39 +271,41 @@ export function aiTurn(state: GameState): GameState {
 
     newLog.push(`AIが${drawnCard.name}（パワー${effectivePower}${aiCorrect ? '、クイズ正解！' : ''}）をめくった`);
 
-    if (aiAttackTotal > defPower) {
-      if (state.defenseCard) {
-        if (!canAddToBench(newPlayerBench, state.defenseCard)) {
+    if (aiAttackTotal > playerCardPower) {
+      // AI勝利 - プレイヤーのカードをベンチに送る
+      if (state.playerCard) {
+        if (!canAddToBench(newPlayerBench)) {
           return {
             ...state, phase: 'game_over', winner: 'ai',
             ai: { ...state.ai, deck: aiDeck, bench: newAIBench, attackStack: [] },
             player: { ...state.player, bench: newPlayerBench },
             message: 'あなたのベンチが満杯！負けです...',
-            log: [...newLog, 'プレイヤーのベンチがいっぱいになった！'],
-            aiAttackCards: aiAttackStack,
+            log: [...newLog, 'プレイヤーのベンチが5種類になった！'],
+            aiAttackCards,
             aiAttackTotal,
           };
         }
-        newPlayerBench = addToBench(newPlayerBench, state.defenseCard);
+        newPlayerBench = addToBench(newPlayerBench, state.playerCard);
       }
 
-      const attackCardsForBench = aiAttackStack.slice(0, -1);
-      for (const c of attackCardsForBench) {
-        if (!canAddToBench(newAIBench, c)) {
+      // AIの使用済みカードをベンチに送る
+      for (const c of aiAttackCards.slice(0, -1)) {
+        if (!canAddToBench(newAIBench)) {
           return {
             ...state, phase: 'game_over', winner: 'player',
             ai: { ...state.ai, deck: aiDeck, bench: newAIBench, attackStack: [] },
             player: { ...state.player, bench: newPlayerBench },
             message: 'AIのベンチが満杯！あなたの勝ちです！',
-            log: [...newLog, 'AIのベンチがいっぱいになった！'],
-            aiAttackCards: aiAttackStack,
+            log: [...newLog, 'AIのベンチが5種類になった！'],
+            aiAttackCards,
             aiAttackTotal,
           };
         }
         newAIBench = addToBench(newAIBench, c);
       }
 
-      const winningCard = aiAttackStack[aiAttackStack.length - 1];
+      // AIのカードが新しい防衛カードに
+      const winningCard = aiAttackCards[aiAttackCards.length - 1];
       newLog.push(`AIがフラッグを奪った！防衛カード: ${winningCard.name}`);
 
       return {
@@ -310,25 +314,26 @@ export function aiTurn(state: GameState): GameState {
         ai: { ...state.ai, deck: aiDeck, bench: newAIBench, attackStack: [] },
         player: { ...state.player, bench: newPlayerBench, attackStack: [] },
         flagHolder: 'ai',
-        defenseCard: winningCard,
-        currentCard: null,
-        attackPowerTotal: 0,
+        playerCard: null,
+        aiCard: winningCard,
+        playerPowerTotal: 0,
+        aiPowerTotal: 0,
         round: state.round + 1,
         message: `AIがフラッグを奪った！${winningCard.name}が防衛カードに。あなたの攻撃ターン！`,
         log: newLog,
-        aiAttackCards: aiAttackStack,
+        aiAttackCards,
         aiAttackTotal,
       };
     }
   }
 
-  if (aiDeck.length === 0 && aiAttackTotal <= defPower) {
+  if (aiDeck.length === 0 && aiAttackTotal <= playerCardPower) {
     return {
       ...state, phase: 'game_over', winner: 'player',
       ai: { ...state.ai, deck: aiDeck, bench: newAIBench, attackStack: [] },
       message: 'AIのデッキ切れ！あなたの勝ちです！',
       log: [...newLog, 'AIのデッキが尽きた！'],
-      aiAttackCards: aiAttackStack,
+      aiAttackCards,
       aiAttackTotal,
     };
   }

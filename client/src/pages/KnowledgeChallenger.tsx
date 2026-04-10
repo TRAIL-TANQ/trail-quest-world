@@ -57,8 +57,8 @@ export default function KnowledgeChallenger() {
     const newState = playerDrawCard(gameState);
     setGameState(newState);
 
-    if (newState.phase === 'quiz' && newState.currentCard) {
-      const quizzes = newState.currentCard.quizzes;
+    if (newState.phase === 'quiz' && newState.playerCard) {
+      const quizzes = newState.playerCard.quizzes;
       const quiz = quizzes[Math.floor(Math.random() * quizzes.length)];
       setSelectedQuiz(quiz);
       setQuizTimer(10);
@@ -340,24 +340,34 @@ export default function KnowledgeChallenger() {
       </div>
 
       {/* Battle Field */}
-      <div className="flex-1 flex flex-col items-center justify-center px-4 gap-3">
-        {/* Defense Card */}
-        <div className="text-center mb-1">
-          <p className="text-[9px] text-amber-200/35 mb-1">
-            {gameState.flagHolder === 'player' ? 'あなたの防衛カード' : 'AIの防衛カード'}
-          </p>
-          {gameState.defenseCard && (
-            <CardDisplay card={gameState.defenseCard} isDefense />
+      <div className="flex-1 flex flex-col items-center justify-center px-4 gap-2">
+        {/* AI Card - Top */}
+        <div className="text-center">
+          <p className="text-[9px] text-red-400/60 mb-1">AI</p>
+          {gameState.aiCard && (
+            <CardDisplay card={gameState.aiCard} isDefense />
+          )}
+          {gameState.aiPowerTotal > 0 && (
+            <p className="text-sm font-bold text-red-400 mt-1">攻撃力: {gameState.aiPowerTotal}</p>
           )}
         </div>
 
         {/* VS Indicator */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 my-1">
           <div className="h-px flex-1" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,215,0,0.3))' }} />
-          <span className="text-xs font-bold" style={{ color: '#ffd700' }}>
-            {gameState.attackPowerTotal > 0 ? `攻撃: ${gameState.attackPowerTotal}` : 'VS'}
-          </span>
+          <span className="text-xs font-bold" style={{ color: '#ffd700' }}>VS</span>
           <div className="h-px flex-1" style={{ background: 'linear-gradient(90deg, rgba(255,215,0,0.3), transparent)' }} />
+        </div>
+
+        {/* Player Card - Bottom */}
+        <div className="text-center">
+          <p className="text-[9px] text-green-400/60 mb-1">あなた</p>
+          {gameState.playerCard && (
+            <CardDisplay card={gameState.playerCard} />
+          )}
+          {gameState.playerPowerTotal > 0 && (
+            <p className="text-sm font-bold text-green-400 mt-1">攻撃力: {gameState.playerPowerTotal}</p>
+          )}
         </div>
 
         {/* Current Card / Draw Button */}
@@ -375,18 +385,18 @@ export default function KnowledgeChallenger() {
           </div>
         )}
 
-        {gameState.phase === 'quiz' && gameState.currentCard && selectedQuiz && (
+        {gameState.phase === 'quiz' && gameState.playerCard && selectedQuiz && (
           <div className="w-full max-w-sm">
             {/* Card reveal */}
             {showCardReveal ? (
               <div className="text-center animate-bounce-in">
-                <CardDisplay card={gameState.currentCard} />
+                <CardDisplay card={gameState.playerCard} />
               </div>
             ) : (
               <>
                 {/* Small card indicator */}
                 <div className="flex items-center justify-center gap-2 mb-2">
-                  <CardMini card={gameState.currentCard} />
+                  <CardMini card={gameState.playerCard} />
                   <span className="text-[10px] text-amber-200/40">のクイズ！</span>
                 </div>
 
