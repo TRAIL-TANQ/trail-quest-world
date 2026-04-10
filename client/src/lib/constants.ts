@@ -189,7 +189,6 @@ export const IMAGES = {
 
 // Avatar items for shop - maps avatar IDs to their image URLs
 export const AVATAR_ITEMS: Record<string, { icon: string; full: string }> = {
-  'avatar-ninja-v2': { icon: IMAGES.AVATAR_NINJA_V2_ICON, full: IMAGES.AVATAR_NINJA_V2_FULL },
   'avatar-princess-chibi': { icon: IMAGES.AVATAR_PRINCESS_CHIBI_ICON, full: IMAGES.AVATAR_PRINCESS_CHIBI_FULL },
   'avatar-witch-chibi': { icon: IMAGES.AVATAR_WITCH_CHIBI_ICON, full: IMAGES.AVATAR_WITCH_CHIBI_FULL },
   'avatar-angel-chibi': { icon: IMAGES.AVATAR_ANGEL_CHIBI_ICON, full: IMAGES.AVATAR_ANGEL_CHIBI_FULL },
