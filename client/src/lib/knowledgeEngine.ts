@@ -280,7 +280,8 @@ export function processQuizAnswer(state: GameState, correct: boolean): GameState
     // プレイヤーが攻撃中
     const aiPower = aiCard.power;
 
-    if (newPlayerPowerTotal > aiPower) {
+    // 攻撃側 >= 防御側 で攻撃側の勝ち（同値は攻撃側勝利）
+    if (newPlayerPowerTotal >= aiPower) {
       // プレイヤー勝利 - AIのカードをベンチに送る
       let newAIBench = [...state.ai.bench.map(s => ({ ...s, cards: [...s.cards] }))];
       
@@ -368,8 +369,8 @@ export function aiTurn(state: GameState): GameState {
   let newAIBench = [...state.ai.bench.map(s => ({ ...s, cards: [...s.cards] }))];
   let newPlayerBench = [...state.player.bench.map(s => ({ ...s, cards: [...s.cards] }))];
 
-  // AIが攻撃 - プレイヤーのカードを倒すまでカードを重ねる
-  while (aiAttackTotal <= playerCardPower && aiDeck.length > 0) {
+  // AIが攻撃 - プレイヤーのカードを倒すまでカードを重ねる（攻撃側 >= 防御側で勝利）
+  while (aiAttackTotal < playerCardPower && aiDeck.length > 0) {
     const drawnCard = aiDeck.shift()!;
     aiAttackCards.push(drawnCard);
 
@@ -379,7 +380,7 @@ export function aiTurn(state: GameState): GameState {
 
     newLog.push(`AIが${drawnCard.name}（パワー${effectivePower}${aiCorrect ? '、クイズ正解！' : ''}）をめくった`);
 
-    if (aiAttackTotal > playerCardPower) {
+    if (aiAttackTotal >= playerCardPower) {
       // AI勝利 - プレイヤーのカードをベンチに送る
       if (state.playerCard) {
         if (!canAddToBench(newPlayerBench)) {
@@ -439,7 +440,7 @@ export function aiTurn(state: GameState): GameState {
     }
   }
 
-  if (aiDeck.length === 0 && aiAttackTotal <= playerCardPower) {
+  if (aiDeck.length === 0 && aiAttackTotal < playerCardPower) {
     return {
       ...state, phase: 'game_over', winner: 'player',
       ai: { ...state.ai, deck: aiDeck, bench: newAIBench, attackStack: [] },

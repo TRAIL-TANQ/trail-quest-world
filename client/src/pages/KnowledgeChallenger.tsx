@@ -85,7 +85,6 @@ export default function KnowledgeChallenger() {
   const [showGameOverOverlay, setShowGameOverOverlay] = useState(false);
 
   // Enhanced battle cinematics
-  const [aiAttackIntro, setAiAttackIntro] = useState(false);
   const [battleOutcome, setBattleOutcome] = useState<'victory' | 'defeat' | null>(null);
   const [screenShake, setScreenShake] = useState(false);
   const [sideBurst, setSideBurst] = useState<'player' | 'ai' | null>(null);
@@ -96,6 +95,41 @@ export default function KnowledgeChallenger() {
   const [showNukeFlash, setShowNukeFlash] = useState(false);
   const [showNukeFailed, setShowNukeFailed] = useState(false);
   const [showSSRReveal, setShowSSRReveal] = useState(false);
+
+  // ===== Battle Cinematic State Machine =====
+  type BattleStep =
+    | 'none'
+    | 'intro'        // "相手の攻撃！" / "あなたの攻撃！"
+    | 'card_back'    // face-down card (AI only)
+    | 'card_flip'    // flip animation
+    | 'card_reveal'  // name + power big display
+    | 'compare'      // "自分:X vs 相手:Y"
+    | 'outcome';     // win/lose flourish
+  interface BattleSeq {
+    attackerSide: 'player' | 'ai';
+    attackerName: string;
+    attackerPower: number;
+    attackerImage?: string;
+    defenderName: string;
+    defenderPower: number;
+    attackerWins: boolean;
+    decisive: boolean;
+  }
+  const [battleStep, setBattleStep] = useState<BattleStep>('none');
+  const [battleSeq, setBattleSeq] = useState<BattleSeq | null>(null);
+  const [fastMode, setFastMode] = useState(false);
+  const fastModeRef = useRef(false);
+  useEffect(() => { fastModeRef.current = fastMode; }, [fastMode]);
+  const stepTimeoutsRef = useRef<number[]>([]);
+  const clearStepTimeouts = useCallback(() => {
+    stepTimeoutsRef.current.forEach((id) => clearTimeout(id));
+    stepTimeoutsRef.current = [];
+  }, []);
+  const scheduleStep = useCallback((delayMs: number, fn: () => void) => {
+    const scale = fastModeRef.current ? 0.3 : 1;
+    const id = window.setTimeout(fn, Math.max(100, delayMs * scale));
+    stepTimeoutsRef.current.push(id);
+  }, []);
 
   // Battle log expanded
   const [logExpanded, setLogExpanded] = useState(false);
@@ -148,6 +182,7 @@ export default function KnowledgeChallenger() {
 
   /* ---------- Start game ---------- */
   const startGame = useCallback(() => {
+    clearStepTimeouts();
     const playerDeck = createInitialDeck();
     const aiDeck = createAIDeck();
     const state = initGameState(playerDeck, aiDeck);
@@ -160,7 +195,9 @@ export default function KnowledgeChallenger() {
     setAttackSlide(false);
     setShowGameOverOverlay(false);
     setLogExpanded(false);
-  }, []);
+    setBattleStep('none');
+    setBattleSeq(null);
+  }, [clearStepTimeouts]);
 
   /* ---------- Draw card ---------- */
   const handleDraw = useCallback(() => {
@@ -269,6 +306,61 @@ export default function KnowledgeChallenger() {
     setTimeout(() => setShowWinGlow(false), 2500);
   }, []);
 
+  // Forward ref for processAITurn (defined below, referenced here to avoid ordering issues)
+  const processAITurnRef = useRef<((state: GameState) => void) | null>(null);
+
+  /* ---------- Player attack cinematic ---------- */
+  const runPlayerCinematic = useCallback(
+    (newState: GameState, priorState: GameState) => {
+      const attackerCard = priorState.playerCard;
+      const defenderCard = priorState.aiCard;
+      const attackerWins = newState.winningCardSide === 'player';
+      const decisive = attackerWins;
+      const attackerPower = newState.playerPowerTotal > 0 ? newState.playerPowerTotal : (priorState.playerPowerTotal + newState.lastAddedPower);
+      if (!attackerCard || !defenderCard) {
+        setGameState(newState);
+        if (newState.phase === 'ai_turn') processAITurnRef.current?.(newState);
+        else if (newState.phase === 'game_over') {
+          setShowGameOverOverlay(true);
+          setTimeout(() => setScreen('result'), 2500);
+        }
+        return;
+      }
+      setBattleSeq({
+        attackerSide: 'player',
+        attackerName: attackerCard.name,
+        attackerPower,
+        attackerImage: attackerCard.imageUrl,
+        defenderName: defenderCard.name,
+        defenderPower: defenderCard.power,
+        attackerWins,
+        decisive,
+      });
+      // Player card already revealed → skip card_back / card_flip / card_reveal, jump to compare
+      setBattleStep('intro');
+      scheduleStep(800, () => setBattleStep('compare'));
+      scheduleStep(1700, () => {
+        setBattleStep('outcome');
+        setGameState(newState);
+        triggerPowerEffect(newState.lastAddedPower);
+        if (attackerWins) {
+          triggerAttackSlide();
+          triggerWinEffect('player');
+        }
+      });
+      scheduleStep(3000, () => {
+        setBattleStep('none');
+        setBattleSeq(null);
+        if (newState.phase === 'ai_turn') processAITurnRef.current?.(newState);
+        else if (newState.phase === 'game_over') {
+          setShowGameOverOverlay(true);
+          setTimeout(() => setScreen('result'), 2500);
+        }
+      });
+    },
+    [scheduleStep],
+  );
+
   const handleQuizTimeout = useCallback(() => {
     if (!gameState) return;
     setSelectedAnswer(-1);
@@ -288,21 +380,11 @@ export default function KnowledgeChallenger() {
     }
     setTimeout(() => {
       const newState = processQuizAnswer(gameState, false);
-      setGameState(newState);
-      triggerPowerEffect(newState.lastAddedPower);
-      if (newState.winningCard && newState.winningCardSide === 'player') {
-        triggerAttackSlide();
-        triggerWinEffect('player');
-      }
       setSelectedQuiz(null);
       setShowResult(false);
-      if (newState.phase === 'ai_turn') processAITurn(newState);
-      else if (newState.phase === 'game_over') {
-        setShowGameOverOverlay(true);
-        setTimeout(() => setScreen('result'), 2500);
-      }
+      runPlayerCinematic(newState, gameState);
     }, 1500);
-  }, [gameState, userId]);
+  }, [gameState, userId, runPlayerCinematic]);
 
   /* ---------- Answer quiz ---------- */
   const handleAnswer = useCallback(
@@ -351,46 +433,89 @@ export default function KnowledgeChallenger() {
 
       setTimeout(() => {
         const newState = processQuizAnswer(gameState, correct);
-        setGameState(newState);
-        triggerPowerEffect(newState.lastAddedPower);
-        if (newState.winningCard && newState.winningCardSide === 'player') {
-          triggerAttackSlide();
-          triggerWinEffect('player');
-        }
         setSelectedQuiz(null);
         setShowResult(false);
         setSelectedAnswer(null);
-        if (newState.phase === 'ai_turn') processAITurn(newState);
-        else if (newState.phase === 'game_over') {
-          setShowGameOverOverlay(true);
-          setTimeout(() => setScreen('result'), 2500);
-        }
+        runPlayerCinematic(newState, gameState);
       }, 1800);
     },
-    [gameState, selectedQuiz, selectedAnswer, consecutiveCorrect, userId, addTotalAlt],
+    [gameState, selectedQuiz, selectedAnswer, consecutiveCorrect, userId, addTotalAlt, runPlayerCinematic],
   );
 
-  /* ---------- AI turn ---------- */
+  /* ---------- AI turn (step-by-step cinematic) ---------- */
   const processAITurn = useCallback((state: GameState) => {
     setAiAnimating(true);
-    setAiAttackIntro(true);
-    setTimeout(() => setAiAttackIntro(false), 1300);
-    setTimeout(() => {
-      const newState = aiTurn(state);
-      setGameState(newState);
+    // Pre-compute the AI turn outcome
+    const result = aiTurn(state);
+
+    // Defender = player's card at the start of AI turn
+    const defender = state.playerCard;
+    // Decisive card = AI's decisive card (the one that settled the battle)
+    // If aiAttackCards is non-empty, use the last card; else fall back to result.aiCard
+    const decisiveCard =
+      result.aiAttackCards && result.aiAttackCards.length > 0
+        ? result.aiAttackCards[result.aiAttackCards.length - 1]
+        : result.aiCard ?? null;
+    const attackerPower = result.aiAttackTotal;
+    const defenderPower = defender?.power ?? 0;
+    const attackerWins = result.winningCardSide === 'ai';
+
+    // If there's no meaningful card (edge case: empty deck → game_over), just apply immediately
+    if (!decisiveCard) {
+      setGameState(result);
       setAiAnimating(false);
-      // Pop the AI attack power number
-      setAiPowerPopKey((k) => k + 1);
-      if (newState.winningCard && newState.winningCardSide === 'ai') {
-        triggerAttackSlide();
-        triggerWinEffect('ai');
-      }
-      if (newState.phase === 'game_over') {
+      if (result.phase === 'game_over') {
         setShowGameOverOverlay(true);
         setTimeout(() => setScreen('result'), 2500);
       }
-    }, 2000);
-  }, []);
+      return;
+    }
+
+    setBattleSeq({
+      attackerSide: 'ai',
+      attackerName: decisiveCard.name,
+      attackerPower,
+      attackerImage: decisiveCard.imageUrl,
+      defenderName: defender?.name ?? '???',
+      defenderPower,
+      attackerWins,
+      decisive: true,
+    });
+
+    // Step 1: intro (1s)
+    setBattleStep('intro');
+    // Step 2: card_back (0.5s after intro)
+    scheduleStep(1000, () => setBattleStep('card_back'));
+    // Step 3: card_flip (0.5s)
+    scheduleStep(1500, () => setBattleStep('card_flip'));
+    // Step 4: card_reveal (0.5s)
+    scheduleStep(2000, () => setBattleStep('card_reveal'));
+    // Step 5: compare (0.7s)
+    scheduleStep(2700, () => setBattleStep('compare'));
+    // Step 6: outcome — apply state + effects
+    scheduleStep(3700, () => {
+      setBattleStep('outcome');
+      setGameState(result);
+      setAiPowerPopKey((k) => k + 1);
+      if (attackerWins) {
+        triggerAttackSlide();
+        triggerWinEffect('ai');
+      }
+    });
+    // Cleanup cinematic
+    scheduleStep(5200, () => {
+      setBattleStep('none');
+      setBattleSeq(null);
+      setAiAnimating(false);
+      if (result.phase === 'game_over') {
+        setShowGameOverOverlay(true);
+        setTimeout(() => setScreen('result'), 2500);
+      }
+    });
+  }, [scheduleStep]);
+
+  // Keep the ref in sync so runPlayerCinematic can call it without circular deps
+  useEffect(() => { processAITurnRef.current = processAITurn; }, [processAITurn]);
 
   /* ---------- Finish ---------- */
   const handleFinish = useCallback(() => {
@@ -612,13 +737,6 @@ export default function KnowledgeChallenger() {
       {battleOutcome === 'defeat' && <div className="kc-defeat-flash" />}
       {battleOutcome === 'victory' && <div className="kc-victory-flash" />}
 
-      {/* AI Attack Intro */}
-      {aiAttackIntro && (
-        <div className="kc-ai-attack-intro">
-          <span className="kc-ai-attack-intro-text">⚔️ 相手の攻撃！</span>
-        </div>
-      )}
-
       {/* Battle Outcome Overlay */}
       {battleOutcome && (
         <div className="kc-battle-outcome">
@@ -670,6 +788,123 @@ export default function KnowledgeChallenger() {
         </div>
       )}
 
+      {/* ===== Step-by-step Battle Cinematic ===== */}
+      {battleStep !== 'none' && battleSeq && (
+        <div className="kc-cinematic-layer">
+          <div className={`kc-cinematic-box kc-cinematic-${battleSeq.attackerSide}`}>
+            {battleStep === 'intro' && (
+              <div className="kc-cine-intro">
+                <span className="kc-cine-intro-icon">{battleSeq.attackerSide === 'ai' ? '🤖' : '🗡️'}</span>
+                <span
+                  className="kc-cine-intro-text"
+                  style={{ color: battleSeq.attackerSide === 'ai' ? '#ef4444' : '#22c55e' }}
+                >
+                  {battleSeq.attackerSide === 'ai' ? '相手の攻撃！' : 'あなたの攻撃！'}
+                </span>
+              </div>
+            )}
+
+            {battleStep === 'card_back' && (
+              <div className="kc-cine-card-back">
+                <div className="kc-card-back-face">
+                  <span className="text-3xl">🎴</span>
+                  <p className="text-[10px] text-amber-200/60 mt-1">AIのカード</p>
+                </div>
+              </div>
+            )}
+
+            {battleStep === 'card_flip' && (
+              <div className="kc-cine-card-flip">
+                <div className="kc-flipper">
+                  <div className="kc-flipper-front">
+                    <span className="text-3xl">🎴</span>
+                  </div>
+                  <div className="kc-flipper-back">
+                    {battleSeq.attackerImage ? (
+                      <img src={battleSeq.attackerImage} alt={battleSeq.attackerName} className="w-full h-full object-cover rounded-lg" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-4xl bg-gradient-to-br from-red-900/40 to-red-700/20 rounded-lg">
+                        ⚔️
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {battleStep === 'card_reveal' && (
+              <div className="kc-cine-reveal">
+                <div className="kc-cine-reveal-card">
+                  {battleSeq.attackerImage ? (
+                    <img src={battleSeq.attackerImage} alt={battleSeq.attackerName} className="w-full h-full object-cover rounded-lg" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-4xl bg-gradient-to-br from-red-900/40 to-red-700/20 rounded-lg">⚔️</div>
+                  )}
+                </div>
+                <div className="kc-cine-reveal-name">{battleSeq.attackerName}</div>
+                <div className="kc-cine-reveal-power">
+                  パワー <span className="kc-cine-reveal-power-num">{battleSeq.attackerPower}</span>
+                </div>
+              </div>
+            )}
+
+            {battleStep === 'compare' && (
+              <div className="kc-cine-compare">
+                <p className="kc-cine-compare-title">⚖️ パワー比較</p>
+                <div className="kc-cine-compare-row">
+                  <div className="kc-cine-side kc-cine-side-player">
+                    <p className="kc-cine-label">自分</p>
+                    <p className="kc-cine-num">
+                      {battleSeq.attackerSide === 'player' ? battleSeq.attackerPower : battleSeq.defenderPower}
+                    </p>
+                  </div>
+                  <span className="kc-cine-vs">VS</span>
+                  <div className="kc-cine-side kc-cine-side-ai">
+                    <p className="kc-cine-label">相手</p>
+                    <p className="kc-cine-num">
+                      {battleSeq.attackerSide === 'ai' ? battleSeq.attackerPower : battleSeq.defenderPower}
+                    </p>
+                  </div>
+                </div>
+                <p className="kc-cine-compare-hint">
+                  {battleSeq.attackerWins
+                    ? (battleSeq.attackerSide === 'ai' ? '相手の勝ち...' : '攻撃成功！')
+                    : '攻撃側が足りない！'}
+                </p>
+              </div>
+            )}
+
+            {battleStep === 'outcome' && (
+              <div className="kc-cine-outcome">
+                {battleSeq.attackerSide === 'ai' ? (
+                  battleSeq.attackerWins ? (
+                    <>
+                      <span className="kc-cine-outcome-icon">💥</span>
+                      <span className="kc-cine-outcome-text" style={{ color: '#ef4444' }}>フラッグを奪われた！</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="kc-cine-outcome-icon">🛡️</span>
+                      <span className="kc-cine-outcome-text" style={{ color: '#22c55e' }}>防御成功！</span>
+                    </>
+                  )
+                ) : battleSeq.attackerWins ? (
+                  <>
+                    <span className="kc-cine-outcome-icon">🚩</span>
+                    <span className="kc-cine-outcome-text" style={{ color: '#22c55e' }}>フラッグ奪取！</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="kc-cine-outcome-icon">💪</span>
+                    <span className="kc-cine-outcome-text" style={{ color: '#ffd700' }}>もう一枚重ねる！</span>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {showGameOverOverlay && (
         <div className="kc-game-over-overlay">
           <div className="kc-game-over-content">
@@ -701,9 +936,23 @@ export default function KnowledgeChallenger() {
           boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
         }}
       >
-        <button onClick={() => navigate('/games')} className="text-amber-200/35 text-sm hover:text-amber-200/60">
-          ✕
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => navigate('/games')} className="text-amber-200/35 text-sm hover:text-amber-200/60">
+            ✕
+          </button>
+          <button
+            onClick={() => setFastMode((v) => !v)}
+            className="text-[10px] font-bold px-2 py-1 rounded-md transition-all"
+            style={{
+              background: fastMode ? 'rgba(255,215,0,0.2)' : 'rgba(255,255,255,0.05)',
+              border: `1px solid ${fastMode ? 'rgba(255,215,0,0.5)' : 'rgba(255,255,255,0.15)'}`,
+              color: fastMode ? '#ffd700' : 'rgba(255,255,255,0.5)',
+            }}
+            title="演出の速度切替"
+          >
+            {fastMode ? '⏩ 早送りON' : '⏩ 早送りOFF'}
+          </button>
+        </div>
         <div className="flex items-center gap-3">
           <div className="text-center">
             <p className="text-[8px] text-amber-200/35">ラウンド</p>
@@ -1336,6 +1585,220 @@ export default function KnowledgeChallenger() {
         @keyframes kcSsrGradient {
           0%   { background-position: 0% 50%; }
           100% { background-position: 100% 50%; }
+        }
+
+        /* ===== Step-by-step Battle Cinematic ===== */
+        .kc-cinematic-layer {
+          position: absolute; inset: 0; z-index: 90;
+          display: flex; align-items: center; justify-content: center;
+          pointer-events: none;
+          background: rgba(0,0,0,0.55);
+          backdrop-filter: blur(2px);
+          animation: kcCineLayer 0.3s ease-out;
+        }
+        @keyframes kcCineLayer { 0% { opacity: 0; } 100% { opacity: 1; } }
+        .kc-cinematic-box {
+          min-width: 260px; max-width: 85%;
+          padding: 20px 24px;
+          border-radius: 18px;
+          background: linear-gradient(135deg, rgba(21,29,59,0.98), rgba(14,20,45,0.98));
+          box-shadow: 0 16px 48px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.08);
+          text-align: center;
+          animation: kcCineBoxIn 0.35s cubic-bezier(.17,.67,.35,1.4);
+        }
+        .kc-cinematic-ai { border: 2px solid rgba(239,68,68,0.55); box-shadow: 0 16px 48px rgba(0,0,0,0.7), 0 0 24px rgba(239,68,68,0.3); }
+        .kc-cinematic-player { border: 2px solid rgba(34,197,94,0.55); box-shadow: 0 16px 48px rgba(0,0,0,0.7), 0 0 24px rgba(34,197,94,0.3); }
+        @keyframes kcCineBoxIn {
+          0%   { opacity: 0; transform: scale(0.7) translateY(20px); }
+          60%  { opacity: 1; transform: scale(1.04) translateY(0); }
+          100% { opacity: 1; transform: scale(1); }
+        }
+
+        /* Step: intro */
+        .kc-cine-intro { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 8px 0; }
+        .kc-cine-intro-icon { font-size: 3rem; animation: kcCineIconBounce 0.6s ease-out; }
+        @keyframes kcCineIconBounce {
+          0%   { opacity: 0; transform: scale(0.3) rotate(-15deg); }
+          60%  { opacity: 1; transform: scale(1.3) rotate(5deg); }
+          100% { opacity: 1; transform: scale(1) rotate(0); }
+        }
+        .kc-cine-intro-text {
+          font-size: 1.8rem; font-weight: 900;
+          letter-spacing: 0.06em;
+          text-shadow: 0 0 20px currentColor, 0 3px 0 rgba(0,0,0,0.6);
+          animation: kcCineIntroText 0.6s cubic-bezier(.17,.67,.35,1.4);
+        }
+        @keyframes kcCineIntroText {
+          0%   { opacity: 0; transform: scale(0.3) translateX(-40px); }
+          60%  { opacity: 1; transform: scale(1.15) translateX(0); }
+          100% { opacity: 1; transform: scale(1); }
+        }
+
+        /* Step: card_back */
+        .kc-cine-card-back { display: flex; justify-content: center; padding: 8px 0; }
+        .kc-card-back-face {
+          width: 120px; height: 160px; border-radius: 12px;
+          background: linear-gradient(135deg, #1a1a3e, #0a0a1e);
+          border: 2px solid rgba(255,215,0,0.4);
+          box-shadow: 0 8px 24px rgba(0,0,0,0.6), inset 0 0 20px rgba(255,215,0,0.1);
+          display: flex; flex-direction: column; align-items: center; justify-content: center;
+          animation: kcCineCardBackIn 0.5s cubic-bezier(.17,.67,.35,1.4);
+        }
+        @keyframes kcCineCardBackIn {
+          0%   { opacity: 0; transform: translateY(-80px) rotate(-20deg); }
+          60%  { opacity: 1; transform: translateY(0) rotate(5deg); }
+          100% { opacity: 1; transform: translateY(0) rotate(0); }
+        }
+
+        /* Step: card_flip */
+        .kc-cine-card-flip {
+          display: flex; justify-content: center; padding: 8px 0;
+          perspective: 800px;
+        }
+        .kc-flipper {
+          position: relative;
+          width: 120px; height: 160px;
+          transform-style: preserve-3d;
+          animation: kcCineFlip 0.6s ease-in-out forwards;
+        }
+        @keyframes kcCineFlip {
+          0%   { transform: rotateY(0deg); }
+          100% { transform: rotateY(180deg); }
+        }
+        .kc-flipper-front, .kc-flipper-back {
+          position: absolute; inset: 0;
+          backface-visibility: hidden;
+          border-radius: 12px;
+          display: flex; align-items: center; justify-content: center;
+        }
+        .kc-flipper-front {
+          background: linear-gradient(135deg, #1a1a3e, #0a0a1e);
+          border: 2px solid rgba(255,215,0,0.4);
+        }
+        .kc-flipper-back {
+          background: linear-gradient(135deg, rgba(239,68,68,0.2), rgba(21,29,59,0.95));
+          border: 2px solid rgba(239,68,68,0.6);
+          transform: rotateY(180deg);
+          overflow: hidden;
+        }
+
+        /* Step: card_reveal */
+        .kc-cine-reveal { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 4px 0; animation: kcCineRevealFade 0.5s ease-out; }
+        @keyframes kcCineRevealFade {
+          0%   { opacity: 0; transform: scale(0.85); }
+          100% { opacity: 1; transform: scale(1); }
+        }
+        .kc-cine-reveal-card {
+          width: 120px; height: 160px;
+          border-radius: 12px;
+          border: 2px solid rgba(255,215,0,0.5);
+          box-shadow: 0 0 18px rgba(255,215,0,0.35);
+          overflow: hidden;
+          background: linear-gradient(135deg, rgba(21,29,59,0.95), rgba(14,20,45,0.95));
+        }
+        .kc-cine-reveal-name {
+          font-size: 1.3rem; font-weight: 900;
+          color: #ffd700;
+          text-shadow: 0 0 12px rgba(255,215,0,0.7), 0 2px 0 rgba(0,0,0,0.6);
+        }
+        .kc-cine-reveal-power { font-size: 1rem; color: rgba(255,255,255,0.7); font-weight: 700; }
+        .kc-cine-reveal-power-num {
+          font-size: 2rem; font-weight: 900; color: #ff8c00;
+          text-shadow: 0 0 14px rgba(255,140,0,0.8);
+          margin-left: 6px;
+          display: inline-block;
+          animation: kcCinePowerPop 0.5s cubic-bezier(.17,.67,.35,1.4) 0.15s both;
+        }
+        @keyframes kcCinePowerPop {
+          0%   { transform: scale(0.3); opacity: 0; }
+          60%  { transform: scale(1.4); opacity: 1; }
+          100% { transform: scale(1); opacity: 1; }
+        }
+
+        /* Step: compare */
+        .kc-cine-compare { padding: 8px 0; animation: kcCineCompareIn 0.4s ease-out; }
+        @keyframes kcCineCompareIn {
+          0%   { opacity: 0; transform: translateY(10px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+        .kc-cine-compare-title {
+          font-size: 0.9rem; font-weight: 900;
+          color: #ffd700; margin-bottom: 10px;
+          text-shadow: 0 0 8px rgba(255,215,0,0.5);
+        }
+        .kc-cine-compare-row {
+          display: flex; align-items: center; justify-content: center; gap: 18px;
+        }
+        .kc-cine-side {
+          min-width: 80px;
+          padding: 10px 14px;
+          border-radius: 12px;
+        }
+        .kc-cine-side-player {
+          background: rgba(34,197,94,0.12);
+          border: 2px solid rgba(34,197,94,0.4);
+        }
+        .kc-cine-side-ai {
+          background: rgba(239,68,68,0.12);
+          border: 2px solid rgba(239,68,68,0.4);
+        }
+        .kc-cine-label {
+          font-size: 0.7rem; font-weight: 700;
+          color: rgba(255,255,255,0.6);
+          margin-bottom: 4px;
+        }
+        .kc-cine-num {
+          font-size: 2.2rem; font-weight: 900;
+          color: #ffd700;
+          text-shadow: 0 0 12px rgba(255,215,0,0.6), 0 2px 0 rgba(0,0,0,0.5);
+          line-height: 1;
+          animation: kcCineNumPop 0.5s cubic-bezier(.17,.67,.35,1.4) both;
+        }
+        @keyframes kcCineNumPop {
+          0%   { opacity: 0; transform: scale(0.3); }
+          60%  { opacity: 1; transform: scale(1.3); }
+          100% { opacity: 1; transform: scale(1); }
+        }
+        .kc-cine-vs {
+          font-size: 1.2rem; font-weight: 900;
+          color: #ff8c00;
+          text-shadow: 0 0 10px rgba(255,140,0,0.7);
+          animation: kcCineVsPulse 0.8s ease-in-out infinite;
+        }
+        @keyframes kcCineVsPulse {
+          0%, 100% { transform: scale(1); opacity: 1; }
+          50%      { transform: scale(1.15); opacity: 0.8; }
+        }
+        .kc-cine-compare-hint {
+          margin-top: 10px;
+          font-size: 0.85rem; font-weight: 700;
+          color: rgba(255,215,0,0.8);
+        }
+
+        /* Step: outcome */
+        .kc-cine-outcome {
+          display: flex; flex-direction: column; align-items: center; gap: 10px;
+          padding: 10px 0;
+          animation: kcCineOutcomeIn 0.4s cubic-bezier(.17,.67,.35,1.4);
+        }
+        @keyframes kcCineOutcomeIn {
+          0%   { opacity: 0; transform: scale(0.4); }
+          60%  { opacity: 1; transform: scale(1.2); }
+          100% { opacity: 1; transform: scale(1); }
+        }
+        .kc-cine-outcome-icon {
+          font-size: 4rem;
+          animation: kcCineOutcomeIcon 0.8s ease-out;
+        }
+        @keyframes kcCineOutcomeIcon {
+          0%   { transform: scale(0.2) rotate(-15deg); opacity: 0; }
+          50%  { transform: scale(1.4) rotate(5deg); opacity: 1; }
+          100% { transform: scale(1.2) rotate(0); opacity: 1; }
+        }
+        .kc-cine-outcome-text {
+          font-size: 1.6rem; font-weight: 900;
+          letter-spacing: 0.04em;
+          text-shadow: 0 0 20px currentColor, 0 3px 0 rgba(0,0,0,0.6);
         }
 
         /* ===== SSR Rainbow Card Border ===== */
