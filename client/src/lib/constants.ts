@@ -109,16 +109,16 @@ export const IMAGES = {
   AVATAR_ICE_MAGE_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-ice-mage-62nnnV8WFVasd6sF59Phh3.webp',
   AVATAR_ICE_MAGE_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-ice-mage-7dMra5fnsoaoGesYrWpg62.png',
   // New male characters - demon king, archer, knight, alchemist, dark swordsman
-  AVATAR_DEMON_KING_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-demon-king-chibi-aTAMWesabBoWeTyhBdqddR.webp',
-  AVATAR_DEMON_KING_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-demon-king-chibi-UwJRceCZrbkmW3s9EmxSGh.png',
-  AVATAR_ARCHER_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-archer-chibi-NaTEQd3RcCcyPCXPrGU2qZ.webp',
-  AVATAR_ARCHER_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-archer-chibi-hNpioHFjBkKiaZFHMxUTVt.png',
-  AVATAR_KNIGHT_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-knight-chibi-d54QbKcJcQVqbH7uPaqjtd.webp',
-  AVATAR_KNIGHT_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-knight-chibi-9eNcFWG2x2xMvgiymnVkoh.png',
-  AVATAR_ALCHEMIST_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-alchemist-chibi-YE7NR9Ahs6Tqa5dpjwFGyq.webp',
-  AVATAR_ALCHEMIST_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-alchemist-chibi-GCEPZCPyktXs8wH48c6jKf.png',
-  AVATAR_DARK_SWORDSMAN_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-dark-swordsman-chibi-mGuRKqKDtcVtB3MiTL3Wxg.webp',
-  AVATAR_DARK_SWORDSMAN_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-dark-swordsman-chibi-e39Ny7LgpWzEnHrmVQLj2c.png',
+  AVATAR_DEMON_KING_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-demon-king-v4-NAjwr7tf5zN6ro2RwjDJaD.webp',
+  AVATAR_DEMON_KING_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-demon-king-v4-7K9CRzptizyp6odX97pZ2S.png',
+  AVATAR_ARCHER_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-archer-v4-5sfFfgg2iRWCCuRAzHBEP2.webp',
+  AVATAR_ARCHER_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-archer-v4-A5U7MXa9SXSAvABmkgELAf.png',
+  AVATAR_KNIGHT_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-knight-v4-HESNKtGH7V6BTJmPFoqW68.webp',
+  AVATAR_KNIGHT_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-knight-v4-8zTuxN8U6fyD5dZXNWEXMp.png',
+  AVATAR_ALCHEMIST_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-alchemist-v4-a4sPBYdxVizt8mvBvdu7sj.webp',
+  AVATAR_ALCHEMIST_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-alchemist-v4-fg2vQGvsSCxBj6k3zsU2UR.png',
+  AVATAR_DARK_SWORDSMAN_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-dark-swordsman-v4-HsscxwXsUeHE5aUVFHjD3W.webp',
+  AVATAR_DARK_SWORDSMAN_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-dark-swordsman-v4-UBWbGwubeyZeSZsg4Aqmgw.png',
 } as const;
 
 // Avatar items for shop - maps avatar IDs to their image URLs
