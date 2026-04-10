@@ -154,10 +154,6 @@ export const MOCK_RANKINGS: RankingEntry[] = [
 ];
 
 export const MOCK_SHOP_ITEMS: ShopItem[] = [
-  { id: 'avatar-samurai', name: '侍', category: 'avatar', price: 500, imageUrl: '', description: '勇敢な侍のアバター', owned: false },
-  { id: 'avatar-witch', name: '魔女', category: 'avatar', price: 500, imageUrl: '', description: '賢い魔女のアバター', owned: false },
-  { id: 'avatar-pirate', name: '海賊', category: 'avatar', price: 600, imageUrl: '', description: '冒険好きな海賊のアバター', owned: false },
-  { id: 'avatar-angel', name: '天使', category: 'avatar', price: 450, imageUrl: '', description: '優しい天使のアバター', owned: false },
   { id: 'avatar-ninja-v2', name: '忍者', category: 'avatar', price: 550, imageUrl: '', description: '影に潜む忍のアバター', owned: false },
   { id: 'avatar-princess-chibi', name: '姫', category: 'avatar', price: 700, imageUrl: '', description: 'キュートな姫のアバター', owned: false },
   { id: 'avatar-witch-chibi', name: '魔女', category: 'avatar', price: 500, imageUrl: '', description: 'キュートな魔女のアバター', owned: false },
