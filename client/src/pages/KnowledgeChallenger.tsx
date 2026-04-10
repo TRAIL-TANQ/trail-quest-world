@@ -510,24 +510,41 @@ function CardDisplay({ card, isDefense }: { card: BattleCard; isDefense?: boolea
   const rarInfo = RARITY_INFO[card.rarity];
 
   return (
-    <div className="inline-block rounded-xl p-3 relative overflow-hidden"
+    <div className="inline-block rounded-xl p-0 relative overflow-hidden"
       style={{
         background: 'linear-gradient(135deg, rgba(21,29,59,0.95), rgba(14,20,45,0.95))',
         border: `2px solid ${isDefense ? 'rgba(255,215,0,0.4)' : `${catInfo.color}55`}`,
         boxShadow: `0 4px 16px rgba(0,0,0,0.4), inset 0 0 20px ${catInfo.color}08`,
-        minWidth: '140px',
+        width: '160px',
+        height: '200px',
       }}>
-      <div className="absolute top-1 right-1 px-1.5 py-0.5 rounded text-[8px] font-bold"
-        style={{ background: rarInfo.bgColor, color: rarInfo.color }}>
-        {rarInfo.label}
+      {/* Card Image */}
+      {card.imageUrl && (
+        <img src={card.imageUrl} alt={card.name} className="w-full h-full object-cover" />
+      )}
+      
+      {/* Overlay Info */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col justify-between p-2">
+        <div className="flex items-start justify-between">
+          <div className="text-lg">{catInfo.emoji}</div>
+          <div className="px-1.5 py-0.5 rounded text-[8px] font-bold"
+            style={{ background: rarInfo.bgColor, color: rarInfo.color }}>
+            {rarInfo.label}
+          </div>
+        </div>
+        
+        <div>
+          <p className="text-xs font-bold text-amber-100 mb-0.5">{card.name}</p>
+          <div className="flex items-center justify-between">
+            <p className="text-[9px]" style={{ color: catInfo.color }}>{catInfo.label}</p>
+            <div className="flex items-center gap-1">
+              <span className="text-sm font-bold" style={{ color: '#ffd700' }}>{card.power}</span>
+              <span className="text-[8px] text-amber-200/60">P</span>
+            </div>
+          </div>
+        </div>
       </div>
-      <div className="text-2xl mb-1">{catInfo.emoji}</div>
-      <p className="text-xs font-bold text-amber-100 mb-0.5">{card.name}</p>
-      <p className="text-[9px] mb-1" style={{ color: catInfo.color }}>{catInfo.label}</p>
-      <div className="flex items-center justify-center gap-1">
-        <span className="text-lg font-bold" style={{ color: '#ffd700' }}>{card.power}</span>
-        <span className="text-[9px] text-amber-200/40">パワー</span>
-      </div>
+      
       {isDefense && (
         <div className="absolute top-1 left-1">
           <span className="text-[10px]">🏴</span>
@@ -543,9 +560,12 @@ function CardMini({ card }: { card: BattleCard }) {
   const rarInfo = RARITY_INFO[card.rarity];
 
   return (
-    <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg"
+    <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg overflow-hidden"
       style={{ background: `${catInfo.color}15`, border: `1px solid ${catInfo.color}33` }}>
-      <span className="text-sm">{catInfo.emoji}</span>
+      {card.imageUrl && (
+        <img src={card.imageUrl} alt={card.name} className="w-6 h-6 rounded object-cover" />
+      )}
+      {!card.imageUrl && <span className="text-sm">{catInfo.emoji}</span>}
       <span className="text-[10px] font-bold text-amber-100">{card.name}</span>
       <span className="text-[9px] font-bold" style={{ color: rarInfo.color }}>{rarInfo.label}</span>
       <span className="text-[10px] font-bold" style={{ color: '#ffd700' }}>P{card.power}</span>
