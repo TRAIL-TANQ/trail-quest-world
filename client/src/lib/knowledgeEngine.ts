@@ -35,9 +35,13 @@ export interface GameState {
   quizCorrect: boolean | null;
   effectApplied: boolean;
   log: string[];
-  // AI attack visualization
+  // Attack visualization
   aiAttackCards: BattleCard[];
   aiAttackTotal: number;
+  playerAttackCards: BattleCard[];  // プレイヤー攻撃スタック可視化
+  lastAddedPower: number;           // 最後に加算されたパワー（演出用）
+  winningCard: BattleCard | null;   // 勝ち残りカード（演出用）
+  winningCardSide: 'player' | 'ai' | null; // どちら側の勝利か
 }
 
 function shuffleDeck(deck: BattleCard[]): BattleCard[] {
@@ -72,6 +76,10 @@ export function initGameState(playerDeck: BattleCard[], aiDeck: BattleCard[]): G
     log: [`ラウンド1開始！AIの防衛カード: ${aiInitialCard.name}（パワー${aiInitialCard.power}）`],
     aiAttackCards: [],
     aiAttackTotal: 0,
+    playerAttackCards: [],
+    lastAddedPower: 0,
+    winningCard: null,
+    winningCardSide: null,
   };
 }
 
@@ -156,6 +164,8 @@ export function playerDrawCard(state: GameState): GameState {
     effectApplied: false,
     message: `${drawnCard.name}をめくった！クイズに答えよう！`,
     log: [...state.log, `プレイヤーが${drawnCard.name}（パワー${drawnCard.power}）をめくった`],
+    winningCard: null,
+    winningCardSide: null,
   };
 }
 
@@ -223,6 +233,10 @@ export function processQuizAnswer(state: GameState, correct: boolean): GameState
         log: [...newLog, `プレイヤーがフラッグを奪った！防衛カード: ${playerCard.name}`],
         aiAttackCards: [],
         aiAttackTotal: 0,
+        playerAttackCards: [...state.playerAttackCards, playerCard],
+        lastAddedPower: playerEffectivePower,
+        winningCard: playerCard,
+        winningCardSide: 'player',
       };
     } else {
       // プレイヤーはまだ負けていない - 次のカードを重ねる
@@ -236,6 +250,10 @@ export function processQuizAnswer(state: GameState, correct: boolean): GameState
         quizCorrect: correct,
         message: `パワー合計: ${newPlayerPowerTotal} / 防衛: ${aiPower} — もっとカードが必要！`,
         log: [...newLog, `攻撃パワー合計: ${newPlayerPowerTotal} vs 防衛: ${aiPower}`],
+        playerAttackCards: [...state.playerAttackCards, playerCard],
+        lastAddedPower: playerEffectivePower,
+        winningCard: null,
+        winningCardSide: null,
       };
     }
   }
@@ -323,6 +341,10 @@ export function aiTurn(state: GameState): GameState {
         log: newLog,
         aiAttackCards,
         aiAttackTotal,
+        playerAttackCards: [],
+        lastAddedPower: 0,
+        winningCard: winningCard,
+        winningCardSide: 'ai',
       };
     }
   }

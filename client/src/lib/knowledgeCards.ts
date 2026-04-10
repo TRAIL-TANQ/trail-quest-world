@@ -671,20 +671,25 @@ const INITIAL_CARDS: BattleCard[] = [
   },
 ];
 
-// Build initial deck: 名もなき偉人x2, 身近な生き物x2, 小さな発見x1, 古い発明x1
+// Build initial deck from COLLECTION_CARDS (6 cards, balanced categories)
 export function createInitialDeck(): BattleCard[] {
-  const gp = INITIAL_CARDS.find(c => c.id === 'init-great-person')!;
-  const cr = INITIAL_CARDS.find(c => c.id === 'init-creature')!;
-  const di = INITIAL_CARDS.find(c => c.id === 'init-discovery')!;
-  const inv = INITIAL_CARDS.find(c => c.id === 'init-invention')!;
-  return [
-    { ...gp, id: 'init-great-person-1' },
-    { ...gp, id: 'init-great-person-2' },
-    { ...cr, id: 'init-creature-1' },
-    { ...cr, id: 'init-creature-2' },
-    { ...di, id: 'init-discovery-1' },
-    { ...inv, id: 'init-invention-1' },
-  ];
+  const shuffled = [...ALL_BATTLE_CARDS].sort(() => Math.random() - 0.5);
+  const deck: BattleCard[] = [];
+  const categories: CardCategory[] = ['great_person', 'creature', 'heritage', 'invention', 'discovery'];
+  // Pick one card per category
+  for (const cat of categories) {
+    const card = shuffled.find(c => c.category === cat && !deck.includes(c));
+    if (card) deck.push({ ...card, id: `player-${card.id}` });
+  }
+  // Fill remaining slot with a random card not already in deck
+  const remaining = shuffled.find(c => !deck.some(d => d.id === `player-${c.id}`));
+  if (remaining) deck.push({ ...remaining, id: `player-${remaining.id}` });
+  // Ensure at least 6 cards
+  while (deck.length < 6) {
+    const card = shuffled[Math.floor(Math.random() * shuffled.length)];
+    deck.push({ ...card, id: `player-extra-${deck.length}` });
+  }
+  return deck;
 }
 
 // AI deck: uses random cards from collection
