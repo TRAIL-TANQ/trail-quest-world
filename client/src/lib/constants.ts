@@ -120,8 +120,8 @@ export const IMAGES = {
   AVATAR_DARK_SWORDSMAN_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-dark-swordsman-v4-HsscxwXsUeHE5aUVFHjD3W.webp',
   AVATAR_DARK_SWORDSMAN_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-dark-swordsman-v4-UBWbGwubeyZeSZsg4Aqmgw.png',
   // New batch 2 - female characters
-  AVATAR_MIKO_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-miko-5t8qZamiRqaJy3y9q3Wri8.webp',
-  AVATAR_MIKO_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-miko-ML8ZuzYsnmityynHQNFTor.png',
+  AVATAR_MIKO_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-miko-v2-9HUBfzVvE9YmMSahkaURbA.webp',
+  AVATAR_MIKO_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-miko-v2-FwSDuBz2DSkpWybyuracXk.png',
   AVATAR_VAMPIRE_GIRL_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-vampire-girl-FWsFrmGw57CdCpm9z2eW6G.webp',
   AVATAR_VAMPIRE_GIRL_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-vampire-girl-B7PygbpwNdfgbTe26e4GNQ.png',
   AVATAR_DANCER_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-dancer-RCw8sYHmKebSq34yi7Rhdj.webp',
