@@ -10,7 +10,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import PageShell from "./components/layout/PageShell";
 import HomePage from "./pages/HomePage";
 import GameListPage from "./pages/GameListPage";
-import GamePlayPage from "./pages/GamePlayPage";
+import KnowledgeChallenger from "./pages/KnowledgeChallenger";
 import GachaPage from "./pages/GachaPage";
 import RankingPage from "./pages/RankingPage";
 import CollectionPage from "./pages/CollectionPage";
@@ -24,7 +24,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/login" component={LoginPage} />
-      <Route path="/games/:gameId" component={GamePlayPage} />
+      <Route path="/games/knowledge-challenger" component={KnowledgeChallenger} />
       <Route path="/result" component={ResultPage} />
       <Route>
         <PageShell>
