@@ -108,6 +108,17 @@ export const IMAGES = {
   AVATAR_MERMAID_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-mermaid-W3eMXMAL535y4UpxxhGvGj.png',
   AVATAR_ICE_MAGE_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-ice-mage-62nnnV8WFVasd6sF59Phh3.webp',
   AVATAR_ICE_MAGE_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-ice-mage-7dMra5fnsoaoGesYrWpg62.png',
+  // New male characters - demon king, archer, knight, alchemist, dark swordsman
+  AVATAR_DEMON_KING_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-demon-king-C8DGxYyVfxGEeZx85sNq2G.webp',
+  AVATAR_DEMON_KING_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-demon-king-4fwTCwxPe7i9fyt6c4nzHS.png',
+  AVATAR_ARCHER_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-archer-HF8pw8KZdBetEKcdFMpVak.webp',
+  AVATAR_ARCHER_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-archer-Y4tbyktaf34jwep8rbdCQ7.png',
+  AVATAR_KNIGHT_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-knight-afmcX6PY84LbTevKzhMHFb.webp',
+  AVATAR_KNIGHT_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-knight-PVC3cvVKdFCyiv2LTFLbf7.png',
+  AVATAR_ALCHEMIST_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-alchemist-hkjKzzGuxzN6AMkaAzku4E.webp',
+  AVATAR_ALCHEMIST_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-alchemist-JkmDrRybzaUQpxb4PuZH3h.png',
+  AVATAR_DARK_SWORDSMAN_ICON: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-dark-swordsman-KCBhAwUzd7Kvqs9rQeT58n.webp',
+  AVATAR_DARK_SWORDSMAN_FULL: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/avatar-dark-swordsman-FiZJ2TGSD2d9acrQ2mXddf.png',
 } as const;
 
 // Avatar items for shop - maps avatar IDs to their image URLs
@@ -127,6 +138,11 @@ export const AVATAR_ITEMS: Record<string, { icon: string; full: string }> = {
   'avatar-fairy': { icon: IMAGES.AVATAR_FAIRY_ICON, full: IMAGES.AVATAR_FAIRY_FULL },
   'avatar-mermaid': { icon: IMAGES.AVATAR_MERMAID_ICON, full: IMAGES.AVATAR_MERMAID_FULL },
   'avatar-ice-mage': { icon: IMAGES.AVATAR_ICE_MAGE_ICON, full: IMAGES.AVATAR_ICE_MAGE_FULL },
+  'avatar-demon-king': { icon: IMAGES.AVATAR_DEMON_KING_ICON, full: IMAGES.AVATAR_DEMON_KING_FULL },
+  'avatar-archer': { icon: IMAGES.AVATAR_ARCHER_ICON, full: IMAGES.AVATAR_ARCHER_FULL },
+  'avatar-knight': { icon: IMAGES.AVATAR_KNIGHT_ICON, full: IMAGES.AVATAR_KNIGHT_FULL },
+  'avatar-alchemist': { icon: IMAGES.AVATAR_ALCHEMIST_ICON, full: IMAGES.AVATAR_ALCHEMIST_FULL },
+  'avatar-dark-swordsman': { icon: IMAGES.AVATAR_DARK_SWORDSMAN_ICON, full: IMAGES.AVATAR_DARK_SWORDSMAN_FULL },
 };
 
 export const CATEGORY_TABS = [
