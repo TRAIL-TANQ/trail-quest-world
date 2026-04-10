@@ -24,10 +24,9 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { useShopOrderStore } from '@/lib/shopOrderStore';
-import { AVATAR_ITEMS } from '@/lib/constants';
+import { useShopOrderStore, defaultAvatarOrder } from '@/lib/shopOrderStore';
+import { AVATAR_ITEMS, IMAGES } from '@/lib/constants';
 import { MOCK_SHOP_ITEMS } from '@/lib/mockData';
-import { IMAGES } from '@/lib/constants';
 import { toast } from 'sonner';
 
 // Sortable avatar row component
@@ -214,16 +213,14 @@ export default function AdminPage() {
   };
 
   const handleSave = () => {
-    // In a real app, this would persist to backend. Here we just confirm the store is updated.
+    // persist middleware auto-saves to localStorage on every setAvatarOrder call
+    // This button confirms to the user that the order is saved
     setHasChanges(false);
-    toast.success('並び順を保存しました！ショップに反映されています。');
+    toast.success('並び順を保存しました！ショップに即座に反映されます。');
   };
 
   const handleReset = () => {
-    const defaultOrder = MOCK_SHOP_ITEMS
-      .filter((item) => item.category === 'avatar')
-      .map((item) => item.id);
-    setAvatarOrder(defaultOrder);
+    setAvatarOrder(defaultAvatarOrder);
     setHasChanges(false);
     toast.info('並び順をデフォルトに戻しました');
   };

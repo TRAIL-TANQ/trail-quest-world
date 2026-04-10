@@ -3,10 +3,10 @@
  * Fantasy merchant shop style with gold pricing, ornate item cards
  * Avatar tab displays character images with purchase/equip functionality
  */
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { MOCK_SHOP_ITEMS } from '@/lib/mockData';
 import { useUserStore } from '@/lib/stores';
-import { useShopOrderStore } from '@/lib/shopOrderStore';
+import { useShopOrderStore, getOrderedAvatarItems } from '@/lib/shopOrderStore';
 import { IMAGES, AVATAR_ITEMS } from '@/lib/constants';
 import { toast } from 'sonner';
 
@@ -26,9 +26,10 @@ export default function ShopPage() {
   const purchaseAvatar = useUserStore((s) => s.purchaseAvatar);
   const equipAvatar = useUserStore((s) => s.equipAvatar);
 
-  const orderedAvatars = useShopOrderStore((s) => s.getOrderedAvatars);
+  const avatarOrder = useShopOrderStore((s) => s.avatarOrder);
+  const orderedAvatars = useMemo(() => getOrderedAvatarItems(avatarOrder), [avatarOrder]);
   const filteredItems = activeTab === 'avatar'
-    ? orderedAvatars()
+    ? orderedAvatars
     : MOCK_SHOP_ITEMS.filter((item) => item.category === activeTab);
   const activeTabData = shopTabs.find(t => t.id === activeTab);
 
