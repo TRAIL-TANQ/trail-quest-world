@@ -84,6 +84,14 @@ export default function KnowledgeChallenger() {
   // Game over overlay
   const [showGameOverOverlay, setShowGameOverOverlay] = useState(false);
 
+  // Enhanced battle cinematics
+  const [aiAttackIntro, setAiAttackIntro] = useState(false);
+  const [battleOutcome, setBattleOutcome] = useState<'victory' | 'defeat' | null>(null);
+  const [screenShake, setScreenShake] = useState(false);
+  const [sideBurst, setSideBurst] = useState<'player' | 'ai' | null>(null);
+  const [flagMoveAnim, setFlagMoveAnim] = useState<'toPlayer' | 'toAi' | null>(null);
+  const [aiPowerPopKey, setAiPowerPopKey] = useState(0);
+
   // Battle log expanded
   const [logExpanded, setLogExpanded] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
@@ -206,9 +214,21 @@ export default function KnowledgeChallenger() {
     setTimeout(() => setAttackSlide(false), 600);
   }, []);
 
-  const triggerWinEffect = useCallback((_side: 'player' | 'ai') => {
+  const triggerWinEffect = useCallback((side: 'player' | 'ai') => {
     setShowWinGlow(true);
     triggerFlagFlash();
+    // Screen shake (defeat shakes harder feel, but use same effect)
+    setScreenShake(true);
+    setTimeout(() => setScreenShake(false), 700);
+    // Burst on loser side
+    setSideBurst(side === 'player' ? 'ai' : 'player');
+    setTimeout(() => setSideBurst(null), 900);
+    // Battle outcome overlay
+    setBattleOutcome(side === 'player' ? 'victory' : 'defeat');
+    setTimeout(() => setBattleOutcome(null), 1800);
+    // Flag move to winner
+    setFlagMoveAnim(side === 'player' ? 'toPlayer' : 'toAi');
+    setTimeout(() => setFlagMoveAnim(null), 1500);
     setTimeout(() => setShowWinGlow(false), 2500);
   }, []);
 
@@ -316,10 +336,14 @@ export default function KnowledgeChallenger() {
   /* ---------- AI turn ---------- */
   const processAITurn = useCallback((state: GameState) => {
     setAiAnimating(true);
+    setAiAttackIntro(true);
+    setTimeout(() => setAiAttackIntro(false), 1300);
     setTimeout(() => {
       const newState = aiTurn(state);
       setGameState(newState);
       setAiAnimating(false);
+      // Pop the AI attack power number
+      setAiPowerPopKey((k) => k + 1);
       if (newState.winningCard && newState.winningCardSide === 'ai') {
         triggerAttackSlide();
         triggerWinEffect('ai');
@@ -546,8 +570,37 @@ export default function KnowledgeChallenger() {
     : 0;
 
   return (
-    <div className="min-h-screen flex flex-col relative" style={{ background: 'linear-gradient(180deg, #0b1128 0%, #131b38 50%, #0e1430 100%)' }}>
+    <div className={`min-h-screen flex flex-col relative ${screenShake ? 'kc-screen-shake' : ''}`} style={{ background: 'linear-gradient(180deg, #0b1128 0%, #131b38 50%, #0e1430 100%)' }}>
       {flagFlash && <div className="kc-flag-flash" />}
+      {battleOutcome === 'defeat' && <div className="kc-defeat-flash" />}
+      {battleOutcome === 'victory' && <div className="kc-victory-flash" />}
+
+      {/* AI Attack Intro */}
+      {aiAttackIntro && (
+        <div className="kc-ai-attack-intro">
+          <span className="kc-ai-attack-intro-text">⚔️ 相手の攻撃！</span>
+        </div>
+      )}
+
+      {/* Battle Outcome Overlay */}
+      {battleOutcome && (
+        <div className="kc-battle-outcome">
+          <span
+            className="kc-battle-outcome-text"
+            style={{
+              color: battleOutcome === 'victory' ? '#22c55e' : '#ef4444',
+              textShadow: battleOutcome === 'victory'
+                ? '0 0 30px rgba(34,197,94,0.9), 0 0 60px rgba(34,197,94,0.4)'
+                : '0 0 30px rgba(239,68,68,0.9), 0 0 60px rgba(239,68,68,0.4)',
+            }}
+          >
+            {battleOutcome === 'victory' ? '🚩 フラッグ奪取！' : '💥 フラッグを奪われた！'}
+          </span>
+        </div>
+      )}
+
+      {/* Side Burst */}
+      {sideBurst && <div className={`kc-side-burst kc-side-burst-${sideBurst}`} />}
 
       {showGameOverOverlay && (
         <div className="kc-game-over-overlay">
@@ -604,7 +657,7 @@ export default function KnowledgeChallenger() {
         <div className="flex items-center gap-3">
           <div className="text-center">
             <p className="text-[8px] text-amber-200/35">山札</p>
-            <p className="text-sm font-bold text-amber-100">{gameState.player.deck.length}</p>
+            <p className={`text-sm font-bold ${gameState.player.deck.length === 0 ? 'kc-deck-empty' : 'text-amber-100'}`}>{gameState.player.deck.length}</p>
           </div>
           <div className="text-center relative">
             <p className="text-[8px] text-amber-200/35">ALT</p>
@@ -694,15 +747,15 @@ export default function KnowledgeChallenger() {
             </div>
           )}
           {gameState.aiAttackTotal > 0 && !isPlayerAttacking && (
-            <p className="text-xs font-bold text-red-400 mt-0.5">攻撃力: {gameState.aiAttackTotal}</p>
+            <p key={aiPowerPopKey} className="text-xs font-bold text-red-400 mt-0.5 kc-power-pop">攻撃力: {gameState.aiAttackTotal}</p>
           )}
         </div>
 
         {/* Center Flag & VS */}
         <div className="flex items-center gap-2 w-full max-w-xs relative">
           <div className="h-px flex-1" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,215,0,0.3))' }} />
-          <div className={`kc-flag-center ${flagFlash ? 'kc-flag-pulse' : ''}`}>
-            <span className="text-lg">🚩</span>
+          <div className={`kc-flag-center ${flagFlash ? 'kc-flag-pulse' : ''} ${flagMoveAnim === 'toPlayer' ? 'kc-flag-move-to-player' : flagMoveAnim === 'toAi' ? 'kc-flag-move-to-ai' : ''}`}>
+            <span className={`text-lg inline-block ${flagMoveAnim ? 'kc-flag-wave' : ''}`}>🚩</span>
           </div>
           <div className="h-px flex-1" style={{ background: 'linear-gradient(90deg, rgba(255,215,0,0.3), transparent)' }} />
         </div>
@@ -879,6 +932,153 @@ export default function KnowledgeChallenger() {
         .kc-bench-danger { animation: kcBenchDanger 1s ease-in-out infinite; }
         @keyframes kcBenchDanger { 0%, 100% { border-color: rgba(239,68,68,0.3); } 50% { border-color: rgba(239,68,68,0.7); } }
         @keyframes kcAltRewardFloat { 0% { opacity: 0; transform: translateX(-50%) translateY(0) scale(0.7); } 15% { opacity: 1; transform: translateX(-50%) translateY(-4px) scale(1.1); } 30% { opacity: 1; transform: translateX(-50%) translateY(-8px) scale(1); } 80% { opacity: 1; transform: translateX(-50%) translateY(-12px) scale(1); } 100% { opacity: 0; transform: translateX(-50%) translateY(-20px) scale(0.9); } }
+
+        /* ===== Enhanced Battle Cinematics ===== */
+        .kc-screen-shake { animation: kcShake 0.6s cubic-bezier(.36,.07,.19,.97) both; }
+        @keyframes kcShake {
+          0%, 100% { transform: translateX(0) translateY(0); }
+          10% { transform: translateX(-6px) translateY(-2px); }
+          20% { transform: translateX(7px) translateY(3px); }
+          30% { transform: translateX(-8px) translateY(-1px); }
+          40% { transform: translateX(8px) translateY(2px); }
+          50% { transform: translateX(-5px) translateY(-3px); }
+          60% { transform: translateX(5px) translateY(2px); }
+          70% { transform: translateX(-4px) translateY(-1px); }
+          80% { transform: translateX(3px) translateY(1px); }
+          90% { transform: translateX(-2px) translateY(0); }
+        }
+
+        .kc-defeat-flash { position: absolute; inset: 0; z-index: 55; pointer-events: none; animation: kcDefeatFlash 1.2s ease-out forwards; }
+        @keyframes kcDefeatFlash {
+          0% { background: rgba(239,68,68,0); }
+          15% { background: rgba(239,68,68,0.45); }
+          45% { background: rgba(239,68,68,0.2); }
+          100% { background: transparent; }
+        }
+        .kc-victory-flash { position: absolute; inset: 0; z-index: 55; pointer-events: none; animation: kcVictoryFlash 1.2s ease-out forwards; }
+        @keyframes kcVictoryFlash {
+          0% { background: rgba(34,197,94,0); }
+          15% { background: rgba(34,197,94,0.4); }
+          45% { background: rgba(34,197,94,0.18); }
+          100% { background: transparent; }
+        }
+
+        .kc-ai-attack-intro {
+          position: absolute; inset: 0; z-index: 60;
+          display: flex; align-items: center; justify-content: center;
+          pointer-events: none;
+          background: radial-gradient(ellipse at center, rgba(239,68,68,0.22), transparent 65%);
+          animation: kcAiIntroFade 1.3s ease-out forwards;
+        }
+        @keyframes kcAiIntroFade {
+          0% { opacity: 0; }
+          15% { opacity: 1; }
+          75% { opacity: 1; }
+          100% { opacity: 0; }
+        }
+        .kc-ai-attack-intro-text {
+          font-size: 2rem;
+          font-weight: 900;
+          color: #ef4444;
+          letter-spacing: 0.05em;
+          text-shadow: 0 0 20px rgba(239,68,68,0.9), 0 0 40px rgba(239,68,68,0.5), 0 4px 0 rgba(0,0,0,0.6);
+          animation: kcAiIntroPop 1.3s cubic-bezier(.17,.67,.35,1.4) both;
+        }
+        @keyframes kcAiIntroPop {
+          0% { opacity: 0; transform: scale(0.3) translateX(-300px) rotate(-15deg); }
+          30% { opacity: 1; transform: scale(1.25) translateX(0) rotate(0); }
+          50% { transform: scale(1) translateX(0); }
+          80% { opacity: 1; transform: scale(1.02); }
+          100% { opacity: 0; transform: scale(1.3); }
+        }
+
+        .kc-battle-outcome {
+          position: absolute; inset: 0; z-index: 70;
+          display: flex; align-items: center; justify-content: center;
+          pointer-events: none;
+        }
+        .kc-battle-outcome-text {
+          font-size: 2.2rem;
+          font-weight: 900;
+          letter-spacing: 0.04em;
+          animation: kcOutcomePop 1.8s cubic-bezier(.17,.67,.35,1.4) both;
+        }
+        @keyframes kcOutcomePop {
+          0% { opacity: 0; transform: scale(0.2) rotate(-8deg); }
+          20% { opacity: 1; transform: scale(1.35) rotate(2deg); }
+          35% { transform: scale(1) rotate(0); }
+          80% { opacity: 1; transform: scale(1.02); }
+          100% { opacity: 0; transform: scale(0.9) translateY(-24px); }
+        }
+
+        .kc-side-burst {
+          position: absolute; left: 50%;
+          width: 260px; height: 260px;
+          border-radius: 50%;
+          pointer-events: none;
+          z-index: 45;
+        }
+        .kc-side-burst-ai {
+          top: 22%;
+          transform: translate(-50%, -50%);
+          background: radial-gradient(circle, rgba(255,215,0,0.55) 0%, rgba(239,68,68,0.4) 40%, transparent 70%);
+          animation: kcBurstAi 0.9s ease-out forwards;
+        }
+        .kc-side-burst-player {
+          bottom: 28%;
+          transform: translate(-50%, 50%);
+          background: radial-gradient(circle, rgba(255,215,0,0.55) 0%, rgba(239,68,68,0.4) 40%, transparent 70%);
+          animation: kcBurstPlayer 0.9s ease-out forwards;
+        }
+        @keyframes kcBurstAi {
+          0% { opacity: 0; transform: translate(-50%, -50%) scale(0.15); }
+          30% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+          100% { opacity: 0; transform: translate(-50%, -50%) scale(2.1); }
+        }
+        @keyframes kcBurstPlayer {
+          0% { opacity: 0; transform: translate(-50%, 50%) scale(0.15); }
+          30% { opacity: 1; transform: translate(-50%, 50%) scale(1.15); }
+          100% { opacity: 0; transform: translate(-50%, 50%) scale(2.1); }
+        }
+
+        .kc-flag-move-to-player { animation: kcFlagMovePlayer 1.5s ease-out; }
+        @keyframes kcFlagMovePlayer {
+          0%   { transform: translateY(-40px) scale(1); background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.4); }
+          35%  { transform: translateY(12px) scale(1.7); background: rgba(255,215,0,0.3); border-color: rgba(255,215,0,0.8); box-shadow: 0 0 24px rgba(255,215,0,0.6); }
+          70%  { transform: translateY(22px) scale(1.5) rotate(-8deg); background: rgba(34,197,94,0.25); border-color: rgba(34,197,94,0.7); }
+          100% { transform: translateY(0) scale(1) rotate(0); }
+        }
+        .kc-flag-move-to-ai { animation: kcFlagMoveAi 1.5s ease-out; }
+        @keyframes kcFlagMoveAi {
+          0%   { transform: translateY(40px) scale(1); background: rgba(34,197,94,0.15); border-color: rgba(34,197,94,0.4); }
+          35%  { transform: translateY(-12px) scale(1.7); background: rgba(255,215,0,0.3); border-color: rgba(255,215,0,0.8); box-shadow: 0 0 24px rgba(255,215,0,0.6); }
+          70%  { transform: translateY(-22px) scale(1.5) rotate(8deg); background: rgba(239,68,68,0.25); border-color: rgba(239,68,68,0.7); }
+          100% { transform: translateY(0) scale(1) rotate(0); }
+        }
+        .kc-flag-wave { animation: kcFlagWave 0.4s ease-in-out infinite; }
+        @keyframes kcFlagWave {
+          0%, 100% { transform: rotate(-8deg); }
+          50% { transform: rotate(8deg); }
+        }
+
+        .kc-deck-empty { animation: kcDeckEmpty 0.9s ease-in-out infinite; color: #ef4444; text-shadow: 0 0 10px rgba(239,68,68,0.8); }
+        @keyframes kcDeckEmpty {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.4; transform: scale(0.9); }
+        }
+
+        .kc-bench-full { animation: kcBenchFullPulse 0.5s ease-in-out infinite; }
+        @keyframes kcBenchFullPulse {
+          0%, 100% { background: rgba(239,68,68,0.08); box-shadow: inset 0 0 0 1px rgba(239,68,68,0.3); }
+          50%      { background: rgba(239,68,68,0.22); box-shadow: inset 0 0 20px rgba(239,68,68,0.4), inset 0 0 0 2px rgba(239,68,68,0.8); }
+        }
+
+        .kc-power-pop { animation: kcPowerPop 0.5s ease-out; }
+        @keyframes kcPowerPop {
+          0% { opacity: 0; transform: scale(0.4); }
+          50% { opacity: 1; transform: scale(1.4); color: #ffd700; text-shadow: 0 0 12px rgba(255,215,0,0.8); }
+          100% { opacity: 1; transform: scale(1); }
+        }
       `}</style>
     </div>
   );
@@ -923,9 +1123,10 @@ function BenchDisplay({ side, bench, deckCount, isDanger, allCategories }: {
   const label = isPlayer ? 'あなた' : 'AI';
   const labelColor = isPlayer ? '#22c55e' : '#ef4444';
   const emptySlots = 5 - bench.length;
+  const isFull = bench.length >= 5;
   const benchMap = new Map(bench.map(s => [s.category, s]));
   return (
-    <div className={`px-3 py-1.5 shrink-0 ${isDanger ? 'kc-bench-danger' : ''}`} style={{ borderTop: isPlayer ? '1px solid rgba(255,215,0,0.1)' : 'none', borderBottom: !isPlayer ? '1px solid rgba(255,215,0,0.1)' : 'none', background: isDanger ? 'rgba(239,68,68,0.05)' : 'transparent' }}>
+    <div className={`px-3 py-1.5 shrink-0 ${isFull ? 'kc-bench-full' : isDanger ? 'kc-bench-danger' : ''}`} style={{ borderTop: isPlayer ? '1px solid rgba(255,215,0,0.1)' : 'none', borderBottom: !isPlayer ? '1px solid rgba(255,215,0,0.1)' : 'none', background: isFull ? 'rgba(239,68,68,0.12)' : isDanger ? 'rgba(239,68,68,0.05)' : 'transparent' }}>
       <div className="flex items-center justify-between mb-1">
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-bold" style={{ color: labelColor }}>{label}</span>
