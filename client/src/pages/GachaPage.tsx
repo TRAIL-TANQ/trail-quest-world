@@ -5,7 +5,7 @@
  * - ガチャ履歴: 過去100件の引き結果を表示
  * Gold ornate styling + full animation system
  */
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { GACHA_COSTS, RARITY_LABELS, RARITY_COLORS, RARITY_STARS, IMAGES } from '@/lib/constants';
 import { COLLECTION_CARDS, GACHA_RARITY_RATES } from '@/lib/cardData';
 import { useUserStore, useGachaStore, useCollectionStore, useMissionStore } from '@/lib/stores';
@@ -13,6 +13,8 @@ import type { GachaHistoryEntry } from '@/lib/stores';
 import type { CollectionCard, CollectionRarity } from '@/lib/types';
 import { availableRarities, levelToGachaPhase } from '@/lib/knowledgeCards';
 import { calculateLevel } from '@/lib/level';
+import { fetchPity, savePity, spendAltForGacha, recordPulls } from '@/lib/gachaService';
+import { fetchChildStatus } from '@/lib/quizService';
 import { toast } from 'sonner';
 
 // --- Constants ---
@@ -104,6 +106,39 @@ export default function GachaPage() {
   const [isDuplicate, setIsDuplicate] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
 
+  // ===== 変更7: Supabase 初期同期 =====
+  // マウント時に gacha_pity と child_status.alt_points を読み込んで、
+  // ローカルストアのpity と currentAlt を Supabase の真値に合わせる。
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const [pity, status] = await Promise.all([
+        fetchPity(user.id),
+        fetchChildStatus(user.id),
+      ]);
+      if (cancelled) return;
+      // pity をローカルに反映
+      const storeState = useGachaStore.getState();
+      const normalDelta = pity.normal_pity - storeState.pityCount;
+      const premiumDelta = pity.premium_pity - storeState.premiumPityCount;
+      if (normalDelta !== 0) {
+        if (normalDelta > 0) for (let i = 0; i < normalDelta; i++) storeState.incrementPity(false);
+        else storeState.resetPity(false);
+      }
+      if (premiumDelta !== 0) {
+        if (premiumDelta > 0) for (let i = 0; i < premiumDelta; i++) storeState.incrementPity(true);
+        else storeState.resetPity(true);
+      }
+      // ALT balance をローカル user.currentAlt に合わせる
+      if (status) {
+        const diff = status.alt_points - user.currentAlt;
+        if (diff !== 0) updateAlt(diff);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user.id]);
+
   const burstParticles = useMemo(() =>
     Array.from({ length: 20 }, (_, i) => {
       const angle = (i / 20) * Math.PI * 2;
@@ -111,13 +146,20 @@ export default function GachaPage() {
       return { id: i, tx: Math.cos(angle) * dist, ty: Math.sin(angle) * dist, delay: Math.random() * 0.3, size: 3 + Math.random() * 5 };
     }), []);
 
-  // 1回引き
-  const handlePull = useCallback((type: 'normal' | 'premium') => {
+  // 1回引き（変更7: Supabase に ALT 減算 / pity 更新 / pull 履歴を永続化）
+  const handlePull = useCallback(async (type: 'normal' | 'premium') => {
     const cost = type === 'normal' ? GACHA_COSTS.NORMAL : GACHA_COSTS.PREMIUM;
     if (user.currentAlt < cost) { toast.error('ALTが足りません'); return; }
     if (phase !== 'idle' && phase !== 'reveal' && phase !== 'multi_reveal') return;
 
-    updateAlt(-cost);
+    // Supabase 側で ALT を減算。失敗したらアニメーションを開始しない。
+    const spend = await spendAltForGacha(user.id, cost);
+    if (!spend.ok) {
+      toast.error(spend.reason === 'insufficient_alt' ? 'ALTが足りません' : '通信エラー');
+      return;
+    }
+    updateAlt(-cost); // ローカル即時反映
+
     setGachaType(type);
     setPulledCard(null);
     setPulledCards([]);
@@ -128,21 +170,32 @@ export default function GachaPage() {
     const rarity = rollRarity(type === 'premium', currentPity, playerLevel);
     const card = pickFromPool(rarity);
 
+    // 新しい pity 値を計算（ローカル + Supabase 両方に反映）
+    let newNormal = pityCount;
+    let newPremium = premiumPityCount;
     if (rarity === 'SSR' || rarity === 'SR') {
+      if (type === 'premium') newPremium = 0; else newNormal = 0;
       resetPity(type === 'premium');
     } else {
+      if (type === 'premium') newPremium += 1; else newNormal += 1;
       incrementPity(type === 'premium');
     }
+    void savePity(user.id, newNormal, newPremium);
+    void recordPulls([{
+      child_id: user.id,
+      card_id: card.id,
+      rarity,
+      gacha_type: type,
+      pity_count: type === 'premium' ? newPremium : newNormal,
+    }]);
 
     const alreadyOwned = ownedCardIds.has(card.id);
     setIsDuplicate(alreadyOwned);
     addCard(card.id);
 
-    // ミッション進捗更新
     updateMissionProgress(type === 'premium' ? 'mission-004' : 'mission-002', 1);
     if (rarity === 'SR' || rarity === 'SSR') updateMissionProgress('mission-005', 1);
 
-    // 履歴に追加
     addHistory({
       id: `${Date.now()}-${Math.random()}`,
       card,
@@ -157,28 +210,34 @@ export default function GachaPage() {
     setTimeout(() => { setPulledCard(card); setPhase('burst'); }, 500);
     setTimeout(() => setPhase('flip'), 500 + burstDuration);
     setTimeout(() => setPhase('reveal'), 500 + burstDuration + 600);
-  }, [user.currentAlt, phase, updateAlt, pityCount, premiumPityCount, incrementPity, resetPity, addCard, addHistory, ownedCardIds, playerLevel, updateMissionProgress]);
+  }, [user.currentAlt, user.id, phase, updateAlt, pityCount, premiumPityCount, incrementPity, resetPity, addCard, addHistory, ownedCardIds, playerLevel, updateMissionProgress]);
 
-  // 10連引き
-  const handlePull10 = useCallback((type: 'normal' | 'premium') => {
+  // 10連引き（変更7: Supabase に ALT 減算 / pity 更新 / 10件バルク履歴保存）
+  const handlePull10 = useCallback(async (type: 'normal' | 'premium') => {
     const cost = (type === 'normal' ? GACHA_COSTS.NORMAL : GACHA_COSTS.PREMIUM) * 10;
     if (user.currentAlt < cost) { toast.error('ALTが足りません'); return; }
     if (phase !== 'idle' && phase !== 'reveal' && phase !== 'multi_reveal') return;
 
+    const spend = await spendAltForGacha(user.id, cost);
+    if (!spend.ok) {
+      toast.error(spend.reason === 'insufficient_alt' ? 'ALTが足りません' : '通信エラー');
+      return;
+    }
     updateAlt(-cost);
+
     setGachaType(type);
     setPulledCard(null);
     setPhase('shake');
 
     let currentPity = type === 'premium' ? premiumPityCount : pityCount;
     const cards: CollectionCard[] = [];
+    const rarities: CollectionRarity[] = [];
+    const pityAtEachPull: number[] = [];
     let hasSROrAbove = false;
 
     for (let i = 0; i < 10; i++) {
-      // 10枚目はSR以上確定（プレミアムはSR以上、ノーマルはSR以上）
       let rarity: CollectionRarity;
       if (i === 9 && !hasSROrAbove) {
-        // 最後の1枚でSR以上確定
         rarity = type === 'premium'
           ? (Math.random() < 0.30 ? 'SSR' : 'SR')
           : (Math.random() < 0.10 ? 'SSR' : 'SR');
@@ -194,26 +253,37 @@ export default function GachaPage() {
           currentPity++;
         }
       }
+      rarities.push(rarity);
+      pityAtEachPull.push(currentPity);
       cards.push(pickFromPool(rarity));
     }
 
-    // ストアのpityを最終値に更新
+    // ローカル store の pity を最終値に補正
     if (type === 'premium') {
-      // premiumPityCountを現在値から更新
       for (let i = 0; i < currentPity; i++) incrementPity(true);
     } else {
       for (let i = 0; i < currentPity; i++) incrementPity(false);
     }
 
+    // Supabase: pity 保存 + 10件バルク履歴
+    const finalNormal = type === 'premium' ? pityCount : currentPity;
+    const finalPremium = type === 'premium' ? currentPity : premiumPityCount;
+    void savePity(user.id, finalNormal, finalPremium);
+    void recordPulls(cards.map((c, i) => ({
+      child_id: user.id,
+      card_id: c.id,
+      rarity: rarities[i],
+      gacha_type: type,
+      pity_count: pityAtEachPull[i],
+    })));
+
     const cardIds = cards.map((c) => c.id);
     addCards(cardIds);
 
-    // ミッション進捗更新（10連）
     updateMissionProgress(type === 'premium' ? 'mission-004' : 'mission-002', 10);
     const srAboveCount = cards.filter((c) => c.rarity === 'SR' || c.rarity === 'SSR').length;
     if (srAboveCount > 0) updateMissionProgress('mission-005', 1);
 
-    // 履歴に追加（10枚）
     cards.forEach((card) => {
       addHistory({
         id: `${Date.now()}-${Math.random()}`,
@@ -226,7 +296,7 @@ export default function GachaPage() {
 
     setPulledCards(cards);
     setTimeout(() => setPhase('multi_reveal'), 1000);
-  }, [user.currentAlt, phase, updateAlt, pityCount, premiumPityCount, incrementPity, resetPity, addCards, addHistory, ownedCardIds, playerLevel, updateMissionProgress]);
+  }, [user.currentAlt, user.id, phase, updateAlt, pityCount, premiumPityCount, incrementPity, resetPity, addCards, addHistory, ownedCardIds, playerLevel, updateMissionProgress]);
 
   const handleDismiss = () => { setPhase('idle'); setPulledCard(null); setPulledCards([]); };
 
