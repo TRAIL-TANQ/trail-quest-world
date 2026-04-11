@@ -121,6 +121,7 @@ export default function KnowledgeChallenger() {
   const fastModeRef = useRef(false);
   useEffect(() => { fastModeRef.current = fastMode; }, [fastMode]);
   const stepTimeoutsRef = useRef<number[]>([]);
+  const pendingSkipRef = useRef<(() => void) | null>(null);
   const clearStepTimeouts = useCallback(() => {
     stepTimeoutsRef.current.forEach((id) => clearTimeout(id));
     stepTimeoutsRef.current = [];
@@ -130,6 +131,13 @@ export default function KnowledgeChallenger() {
     const id = window.setTimeout(fn, Math.max(100, delayMs * scale));
     stepTimeoutsRef.current.push(id);
   }, []);
+  const skipCinematic = useCallback(() => {
+    const action = pendingSkipRef.current;
+    if (!action) return;
+    clearStepTimeouts();
+    action();
+    pendingSkipRef.current = null;
+  }, [clearStepTimeouts]);
 
   // Battle log expanded
   const [logExpanded, setLogExpanded] = useState(false);
@@ -338,8 +346,8 @@ export default function KnowledgeChallenger() {
       });
       // Player card already revealed → skip card_back / card_flip / card_reveal, jump to compare
       setBattleStep('intro');
-      scheduleStep(800, () => setBattleStep('compare'));
-      scheduleStep(1700, () => {
+      scheduleStep(1000, () => setBattleStep('compare'));
+      scheduleStep(2200, () => {
         setBattleStep('outcome');
         setGameState(newState);
         triggerPowerEffect(newState.lastAddedPower);
@@ -348,15 +356,34 @@ export default function KnowledgeChallenger() {
           triggerWinEffect('player');
         }
       });
-      scheduleStep(3000, () => {
+      scheduleStep(3800, () => {
         setBattleStep('none');
         setBattleSeq(null);
+        pendingSkipRef.current = null;
         if (newState.phase === 'ai_turn') processAITurnRef.current?.(newState);
         else if (newState.phase === 'game_over') {
           setShowGameOverOverlay(true);
           setTimeout(() => setScreen('result'), 2500);
         }
       });
+      // Skip action: finalize immediately
+      pendingSkipRef.current = () => {
+        setBattleStep('none');
+        setBattleSeq(null);
+        setGameState(newState);
+        triggerPowerEffect(newState.lastAddedPower);
+        if (attackerWins) {
+          triggerAttackSlide();
+          triggerWinEffect('player');
+        }
+        pendingSkipRef.current = null;
+        if (newState.phase === 'ai_turn') {
+          window.setTimeout(() => processAITurnRef.current?.(newState), 200);
+        } else if (newState.phase === 'game_over') {
+          setShowGameOverOverlay(true);
+          window.setTimeout(() => setScreen('result'), 2500);
+        }
+      };
     },
     [scheduleStep],
   );
@@ -486,14 +513,14 @@ export default function KnowledgeChallenger() {
     setBattleStep('intro');
     // Step 2: card_back (0.5s after intro)
     scheduleStep(1000, () => setBattleStep('card_back'));
-    // Step 3: card_flip (0.5s)
-    scheduleStep(1500, () => setBattleStep('card_flip'));
-    // Step 4: card_reveal (0.5s)
-    scheduleStep(2000, () => setBattleStep('card_reveal'));
-    // Step 5: compare (0.7s)
-    scheduleStep(2700, () => setBattleStep('compare'));
-    // Step 6: outcome — apply state + effects
-    scheduleStep(3700, () => {
+    // Step 3: card_flip (0.6s)
+    scheduleStep(1600, () => setBattleStep('card_flip'));
+    // Step 4: card_reveal (0.6s)
+    scheduleStep(2200, () => setBattleStep('card_reveal'));
+    // Step 5: compare (1.5s)
+    scheduleStep(3000, () => setBattleStep('compare'));
+    // Step 6: outcome — apply state + effects (2s)
+    scheduleStep(4500, () => {
       setBattleStep('outcome');
       setGameState(result);
       setAiPowerPopKey((k) => k + 1);
@@ -503,15 +530,33 @@ export default function KnowledgeChallenger() {
       }
     });
     // Cleanup cinematic
-    scheduleStep(5200, () => {
+    scheduleStep(6500, () => {
       setBattleStep('none');
       setBattleSeq(null);
       setAiAnimating(false);
+      pendingSkipRef.current = null;
       if (result.phase === 'game_over') {
         setShowGameOverOverlay(true);
         setTimeout(() => setScreen('result'), 2500);
       }
     });
+    // Skip action: jump straight to outcome
+    pendingSkipRef.current = () => {
+      setBattleStep('none');
+      setBattleSeq(null);
+      setGameState(result);
+      setAiPowerPopKey((k) => k + 1);
+      if (attackerWins) {
+        triggerAttackSlide();
+        triggerWinEffect('ai');
+      }
+      setAiAnimating(false);
+      pendingSkipRef.current = null;
+      if (result.phase === 'game_over') {
+        setShowGameOverOverlay(true);
+        window.setTimeout(() => setScreen('result'), 2500);
+      }
+    };
   }, [scheduleStep]);
 
   // Keep the ref in sync so runPlayerCinematic can call it without circular deps
@@ -791,6 +836,13 @@ export default function KnowledgeChallenger() {
       {/* ===== Step-by-step Battle Cinematic ===== */}
       {battleStep !== 'none' && battleSeq && (
         <div className="kc-cinematic-layer">
+          <button
+            onClick={skipCinematic}
+            className="kc-cinematic-skip"
+            style={{ pointerEvents: 'auto' }}
+          >
+            ⏭ スキップ
+          </button>
           <div className={`kc-cinematic-box kc-cinematic-${battleSeq.attackerSide}`}>
             {battleStep === 'intro' && (
               <div className="kc-cine-intro">
@@ -937,16 +989,16 @@ export default function KnowledgeChallenger() {
         }}
       >
         <div className="flex items-center gap-2">
-          <button onClick={() => navigate('/games')} className="text-amber-200/35 text-sm hover:text-amber-200/60">
+          <button onClick={() => navigate('/games')} className="text-amber-200/60 text-xl font-black hover:text-amber-200 px-2">
             ✕
           </button>
           <button
             onClick={() => setFastMode((v) => !v)}
-            className="text-[10px] font-bold px-2 py-1 rounded-md transition-all"
+            className="text-xs font-black px-2.5 py-1.5 rounded-lg transition-all"
             style={{
-              background: fastMode ? 'rgba(255,215,0,0.2)' : 'rgba(255,255,255,0.05)',
-              border: `1px solid ${fastMode ? 'rgba(255,215,0,0.5)' : 'rgba(255,255,255,0.15)'}`,
-              color: fastMode ? '#ffd700' : 'rgba(255,255,255,0.5)',
+              background: fastMode ? 'rgba(255,215,0,0.25)' : 'rgba(255,255,255,0.08)',
+              border: `2px solid ${fastMode ? 'rgba(255,215,0,0.6)' : 'rgba(255,255,255,0.2)'}`,
+              color: fastMode ? '#ffd700' : 'rgba(255,255,255,0.7)',
             }}
             title="演出の速度切替"
           >
@@ -955,30 +1007,31 @@ export default function KnowledgeChallenger() {
         </div>
         <div className="flex items-center gap-3">
           <div className="text-center">
-            <p className="text-[8px] text-amber-200/35">ラウンド</p>
-            <p className="text-sm font-bold" style={{ color: '#ffd700' }}>{gameState.round}</p>
+            <p className="text-[10px] font-bold text-amber-200/50">ラウンド</p>
+            <p className="text-xl font-black" style={{ color: '#ffd700', textShadow: '0 0 8px rgba(255,215,0,0.5), 0 1px 2px rgba(0,0,0,0.9)' }}>{gameState.round}</p>
           </div>
           <div
-            className="flex items-center gap-1 px-2 py-1 rounded-full"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full"
             style={{
-              background: gameState.flagHolder === 'player' ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)',
-              border: `1px solid ${gameState.flagHolder === 'player' ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)'}`,
+              background: gameState.flagHolder === 'player' ? 'rgba(34,197,94,0.25)' : 'rgba(239,68,68,0.25)',
+              border: `2px solid ${gameState.flagHolder === 'player' ? 'rgba(34,197,94,0.6)' : 'rgba(239,68,68,0.6)'}`,
+              boxShadow: `0 0 12px ${gameState.flagHolder === 'player' ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)'}`,
             }}
           >
-            <span className="text-sm">🚩</span>
-            <span className="text-[10px] font-bold" style={{ color: gameState.flagHolder === 'player' ? '#22c55e' : '#ef4444' }}>
+            <span className="text-lg">🚩</span>
+            <span className="text-sm font-black" style={{ color: gameState.flagHolder === 'player' ? '#4ade80' : '#ff6b6b', textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}>
               {gameState.flagHolder === 'player' ? 'あなた' : 'AI'}
             </span>
           </div>
         </div>
         <div className="flex items-center gap-3">
           <div className="text-center">
-            <p className="text-[8px] text-amber-200/35">山札</p>
-            <p className={`text-sm font-bold ${gameState.player.deck.length === 0 ? 'kc-deck-empty' : 'text-amber-100'}`}>{gameState.player.deck.length}</p>
+            <p className="text-[10px] font-bold text-amber-200/50">山札</p>
+            <p className={`text-xl font-black ${gameState.player.deck.length === 0 ? 'kc-deck-empty' : 'text-amber-100'}`} style={{ textShadow: '0 1px 2px rgba(0,0,0,0.9)' }}>{gameState.player.deck.length}</p>
           </div>
           <div className="text-center relative">
-            <p className="text-[8px] text-amber-200/35">ALT</p>
-            <p className="text-sm font-bold" style={{ color: '#ffd700' }}>
+            <p className="text-[10px] font-bold text-amber-200/50">ALT</p>
+            <p className="text-lg font-black" style={{ color: '#ffd700', textShadow: '0 0 6px rgba(255,215,0,0.4), 0 1px 2px rgba(0,0,0,0.9)' }}>
               {altBalance !== null ? altBalance.toLocaleString() : '---'}
             </p>
             {altRewardPopup && (
@@ -988,18 +1041,18 @@ export default function KnowledgeChallenger() {
                 style={{ animation: 'kcAltRewardFloat 2.5s ease-out forwards', transform: 'translateX(-50%)' }}
               >
                 <div className="rounded-lg px-2.5 py-1.5" style={{
-                  background: 'linear-gradient(135deg, rgba(255,215,0,0.25), rgba(255,170,0,0.2))',
-                  border: '1px solid rgba(255,215,0,0.5)',
-                  boxShadow: '0 0 16px rgba(255,215,0,0.3)',
+                  background: 'linear-gradient(135deg, rgba(255,215,0,0.3), rgba(255,170,0,0.25))',
+                  border: '1.5px solid rgba(255,215,0,0.6)',
+                  boxShadow: '0 0 20px rgba(255,215,0,0.4)',
                 }}>
-                  <span className="text-sm font-black" style={{ color: '#ffd700', textShadow: '0 0 8px rgba(255,215,0,0.5)' }}>
+                  <span className="text-base font-black" style={{ color: '#ffd700', textShadow: '0 0 10px rgba(255,215,0,0.6)' }}>
                     +{altRewardPopup.alt} ALT
                   </span>
-                  {altRewardPopup.streak && <span className="text-[9px] ml-1 font-bold text-orange-300">連続ボーナス!</span>}
-                  {altRewardPopup.rarity && <span className="text-[9px] ml-1 font-bold text-purple-300">高難度!</span>}
+                  {altRewardPopup.streak && <span className="text-xs ml-1 font-black text-orange-300">連続ボーナス!</span>}
+                  {altRewardPopup.rarity && <span className="text-xs ml-1 font-black text-purple-300">高難度!</span>}
                 </div>
                 {altRewardPopup.xp > 0 && (
-                  <p className="text-[9px] text-green-400 font-bold mt-0.5 text-center">+{altRewardPopup.xp} XP</p>
+                  <p className="text-xs text-green-400 font-bold mt-0.5 text-center">+{altRewardPopup.xp} XP</p>
                 )}
               </div>
             )}
@@ -1007,51 +1060,67 @@ export default function KnowledgeChallenger() {
         </div>
       </div>
 
-      {/* Turn Banner + Streak/XP */}
-      <div
-        className="px-3 py-1.5 flex items-center justify-between shrink-0"
-        style={{
-          background: isPlayerAttacking
-            ? 'linear-gradient(90deg, rgba(34,197,94,0.08), rgba(0,0,0,0.25), rgba(34,197,94,0.08))'
-            : aiAnimating
-              ? 'linear-gradient(90deg, rgba(239,68,68,0.08), rgba(0,0,0,0.25), rgba(239,68,68,0.08))'
-              : 'linear-gradient(90deg, rgba(100,180,255,0.08), rgba(0,0,0,0.25), rgba(100,180,255,0.08))',
-          borderBottom: '1px solid rgba(255,215,0,0.08)',
-        }}
-      >
-        <div className="flex items-center gap-2">
-          {aiAnimating ? (
-            <span className="text-[10px] font-bold text-red-400 kc-pulse-text">🤖 AI攻撃中...</span>
-          ) : gameState.phase === 'quiz' ? (
-            <span className="text-[10px] font-bold text-amber-200">❓ クイズ！</span>
-          ) : isPlayerAttacking ? (
-            <span className="text-[10px] font-bold text-green-400">🗡️ あなたの攻撃</span>
-          ) : (
-            <span className="text-[10px] font-bold text-blue-400">🛡️ あなたの防衛</span>
-          )}
-          {consecutiveCorrect >= 2 && (
-            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: 'rgba(255,170,0,0.2)', color: '#ffaa00', border: '1px solid rgba(255,170,0,0.3)' }}>
-              🔥 {consecutiveCorrect}連続!
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="text-[9px] text-amber-200/40">Lv.{xpLevel}</span>
-          <span className="text-[9px] text-amber-200/40">XP: {xpTotal}</span>
-        </div>
-      </div>
+      {/* ===== Big Turn Banner ===== */}
+      {(() => {
+        const isQuiz = gameState.phase === 'quiz';
+        const turnType: 'ai' | 'attack' | 'defense' | 'quiz' = aiAnimating ? 'ai' : isQuiz ? 'quiz' : isPlayerAttacking ? 'attack' : 'defense';
+        const bannerBg = turnType === 'ai'
+          ? 'linear-gradient(90deg, rgba(239,68,68,0.35), rgba(180,30,30,0.55), rgba(239,68,68,0.35))'
+          : turnType === 'attack'
+            ? 'linear-gradient(90deg, rgba(34,197,94,0.35), rgba(20,140,60,0.55), rgba(34,197,94,0.35))'
+            : turnType === 'quiz'
+              ? 'linear-gradient(90deg, rgba(255,170,0,0.3), rgba(255,140,0,0.5), rgba(255,170,0,0.3))'
+              : 'linear-gradient(90deg, rgba(100,180,255,0.3), rgba(40,100,200,0.55), rgba(100,180,255,0.3))';
+        const borderCol = turnType === 'ai' ? 'rgba(239,68,68,0.7)' : turnType === 'attack' ? 'rgba(34,197,94,0.7)' : turnType === 'quiz' ? 'rgba(255,170,0,0.7)' : 'rgba(100,180,255,0.7)';
+        const label = turnType === 'ai' ? '🤖 相手の攻撃！' : turnType === 'quiz' ? '❓ クイズ出題中！' : turnType === 'attack' ? '🗡️ あなたの攻撃！' : '🛡️ あなたの防衛！';
+        const textColor = turnType === 'ai' ? '#ff6b6b' : turnType === 'attack' ? '#4ade80' : turnType === 'quiz' ? '#ffcc44' : '#5fb8ff';
+        return (
+          <div
+            className="px-4 py-3 flex items-center justify-between shrink-0 relative"
+            style={{
+              background: bannerBg,
+              borderTop: `2px solid ${borderCol}`,
+              borderBottom: `2px solid ${borderCol}`,
+              boxShadow: `inset 0 0 20px ${borderCol}33`,
+            }}
+          >
+            <div className="flex items-center gap-3 flex-1 justify-center">
+              <span
+                className={`font-black tracking-wider ${turnType === 'ai' ? 'kc-pulse-text' : ''}`}
+                style={{
+                  fontSize: '1.75rem',
+                  color: textColor,
+                  textShadow: `0 0 20px ${textColor}88, 0 3px 0 rgba(0,0,0,0.8), 0 0 8px ${textColor}`,
+                  letterSpacing: '0.05em',
+                }}
+              >
+                {label}
+              </span>
+              {consecutiveCorrect >= 2 && (
+                <span className="font-black px-2.5 py-1 rounded-lg" style={{ fontSize: '0.9rem', background: 'rgba(255,170,0,0.3)', color: '#ffaa00', border: '2px solid rgba(255,170,0,0.6)', textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}>
+                  🔥 {consecutiveCorrect}連続!
+                </span>
+              )}
+            </div>
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex flex-col items-end gap-0.5">
+              <span className="text-xs font-bold text-amber-200/70">Lv.{xpLevel}</span>
+              <span className="text-[10px] text-amber-200/50">XP:{xpTotal}</span>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* AI Bench */}
       <BenchDisplay side="ai" bench={gameState.ai.bench} deckCount={gameState.ai.deck.length} isDanger={aiBenchDanger} allCategories={allCategories} />
 
       {/* Battle Field */}
-      <div className="flex-1 flex flex-col items-center justify-center px-4 gap-1 relative min-h-0 overflow-hidden">
+      <div className="flex-1 flex flex-col items-center justify-center px-3 gap-2 relative min-h-0 overflow-hidden py-2">
         {/* AI Side */}
         <div className={`text-center relative ${attackSlide && gameState.winningCardSide === 'ai' ? 'kc-attack-slide-down' : ''}`}>
           {!isPlayerAttacking && gameState.aiAttackCards.length > 0 && (
-            <div className="relative inline-block mb-1" style={{ height: `${Math.min(130, 90 + (gameState.aiAttackCards.length - 1) * 8)}px`, width: `${Math.min(150, 100 + (gameState.aiAttackCards.length - 1) * 5)}px` }}>
+            <div className="relative inline-block mb-2" style={{ height: `${Math.min(200, 150 + (gameState.aiAttackCards.length - 1) * 12)}px`, width: `${Math.min(220, 140 + (gameState.aiAttackCards.length - 1) * 8)}px` }}>
               {gameState.aiAttackCards.map((card, i) => (
-                <div key={card.id + '-' + i} className="absolute" style={{ top: `${i * 8}px`, left: `${i * 4}px`, zIndex: i + 1, transform: `rotate(${(i - Math.floor(gameState.aiAttackCards.length / 2)) * 2}deg)`, transition: 'all 0.4s ease-out' }}>
+                <div key={card.id + '-' + i} className="absolute" style={{ top: `${i * 12}px`, left: `${i * 6}px`, zIndex: i + 1, transform: `rotate(${(i - Math.floor(gameState.aiAttackCards.length / 2)) * 2}deg)`, transition: 'all 0.4s ease-out' }}>
                   <CardDisplay card={card} size="sm" />
                 </div>
               ))}
@@ -1064,17 +1133,17 @@ export default function KnowledgeChallenger() {
             </div>
           )}
           {gameState.aiAttackTotal > 0 && !isPlayerAttacking && (
-            <p key={aiPowerPopKey} className="text-xs font-bold text-red-400 mt-0.5 kc-power-pop">攻撃力: {gameState.aiAttackTotal}</p>
+            <p key={aiPowerPopKey} className="font-black text-red-400 mt-1 kc-power-pop" style={{ fontSize: '1.1rem', textShadow: '0 0 10px rgba(239,68,68,0.6), 0 1px 2px rgba(0,0,0,0.9)' }}>攻撃力: {gameState.aiAttackTotal}</p>
           )}
         </div>
 
         {/* Center Flag & VS */}
-        <div className="flex items-center gap-2 w-full max-w-xs relative">
-          <div className="h-px flex-1" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,215,0,0.3))' }} />
-          <div className={`kc-flag-center ${flagFlash ? 'kc-flag-pulse' : ''} ${flagMoveAnim === 'toPlayer' ? 'kc-flag-move-to-player' : flagMoveAnim === 'toAi' ? 'kc-flag-move-to-ai' : ''}`}>
-            <span className={`text-lg inline-block ${flagMoveAnim ? 'kc-flag-wave' : ''}`}>🚩</span>
+        <div className="flex items-center gap-3 w-full max-w-sm relative">
+          <div className="h-0.5 flex-1" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,215,0,0.5))' }} />
+          <div className={`kc-flag-big ${gameState.flagHolder === 'player' ? 'kc-flag-big-player' : 'kc-flag-big-ai'} ${flagFlash ? 'kc-flag-pulse' : ''} ${flagMoveAnim === 'toPlayer' ? 'kc-flag-move-to-player' : flagMoveAnim === 'toAi' ? 'kc-flag-move-to-ai' : ''}`}>
+            <span className={`text-4xl inline-block ${flagMoveAnim ? 'kc-flag-wave' : ''}`}>🚩</span>
           </div>
-          <div className="h-px flex-1" style={{ background: 'linear-gradient(90deg, rgba(255,215,0,0.3), transparent)' }} />
+          <div className="h-0.5 flex-1" style={{ background: 'linear-gradient(90deg, rgba(255,215,0,0.5), transparent)' }} />
         </div>
 
         {/* Power Comparison Bar */}
@@ -1085,9 +1154,9 @@ export default function KnowledgeChallenger() {
         {/* Player Side */}
         <div className={`text-center relative ${attackSlide && gameState.winningCardSide === 'player' ? 'kc-attack-slide-up' : ''}`}>
           {isPlayerAttacking && gameState.playerAttackCards.length > 0 && (
-            <div className="relative inline-block mb-1" style={{ height: `${Math.min(130, 90 + (gameState.playerAttackCards.length - 1) * 10)}px`, width: `${Math.min(150, 100 + (gameState.playerAttackCards.length - 1) * 5)}px` }}>
+            <div className="relative inline-block mb-2" style={{ height: `${Math.min(200, 150 + (gameState.playerAttackCards.length - 1) * 14)}px`, width: `${Math.min(220, 140 + (gameState.playerAttackCards.length - 1) * 8)}px` }}>
               {gameState.playerAttackCards.map((card, i) => (
-                <div key={card.id + '-stack-' + i} className="absolute" style={{ top: `${i * 10}px`, left: `${i * 5}px`, zIndex: i + 1, transform: `rotate(${(i - Math.floor(gameState.playerAttackCards.length / 2)) * 2.5}deg)`, transition: 'all 0.4s ease-out', animation: 'kcCardStackIn 0.4s ease-out' }}>
+                <div key={card.id + '-stack-' + i} className="absolute" style={{ top: `${i * 14}px`, left: `${i * 8}px`, zIndex: i + 1, transform: `rotate(${(i - Math.floor(gameState.playerAttackCards.length / 2)) * 2.5}deg)`, transition: 'all 0.4s ease-out', animation: 'kcCardStackIn 0.4s ease-out' }}>
                   <CardDisplay card={card} size="sm" />
                 </div>
               ))}
@@ -1118,45 +1187,57 @@ export default function KnowledgeChallenger() {
 
         {/* Quiz Phase */}
         {gameState.phase === 'quiz' && gameState.playerCard && selectedQuiz && (
-          <div className="w-full max-w-sm mt-1">
+          <div className="w-full max-w-md mt-2">
             {showCardReveal ? (
               <div className="text-center kc-card-reveal">
                 <CardDisplay card={gameState.playerCard} />
               </div>
             ) : (
               <>
-                <div className="flex items-center justify-center gap-2 mb-1.5">
+                <div className="flex items-center justify-center gap-2 mb-2">
                   <CardMini card={gameState.playerCard} />
-                  <span className="text-[10px] text-amber-200/40">のクイズ！</span>
+                  <span className="text-sm font-bold text-amber-200/70">のクイズ！</span>
                 </div>
-                <div className="rounded-xl p-3" style={{ background: 'linear-gradient(135deg, rgba(21,29,59,0.95), rgba(14,20,45,0.95))', border: '1.5px solid rgba(255,215,0,0.25)' }}>
+                <div className="rounded-2xl p-4" style={{ background: 'linear-gradient(135deg, rgba(21,29,59,0.98), rgba(14,20,45,0.98))', border: '2px solid rgba(255,215,0,0.4)', boxShadow: '0 8px 32px rgba(0,0,0,0.6), 0 0 24px rgba(255,215,0,0.15)' }}>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] text-amber-200/40">制限時間</span>
-                    <span className={`text-sm font-bold ${quizTimer <= 3 ? 'text-red-400' : 'text-amber-100'}`}>{quizTimer}秒</span>
+                    <span className="text-sm font-bold text-amber-200/70">⏱ 制限時間</span>
+                    <span className={`text-2xl font-black ${quizTimer <= 3 ? 'text-red-400 kc-pulse-text' : 'text-amber-100'}`} style={{ textShadow: '0 2px 4px rgba(0,0,0,0.9)' }}>{quizTimer}秒</span>
                   </div>
-                  <div className="h-1 rounded-full mb-3" style={{ background: 'rgba(255,255,255,0.05)' }}>
-                    <div className="h-full rounded-full transition-all duration-1000" style={{ width: `${(quizTimer / 10) * 100}%`, background: quizTimer <= 3 ? '#ef4444' : '#ffd700' }} />
+                  <div className="h-2 rounded-full mb-4" style={{ background: 'rgba(255,255,255,0.08)' }}>
+                    <div className="h-full rounded-full transition-all duration-1000" style={{ width: `${(quizTimer / 10) * 100}%`, background: quizTimer <= 3 ? '#ef4444' : '#ffd700', boxShadow: quizTimer <= 3 ? '0 0 10px rgba(239,68,68,0.6)' : '0 0 10px rgba(255,215,0,0.5)' }} />
                   </div>
-                  <p className="text-amber-100 text-sm font-bold mb-3 leading-relaxed">{selectedQuiz.question}</p>
-                  <div className="space-y-2">
+                  <p className="text-white font-black mb-4 leading-relaxed text-center" style={{ fontSize: '1.3rem', textShadow: '0 2px 6px rgba(0,0,0,0.9)' }}>{selectedQuiz.question}</p>
+                  <div className="space-y-2.5">
                     {selectedQuiz.choices.map((choice, i) => {
-                      let btnStyle: React.CSSProperties = { background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' };
+                      let btnStyle: React.CSSProperties = { background: 'rgba(255,255,255,0.06)', border: '2px solid rgba(255,255,255,0.15)' };
                       if (showResult) {
-                        if (i === selectedQuiz.correctIndex) btnStyle = { background: 'rgba(34,197,94,0.2)', border: '1px solid rgba(34,197,94,0.5)' };
-                        else if (i === selectedAnswer && i !== selectedQuiz.correctIndex) btnStyle = { background: 'rgba(239,68,68,0.2)', border: '1px solid rgba(239,68,68,0.5)' };
+                        if (i === selectedQuiz.correctIndex) btnStyle = { background: 'rgba(34,197,94,0.3)', border: '2px solid rgba(34,197,94,0.8)' };
+                        else if (i === selectedAnswer && i !== selectedQuiz.correctIndex) btnStyle = { background: 'rgba(239,68,68,0.3)', border: '2px solid rgba(239,68,68,0.8)' };
                       }
                       return (
-                        <button key={i} onClick={() => handleAnswer(i)} disabled={selectedAnswer !== null} className="w-full text-left px-3 py-2.5 rounded-lg text-sm transition-all active:scale-[0.98]" style={{ ...btnStyle, color: showResult && i === selectedQuiz.correctIndex ? '#22c55e' : showResult && i === selectedAnswer ? '#ef4444' : 'rgba(255,255,255,0.8)' }}>
-                          <span className="text-amber-200/30 mr-2 text-xs">{['A', 'B', 'C', 'D'][i]}</span>
-                          {choice}
+                        <button
+                          key={i}
+                          onClick={() => handleAnswer(i)}
+                          disabled={selectedAnswer !== null}
+                          className="w-full text-left px-4 rounded-xl font-bold transition-all active:scale-[0.97] flex items-center gap-3"
+                          style={{
+                            ...btnStyle,
+                            minHeight: '62px',
+                            fontSize: '1.05rem',
+                            color: showResult && i === selectedQuiz.correctIndex ? '#4ade80' : showResult && i === selectedAnswer ? '#ff6b6b' : 'rgba(255,255,255,0.95)',
+                            textShadow: '0 1px 3px rgba(0,0,0,0.8)',
+                          }}
+                        >
+                          <span className="font-black px-2.5 py-1 rounded-lg shrink-0" style={{ background: 'rgba(255,215,0,0.2)', color: '#ffd700', fontSize: '1rem' }}>{['A', 'B', 'C', 'D'][i]}</span>
+                          <span className="flex-1">{choice}</span>
                         </button>
                       );
                     })}
                   </div>
                   {showResult && (
-                    <div className="mt-2 text-center">
-                      <span className={`text-sm font-bold ${selectedAnswer === selectedQuiz.correctIndex ? 'text-green-400' : 'text-red-400'}`}>
-                        {selectedAnswer === selectedQuiz.correctIndex ? '正解！パワーアップ！' : selectedAnswer === -1 ? '時間切れ...' : '不正解...'}
+                    <div className="mt-3 text-center kc-quiz-result-pop">
+                      <span className={`font-black ${selectedAnswer === selectedQuiz.correctIndex ? 'text-green-400' : 'text-red-400'}`} style={{ fontSize: '1.5rem', textShadow: '0 0 16px currentColor, 0 2px 4px rgba(0,0,0,0.9)' }}>
+                        {selectedAnswer === selectedQuiz.correctIndex ? '✨ 正解！パワーアップ！ ✨' : selectedAnswer === -1 ? '⏱ 時間切れ...' : '❌ 不正解...'}
                       </span>
                     </div>
                   )}
@@ -1221,6 +1302,24 @@ export default function KnowledgeChallenger() {
         .kc-flag-flash { position: absolute; inset: 0; z-index: 50; pointer-events: none; animation: kcFlagFlash 1.5s ease-out forwards; }
         @keyframes kcFlagFlash { 0% { background: rgba(255,215,0,0.3); } 30% { background: rgba(255,215,0,0.15); } 100% { background: transparent; } }
         .kc-flag-center { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: rgba(255,215,0,0.1); border: 2px solid rgba(255,215,0,0.3); flex-shrink: 0; }
+        .kc-flag-big {
+          width: 80px; height: 80px;
+          display: flex; align-items: center; justify-content: center;
+          border-radius: 50%;
+          border: 4px solid;
+          flex-shrink: 0;
+          transition: background 0.4s, border-color 0.4s, box-shadow 0.4s;
+        }
+        .kc-flag-big-player {
+          background: radial-gradient(circle, rgba(34,197,94,0.3), rgba(34,197,94,0.08));
+          border-color: rgba(34,197,94,0.8);
+          box-shadow: 0 0 24px rgba(34,197,94,0.5), inset 0 0 16px rgba(34,197,94,0.2);
+        }
+        .kc-flag-big-ai {
+          background: radial-gradient(circle, rgba(239,68,68,0.3), rgba(239,68,68,0.08));
+          border-color: rgba(239,68,68,0.8);
+          box-shadow: 0 0 24px rgba(239,68,68,0.5), inset 0 0 16px rgba(239,68,68,0.2);
+        }
         .kc-flag-pulse { animation: kcFlagPulse 1s ease-out; }
         @keyframes kcFlagPulse { 0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255,215,0,0.5); } 50% { transform: scale(1.3); box-shadow: 0 0 20px 10px rgba(255,215,0,0.3); } 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255,215,0,0); } }
         .kc-attack-slide-up { animation: kcSlideUp 0.5s ease-out; }
@@ -1592,9 +1691,41 @@ export default function KnowledgeChallenger() {
           position: absolute; inset: 0; z-index: 90;
           display: flex; align-items: center; justify-content: center;
           pointer-events: none;
-          background: rgba(0,0,0,0.55);
-          backdrop-filter: blur(2px);
+          background: rgba(0,0,0,0.7);
+          backdrop-filter: blur(3px);
           animation: kcCineLayer 0.3s ease-out;
+        }
+        .kc-cinematic-skip {
+          position: absolute; top: 16px; right: 16px;
+          padding: 10px 18px;
+          border-radius: 12px;
+          background: rgba(255,215,0,0.2);
+          border: 2px solid rgba(255,215,0,0.6);
+          color: #ffd700;
+          font-size: 0.95rem; font-weight: 900;
+          text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+          box-shadow: 0 4px 14px rgba(0,0,0,0.6), 0 0 16px rgba(255,215,0,0.25);
+          cursor: pointer;
+          transition: all 0.15s ease-out;
+          z-index: 95;
+        }
+        .kc-cinematic-skip:hover { background: rgba(255,215,0,0.35); transform: scale(1.05); }
+        .kc-cinematic-skip:active { transform: scale(0.96); }
+        .kc-warn-pulse { animation: kcWarnPulse 0.9s ease-in-out infinite; }
+        @keyframes kcWarnPulse {
+          0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239,68,68,0.5); }
+          50%      { transform: scale(1.06); box-shadow: 0 0 0 4px rgba(239,68,68,0); }
+        }
+        .kc-bench-warning { animation: kcBenchWarn 1s ease-in-out infinite; }
+        @keyframes kcBenchWarn {
+          0%, 100% { background: rgba(239,68,68,0.08); }
+          50%      { background: rgba(239,68,68,0.18); }
+        }
+        .kc-quiz-result-pop { animation: kcQuizResultPop 0.5s cubic-bezier(.17,.67,.35,1.4) both; }
+        @keyframes kcQuizResultPop {
+          0%   { opacity: 0; transform: scale(0.4); }
+          55%  { opacity: 1; transform: scale(1.2); }
+          100% { opacity: 1; transform: scale(1); }
         }
         @keyframes kcCineLayer { 0% { opacity: 0; } 100% { opacity: 1; } }
         .kc-cinematic-box {
@@ -1722,17 +1853,18 @@ export default function KnowledgeChallenger() {
           100% { opacity: 1; transform: translateY(0); }
         }
         .kc-cine-compare-title {
-          font-size: 0.9rem; font-weight: 900;
-          color: #ffd700; margin-bottom: 10px;
-          text-shadow: 0 0 8px rgba(255,215,0,0.5);
+          font-size: 1.3rem; font-weight: 900;
+          color: #ffd700; margin-bottom: 16px;
+          text-shadow: 0 0 10px rgba(255,215,0,0.6), 0 2px 0 rgba(0,0,0,0.5);
+          letter-spacing: 0.04em;
         }
         .kc-cine-compare-row {
-          display: flex; align-items: center; justify-content: center; gap: 18px;
+          display: flex; align-items: center; justify-content: center; gap: 22px;
         }
         .kc-cine-side {
-          min-width: 80px;
-          padding: 10px 14px;
-          border-radius: 12px;
+          min-width: 110px;
+          padding: 14px 18px;
+          border-radius: 16px;
         }
         .kc-cine-side-player {
           background: rgba(34,197,94,0.12);
@@ -1743,14 +1875,16 @@ export default function KnowledgeChallenger() {
           border: 2px solid rgba(239,68,68,0.4);
         }
         .kc-cine-label {
-          font-size: 0.7rem; font-weight: 700;
-          color: rgba(255,255,255,0.6);
-          margin-bottom: 4px;
+          font-size: 1rem; font-weight: 900;
+          color: rgba(255,255,255,0.85);
+          margin-bottom: 6px;
+          text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+          letter-spacing: 0.05em;
         }
         .kc-cine-num {
-          font-size: 2.2rem; font-weight: 900;
+          font-size: 3.5rem; font-weight: 900;
           color: #ffd700;
-          text-shadow: 0 0 12px rgba(255,215,0,0.6), 0 2px 0 rgba(0,0,0,0.5);
+          text-shadow: 0 0 18px rgba(255,215,0,0.7), 0 3px 0 rgba(0,0,0,0.6);
           line-height: 1;
           animation: kcCineNumPop 0.5s cubic-bezier(.17,.67,.35,1.4) both;
         }
@@ -1760,10 +1894,11 @@ export default function KnowledgeChallenger() {
           100% { opacity: 1; transform: scale(1); }
         }
         .kc-cine-vs {
-          font-size: 1.2rem; font-weight: 900;
+          font-size: 2rem; font-weight: 900;
           color: #ff8c00;
-          text-shadow: 0 0 10px rgba(255,140,0,0.7);
+          text-shadow: 0 0 14px rgba(255,140,0,0.9), 0 3px 0 rgba(0,0,0,0.6);
           animation: kcCineVsPulse 0.8s ease-in-out infinite;
+          letter-spacing: 0.04em;
         }
         @keyframes kcCineVsPulse {
           0%, 100% { transform: scale(1); opacity: 1; }
@@ -1863,29 +1998,43 @@ function BenchDisplay({ side, bench, deckCount, isDanger, allCategories }: {
   const labelColor = isPlayer ? '#22c55e' : '#ef4444';
   const emptySlots = 5 - bench.length;
   const isFull = bench.length >= 5;
+  const isWarning = emptySlots <= 2 && emptySlots > 0;
   const benchMap = new Map(bench.map(s => [s.category, s]));
   return (
-    <div className={`px-3 py-1.5 shrink-0 ${isFull ? 'kc-bench-full' : isDanger ? 'kc-bench-danger' : ''}`} style={{ borderTop: isPlayer ? '1px solid rgba(255,215,0,0.1)' : 'none', borderBottom: !isPlayer ? '1px solid rgba(255,215,0,0.1)' : 'none', background: isFull ? 'rgba(239,68,68,0.12)' : isDanger ? 'rgba(239,68,68,0.05)' : 'transparent' }}>
-      <div className="flex items-center justify-between mb-1">
+    <div className={`px-3 py-2 shrink-0 ${isFull ? 'kc-bench-full' : isWarning ? 'kc-bench-warning' : ''}`} style={{ borderTop: isPlayer ? '2px solid rgba(255,215,0,0.15)' : 'none', borderBottom: !isPlayer ? '2px solid rgba(255,215,0,0.15)' : 'none', background: isFull ? 'rgba(239,68,68,0.15)' : isWarning ? 'rgba(239,68,68,0.08)' : 'rgba(0,0,0,0.25)' }}>
+      <div className="flex items-center justify-between mb-1.5">
         <div className="flex items-center gap-2">
-          <span className="text-[10px] font-bold" style={{ color: labelColor }}>{label}</span>
-          <span className="text-[9px] text-amber-200/30">山札: {deckCount}</span>
+          <span className="text-base font-black" style={{ color: labelColor, textShadow: `0 0 8px ${labelColor}66, 0 1px 2px rgba(0,0,0,0.8)` }}>{label}</span>
+          <span className="text-sm font-bold text-amber-200/70">山札: <span className="text-amber-100">{deckCount}</span></span>
         </div>
-        <div className="flex items-center gap-1">
-          <span className={`text-[9px] font-bold ${isDanger ? 'text-red-400' : 'text-amber-200/40'}`}>ベンチ {bench.length}/5</span>
-          {isDanger && <span className="text-[9px] text-red-400 font-bold">⚠️</span>}
-          {emptySlots > 0 && <span className="text-[8px] text-amber-200/25">残り{emptySlots}枠</span>}
+        <div className="flex items-center gap-2">
+          <span className={`text-base font-black ${isWarning || isFull ? 'text-red-400' : 'text-amber-100'}`} style={{ textShadow: '0 1px 2px rgba(0,0,0,0.9)' }}>
+            ベンチ {bench.length}/5
+          </span>
+          {emptySlots > 0 ? (
+            <span className={`text-sm font-black px-2 py-0.5 rounded ${isWarning ? 'kc-warn-pulse' : ''}`} style={{ background: isWarning ? 'rgba(239,68,68,0.3)' : 'rgba(255,215,0,0.15)', color: isWarning ? '#ff6666' : '#ffd700', border: `1.5px solid ${isWarning ? 'rgba(239,68,68,0.6)' : 'rgba(255,215,0,0.3)'}`, textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}>
+              残り{emptySlots}枠{isWarning && ' ⚠️'}
+            </span>
+          ) : (
+            <span className="text-sm font-black px-2 py-0.5 rounded kc-warn-pulse" style={{ background: 'rgba(239,68,68,0.4)', color: '#fff', border: '1.5px solid rgba(239,68,68,0.8)' }}>
+              満杯！
+            </span>
+          )}
         </div>
       </div>
-      <div className="flex gap-1">
+      <div className="flex gap-1.5">
         {allCategories.map((cat) => {
           const catInfo = CATEGORY_INFO[cat as keyof typeof CATEGORY_INFO];
           const slot = benchMap.get(cat);
           const filled = !!slot;
           return (
-            <div key={cat} className="flex-1 rounded px-1 py-0.5 text-center" style={{ background: filled ? `${catInfo.color}18` : 'rgba(255,255,255,0.03)', border: `1px solid ${filled ? `${catInfo.color}44` : 'rgba(255,255,255,0.06)'}`, opacity: filled ? 1 : 0.5 }}>
-              <span className="text-[10px] block">{catInfo.emoji}</span>
-              {filled ? <span className="text-[8px] font-bold block" style={{ color: catInfo.color }}>{slot!.cards.length}枚</span> : <span className="text-[7px] text-amber-200/20 block">---</span>}
+            <div key={cat} className="flex-1 rounded-lg px-1 py-1.5 text-center relative" style={{ background: filled ? `${catInfo.color}22` : 'rgba(255,255,255,0.04)', border: `1.5px solid ${filled ? `${catInfo.color}66` : 'rgba(255,255,255,0.08)'}`, opacity: filled ? 1 : 0.55, minHeight: '46px' }}>
+              <span className="text-xl block leading-none">{catInfo.emoji}</span>
+              {filled ? (
+                <span className="text-xs font-black block mt-0.5" style={{ color: catInfo.color, textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}>{slot!.cards.length}枚</span>
+              ) : (
+                <span className="text-[10px] font-bold block mt-0.5 text-amber-200/30">空</span>
+              )}
             </div>
           );
         })}
@@ -1899,36 +2048,38 @@ function CardDisplay({ card, isDefense, isWinner, size }: { card: BattleCard; is
   const catInfo = CATEGORY_INFO[card.category];
   const rarInfo = RARITY_INFO[card.rarity];
   const [imgLoaded, setImgLoaded] = useState(false);
-  const w = size === 'sm' ? 80 : 140;
-  const h = size === 'sm' ? 100 : 175;
+  // 1.5x size upgrade
+  const w = size === 'sm' ? 120 : 200;
+  const h = size === 'sm' ? 150 : 260;
   return (
-    <div className={`inline-block rounded-xl p-0 relative overflow-hidden ${isWinner ? 'kc-win-glow' : ''} ${card.rarity === 'SSR' ? 'kc-card-ssr' : ''}`} style={{ background: 'linear-gradient(135deg, rgba(21,29,59,0.95), rgba(14,20,45,0.95))', border: `2px solid ${isWinner ? 'rgba(255,215,0,0.8)' : card.rarity === 'SSR' ? 'transparent' : isDefense ? 'rgba(100,180,255,0.5)' : `${catInfo.color}55`}`, boxShadow: isWinner ? '0 0 20px rgba(255,215,0,0.5), 0 0 40px rgba(255,215,0,0.2), 0 4px 16px rgba(0,0,0,0.4)' : card.rarity === 'SSR' ? '0 0 18px rgba(255,215,0,0.45), 0 0 32px rgba(236,72,153,0.25), 0 4px 16px rgba(0,0,0,0.4)' : isDefense ? '0 0 12px rgba(100,180,255,0.2), 0 4px 16px rgba(0,0,0,0.4)' : `0 4px 16px rgba(0,0,0,0.4), inset 0 0 20px ${catInfo.color}08`, width: `${w}px`, height: `${h}px` }}>
+    <div className={`inline-block rounded-xl p-0 relative overflow-hidden ${isWinner ? 'kc-win-glow' : ''} ${card.rarity === 'SSR' ? 'kc-card-ssr' : ''}`} style={{ background: 'linear-gradient(135deg, rgba(21,29,59,0.95), rgba(14,20,45,0.95))', border: `3px solid ${isWinner ? 'rgba(255,215,0,0.8)' : card.rarity === 'SSR' ? 'transparent' : isDefense ? 'rgba(100,180,255,0.5)' : `${catInfo.color}55`}`, boxShadow: isWinner ? '0 0 24px rgba(255,215,0,0.55), 0 0 48px rgba(255,215,0,0.25), 0 6px 20px rgba(0,0,0,0.5)' : card.rarity === 'SSR' ? '0 0 22px rgba(255,215,0,0.5), 0 0 38px rgba(236,72,153,0.3), 0 6px 20px rgba(0,0,0,0.5)' : isDefense ? '0 0 16px rgba(100,180,255,0.3), 0 6px 20px rgba(0,0,0,0.5)' : `0 6px 20px rgba(0,0,0,0.5), inset 0 0 24px ${catInfo.color}10`, width: `${w}px`, height: `${h}px` }}>
       {!imgLoaded && (
         <div className="absolute inset-0 flex items-center justify-center animate-pulse" style={{ background: `linear-gradient(135deg, ${catInfo.color}15, rgba(14,20,45,0.95))` }}>
-          <span className={`${size === 'sm' ? 'text-2xl' : 'text-4xl'} opacity-40`}>{catInfo.emoji}</span>
+          <span className={`${size === 'sm' ? 'text-4xl' : 'text-6xl'} opacity-40`}>{catInfo.emoji}</span>
         </div>
       )}
       {card.imageUrl && (
         <img src={card.imageUrl} alt={card.name} className={`w-full h-full object-cover transition-opacity duration-300 ${imgLoaded ? 'opacity-100' : 'opacity-0'}`} loading="eager" decoding="async" onLoad={() => setImgLoaded(true)} onError={() => setImgLoaded(true)} />
       )}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col justify-between p-1.5">
+      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent flex flex-col justify-between p-2">
         <div className="flex items-start justify-between">
-          <div className={size === 'sm' ? 'text-xs' : 'text-lg'}>{catInfo.emoji}</div>
-          {size !== 'sm' && <div className="px-1.5 py-0.5 rounded text-[8px] font-bold" style={{ background: rarInfo.bgColor, color: rarInfo.color }}>{rarInfo.label}</div>}
+          <div className={size === 'sm' ? 'text-xl' : 'text-3xl'}>{catInfo.emoji}</div>
+          {size !== 'sm' && <div className="px-2 py-0.5 rounded text-xs font-black" style={{ background: rarInfo.bgColor, color: rarInfo.color }}>{rarInfo.label}</div>}
+          {size === 'sm' && <div className="px-1.5 py-0.5 rounded text-[10px] font-black" style={{ background: rarInfo.bgColor, color: rarInfo.color }}>{rarInfo.label}</div>}
         </div>
         <div>
-          <p className={`font-bold text-amber-100 ${size === 'sm' ? 'text-[8px] leading-tight' : 'text-xs mb-0.5'}`}>{card.name}</p>
+          <p className={`font-black text-white drop-shadow-lg ${size === 'sm' ? 'text-sm leading-tight mb-0.5' : 'text-lg leading-tight mb-1'}`} style={{ textShadow: '0 2px 6px rgba(0,0,0,0.95), 0 0 3px rgba(0,0,0,0.8)' }}>{card.name}</p>
           <div className="flex items-center justify-between">
-            {size !== 'sm' && <p className="text-[9px]" style={{ color: catInfo.color }}>{catInfo.label}</p>}
-            <div className="flex items-center gap-0.5">
-              <span className={`font-bold ${size === 'sm' ? 'text-[10px]' : 'text-sm'}`} style={{ color: '#ffd700' }}>{card.power}</span>
-              <span className={`text-amber-200/60 ${size === 'sm' ? 'text-[7px]' : 'text-[8px]'}`}>P</span>
+            {size !== 'sm' && <p className="text-sm font-bold" style={{ color: catInfo.color, textShadow: '0 1px 3px rgba(0,0,0,0.9)' }}>{catInfo.label}</p>}
+            <div className="flex items-baseline gap-0.5 ml-auto">
+              <span className={`font-black ${size === 'sm' ? 'text-xl' : 'text-3xl'}`} style={{ color: '#ffd700', textShadow: '0 0 10px rgba(255,215,0,0.7), 0 2px 4px rgba(0,0,0,0.95)' }}>{card.power}</span>
+              <span className={`font-bold ${size === 'sm' ? 'text-xs' : 'text-sm'}`} style={{ color: '#ffd700', textShadow: '0 1px 3px rgba(0,0,0,0.9)' }}>P</span>
             </div>
           </div>
         </div>
       </div>
-      {isDefense && <div className="absolute top-1 left-1"><span className="text-[10px]">🛡️</span></div>}
-      {isWinner && <div className="absolute top-1 right-1 kc-win-badge"><span className="text-sm drop-shadow-lg">👑</span></div>}
+      {isDefense && <div className="absolute top-1.5 left-1.5"><span className={size === 'sm' ? 'text-base' : 'text-xl'}>🛡️</span></div>}
+      {isWinner && <div className="absolute top-1.5 right-1.5 kc-win-badge"><span className={`${size === 'sm' ? 'text-lg' : 'text-2xl'} drop-shadow-lg`}>👑</span></div>}
     </div>
   );
 }
