@@ -326,18 +326,37 @@ export function applyRevealEffect(
       break;
     }
     case 'galileo': {
+      // Combo: +1/+1 per 「地動説」 on own bench (stacks).
       const myState = side === 'player' ? next.player : next.ai;
       const oppState = opp === 'player' ? next.player : next.ai;
+      const heliocentricSlot = myState.bench.find((b) => b.name === '地動説');
+      const heliocentricCount = heliocentricSlot?.count ?? 0;
+      if (heliocentricCount > 0 && role === 'attacker') {
+        bonusAttack += heliocentricCount;
+      }
+      if (heliocentricCount > 0 && role === 'defender') {
+        next = { ...next, defenderBonus: next.defenderBonus + heliocentricCount };
+      }
+      // Original bench-swap effect (kept).
       const sumOf = (bench: BenchSlot[]) =>
         bench.reduce((s, b) => s + getBaseAttack(b.card) * b.count, 0);
       if (sumOf(oppState.bench) > sumOf(myState.bench)) {
         const mine = { ...myState, bench: oppState.bench };
         const theirs = { ...oppState, bench: myState.bench };
         next = applySide(applySide(next, side, mine), opp, theirs);
-        telop = { text: '🌍ガリレオの地動説！ベンチ入れ替え', color };
+        telop = heliocentricCount > 0
+          ? { text: `🌍ガリレオ + 地動説×${heliocentricCount}！パワー+${heliocentricCount} & ベンチ入替`, color }
+          : { text: '🌍ガリレオの地動説！ベンチ入れ替え', color };
+      } else if (heliocentricCount > 0) {
+        telop = { text: `🌍ガリレオ + 地動説×${heliocentricCount}！攻防+${heliocentricCount}`, color };
       } else {
         telop = { text: '🌍ガリレオの地動説！入れ替え見送り', color };
       }
+      break;
+    }
+    case 'heliocentric': {
+      // Passive bench effect — no reveal action. The bonus is read by Galileo.
+      telop = { text: '🌌コペルニクスの真理！ベンチでガリレオを強化', color };
       break;
     }
     case 'piranha': {
@@ -389,13 +408,39 @@ export function applyRevealEffect(
       break;
     }
     case 'telescope': {
-      telop = { text: '🔭望遠鏡の先見！敵デッキを予見', color };
+      // Combo: search own deck for 地動説; if found, move it to the top.
+      const myState = side === 'player' ? next.player : next.ai;
+      const idx = myState.deck.findIndex((c) => c.name === '地動説');
+      if (idx > 0) {
+        const newDeck = [...myState.deck];
+        const [moved] = newDeck.splice(idx, 1);
+        newDeck.unshift(moved);
+        next = applySide(next, side, { ...myState, deck: newDeck });
+        telop = { text: '🔭望遠鏡の天体観測！地動説をデッキトップへ', color };
+      } else if (idx === 0) {
+        telop = { text: '🔭望遠鏡の天体観測！地動説は既にトップ', color };
+      } else {
+        telop = { text: '🔭望遠鏡の天体観測！対象なし', color };
+      }
       break;
     }
     case 'gunpowder': {
+      // Passive bench effect — no reveal action. The bonus is read by Dynamite.
+      telop = { text: '💥火薬の爆薬の基礎！ベンチでダイナマイト強化', color };
+      break;
+    }
+    case 'dynamite': {
+      // Combo: +2 attack per 「火薬」 on own bench.
       if (role === 'attacker') {
-        bonusAttack += getBaseAttack(card); // effectively 2x this card's attack
-        telop = { text: '💥火薬の爆発！攻撃パワー2倍', color };
+        const myState = side === 'player' ? next.player : next.ai;
+        const gunpowderSlot = myState.bench.find((b) => b.name === '火薬');
+        const copies = gunpowderSlot?.count ?? 0;
+        if (copies > 0) {
+          bonusAttack += copies * 2;
+          telop = { text: `💣ダイナマイトの大爆発！火薬×${copies}で攻撃+${copies * 2}`, color };
+        } else {
+          telop = { text: '💣ダイナマイトの大爆発！火薬なし...', color };
+        }
       }
       break;
     }

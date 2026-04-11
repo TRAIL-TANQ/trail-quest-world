@@ -65,13 +65,20 @@ export const EFFECT_DEFS: Record<string, CardEffect> = {
   cleopatra:  { id: 'cleopatra',  name: '魅了',               description: '公開時、相手のデッキ一番上を隔離する。', category: 'bench' },
   nobunaga:   { id: 'nobunaga',   name: '天下布武',           description: '公開時、相手のベンチ最強カードを封印する。', category: 'bench' },
   mozart:     { id: 'mozart',     name: '天才の旋律',         description: '公開時、次に公開する味方カードの攻撃+2。', category: 'atk' },
-  galileo:    { id: 'galileo',    name: '地動説',             description: '公開時、味方ベンチ合計 < 相手なら入れ替える。', category: 'bench' },
+  // Galileo: keeps the bench-swap effect AND gains +1/+1 per 地動説 on bench.
+  galileo:    { id: 'galileo',    name: '地動説の支持者',     description: '公開時、自分ベンチの「地動説」1枚につき攻撃+1/防御+1。さらに味方ベンチ合計が相手未満ならベンチ入れ替え。', category: 'special' },
   piranha:    { id: 'piranha',    name: '群れの猛攻',         description: '攻撃時、自分のベンチに同名ピラニアが居るほど攻撃+1。', category: 'atk' },
   dolphin:    { id: 'dolphin',    name: 'エコーロケーション', description: '公開時、相手デッキ上2枚のうち強い方を底へ送る。', category: 'special' },
   internet:   { id: 'internet',   name: '情報革命',           description: '公開時、自分ベンチからランダム1枚を隔離。', category: 'bench' },
   phone:      { id: 'phone',      name: '通信',               description: '公開時、次デッキフェイズは5枚中3枚取得可。', category: 'special' },
-  telescope:  { id: 'telescope',  name: '先見',               description: '公開時、相手デッキ上3枚を確認。', category: 'special' },
-  gunpowder:  { id: 'gunpowder',  name: '爆発',               description: '攻撃時、攻撃パワー2倍。', category: 'atk' },
+  // Telescope: search own deck for 地動説 and move it to the top.
+  telescope:  { id: 'telescope',  name: '天体観測',           description: '公開時、デッキ内の「地動説」をデッキの一番上に移動する。', category: 'special' },
+  // Gunpowder: passive bench effect (no reveal action) — read by Dynamite at reveal.
+  gunpowder:  { id: 'gunpowder',  name: '爆薬の基礎',         description: 'From the bench: ベンチにある間、「ダイナマイト」の攻撃パワー+2。', category: 'special' },
+  // Heliocentric: passive bench effect — read by Galileo at reveal.
+  heliocentric: { id: 'heliocentric', name: 'コペルニクスの真理', description: 'From the bench: ベンチにある間、「ガリレオ」の攻撃+1/防御+1 (重複可)。', category: 'special' },
+  // Dynamite: gains +2 attack per 火薬 on own bench.
+  dynamite:   { id: 'dynamite',   name: '大爆発',             description: '公開時、自分ベンチの「火薬」1枚につき攻撃+2。', category: 'atk' },
   compass:    { id: 'compass',    name: '航海術',             description: '公開時、自分デッキの上3枚をパワー順に並べ替える。', category: 'bench' },
   penicillin: { id: 'penicillin', name: '治療',               description: '公開時、自分ベンチ最強カード1枚をデッキの下へ戻す。', category: 'bench' },
   paper:      { id: 'paper',      name: '記録',               description: '公開時、このマッチの獲得ALT+5。', category: 'special' },
@@ -94,6 +101,8 @@ export const EFFECT_BY_CARD_NAME: Record<string, string> = {
   '電話':               'phone',
   '望遠鏡':             'telescope',
   '火薬':               'gunpowder',
+  'ダイナマイト':       'dynamite',
+  '地動説':             'heliocentric',
   '羅針盤':             'compass',
   'ペニシリン':         'penicillin',
   '紙':                 'paper',
@@ -171,6 +180,12 @@ function pickStatProfile(id: string, profiles: StatProfile[]): StatProfile {
   const idx = Math.abs(hash) % profiles.length;
   return profiles[idx];
 }
+
+// Per-card stat overrides for combo / signature cards that need stats
+// outside the category default. Keyed by card name for stability.
+export const CARD_STAT_OVERRIDES: Record<string, StatProfile> = {
+  'ダイナマイト': { attackPower: 3, defensePower: 2 },
+};
 
 // Combo card IDs for detection
 export const COMBO_CARD_IDS = {
@@ -788,9 +803,11 @@ function toBattleCard(cc: CollectionCard): BattleCard {
   // 2026-04 rebalance: stats come from CATEGORY_RARITY_STATS per (category, rarity).
   // `power` is kept as a legacy fallback (= attackPower) for the few call sites
   // that still read it before attackPower/defensePower were always populated.
-  const profile = pickStatProfile(cc.id, CATEGORY_RARITY_STATS[category][rarity]);
-  let attackPower: number = profile.attackPower;
-  let defensePower: number = profile.defensePower;
+  // Per-card overrides take precedence (combo / signature cards).
+  const baseProfile = CARD_STAT_OVERRIDES[cc.name]
+    ?? pickStatProfile(cc.id, CATEGORY_RARITY_STATS[category][rarity]);
+  let attackPower: number = baseProfile.attackPower;
+  let defensePower: number = baseProfile.defensePower;
   let power = attackPower;
 
   // Combo card overrides (keep original combo identity; ignore category stats)
