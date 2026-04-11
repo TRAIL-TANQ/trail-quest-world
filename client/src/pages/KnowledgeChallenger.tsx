@@ -1188,9 +1188,11 @@ export default function KnowledgeChallenger() {
           </button>
         )}
 
-        {/* ====== AI AREA (top half) ====== */}
-        <div className="flex-1 flex items-center justify-center relative">
+        {/* ====== AI AREA (top half) ======
+             Layout: [AI card center] [AI deck stack right] */}
+        <div className="flex-1 flex items-center justify-center gap-4 relative px-4">
           {playerIsDefender ? renderAttackerSlot() : renderDefenderSlot()}
+          <MiniDeckStack count={gameState.ai.deck.length} color="#ef4444" />
         </div>
 
         {/* ====== CENTER BAND (flag) ====== */}
@@ -1216,138 +1218,49 @@ export default function KnowledgeChallenger() {
           <div className="h-0.5 flex-1" style={{ background: 'linear-gradient(90deg, rgba(255,215,0,0.5), transparent)' }} />
         </div>
 
-        {/* ====== PLAYER AREA (bottom half) ====== */}
-        <div className="flex-1 flex items-center justify-center relative">
-          {playerIsDefender ? renderDefenderSlot() : renderAttackerSlot()}
-        </div>
-
-        {/* ====== Bottom action area ======
-             - Player attacker waiting for reveal → tappable deck stack + forfeit
-             - Otherwise (AI turn / wait period) → small "次へ ▶" advance button */}
-        {gameState.phase !== 'deck_phase' && gameState.phase !== 'game_over' && (() => {
-          const playerIsAttacker = gameState.flagHolder === 'ai';
-          const showDeckTap = playerIsAttacker && waitingForPlayerReveal && cineStep === 'attack_reveal';
-
-          if (showDeckTap) {
-            const playerDeck = gameState.player.deck;
+        {/* ====== PLAYER AREA (bottom half) ======
+             Layout: [player deck stack left] [player card center]
+             The deck stack is tappable while the player is the attacker
+             and the loop is waiting on a manual reveal. */}
+        <div className="flex-1 flex items-center justify-center gap-4 relative px-4">
+          {(() => {
+            const playerIsAttacker = gameState.flagHolder === 'ai';
+            const tappable = playerIsAttacker && waitingForPlayerReveal && cineStep === 'attack_reveal';
             const defenderEffectiveDef = gameState.defenseCard
               ? Math.max(0, (gameState.defenseCard.defensePower ?? gameState.defenseCard.power) + gameState.defenderBonus)
               : 0;
-            const atk = gameState.attackCurrentPower;
-            const gap = Math.max(0, defenderEffectiveDef - atk);
             return (
-              <div className="shrink-0 px-3 pb-2 pt-1 z-40 relative flex flex-col items-center">
-                {/* Power compare line */}
-                <div className="flex items-center gap-3 mb-1">
-                  <span className="font-black" style={{ fontSize: '15px', color: '#ff6b6b', textShadow: '0 0 8px rgba(239,68,68,0.6)' }}>
-                    ⚔️ {atk}
-                  </span>
-                  <span className="text-amber-200/60 font-black">vs</span>
-                  <span className="font-black" style={{ fontSize: '15px', color: '#60a5fa', textShadow: '0 0 8px rgba(96,165,250,0.6)' }}>
-                    🛡️ {defenderEffectiveDef}
-                  </span>
-                  {gap > 0 && (
-                    <span className="font-black" style={{ fontSize: '13px', color: '#ffd700' }}>
-                      あと {gap}
-                    </span>
-                  )}
-                </div>
-                {/* Deck stack: 3 stacked card backs, tappable */}
-                <div className="flex items-center gap-3">
+              <div className="flex flex-col items-center gap-1.5">
+                {tappable && (
+                  <p className="font-black whitespace-nowrap" style={{ fontSize: '13px', color: '#ff6b6b', textShadow: '0 0 8px rgba(239,68,68,0.6)' }}>
+                    ⚔️ {gameState.attackCurrentPower} / 🛡️ {defenderEffectiveDef}
+                  </p>
+                )}
+                <MiniDeckStack
+                  count={gameState.player.deck.length}
+                  color="#22c55e"
+                  interactive={tappable}
+                  glow={tappable}
+                  onTap={handleAdvance}
+                />
+                {tappable && (
                   <button
-                    onClick={handleAdvance}
-                    disabled={playerDeck.length === 0}
-                    className="kc-deck-stack relative active:scale-95 transition-transform"
-                    style={{ width: 86, height: 116 }}
-                    aria-label="デッキをタップしてカードを出す"
+                    onClick={handleForfeitAttack}
+                    className="text-center"
+                    style={{ fontSize: '11px', color: 'rgba(255,255,255,0.55)', textDecoration: 'underline' }}
                   >
-                    {/* 3 stacked layers (bottom → top), each rendering the card back image */}
-                    {[2, 1, 0].map((layer) => (
-                      <div
-                        key={layer}
-                        className="absolute rounded-lg overflow-hidden"
-                        style={{
-                          inset: 0,
-                          transform: `translate(${layer * 3}px, ${layer * -3}px)`,
-                          border: '2.5px solid rgba(34,197,94,0.85)',
-                          boxShadow: layer === 0
-                            ? '0 6px 18px rgba(0,0,0,0.55), 0 0 20px rgba(34,197,94,0.5)'
-                            : '0 3px 8px rgba(0,0,0,0.4)',
-                        }}
-                      >
-                        <img
-                          src="/images/card-back.png"
-                          alt="card back"
-                          className="absolute inset-0 w-full h-full"
-                          style={{ objectFit: 'cover' }}
-                        />
-                      </div>
-                    ))}
-                    {/* Remaining count badge */}
-                    <div
-                      className="absolute -top-1 -right-1 z-30 rounded-full min-w-[22px] h-[22px] flex items-center justify-center px-1.5"
-                      style={{
-                        background: '#ffd700',
-                        border: '2px solid rgba(0,0,0,0.7)',
-                        color: '#000',
-                        fontSize: '11px',
-                        fontWeight: 900,
-                      }}
-                    >
-                      {playerDeck.length}
-                    </div>
+                    🏳️ 攻撃をやめる
                   </button>
-                  <div className="flex flex-col items-start">
-                    <p className="font-black text-amber-100 mb-1" style={{ fontSize: '13px' }}>
-                      タップしてカードを出す
-                    </p>
-                    <button
-                      onClick={handleForfeitAttack}
-                      className="text-left"
-                      style={{
-                        fontSize: '11px',
-                        color: 'rgba(255,255,255,0.5)',
-                        textDecoration: 'underline',
-                      }}
-                    >
-                      🏳️ 攻撃をやめる
-                    </button>
-                  </div>
-                </div>
+                )}
+                {!tappable && playerIsAttacker && (
+                  <p className="text-[10px] font-bold text-amber-200/50">あなたの山札</p>
+                )}
               </div>
             );
-          }
+          })()}
+          {playerIsDefender ? renderDefenderSlot() : renderAttackerSlot()}
+        </div>
 
-          // Default: small advance button for AI turns and waits.
-          const labelByStep: Record<string, string> = {
-            idle: '次へ ▶',
-            turn_banner: '次へ ▶',
-            defender_show: '攻撃を見る ▶',
-            attack_reveal: '次へ ▶',
-            resolve: '次のサブバトルへ ▶',
-            game_over: '結果を見る ▶',
-          };
-          const label = labelByStep[cineStep] ?? '次へ ▶';
-          return (
-            <div className="shrink-0 px-3 pb-2 pt-1 z-40 relative">
-              <button
-                onClick={handleAdvance}
-                className="w-full rounded-xl font-black active:scale-[0.98] transition-all"
-                style={{
-                  minHeight: '44px',
-                  fontSize: '15px',
-                  color: '#fff',
-                  background: 'linear-gradient(180deg, #ffd700 0%, #daa520 100%)',
-                  border: '2.5px solid #ffe066',
-                  boxShadow: '0 4px 16px rgba(255,215,0,0.45), 0 0 20px rgba(255,215,0,0.25)',
-                  textShadow: '0 1px 3px rgba(0,0,0,0.6)',
-                }}
-              >
-                {label}
-              </button>
-            </div>
-          );
-        })()}
 
         {/* ====== Turn Banner ====== */}
         {cineStep === 'turn_banner' && (
@@ -2296,6 +2209,81 @@ function CardDisplay({ card, isDefense, isWinner, size, mode }: {
       {isDefense && <div className="absolute top-1.5 left-1.5"><span className={isBig ? 'text-xl' : 'text-base'}>🛡️</span></div>}
       {isWinner && <div className="absolute top-1.5 right-1.5 kc-win-badge"><span className={`${isBig ? 'text-2xl' : 'text-lg'} drop-shadow-lg`}>👑</span></div>}
     </div>
+  );
+}
+
+/**
+ * Small (≈70×100) stacked card-back used as the per-side deck pile.
+ * Tappable when `interactive` is true; pulses when `glow` is true.
+ */
+function MiniDeckStack({
+  count,
+  color,
+  interactive = false,
+  glow = false,
+  onTap,
+}: {
+  count: number;
+  color: string;
+  interactive?: boolean;
+  glow?: boolean;
+  onTap?: () => void;
+}) {
+  const W = 70;
+  const H = 100;
+  return (
+    <button
+      onClick={interactive && count > 0 ? onTap : undefined}
+      disabled={!interactive || count === 0}
+      className={`relative ${glow && count > 0 ? 'kc-deck-stack' : ''} ${interactive ? 'active:scale-95' : ''} transition-transform`}
+      style={{
+        width: W + 6,
+        height: H + 6,
+        background: 'transparent',
+        border: 'none',
+        padding: 0,
+        cursor: interactive && count > 0 ? 'pointer' : 'default',
+        opacity: count === 0 ? 0.35 : 1,
+      }}
+      aria-label={interactive ? 'デッキをタップしてカードを出す' : 'デッキ'}
+    >
+      {[2, 1, 0].map((layer) => (
+        <div
+          key={layer}
+          className="absolute rounded-md overflow-hidden"
+          style={{
+            top: 3,
+            left: 3,
+            width: W,
+            height: H,
+            transform: `translate(${layer * 2}px, ${layer * -2}px)`,
+            border: `2px solid ${color}aa`,
+            boxShadow: layer === 0
+              ? `0 4px 12px rgba(0,0,0,0.55)${glow ? `, 0 0 16px ${color}90` : ''}`
+              : '0 2px 6px rgba(0,0,0,0.4)',
+          }}
+        >
+          <img
+            src="/images/card-back.png"
+            alt=""
+            className="absolute inset-0 w-full h-full"
+            style={{ objectFit: 'cover' }}
+          />
+        </div>
+      ))}
+      <div
+        className="absolute -top-1 -right-1 z-30 rounded-full min-w-[22px] h-[22px] flex items-center justify-center px-1.5"
+        style={{
+          background: '#ffd700',
+          border: '2px solid rgba(0,0,0,0.7)',
+          color: '#000',
+          fontSize: '11px',
+          fontWeight: 900,
+        }}
+      >
+        {count}
+      </div>
+    </button>
   );
 }
 
