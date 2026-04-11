@@ -8,6 +8,7 @@ const tabs = [
   { path: '/', label: 'ホーム', icon: '🏠' },
   { path: '/games', label: 'ゲーム', icon: '🎮' },
   { path: '/gacha', label: 'ガチャ', icon: '🎰' },
+  { path: '/shop', label: 'ショップ', icon: '🛒' },
   { path: '/ranking', label: 'ランキング', icon: '🏆' },
   { path: '/mypage', label: 'マイページ', icon: '👤' },
 ];
