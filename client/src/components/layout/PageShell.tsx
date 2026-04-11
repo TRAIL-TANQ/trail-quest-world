@@ -10,11 +10,16 @@ import AltEarnEffect from '@/components/effects/AltEarnEffect';
 import LevelUpModal from '@/components/effects/LevelUpModal';
 import { useUserStore } from '@/lib/stores';
 import { fetchEquippedItemId, fetchShopItems } from '@/lib/shopService';
+import { fetchUserProfile } from '@/lib/userProfileService';
 import { calculateLevel } from '@/lib/level';
 
 export default function PageShell({ children }: { children: ReactNode }) {
   const userId = useUserStore((s) => s.user.id);
   const equipAvatar = useUserStore((s) => s.equipAvatar);
+  const setNickname = useUserStore((s) => s.setNickname);
+  const setAvatarType = useUserStore((s) => s.setAvatarType);
+  const initialNickname = useUserStore((s) => s.user.nickname);
+  const initialAvatarType = useUserStore((s) => s.user.avatarType);
   const totalAlt = useUserStore((s) => s.user.totalAlt);
 
   // ===== Level-up detection (変更15) =====
@@ -49,6 +54,24 @@ export default function PageShell({ children }: { children: ReactNode }) {
     })();
     return () => { cancelled = true; };
   }, [userId, equipAvatar]);
+
+  // ===== User profile sync (変更17) =====
+  // 起動時に user_profile を読み込んで zustand ストアに反映。
+  // 既存のローカル値をフォールバックに渡すので、新規ユーザーは MOCK_USER の値で作成される。
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const profile = await fetchUserProfile(userId, {
+        nickname: initialNickname,
+        avatarType: initialAvatarType,
+      });
+      if (cancelled) return;
+      if (profile.nickname && profile.nickname !== initialNickname) setNickname(profile.nickname);
+      if (profile.avatar_type && profile.avatar_type !== initialAvatarType) setAvatarType(profile.avatar_type);
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center">

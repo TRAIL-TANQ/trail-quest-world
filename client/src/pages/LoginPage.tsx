@@ -6,18 +6,23 @@ import { useState } from 'react';
 import { useLocation } from 'wouter';
 import { useUserStore } from '@/lib/stores';
 import { IMAGES } from '@/lib/constants';
+import { saveUserProfile } from '@/lib/userProfileService';
 import type { AvatarType } from '@/lib/types';
 
 export default function LoginPage() {
   const [, navigate] = useLocation();
+  const userId = useUserStore((s) => s.user.id);
   const setNickname = useUserStore((s) => s.setNickname);
   const setAvatarType = useUserStore((s) => s.setAvatarType);
   const [name, setName] = useState('');
   const [selectedAvatar, setSelectedAvatar] = useState<AvatarType>('boy');
 
   const handleStart = () => {
-    if (name.trim()) setNickname(name.trim());
+    const finalName = name.trim() || 'ぼうけんしゃ';
+    setNickname(finalName);
     setAvatarType(selectedAvatar);
+    // 変更17: Supabase user_profile に永続化（失敗してもログインは続行）
+    void saveUserProfile(userId, finalName, selectedAvatar);
     navigate('/');
   };
 

@@ -10,18 +10,24 @@ import { calculateLevel } from '@/lib/level';
 import { IMAGES, CLASS_LIST, AVATAR_ITEMS } from '@/lib/constants';
 import { Link } from 'wouter';
 import LevelUpModal from '@/components/effects/LevelUpModal';
+import { saveUserProfile } from '@/lib/userProfileService';
+import { toast } from 'sonner';
 import type { AvatarType } from '@/lib/types';
 
 export default function MyPage() {
   const user = useUserStore((s) => s.user);
   const addTotalAlt = useUserStore((s) => s.addTotalAlt);
   const setAvatarType = useUserStore((s) => s.setAvatarType);
+  const setNickname = useUserStore((s) => s.setNickname);
   const equipAvatar = useUserStore((s) => s.equipAvatar);
   const triggerEarnEffect = useAltStore((s) => s.triggerEarnEffect);
   const levelInfo = calculateLevel(user.totalAlt);
   const classLabel = CLASS_LIST.find((c) => c.id === user.classId)?.label || user.classId;
   const [showLevelUp, setShowLevelUp] = useState(false);
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
+  // 変更17: ニックネーム編集モーダル
+  const [showNicknameEdit, setShowNicknameEdit] = useState(false);
+  const [nicknameDraft, setNicknameDraft] = useState(user.nickname);
 
   // Get current avatar image (equipped shop avatar or default)
   const getAvatarIcon = () => {
@@ -44,6 +50,22 @@ export default function MyPage() {
     setAvatarType(type);
     equipAvatar(null); // Reset equipped shop avatar when selecting default
     setShowAvatarPicker(false);
+    // 変更17: Supabase user_profile に永続化
+    void saveUserProfile(user.id, user.nickname, type);
+  };
+
+  const handleNicknameSave = async () => {
+    const trimmed = nicknameDraft.trim();
+    if (!trimmed) { toast.error('ニックネームを入力してください'); return; }
+    if (trimmed.length > 12) { toast.error('12文字以内で入力してください'); return; }
+    setNickname(trimmed);
+    const ok = await saveUserProfile(user.id, trimmed, user.avatarType);
+    if (ok) {
+      toast.success('ニックネームを変更しました');
+      setShowNicknameEdit(false);
+    } else {
+      toast.error('保存に失敗しました');
+    }
   };
 
   return (
@@ -91,7 +113,14 @@ export default function MyPage() {
               </div>
             </button>
             <div className="flex-1 min-w-0 pb-1">
-              <h2 className="text-lg font-bold text-amber-100">{user.nickname}</h2>
+              <button
+                onClick={() => { setNicknameDraft(user.nickname); setShowNicknameEdit(true); }}
+                className="flex items-center gap-1.5 active:scale-95 transition-transform"
+                title="ニックネームを変更"
+              >
+                <h2 className="text-lg font-bold text-amber-100">{user.nickname}</h2>
+                <span className="text-[10px] text-amber-200/35">✏️</span>
+              </button>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] px-1.5 py-0.5 rounded"
                   style={{ background: 'rgba(59,130,246,0.15)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.25)' }}>{classLabel}</span>
@@ -265,6 +294,55 @@ export default function MyPage() {
               className="rpg-btn rpg-btn-gold w-full mt-5 py-2.5">
               閉じる
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Nickname Edit Modal (変更17) */}
+      {showNicknameEdit && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center px-6"
+          style={{ background: 'rgba(0,0,0,0.8)' }}
+          onClick={() => setShowNicknameEdit(false)}>
+          <div className="w-full max-w-[320px] rounded-2xl p-5 relative"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'linear-gradient(135deg, rgba(21,29,59,0.98), rgba(14,20,45,0.98))',
+              border: '2px solid rgba(255,215,0,0.3)',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.6), 0 0 40px rgba(255,215,0,0.05)',
+              animation: 'scale-in 0.3s ease-out',
+            }}>
+            <h3 className="text-center text-sm font-bold mb-4" style={{ color: '#ffd700' }}>ニックネーム変更</h3>
+            <input
+              type="text"
+              value={nicknameDraft}
+              onChange={(e) => setNicknameDraft(e.target.value)}
+              maxLength={12}
+              placeholder="ニックネームを入力…"
+              className="w-full px-4 py-3 rounded-xl text-sm font-medium outline-none mb-4"
+              style={{
+                background: 'rgba(255,255,255,0.04)',
+                color: '#fde68a',
+                border: '1px solid rgba(255,215,0,0.25)',
+              }}
+              autoFocus
+            />
+            <div className="flex gap-2">
+              <button onClick={() => setShowNicknameEdit(false)}
+                className="flex-1 py-2.5 rounded-lg text-xs font-bold transition-all active:scale-95"
+                style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.15)' }}>
+                キャンセル
+              </button>
+              <button onClick={handleNicknameSave}
+                className="flex-1 py-2.5 rounded-lg text-xs font-bold transition-all active:scale-95"
+                style={{
+                  background: 'linear-gradient(135deg, #ffd700, #f0a500)',
+                  color: '#0b1128',
+                  border: '1px solid rgba(255,215,0,0.6)',
+                  boxShadow: '0 0 16px rgba(255,215,0,0.3)',
+                }}>
+                保存
+              </button>
+            </div>
           </div>
         </div>
       )}
