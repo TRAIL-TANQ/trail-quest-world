@@ -10,7 +10,7 @@
  * クリア報酬: ALT + 時々レアカード
  * ステージ5クリア時に「中級者」、ステージ10クリア時に「マスター」称号付与
  */
-import { ALL_BATTLE_CARDS, INITIAL_DECK_SIZE, MAX_SSR, MAX_SR, MAX_SAME_NAME, COMBO_CARD_IDS } from './knowledgeCards';
+import { ALL_BATTLE_CARDS, INITIAL_DECK_SIZE, MAX_SSR, MAX_SR, maxSameNameFor, COMBO_CARD_IDS } from './knowledgeCards';
 import type { BattleCard, CardRarity } from './knowledgeCards';
 
 export type StageTheme = 'balanced' | 'heritage_heavy' | 'ssr_powered' | 'nuke_combo';
@@ -94,7 +94,7 @@ function buildDeck(
   const tryAdd = (card: BattleCard): boolean => {
     if (deck.length >= INITIAL_DECK_SIZE) return false;
     const sameName = deck.filter((c) => c.name === card.name).length;
-    if (sameName >= MAX_SAME_NAME) return false;
+    if (sameName >= maxSameNameFor(card.rarity)) return false;
     if (card.rarity === 'SSR' && deck.filter((c) => c.rarity === 'SSR').length >= rule.ssrMax) return false;
     if (card.rarity === 'SR' && deck.filter((c) => c.rarity === 'SR').length >= rule.srMax) return false;
     deck.push({ ...card, id: `${prefix}-${card.id}-${deck.length}-${stamp}` });

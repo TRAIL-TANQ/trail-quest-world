@@ -770,13 +770,35 @@ const INITIAL_CARDS: BattleCard[] = [
   },
 ];
 
-// ===== Deck Building Rules (Phase 1: growth-based) =====
-// Initial deck = 10 cards. Deck grows +1~2 per round via the deck phase, max 15.
+// ===== Deck Building Rules =====
+// Initial deck = 10 cards. Max deck = 15. Minimum during trim = 6 (MIN_DECK_SIZE).
 export const INITIAL_DECK_SIZE = 10;
 export const MAX_DECK_SIZE = 15;
-export const MAX_SAME_NAME = 3;
+export const MIN_DECK_SIZE = 6;  // デッキフェイズで削除できる下限
+
+// 同名カード制限（rarity 別）
+//   N, R : 5 枚まで
+//   SR   : 3 枚まで
+//   SSR  : 1 枚まで
+export const MAX_SAME_NAME_BY_RARITY: Record<CardRarity, number> = {
+  N: 5,
+  R: 5,
+  SR: 3,
+  SSR: 1,
+};
+export function maxSameNameFor(rarity: CardRarity): number {
+  return MAX_SAME_NAME_BY_RARITY[rarity];
+}
+
+// 合計 per-rarity 上限 (デッキ全体でのレア度別枚数)
+// SR 上限を同名上限と整合させて 3 に設定（旧 2 からの変更）
 export const MAX_SSR = 1;
-export const MAX_SR = 2;
+export const MAX_SR = 3;
+
+// Legacy: 旧固定値 3。残存する古い参照がある場合の後方互換。
+// 新規コードは maxSameNameFor(rarity) を使うこと。
+export const MAX_SAME_NAME = 5;
+
 // Back-compat: some call sites still reference DECK_SIZE.
 export const DECK_SIZE = INITIAL_DECK_SIZE;
 
@@ -801,8 +823,11 @@ export function validateDeck(deck: BattleCard[]): DeckValidation {
     if (c.rarity === 'SR') srCount++;
   }
   const nameOverflow: string[] = [];
+  const nameRarity = new Map<string, CardRarity>();
+  for (const c of deck) nameRarity.set(c.name, c.rarity);
   nameCount.forEach((count, name) => {
-    if (count > MAX_SAME_NAME) nameOverflow.push(name);
+    const rarity = nameRarity.get(name)!;
+    if (count > maxSameNameFor(rarity)) nameOverflow.push(name);
   });
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -814,7 +839,8 @@ export function validateDeck(deck: BattleCard[]): DeckValidation {
   if (ssrCount > MAX_SSR) errors.push(`SSRは${MAX_SSR}枚までです（現在${ssrCount}枚）`);
   if (srCount > MAX_SR) errors.push(`SRは${MAX_SR}枚までです（現在${srCount}枚）`);
   for (const name of nameOverflow) {
-    errors.push(`「${name}」は${MAX_SAME_NAME}枚までです（現在${nameCount.get(name)}枚）`);
+    const rarity = nameRarity.get(name)!;
+    errors.push(`「${name}」は${maxSameNameFor(rarity)}枚までです（現在${nameCount.get(name)}枚）`);
   }
   return {
     valid: errors.length === 0,
@@ -831,7 +857,8 @@ export function validateDeck(deck: BattleCard[]): DeckValidation {
 export function canAddCardToDeck(deck: BattleCard[], card: BattleCard): { ok: boolean; reason?: string } {
   if (deck.length >= MAX_DECK_SIZE) return { ok: false, reason: `デッキは${MAX_DECK_SIZE}枚までです` };
   const sameNameCount = deck.filter(c => c.name === card.name).length;
-  if (sameNameCount >= MAX_SAME_NAME) return { ok: false, reason: `「${card.name}」は${MAX_SAME_NAME}枚までです` };
+  const sameNameCap = maxSameNameFor(card.rarity);
+  if (sameNameCount >= sameNameCap) return { ok: false, reason: `「${card.name}」は${sameNameCap}枚までです` };
   return { ok: true };
 }
 
@@ -849,7 +876,7 @@ function buildValidDeck(pool: BattleCard[], prefix: string, targetSize: number):
   const tryAdd = (card: BattleCard) => {
     if (deck.length >= targetSize) return false;
     const sameNameCount = deck.filter(c => c.name === card.name).length;
-    if (sameNameCount >= MAX_SAME_NAME) return false;
+    if (sameNameCount >= maxSameNameFor(card.rarity)) return false;
     if (card.rarity === 'SSR' && deck.filter(d => d.rarity === 'SSR').length >= MAX_SSR) return false;
     if (card.rarity === 'SR' && deck.filter(d => d.rarity === 'SR').length >= MAX_SR) return false;
     deck.push({ ...card, id: `${prefix}-${card.id}-${deck.length}` });

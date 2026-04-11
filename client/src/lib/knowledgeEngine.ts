@@ -176,6 +176,15 @@ export function addCardToDeck(state: GameState, card: BattleCard): GameState {
   };
 }
 
+export function removeCardFromDeck(state: GameState, removeIndex: number): GameState {
+  const deck = [...state.player.deck];
+  deck.splice(removeIndex, 1);
+  return {
+    ...state,
+    player: { ...state.player, deck },
+  };
+}
+
 export function swapCardInDeck(state: GameState, removeIndex: number, newCard: BattleCard): GameState {
   const deck = [...state.player.deck];
   deck.splice(removeIndex, 1);

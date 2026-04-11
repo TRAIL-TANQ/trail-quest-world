@@ -22,6 +22,7 @@ import {
   sampleCards,
   INITIAL_DECK_SIZE,
   MAX_DECK_SIZE,
+  MIN_DECK_SIZE,
   MAX_SSR,
   MAX_SR,
   MAX_SAME_NAME,
@@ -41,6 +42,7 @@ import {
   getBaseAttack,
   getBaseDefense,
   addCardToDeck,
+  removeCardFromDeck,
   swapCardInDeck,
   aiDeckGrowth,
 } from '@/lib/knowledgeEngine';
@@ -135,6 +137,9 @@ export default function KnowledgeChallenger() {
   const [quizTimer, setQuizTimer] = useState(10);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [swapState, setSwapState] = useState<{ incoming: BattleCard } | null>(null);
+  // デッキフェイズ中のカード削除: 確認ダイアログと削除アニメ用 state
+  const [pendingRemoveIdx, setPendingRemoveIdx] = useState<number | null>(null);
+  const [fadingOutIdx, setFadingOutIdx] = useState<number | null>(null);
 
   // ALT/XP
   const userId = useUserStore((s) => s.user.id);
@@ -472,8 +477,35 @@ export default function KnowledgeChallenger() {
   // ===== Deck phase → start battle =====
   // デッキフェイズ終了（「バトル開始」ボタン）で battle_intro へ遷移
   // startBattle は flagHolder のデッキトップから最初の defender カードを引く
+  // ===== Deck phase: remove card from current deck =====
+  const handleRequestRemoveCard = useCallback((index: number) => {
+    if (!gameState) return;
+    if (gameState.player.deck.length <= MIN_DECK_SIZE) {
+      toast.error(`最低${MIN_DECK_SIZE}枚必要です`);
+      return;
+    }
+    setPendingRemoveIdx(index);
+  }, [gameState]);
+
+  const handleConfirmRemoveCard = useCallback(() => {
+    if (pendingRemoveIdx === null || !gameState) return;
+    const idx = pendingRemoveIdx;
+    setPendingRemoveIdx(null);
+    setFadingOutIdx(idx);
+    window.setTimeout(() => {
+      setGameState((prev) => (prev ? removeCardFromDeck(prev, idx) : prev));
+      setFadingOutIdx(null);
+    }, 280);
+  }, [pendingRemoveIdx, gameState]);
+
+  const handleCancelRemoveCard = useCallback(() => setPendingRemoveIdx(null), []);
+
   const handleStartBattle = useCallback(() => {
     if (!gameState || gameState.phase !== 'deck_phase') return;
+    if (gameState.player.deck.length < MIN_DECK_SIZE) {
+      toast.error(`デッキは最低${MIN_DECK_SIZE}枚必要です`);
+      return;
+    }
     setDeckOffer(null);
     setActiveQuiz(null);
     setSwapState(null);
@@ -1147,6 +1179,65 @@ export default function KnowledgeChallenger() {
                 );
               })}
             </div>
+            {/* 現在のデッキ: ✕ ボタンで削除可能 */}
+            <div
+              className="rounded-xl p-2 mb-3"
+              style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,215,0,0.2)' }}
+            >
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[11px] font-bold text-amber-100">
+                  🃏 現在のデッキ {gameState.player.deck.length}/{MAX_DECK_SIZE}枚
+                </span>
+                <span
+                  className="text-[10px] font-bold"
+                  style={{ color: gameState.player.deck.length < MIN_DECK_SIZE ? '#ff6b6b' : '#4ade80' }}
+                >
+                  最低{MIN_DECK_SIZE}枚
+                </span>
+              </div>
+              <div className="grid grid-cols-5 gap-1 max-h-40 overflow-y-auto">
+                {gameState.player.deck.map((c, i) => {
+                  const canRemove = gameState.player.deck.length > MIN_DECK_SIZE;
+                  const isFading = fadingOutIdx === i;
+                  return (
+                    <div
+                      key={c.id + '-' + i}
+                      className="relative rounded-md p-0.5"
+                      style={{
+                        background: 'rgba(255,255,255,0.04)',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        opacity: isFading ? 0 : 1,
+                        transform: isFading ? 'scale(0.85)' : 'scale(1)',
+                        transition: 'opacity 0.28s ease, transform 0.28s ease',
+                      }}
+                    >
+                      <CardDisplay card={c} size="sm" />
+                      {canRemove && !isFading && (
+                        <button
+                          onClick={() => handleRequestRemoveCard(i)}
+                          aria-label="このカードを外す"
+                          className="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center active:scale-90 transition-transform"
+                          style={{
+                            background: '#ef4444',
+                            color: '#fff',
+                            fontSize: '11px',
+                            fontWeight: 900,
+                            boxShadow: '0 2px 6px rgba(0,0,0,0.6)',
+                            border: '1.5px solid rgba(255,255,255,0.85)',
+                          }}
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="text-[10px] text-amber-200/50 mt-1.5 text-center">
+                💡 デッキ整理のコツ: 攻撃と防御のバランスを考えよう
+              </p>
+            </div>
+
             <div className="flex gap-2">
               <button
                 onClick={handleRedraw}
@@ -1156,8 +1247,42 @@ export default function KnowledgeChallenger() {
               >
                 🔄 引き直し ({deckOffer.redrawsLeft})
               </button>
-              <button onClick={handleStartBattle} className="rpg-btn rpg-btn-gold flex-1 py-2.5 text-sm">
+              <button
+                onClick={handleStartBattle}
+                disabled={gameState.player.deck.length < MIN_DECK_SIZE}
+                className="rpg-btn rpg-btn-gold flex-1 py-2.5 text-sm"
+                style={{ opacity: gameState.player.deck.length < MIN_DECK_SIZE ? 0.5 : 1 }}
+              >
                 ⚔️ バトル開始 ▶
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== Confirm remove card dialog ===== */}
+      {pendingRemoveIdx !== null && gameState && gameState.player.deck[pendingRemoveIdx] && (
+        <div className="fixed inset-0 z-[180] flex items-center justify-center p-5" style={{ background: 'rgba(0,0,0,0.85)' }}>
+          <div
+            className="rounded-2xl p-5 w-full max-w-xs"
+            style={{
+              background: 'linear-gradient(135deg, rgba(21,29,59,0.98), rgba(14,20,45,0.98))',
+              border: '3px solid rgba(239,68,68,0.6)',
+              boxShadow: '0 12px 40px rgba(0,0,0,0.8)',
+            }}
+          >
+            <h3 className="text-base font-black text-center mb-3" style={{ color: '#ff9b9b' }}>
+              このカードをデッキから外しますか？
+            </h3>
+            <div className="flex justify-center mb-4">
+              <CardDisplay card={gameState.player.deck[pendingRemoveIdx]} size="sm" />
+            </div>
+            <div className="flex gap-2">
+              <button onClick={handleCancelRemoveCard} className="rpg-btn flex-1 py-2 text-sm" style={{ background: 'rgba(255,255,255,0.1)' }}>
+                やめる
+              </button>
+              <button onClick={handleConfirmRemoveCard} className="rpg-btn flex-1 py-2 text-sm" style={{ background: '#ef4444', color: '#fff' }}>
+                外す
               </button>
             </div>
           </div>
