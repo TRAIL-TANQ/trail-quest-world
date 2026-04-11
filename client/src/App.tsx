@@ -11,6 +11,7 @@ import PageShell from "./components/layout/PageShell";
 import HomePage from "./pages/HomePage";
 import GameListPage from "./pages/GameListPage";
 import KnowledgeChallenger from "./pages/KnowledgeChallenger";
+import StageSelectPage from "./pages/StageSelectPage";
 import GachaPage from "./pages/GachaPage";
 import RankingPage from "./pages/RankingPage";
 import CollectionPage from "./pages/CollectionPage";
@@ -24,6 +25,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/login" component={LoginPage} />
+      <Route path="/games/knowledge-challenger/stage/:id" component={KnowledgeChallenger} />
       <Route path="/games/knowledge-challenger" component={KnowledgeChallenger} />
       <Route path="/result" component={ResultPage} />
       <Route>
@@ -31,6 +33,7 @@ function Router() {
           <Switch>
             <Route path="/" component={HomePage} />
             <Route path="/games" component={GameListPage} />
+            <Route path="/games/stages" component={StageSelectPage} />
             <Route path="/gacha" component={GachaPage} />
             <Route path="/ranking" component={RankingPage} />
             <Route path="/collection" component={CollectionPage} />

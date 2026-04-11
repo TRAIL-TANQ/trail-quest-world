@@ -25,8 +25,8 @@ export default function GameListPage() {
         </div>
 
         <div className="space-y-2.5">
-          {/* Knowledge Challenger - Main Game */}
-          <Link href="/games/knowledge-challenger">
+          {/* Knowledge Challenger - Main Game (ソロモード) */}
+          <Link href="/games/stages">
             <div className="rounded-xl overflow-hidden transition-all duration-200 hover:scale-[1.01] active:scale-[0.98] card-shine animate-slide-up relative"
               style={{
                 background: 'linear-gradient(135deg, rgba(21,29,59,0.95), rgba(14,20,45,0.95))',
@@ -44,7 +44,7 @@ export default function GameListPage() {
                   }}>⚔️</div>
                 <div className="flex-1 min-w-0">
                   <h3 className="text-sm font-bold text-amber-100 truncate mb-0.5">ナレッジ・チャレンジャー</h3>
-                  <p className="text-[11px] text-amber-200/45 mb-1.5 line-clamp-2">知識の力でフラッグを奪え！4択クイズ付きカードバトル</p>
+                  <p className="text-[11px] text-amber-200/45 mb-1.5 line-clamp-2">ソロモード 全10ステージ・レアカード報酬あり</p>
                   <div className="flex items-center gap-2">
                     <div className="flex gap-0.5">
                       {Array.from({ length: 5 }).map((_, si) => (

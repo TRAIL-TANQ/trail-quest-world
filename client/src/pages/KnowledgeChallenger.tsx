@@ -7,9 +7,9 @@
  * - Deck phase: 2 cards offered, per-card quiz gate, 1 redraw allowed. Correct = add to deck (+10 ALT).
  * - Bench: 6 distinct-name slots, same-name cards stack, 6th distinct name = instant loss.
  */
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { useLocation } from 'wouter';
-import { useUserStore, useGameStore, useAltStore } from '@/lib/stores';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useLocation, useRoute } from 'wouter';
+import { useUserStore, useGameStore, useAltStore, useCollectionStore } from '@/lib/stores';
 import {
   type BattleCard,
   type Quiz,
@@ -44,6 +44,9 @@ import {
   processQuizResult,
   fetchChildStatus,
 } from '@/lib/quizService';
+import { getStage, createStageAIDeck } from '@/lib/stages';
+import { useStageProgressStore } from '@/lib/stageProgressStore';
+import { toast } from 'sonner';
 
 type ScreenPhase = 'title' | 'playing' | 'result';
 
@@ -54,9 +57,20 @@ const REVEAL_OUTCOME_MS = 1400;
 
 export default function KnowledgeChallenger() {
   const [, navigate] = useLocation();
+  const [, stageMatch] = useRoute<{ id: string }>('/games/knowledge-challenger/stage/:id');
+  const stageId = stageMatch ? parseInt(stageMatch.id, 10) : null;
+  const currentStage = useMemo(() => (stageId ? getStage(stageId) : null), [stageId]);
+
   const addTotalAlt = useUserStore((s) => s.addTotalAlt);
+  const userStoreSet = useUserStore;  // 称号更新に直接触りたい
+  const addCollectionCard = useCollectionStore((s) => s.addCard);
   const setLastResult = useGameStore((s) => s.setLastResult);
   const triggerEarnEffect = useAltStore((s) => s.triggerEarnEffect);
+
+  // 変更9: ステージ進行
+  const markStageCleared = useStageProgressStore((s) => s.markCleared);
+  const markStageRewarded = useStageProgressStore((s) => s.markRewarded);
+  const isStageRewarded = useStageProgressStore((s) => s.isRewarded);
 
   const [screen, setScreen] = useState<ScreenPhase>('title');
   const [gameState, setGameState] = useState<GameState | null>(null);
@@ -157,7 +171,8 @@ export default function KnowledgeChallenger() {
   const startGame = useCallback(() => {
     clearStepTimeouts();
     const playerDeck = previewDeck && validateDeck(previewDeck).valid ? previewDeck : createInitialDeck();
-    const aiDeckCards = createAIDeck();
+    // 変更9: ステージ指定があればそのテーマに沿った AI デッキを使う
+    const aiDeckCards = stageId !== null ? createStageAIDeck(stageId) : createAIDeck();
     const state = initGameState(playerDeck, aiDeckCards);
     setGameState(state);
     setScreen('playing');
@@ -165,7 +180,7 @@ export default function KnowledgeChallenger() {
     setDeckOffer(null);
     setActiveQuiz(null);
     setSwapState(null);
-  }, [clearStepTimeouts, previewDeck]);
+  }, [clearStepTimeouts, previewDeck, stageId]);
 
   // ===== Round reveal cinematic =====
   const beginRoundReveal = useCallback(() => {
@@ -358,12 +373,32 @@ export default function KnowledgeChallenger() {
   const handleFinish = useCallback(() => {
     if (!gameState) return;
     const won = gameState.winner === 'player';
-    const altReward = won ? 30 : 5;
+
+    // 基本報酬: フリープレイなら won?30:5
+    let altReward = won ? 30 : 5;
+
+    // 変更9: ステージクリア報酬を加算 & 状態更新
+    if (won && currentStage) {
+      markStageCleared(currentStage.id);
+      if (!isStageRewarded(currentStage.id)) {
+        altReward += currentStage.altReward;
+        if (currentStage.cardRewardId) {
+          addCollectionCard(currentStage.cardRewardId);
+          toast.success(`カード「${currentStage.cardRewardId}」を獲得！`);
+        }
+        if (currentStage.title) {
+          userStoreSet.setState((s) => ({ user: { ...s.user, titleId: currentStage.title!.id } }));
+          toast.success(`称号「${currentStage.title.name}」を獲得！`);
+        }
+        markStageRewarded(currentStage.id);
+      }
+    }
+
     addTotalAlt(altReward);
     triggerEarnEffect(altReward);
     setLastResult({ score: won ? 100 : 30, maxScore: 100, timeSeconds: 0, accuracy: won ? 1 : 0.3, isBestScore: won });
     navigate('/result');
-  }, [gameState, addTotalAlt, triggerEarnEffect, setLastResult, navigate]);
+  }, [gameState, currentStage, addTotalAlt, triggerEarnEffect, setLastResult, navigate, markStageCleared, markStageRewarded, isStageRewarded, addCollectionCard, userStoreSet]);
 
   // =============================================================
   // ===================== TITLE SCREEN =========================
