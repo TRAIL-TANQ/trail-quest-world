@@ -46,6 +46,7 @@ import {
 } from '@/lib/quizService';
 import { getStage, createStageAIDeck } from '@/lib/stages';
 import { useStageProgressStore } from '@/lib/stageProgressStore';
+import { applyRatingChange } from '@/lib/ratingService';
 import { toast } from 'sonner';
 
 type ScreenPhase = 'title' | 'playing' | 'result';
@@ -394,11 +395,20 @@ export default function KnowledgeChallenger() {
       }
     }
 
+    // 変更10: Elo レーティング更新（ステージ mode のみ。フリープレイはスキップ）
+    if (currentStage) {
+      void applyRatingChange(userId, currentStage.aiRating, won).then((res) => {
+        if (res) {
+          toast.info(`レート ${res.delta >= 0 ? '+' : ''}${res.delta} (${res.newRating})`);
+        }
+      });
+    }
+
     addTotalAlt(altReward);
     triggerEarnEffect(altReward);
     setLastResult({ score: won ? 100 : 30, maxScore: 100, timeSeconds: 0, accuracy: won ? 1 : 0.3, isBestScore: won });
     navigate('/result');
-  }, [gameState, currentStage, addTotalAlt, triggerEarnEffect, setLastResult, navigate, markStageCleared, markStageRewarded, isStageRewarded, addCollectionCard, userStoreSet]);
+  }, [gameState, currentStage, userId, addTotalAlt, triggerEarnEffect, setLastResult, navigate, markStageCleared, markStageRewarded, isStageRewarded, addCollectionCard, userStoreSet]);
 
   // =============================================================
   // ===================== TITLE SCREEN =========================
