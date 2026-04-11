@@ -41,6 +41,7 @@ import {
   type ShopItem,
 } from '@/lib/shopService';
 import { fetchChildStatus } from '@/lib/quizService';
+import { spendAlt } from '@/lib/altGuard';
 import { toast } from 'sonner';
 
 const shopTabs = [
@@ -147,8 +148,8 @@ export default function ShopPage() {
     setOwned((prev) => new Set(prev).add(confirmItem.id));
     if (typeof result.newAltBalance === 'number') {
       setAltBalance(result.newAltBalance);
-      // ローカルストアにも反映（HomePage 等の currentAlt 表示同期）
-      updateAlt(-confirmItem.price_alt);
+      // 変更18: altGuard 経由でローカルストアにも反映
+      spendAlt(updateAlt, confirmItem.price_alt, 'shop_skin');
     }
     setSparkleItemId(confirmItem.id);
     toast.success(`${localizeItem(confirmItem).name} を購入しました！`);
@@ -176,7 +177,9 @@ export default function ShopPage() {
   const handlePurchaseLegacy = (it: typeof MOCK_SHOP_ITEMS[0]) => {
     if (it.owned) { toast.info('すでに所持しています'); return; }
     if (user.currentAlt < it.price) { toast.error('ALTが足りません'); return; }
-    updateAlt(-it.price);
+    // 変更18: 旧タイトル/アイテムタブもカテゴリー別理由を渡す
+    const reason = it.category === 'title' ? 'shop_title' : 'shop_item';
+    spendAlt(updateAlt, it.price, reason);
     toast.success(`${it.name} を購入しました！`);
   };
 

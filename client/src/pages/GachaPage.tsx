@@ -15,6 +15,7 @@ import { availableRarities, levelToGachaPhase } from '@/lib/knowledgeCards';
 import { calculateLevel } from '@/lib/level';
 import { fetchPity, savePity, spendAltForGacha, recordPulls } from '@/lib/gachaService';
 import { fetchChildStatus } from '@/lib/quizService';
+import { spendAlt } from '@/lib/altGuard';
 import { toast } from 'sonner';
 
 // --- Constants ---
@@ -158,7 +159,8 @@ export default function GachaPage() {
       toast.error(spend.reason === 'insufficient_alt' ? 'ALTが足りません' : '通信エラー');
       return;
     }
-    updateAlt(-cost); // ローカル即時反映
+    // 変更18: altGuard 経由で消費理由を明示
+    spendAlt(updateAlt, cost, type === 'premium' ? 'gacha_premium' : 'gacha_normal');
 
     setGachaType(type);
     setPulledCard(null);
@@ -223,7 +225,8 @@ export default function GachaPage() {
       toast.error(spend.reason === 'insufficient_alt' ? 'ALTが足りません' : '通信エラー');
       return;
     }
-    updateAlt(-cost);
+    // 変更18: altGuard 経由で消費理由を明示
+    spendAlt(updateAlt, cost, type === 'premium' ? 'gacha_premium_10' : 'gacha_normal_10');
 
     setGachaType(type);
     setPulledCard(null);
