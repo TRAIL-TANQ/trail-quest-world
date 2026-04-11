@@ -1,5 +1,7 @@
 /*
  * ShopPage (変更16): Supabase shop_items テーブルから動的ロード。
+ * - DB の name / description は英語。skin_key をキーに MOCK_SHOP_ITEMS から
+ *   日本語名/説明をローカルでルックアップして表示。フォールバックは英語。
  * - レベル制限: unlock_level > currentLevel は silhouette + 「Lv○で解放」
  * - 購入確認ダイアログ
  * - 購入成功キラキラ演出
@@ -7,6 +9,26 @@
  */
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { MOCK_SHOP_ITEMS } from '@/lib/mockData';
+
+// skin_key (avatar-id) → 日本語表示名/説明 のローカルマップ。
+// DB には英語、UI では日本語を出す i18n 層。
+const JP_SKIN_I18N: Record<string, { name: string; description: string }> = (() => {
+  const map: Record<string, { name: string; description: string }> = {};
+  for (const it of MOCK_SHOP_ITEMS) {
+    if (it.category === 'avatar') {
+      map[it.id] = { name: it.name, description: it.description };
+    }
+  }
+  return map;
+})();
+
+function localizeItem(item: { skin_key: string; name: string; description: string | null }) {
+  const jp = JP_SKIN_I18N[item.skin_key];
+  return {
+    name: jp?.name ?? item.name,
+    description: jp?.description ?? item.description ?? '',
+  };
+}
 import { useUserStore } from '@/lib/stores';
 import { IMAGES } from '@/lib/constants';
 import { calculateLevel } from '@/lib/level';
@@ -129,7 +151,7 @@ export default function ShopPage() {
       updateAlt(-confirmItem.price_alt);
     }
     setSparkleItemId(confirmItem.id);
-    toast.success(`${confirmItem.name} を購入しました！`);
+    toast.success(`${localizeItem(confirmItem).name} を購入しました！`);
     setConfirmItem(null);
     window.setTimeout(() => setSparkleItemId(null), 1600);
   };
@@ -210,7 +232,8 @@ export default function ShopPage() {
               <div className="rounded-xl p-4 text-center text-[11px] text-amber-200/50"
                 style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
                 ショップアイテムが読み込めませんでした。
-                <br />管理者は <code>supabase/migrations/0001_shop.sql</code> を実行してください。
+                <br />管理者は <code>supabase/migrations/0001_shop_tables.sql</code>
+                <br />→ <code>0001_shop_seed.sql</code> の順に実行してください。
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-3">
@@ -220,6 +243,7 @@ export default function ShopPage() {
                   const equipped = isEquipped(item);
                   const locked = isLocked(item);
                   const cannotAfford = !owned_ && !locked && altBalance < item.price_alt;
+                  const loc = localizeItem(item);
                   return (
                     <div key={item.id}
                       className="rounded-xl overflow-hidden transition-all duration-200 animate-slide-up card-shine relative"
@@ -251,7 +275,7 @@ export default function ShopPage() {
                       )}
                       <div className="aspect-square flex items-center justify-center relative overflow-hidden"
                         style={{ background: `radial-gradient(circle, ${tabColor}08, transparent)` }}>
-                        <img src={item.image_url} alt={item.name}
+                        <img src={item.image_url} alt={loc.name}
                           className="w-full h-full object-contain transition-all"
                           style={{
                             filter: locked ? 'brightness(0) opacity(0.7)' : 'none',
@@ -285,8 +309,8 @@ export default function ShopPage() {
                       </div>
                       <div className="p-2.5"
                         style={{ borderTop: `1px solid ${equipped ? 'rgba(255,215,0,0.2)' : owned_ ? 'rgba(34,197,94,0.15)' : tabColor + '15'}` }}>
-                        <p className="text-xs font-bold text-amber-100 mb-1 truncate">{item.name}</p>
-                        <p className="text-[10px] text-amber-200/35 mb-2 line-clamp-1">{item.description ?? ''}</p>
+                        <p className="text-xs font-bold text-amber-100 mb-1 truncate">{loc.name}</p>
+                        <p className="text-[10px] text-amber-200/35 mb-2 line-clamp-1">{loc.description}</p>
                         {locked ? (
                           <button disabled
                             className="w-full py-1.5 rounded-lg text-[11px] font-bold opacity-60"
@@ -391,10 +415,10 @@ export default function ShopPage() {
             <h3 className="text-center text-sm font-bold mb-3" style={{ color: '#ffd700' }}>購入確認</h3>
             <div className="aspect-square w-32 mx-auto mb-3 rounded-xl overflow-hidden"
               style={{ background: 'radial-gradient(circle, rgba(168,85,247,0.15), transparent)', border: '1px solid rgba(168,85,247,0.2)' }}>
-              <img src={confirmItem.image_url} alt={confirmItem.name} className="w-full h-full object-contain" />
+              <img src={confirmItem.image_url} alt={localizeItem(confirmItem).name} className="w-full h-full object-contain" />
             </div>
-            <p className="text-center text-base font-bold text-amber-100 mb-1">{confirmItem.name}</p>
-            <p className="text-center text-[10px] text-amber-200/50 mb-3 px-2">{confirmItem.description ?? ''}</p>
+            <p className="text-center text-base font-bold text-amber-100 mb-1">{localizeItem(confirmItem).name}</p>
+            <p className="text-center text-[10px] text-amber-200/50 mb-3 px-2">{localizeItem(confirmItem).description}</p>
             <div className="flex items-center justify-center gap-1 mb-4">
               <div className="w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold"
                 style={{ background: 'linear-gradient(135deg, #ffd700, #f0a500)', color: '#0b1128' }}>A</div>
