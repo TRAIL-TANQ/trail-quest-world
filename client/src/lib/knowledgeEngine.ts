@@ -5,9 +5,14 @@
 import type { BattleCard, CardCategory } from './knowledgeCards';
 import { COMBO_CARD_IDS } from './knowledgeCards';
 
+// Bench slot is keyed by CARD NAME (not category). Same-named cards stack.
+// Different names occupy different slots. Max 5 distinct names.
+export const BENCH_MAX_SLOTS = 5;
+
 export interface BenchSlot {
-  category: CardCategory;
-  cards: BattleCard[];
+  name: string;
+  card: BattleCard;  // representative card for display
+  count: number;     // number of cards of this name on the bench
 }
 
 export interface PlayerState {
@@ -91,32 +96,29 @@ export function initGameState(playerDeck: BattleCard[], aiDeck: BattleCard[]): G
   };
 }
 
-// Check if a bench contains cards matching given names (from bench slots)
+// Check if a bench contains cards matching given names
 function benchHasCardNames(bench: BenchSlot[], names: string[]): boolean {
-  const benchNames = new Set<string>();
-  for (const slot of bench) {
-    for (const card of slot.cards) {
-      // Strip player/ai prefix from id to match by original id base
-      benchNames.add(card.name);
-    }
-  }
+  const benchNames = new Set(bench.map(s => s.name));
   return names.every(n => benchNames.has(n));
 }
 
-function canAddToBench(bench: BenchSlot[]): boolean {
-  // ベンチに5種類以上あると満杯
-  return bench.length < 5;
+function canAddToBench(bench: BenchSlot[], card: BattleCard): boolean {
+  // 同名カードは既存スロットに重ねられるので常にOK
+  if (bench.some(s => s.name === card.name)) return true;
+  // 新しい名前は空きスロットが必要
+  return bench.length < BENCH_MAX_SLOTS;
 }
 
 function addToBench(bench: BenchSlot[], card: BattleCard): BenchSlot[] {
-  const newBench = bench.map(s => ({ ...s, cards: [...s.cards] }));
-  const existingSlot = newBench.find(s => s.category === card.category);
-  if (existingSlot) {
-    existingSlot.cards.push(card);
-  } else {
-    newBench.push({ category: card.category, cards: [card] });
+  const existing = bench.find(s => s.name === card.name);
+  if (existing) {
+    return bench.map(s => s.name === card.name ? { ...s, count: s.count + 1 } : s);
   }
-  return newBench;
+  return [...bench, { name: card.name, card, count: 1 }];
+}
+
+function cloneBench(bench: BenchSlot[]): BenchSlot[] {
+  return bench.map(s => ({ ...s }));
 }
 
 // Calculate effective power with category-based effects
@@ -131,18 +133,18 @@ function calculatePower(card: BattleCard, quizCorrect: boolean, bench: BenchSlot
 
     if (category === 'great_person') {
       if (rarity === 'R') {
-        const sameCount = bench.filter(s => s.category === 'great_person').reduce((sum, s) => sum + s.cards.length, 0);
+        const sameCount = bench.filter(s => s.card.category === 'great_person').reduce((sum, s) => sum + s.count, 0);
         power += sameCount * 1;
       } else if (rarity === 'SR') {
-        const sameCount = bench.filter(s => s.category === 'great_person').reduce((sum, s) => sum + s.cards.length, 0);
+        const sameCount = bench.filter(s => s.card.category === 'great_person').reduce((sum, s) => sum + s.count, 0);
         power += sameCount * 2;
       } else if (rarity === 'SSR') {
-        const totalBench = bench.reduce((sum, s) => sum + s.cards.length, 0);
+        const totalBench = bench.reduce((sum, s) => sum + s.count, 0);
         power += totalBench * 1;
       }
     } else if (category === 'creature') {
       if (rarity === 'SR') {
-        const emptySlots = 5 - bench.length;
+        const emptySlots = BENCH_MAX_SLOTS - bench.length;
         if (emptySlots <= 2) power += 4;
       }
     } else if (category === 'heritage') {
@@ -283,25 +285,25 @@ export function processQuizAnswer(state: GameState, correct: boolean): GameState
     // 攻撃側 >= 防御側 で攻撃側の勝ち（同値は攻撃側勝利）
     if (newPlayerPowerTotal >= aiPower) {
       // プレイヤー勝利 - AIのカードをベンチに送る
-      let newAIBench = [...state.ai.bench.map(s => ({ ...s, cards: [...s.cards] }))];
-      
-      if (!canAddToBench(newAIBench)) {
+      let newAIBench = cloneBench(state.ai.bench);
+
+      if (!canAddToBench(newAIBench, aiCard)) {
         return {
           ...state, phase: 'game_over', winner: 'player',
           message: 'AIのベンチが満杯！あなたの勝ちです！',
-          log: [...newLog, 'AIのベンチが5種類になった！'],
+          log: [...newLog, `AIのベンチが${BENCH_MAX_SLOTS}種類で埋まった！`],
         };
       }
       newAIBench = addToBench(newAIBench, aiCard);
 
       // プレイヤーの使用済みカードをベンチに送る
-      let newPlayerBench = [...state.player.bench.map(s => ({ ...s, cards: [...s.cards] }))];
+      let newPlayerBench = cloneBench(state.player.bench);
       for (const c of state.player.attackStack) {
-        if (!canAddToBench(newPlayerBench)) {
+        if (!canAddToBench(newPlayerBench, c)) {
           return {
             ...state, phase: 'game_over', winner: 'ai',
             message: 'あなたのベンチが満杯！負けです...',
-            log: [...newLog, 'プレイヤーのベンチが5種類になった！'],
+            log: [...newLog, `プレイヤーのベンチが${BENCH_MAX_SLOTS}種類で埋まった！`],
           };
         }
         newPlayerBench = addToBench(newPlayerBench, c);
@@ -366,8 +368,8 @@ export function aiTurn(state: GameState): GameState {
   let aiAttackCards: BattleCard[] = [];
   let aiAttackTotal = 0;
   let newLog = [...state.log];
-  let newAIBench = [...state.ai.bench.map(s => ({ ...s, cards: [...s.cards] }))];
-  let newPlayerBench = [...state.player.bench.map(s => ({ ...s, cards: [...s.cards] }))];
+  let newAIBench = cloneBench(state.ai.bench);
+  let newPlayerBench = cloneBench(state.player.bench);
 
   // AIが攻撃 - プレイヤーのカードを倒すまでカードを重ねる（攻撃側 >= 防御側で勝利）
   while (aiAttackTotal < playerCardPower && aiDeck.length > 0) {
@@ -383,13 +385,13 @@ export function aiTurn(state: GameState): GameState {
     if (aiAttackTotal >= playerCardPower) {
       // AI勝利 - プレイヤーのカードをベンチに送る
       if (state.playerCard) {
-        if (!canAddToBench(newPlayerBench)) {
+        if (!canAddToBench(newPlayerBench, state.playerCard)) {
           return {
             ...state, phase: 'game_over', winner: 'ai',
             ai: { ...state.ai, deck: aiDeck, bench: newAIBench, attackStack: [] },
             player: { ...state.player, bench: newPlayerBench },
             message: 'あなたのベンチが満杯！負けです...',
-            log: [...newLog, 'プレイヤーのベンチが5種類になった！'],
+            log: [...newLog, `プレイヤーのベンチが${BENCH_MAX_SLOTS}種類で埋まった！`],
             aiAttackCards,
             aiAttackTotal,
           };
@@ -399,13 +401,13 @@ export function aiTurn(state: GameState): GameState {
 
       // AIの使用済みカードをベンチに送る
       for (const c of aiAttackCards.slice(0, -1)) {
-        if (!canAddToBench(newAIBench)) {
+        if (!canAddToBench(newAIBench, c)) {
           return {
             ...state, phase: 'game_over', winner: 'player',
             ai: { ...state.ai, deck: aiDeck, bench: newAIBench, attackStack: [] },
             player: { ...state.player, bench: newPlayerBench },
             message: 'AIのベンチが満杯！あなたの勝ちです！',
-            log: [...newLog, 'AIのベンチが5種類になった！'],
+            log: [...newLog, `AIのベンチが${BENCH_MAX_SLOTS}種類で埋まった！`],
             aiAttackCards,
             aiAttackTotal,
           };

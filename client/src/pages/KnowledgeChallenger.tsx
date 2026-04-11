@@ -21,6 +21,11 @@ import {
   RARITY_INFO,
   createInitialDeck,
   createAIDeck,
+  validateDeck,
+  DECK_SIZE,
+  MAX_SSR,
+  MAX_SR,
+  MAX_SAME_NAME,
   ALL_BATTLE_CARDS,
 } from '@/lib/knowledgeCards';
 import {
@@ -95,6 +100,25 @@ export default function KnowledgeChallenger() {
   const [showNukeFlash, setShowNukeFlash] = useState(false);
   const [showNukeFailed, setShowNukeFailed] = useState(false);
   const [showSSRReveal, setShowSSRReveal] = useState(false);
+
+  // Quiz effect telop
+  type QuizTelopType = 'attack' | 'defense' | 'bench' | 'special' | 'ssr' | 'fail';
+  interface QuizTelop {
+    step: 'flash' | 'effect';
+    correct: boolean;
+    label: string;
+    type: QuizTelopType;
+    bonusPower: number;
+  }
+  const [quizTelop, setQuizTelop] = useState<QuizTelop | null>(null);
+
+  // Preview deck (built on mount for title screen)
+  const [previewDeck, setPreviewDeck] = useState<BattleCard[] | null>(null);
+  useEffect(() => {
+    if (!previewDeck) setPreviewDeck(createInitialDeck());
+  }, [previewDeck]);
+  const previewValidation = previewDeck ? validateDeck(previewDeck) : null;
+  const rebuildPreviewDeck = useCallback(() => { setPreviewDeck(createInitialDeck()); }, []);
 
   // ===== Battle Cinematic State Machine =====
   type BattleStep =
@@ -191,7 +215,7 @@ export default function KnowledgeChallenger() {
   /* ---------- Start game ---------- */
   const startGame = useCallback(() => {
     clearStepTimeouts();
-    const playerDeck = createInitialDeck();
+    const playerDeck = previewDeck && validateDeck(previewDeck).valid ? previewDeck : createInitialDeck();
     const aiDeck = createAIDeck();
     const state = initGameState(playerDeck, aiDeck);
     setGameState(state);
@@ -205,7 +229,7 @@ export default function KnowledgeChallenger() {
     setLogExpanded(false);
     setBattleStep('none');
     setBattleSeq(null);
-  }, [clearStepTimeouts]);
+  }, [clearStepTimeouts, previewDeck]);
 
   /* ---------- Draw card ---------- */
   const handleDraw = useCallback(() => {
@@ -388,6 +412,43 @@ export default function KnowledgeChallenger() {
     [scheduleStep],
   );
 
+  // Play quiz effect telop, then run the player cinematic
+  const playQuizTelop = useCallback((correct: boolean, newState: GameState, priorState: GameState) => {
+    const card = priorState.playerCard;
+    const bonusPower = Math.max(0, newState.lastAddedPower - (card?.power ?? 0));
+    let type: QuizTelopType = 'fail';
+    let label = '効果は発動しなかった...';
+    if (correct && card) {
+      if (card.rarity === 'SSR') { type = 'ssr'; label = '✨ SSR効果 発動！ ✨'; }
+      else if (card.specialEffect) { type = 'special'; label = '✨ 特殊効果 発動！'; }
+      else if (card.category === 'heritage' || (card.category === 'invention' && card.rarity === 'R')) {
+        type = 'defense';
+        label = bonusPower > 0 ? `🛡️ 防御パワー +${bonusPower}！` : '🛡️ 防御効果 発動！';
+      }
+      else if (card.category === 'great_person' && priorState.player.bench.length > 0) {
+        type = 'bench'; label = `📋 ベンチ効果 発動！ +${bonusPower}`;
+      }
+      else {
+        type = 'attack';
+        label = bonusPower > 0 ? `⚔️ 攻撃パワー +${bonusPower}！` : `⚔️ パワー +${card.correctBonus}！`;
+      }
+    }
+    // Step 1: flash (1s)
+    setQuizTelop({ step: 'flash', correct, label, type, bonusPower });
+    const telopScale = fastModeRef.current ? 0.35 : 1;
+    window.setTimeout(() => {
+      // Step 2: effect text (1.5s for correct, 1s for wrong)
+      setQuizTelop({ step: 'effect', correct, label, type, bonusPower });
+    }, 1000 * telopScale);
+    window.setTimeout(() => {
+      setQuizTelop(null);
+      setSelectedQuiz(null);
+      setShowResult(false);
+      setSelectedAnswer(null);
+      runPlayerCinematic(newState, priorState);
+    }, (correct ? 2500 : 2000) * telopScale);
+  }, [runPlayerCinematic]);
+
   const handleQuizTimeout = useCallback(() => {
     if (!gameState) return;
     setSelectedAnswer(-1);
@@ -405,13 +466,11 @@ export default function KnowledgeChallenger() {
         cardRarity: gameState.playerCard.rarity,
       });
     }
-    setTimeout(() => {
+    window.setTimeout(() => {
       const newState = processQuizAnswer(gameState, false);
-      setSelectedQuiz(null);
-      setShowResult(false);
-      runPlayerCinematic(newState, gameState);
-    }, 1500);
-  }, [gameState, userId, runPlayerCinematic]);
+      playQuizTelop(false, newState, gameState);
+    }, 900);
+  }, [gameState, userId, playQuizTelop]);
 
   /* ---------- Answer quiz ---------- */
   const handleAnswer = useCallback(
@@ -458,15 +517,12 @@ export default function KnowledgeChallenger() {
         });
       }
 
-      setTimeout(() => {
+      window.setTimeout(() => {
         const newState = processQuizAnswer(gameState, correct);
-        setSelectedQuiz(null);
-        setShowResult(false);
-        setSelectedAnswer(null);
-        runPlayerCinematic(newState, gameState);
-      }, 1800);
+        playQuizTelop(correct, newState, gameState);
+      }, 1100);
     },
-    [gameState, selectedQuiz, selectedAnswer, consecutiveCorrect, userId, addTotalAlt, runPlayerCinematic],
+    [gameState, selectedQuiz, selectedAnswer, consecutiveCorrect, userId, addTotalAlt, playQuizTelop],
   );
 
   /* ---------- AI turn (step-by-step cinematic) ---------- */
@@ -604,21 +660,70 @@ export default function KnowledgeChallenger() {
           </h1>
           <p className="text-amber-200/50 text-xs mb-5">知識の力でフラッグを奪え！カードバトル</p>
 
-          <div className="rounded-xl p-3 mb-4" style={{ background: 'rgba(255,215,0,0.05)', border: '1px solid rgba(255,215,0,0.15)' }}>
+          <div className="rounded-xl p-3 mb-3" style={{ background: 'rgba(255,215,0,0.05)', border: '1px solid rgba(255,215,0,0.15)' }}>
             <p className="text-amber-200/60 text-[11px] text-left leading-relaxed">
               <span className="text-amber-100 font-bold">ルール：</span>
               <br />
-              ・山札からカードをめくって攻撃
+              ・デッキ: {DECK_SIZE}枚 / 同名{MAX_SAME_NAME}枚まで / SSR:{MAX_SSR}、SR:{MAX_SR}
               <br />
               ・4択クイズに正解でパワーアップ
               <br />
-              ・防衛カードより大きいパワーでフラッグ奪取
+              ・攻撃側 ≥ 防御側 でフラッグ奪取
               <br />
-              ・ベンチが5種類埋まるかデッキ切れで敗北
+              ・ベンチ5種類埋まるかデッキ切れで敗北
             </p>
           </div>
 
-          <div className="flex items-center justify-center gap-5 mb-5">
+          {/* Deck Validation Panel */}
+          {previewValidation && (
+            <div
+              className="rounded-xl p-3 mb-3 text-left"
+              style={{
+                background: previewValidation.valid ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)',
+                border: `2px solid ${previewValidation.valid ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.5)'}`,
+              }}
+            >
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-black text-amber-100">🃏 デッキ</span>
+                <span
+                  className="text-lg font-black"
+                  style={{
+                    color: previewValidation.valid ? '#4ade80' : '#ff6b6b',
+                    textShadow: '0 1px 3px rgba(0,0,0,0.8)',
+                  }}
+                >
+                  {previewValidation.totalCount}/{DECK_SIZE}枚
+                  {!previewValidation.valid && previewValidation.totalCount < DECK_SIZE && (
+                    <span className="text-xs ml-1">あと{DECK_SIZE - previewValidation.totalCount}枚</span>
+                  )}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${previewValidation.ssrCount > MAX_SSR ? 'bg-red-900/40 text-red-300' : 'bg-amber-900/30 text-amber-200'}`}>
+                  SSR: {previewValidation.ssrCount}/{MAX_SSR}
+                </span>
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${previewValidation.srCount > MAX_SR ? 'bg-red-900/40 text-red-300' : 'bg-purple-900/30 text-purple-200'}`}>
+                  SR: {previewValidation.srCount}/{MAX_SR}
+                </span>
+                <button
+                  onClick={rebuildPreviewDeck}
+                  className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded"
+                  style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.8)' }}
+                >
+                  🔄 再構築
+                </button>
+              </div>
+              {previewValidation.errors.length > 0 && (
+                <div className="mt-1.5 space-y-0.5">
+                  {previewValidation.errors.map((err, i) => (
+                    <p key={i} className="text-[10px] font-bold text-red-300">⚠️ {err}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex items-center justify-center gap-5 mb-4">
             <div className="text-center">
               <p className="text-[9px] text-amber-200/35 mb-1">難易度</p>
               <div className="flex gap-0.5">
@@ -636,8 +741,8 @@ export default function KnowledgeChallenger() {
               </span>
             </div>
             <div className="text-center">
-              <p className="text-[9px] text-amber-200/35 mb-1">初期デッキ</p>
-              <span className="text-sm font-bold text-amber-100">6枚</span>
+              <p className="text-[9px] text-amber-200/35 mb-1">ベンチ</p>
+              <span className="text-sm font-bold text-amber-100">5枠</span>
             </div>
           </div>
 
@@ -655,8 +760,17 @@ export default function KnowledgeChallenger() {
               </div>
             </div>
           )}
-          <button onClick={startGame} className="rpg-btn rpg-btn-green w-full text-lg py-3.5 mb-2">
-            {imagesPreloaded ? '⚔️ バトル開始！' : `⏳ 読み込み中... ${preloadProgress}%`}
+          <button
+            onClick={startGame}
+            disabled={!imagesPreloaded || !(previewValidation?.valid)}
+            className="rpg-btn rpg-btn-green w-full text-lg py-3.5 mb-2"
+            style={{ opacity: (!imagesPreloaded || !(previewValidation?.valid)) ? 0.5 : 1 }}
+          >
+            {!imagesPreloaded
+              ? `⏳ 読み込み中... ${preloadProgress}%`
+              : !previewValidation?.valid
+                ? '❌ デッキ条件未達'
+                : '⚔️ バトル開始！'}
           </button>
           <button
             onClick={() => navigate('/games')}
@@ -762,9 +876,6 @@ export default function KnowledgeChallenger() {
   if (!gameState) return null;
 
   const isPlayerAttacking = gameState.flagHolder === 'ai';
-  const playerBenchDanger = gameState.player.bench.length >= 4;
-  const aiBenchDanger = gameState.ai.bench.length >= 4;
-  const allCategories: Array<'great_person' | 'creature' | 'heritage' | 'invention' | 'discovery'> = ['great_person', 'creature', 'heritage', 'invention', 'discovery'];
 
   const defenderPower = isPlayerAttacking
     ? (gameState.aiCard?.power ?? 0)
@@ -820,6 +931,21 @@ export default function KnowledgeChallenger() {
       {showNukeFailed && (
         <div className="kc-nuke-failed">
           <span className="kc-nuke-failed-text">💨 不発...条件カードが揃っていない</span>
+        </div>
+      )}
+
+      {/* ===== Quiz Effect Telop ===== */}
+      {quizTelop && (
+        <div className={`kc-quiz-telop ${quizTelop.correct ? 'kc-quiz-telop-correct' : 'kc-quiz-telop-wrong'}`}>
+          {quizTelop.step === 'flash' ? (
+            <div className="kc-quiz-telop-flash-text" style={{ color: quizTelop.correct ? '#22c55e' : '#ef4444' }}>
+              {quizTelop.correct ? '✨ 正解！ ✨' : '❌ 不正解...'}
+            </div>
+          ) : (
+            <div className={`kc-quiz-telop-effect kc-telop-${quizTelop.type}`}>
+              {quizTelop.label}
+            </div>
+          )}
         </div>
       )}
 
@@ -1111,7 +1237,7 @@ export default function KnowledgeChallenger() {
       })()}
 
       {/* AI Bench */}
-      <BenchDisplay side="ai" bench={gameState.ai.bench} deckCount={gameState.ai.deck.length} isDanger={aiBenchDanger} allCategories={allCategories} />
+      <BenchDisplay side="ai" bench={gameState.ai.bench} deckCount={gameState.ai.deck.length} />
 
       {/* Battle Field */}
       <div className="flex-1 flex flex-col items-center justify-center px-3 gap-2 relative min-h-0 overflow-hidden py-2">
@@ -1256,7 +1382,7 @@ export default function KnowledgeChallenger() {
       </div>
 
       {/* Player Bench */}
-      <BenchDisplay side="player" bench={gameState.player.bench} deckCount={gameState.player.deck.length} isDanger={playerBenchDanger} allCategories={allCategories} />
+      <BenchDisplay side="player" bench={gameState.player.bench} deckCount={gameState.player.deck.length} />
 
       {/* Battle Log */}
       <div className="shrink-0" style={{ borderTop: '1px solid rgba(255,215,0,0.1)' }}>
@@ -1727,6 +1853,77 @@ export default function KnowledgeChallenger() {
           55%  { opacity: 1; transform: scale(1.2); }
           100% { opacity: 1; transform: scale(1); }
         }
+
+        /* ===== Quiz Effect Telop ===== */
+        .kc-quiz-telop {
+          position: absolute; inset: 0; z-index: 85;
+          display: flex; align-items: center; justify-content: center;
+          pointer-events: none;
+        }
+        .kc-quiz-telop-correct {
+          background: radial-gradient(ellipse at center, rgba(34,197,94,0.35), rgba(0,0,0,0.55) 60%);
+          animation: kcTelopBg 0.4s ease-out;
+        }
+        .kc-quiz-telop-wrong {
+          background: radial-gradient(ellipse at center, rgba(239,68,68,0.3), rgba(0,0,0,0.55) 60%);
+          animation: kcTelopBg 0.4s ease-out;
+        }
+        @keyframes kcTelopBg { 0% { opacity: 0; } 100% { opacity: 1; } }
+
+        .kc-quiz-telop-flash-text {
+          font-size: 3.5rem; font-weight: 900;
+          letter-spacing: 0.05em;
+          text-shadow: 0 0 30px currentColor, 0 4px 0 rgba(0,0,0,0.8), 0 0 12px currentColor;
+          animation: kcTelopFlash 1s cubic-bezier(.17,.67,.35,1.4);
+        }
+        @keyframes kcTelopFlash {
+          0%   { opacity: 0; transform: scale(0.3) rotate(-8deg); }
+          25%  { opacity: 1; transform: scale(1.4) rotate(4deg); }
+          45%  { transform: scale(1) rotate(0); }
+          85%  { opacity: 1; transform: scale(1.05); }
+          100% { opacity: 0.8; transform: scale(1); }
+        }
+
+        .kc-quiz-telop-effect {
+          font-size: 2.5rem;
+          font-weight: 900;
+          letter-spacing: 0.04em;
+          padding: 22px 40px;
+          border-radius: 20px;
+          text-shadow: 0 0 20px currentColor, 0 4px 0 rgba(0,0,0,0.85), 0 0 10px currentColor;
+          animation: kcTelopEffect 1.5s cubic-bezier(.17,.67,.35,1.4);
+          max-width: 92%;
+          text-align: center;
+        }
+        @keyframes kcTelopEffect {
+          0%   { opacity: 0; transform: scale(0.2) rotate(-10deg); }
+          25%  { opacity: 1; transform: scale(1.35) rotate(3deg); }
+          40%  { transform: scale(1) rotate(0); }
+          85%  { opacity: 1; transform: scale(1.05); }
+          100% { opacity: 0; transform: scale(1.2) translateY(-20px); }
+        }
+        .kc-telop-attack  { color: #ff5555; background: rgba(239,68,68,0.18); border: 3px solid rgba(239,68,68,0.7); box-shadow: 0 0 40px rgba(239,68,68,0.45), inset 0 0 24px rgba(239,68,68,0.2); }
+        .kc-telop-defense { color: #5fb8ff; background: rgba(100,180,255,0.18); border: 3px solid rgba(100,180,255,0.7); box-shadow: 0 0 40px rgba(100,180,255,0.45), inset 0 0 24px rgba(100,180,255,0.2); }
+        .kc-telop-bench   { color: #c084fc; background: rgba(168,85,247,0.18); border: 3px solid rgba(168,85,247,0.7); box-shadow: 0 0 40px rgba(168,85,247,0.45), inset 0 0 24px rgba(168,85,247,0.2); }
+        .kc-telop-special { color: #ffd700; background: rgba(255,215,0,0.18); border: 3px solid rgba(255,215,0,0.8); box-shadow: 0 0 40px rgba(255,215,0,0.55), inset 0 0 24px rgba(255,215,0,0.25); }
+        .kc-telop-fail    { color: #9ca3af; background: rgba(80,80,80,0.18); border: 3px solid rgba(156,163,175,0.6); box-shadow: 0 0 40px rgba(0,0,0,0.4); }
+        .kc-telop-ssr {
+          background: rgba(0,0,0,0.35);
+          border: 3px solid transparent;
+          background-clip: padding-box;
+          background-image: linear-gradient(135deg, #ffd700, #ec4899, #a855f7, #3b82f6, #22c55e, #ffd700);
+          background-size: 300% 300%;
+          -webkit-background-clip: text;
+          background-clip: text;
+          color: transparent;
+          box-shadow: 0 0 60px rgba(255,215,0,0.6), 0 0 100px rgba(236,72,153,0.4);
+          animation: kcTelopEffect 1.5s cubic-bezier(.17,.67,.35,1.4), kcSsrGradient 1.5s linear infinite;
+        }
+        .kc-bench-last-slot { animation: kcBenchLastSlot 1s ease-in-out infinite; }
+        @keyframes kcBenchLastSlot {
+          0%, 100% { background: rgba(255,200,0,0.08); }
+          50%      { background: rgba(255,200,0,0.2); }
+        }
         @keyframes kcCineLayer { 0% { opacity: 0; } 100% { opacity: 1; } }
         .kc-cinematic-box {
           min-width: 260px; max-width: 85%;
@@ -1990,56 +2187,119 @@ function PowerBar({ attackerPower, defenderPower, isPlayerAttacking, percent, po
 }
 
 // ===================== Bench Display Component =====================
-function BenchDisplay({ side, bench, deckCount, isDanger, allCategories }: {
-  side: 'player' | 'ai'; bench: Array<{ category: string; cards: BattleCard[] }>; deckCount: number; isDanger: boolean; allCategories: string[];
+type BenchSlotUI = { name: string; card: BattleCard; count: number };
+const BENCH_SLOT_COUNT = 5;
+
+function BenchDisplay({ side, bench, deckCount }: {
+  side: 'player' | 'ai'; bench: BenchSlotUI[]; deckCount: number;
 }) {
   const isPlayer = side === 'player';
   const label = isPlayer ? 'あなた' : 'AI';
   const labelColor = isPlayer ? '#22c55e' : '#ef4444';
-  const emptySlots = 5 - bench.length;
-  const isFull = bench.length >= 5;
+  const emptySlots = BENCH_SLOT_COUNT - bench.length;
+  const isFull = bench.length >= BENCH_SLOT_COUNT;
+  const isLastSlot = emptySlots === 1;
   const isWarning = emptySlots <= 2 && emptySlots > 0;
-  const benchMap = new Map(bench.map(s => [s.category, s]));
+  const [detailSlot, setDetailSlot] = useState<BenchSlotUI | null>(null);
+
   return (
-    <div className={`px-3 py-2 shrink-0 ${isFull ? 'kc-bench-full' : isWarning ? 'kc-bench-warning' : ''}`} style={{ borderTop: isPlayer ? '2px solid rgba(255,215,0,0.15)' : 'none', borderBottom: !isPlayer ? '2px solid rgba(255,215,0,0.15)' : 'none', background: isFull ? 'rgba(239,68,68,0.15)' : isWarning ? 'rgba(239,68,68,0.08)' : 'rgba(0,0,0,0.25)' }}>
-      <div className="flex items-center justify-between mb-1.5">
-        <div className="flex items-center gap-2">
-          <span className="text-base font-black" style={{ color: labelColor, textShadow: `0 0 8px ${labelColor}66, 0 1px 2px rgba(0,0,0,0.8)` }}>{label}</span>
-          <span className="text-sm font-bold text-amber-200/70">山札: <span className="text-amber-100">{deckCount}</span></span>
+    <>
+      <div className={`px-3 py-2 shrink-0 ${isFull ? 'kc-bench-full' : isLastSlot ? 'kc-bench-last-slot' : isWarning ? 'kc-bench-warning' : ''}`} style={{ borderTop: isPlayer ? '2px solid rgba(255,215,0,0.15)' : 'none', borderBottom: !isPlayer ? '2px solid rgba(255,215,0,0.15)' : 'none', background: isFull ? 'rgba(239,68,68,0.18)' : isLastSlot ? 'rgba(255,200,0,0.1)' : isWarning ? 'rgba(239,68,68,0.08)' : 'rgba(0,0,0,0.25)' }}>
+        <div className="flex items-center justify-between mb-1.5">
+          <div className="flex items-center gap-2">
+            <span className="text-base font-black" style={{ color: labelColor, textShadow: `0 0 8px ${labelColor}66, 0 1px 2px rgba(0,0,0,0.8)` }}>{label}</span>
+            <span className="text-sm font-bold text-amber-200/70">山札: <span className="text-amber-100">{deckCount}</span></span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`text-base font-black ${isWarning || isFull ? 'text-red-400' : 'text-amber-100'}`} style={{ textShadow: '0 1px 2px rgba(0,0,0,0.9)' }}>
+              ベンチ {bench.length}/{BENCH_SLOT_COUNT}
+            </span>
+            {isFull ? (
+              <span className="text-sm font-black px-2 py-0.5 rounded kc-warn-pulse" style={{ background: 'rgba(239,68,68,0.5)', color: '#fff', border: '2px solid rgba(239,68,68,0.9)' }}>
+                満杯！
+              </span>
+            ) : isLastSlot ? (
+              <span className="text-sm font-black px-2 py-0.5 rounded kc-warn-pulse" style={{ background: 'rgba(255,200,0,0.3)', color: '#ffd700', border: '2px solid rgba(255,200,0,0.7)', textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}>
+                ⚠️ 残り1枠！
+              </span>
+            ) : (
+              <span className="text-sm font-black px-2 py-0.5 rounded" style={{ background: isWarning ? 'rgba(239,68,68,0.3)' : 'rgba(255,215,0,0.15)', color: isWarning ? '#ff6666' : '#ffd700', border: `1.5px solid ${isWarning ? 'rgba(239,68,68,0.6)' : 'rgba(255,215,0,0.3)'}`, textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}>
+                残り{emptySlots}枠
+              </span>
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className={`text-base font-black ${isWarning || isFull ? 'text-red-400' : 'text-amber-100'}`} style={{ textShadow: '0 1px 2px rgba(0,0,0,0.9)' }}>
-            ベンチ {bench.length}/5
-          </span>
-          {emptySlots > 0 ? (
-            <span className={`text-sm font-black px-2 py-0.5 rounded ${isWarning ? 'kc-warn-pulse' : ''}`} style={{ background: isWarning ? 'rgba(239,68,68,0.3)' : 'rgba(255,215,0,0.15)', color: isWarning ? '#ff6666' : '#ffd700', border: `1.5px solid ${isWarning ? 'rgba(239,68,68,0.6)' : 'rgba(255,215,0,0.3)'}`, textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}>
-              残り{emptySlots}枠{isWarning && ' ⚠️'}
-            </span>
-          ) : (
-            <span className="text-sm font-black px-2 py-0.5 rounded kc-warn-pulse" style={{ background: 'rgba(239,68,68,0.4)', color: '#fff', border: '1.5px solid rgba(239,68,68,0.8)' }}>
-              満杯！
-            </span>
-          )}
+        <div className="flex gap-1.5">
+          {Array.from({ length: BENCH_SLOT_COUNT }).map((_, i) => {
+            const slot = bench[i];
+            if (!slot) {
+              return (
+                <div key={`empty-${i}`} className="flex-1 rounded-lg text-center relative" style={{ background: 'rgba(255,255,255,0.04)', border: '1.5px dashed rgba(255,255,255,0.1)', minHeight: '62px' }}>
+                  <span className="text-[10px] font-bold text-amber-200/30 block mt-5">空</span>
+                </div>
+              );
+            }
+            const catInfo = CATEGORY_INFO[slot.card.category];
+            return (
+              <button
+                key={slot.name}
+                onClick={() => isPlayer && setDetailSlot(slot)}
+                className="flex-1 rounded-lg relative overflow-hidden transition-all active:scale-95"
+                style={{ background: `${catInfo.color}1a`, border: `2px solid ${catInfo.color}77`, minHeight: '62px', cursor: isPlayer ? 'pointer' : 'default' }}
+              >
+                {slot.card.imageUrl ? (
+                  <img src={slot.card.imageUrl} alt={slot.name} className="absolute inset-0 w-full h-full object-cover opacity-70" />
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center text-2xl opacity-50">
+                    {catInfo.emoji}
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent" />
+                <div className="relative z-10 flex flex-col justify-end h-full p-1">
+                  <p className="text-[9px] font-black text-white leading-tight truncate" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.95)' }}>{slot.name}</p>
+                </div>
+                {slot.count > 1 && (
+                  <div className="absolute top-0.5 right-0.5 z-20 rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1" style={{ background: '#ffd700', border: '1.5px solid rgba(0,0,0,0.6)' }}>
+                    <span className="text-[10px] font-black text-black">×{slot.count}</span>
+                  </div>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
-      <div className="flex gap-1.5">
-        {allCategories.map((cat) => {
-          const catInfo = CATEGORY_INFO[cat as keyof typeof CATEGORY_INFO];
-          const slot = benchMap.get(cat);
-          const filled = !!slot;
-          return (
-            <div key={cat} className="flex-1 rounded-lg px-1 py-1.5 text-center relative" style={{ background: filled ? `${catInfo.color}22` : 'rgba(255,255,255,0.04)', border: `1.5px solid ${filled ? `${catInfo.color}66` : 'rgba(255,255,255,0.08)'}`, opacity: filled ? 1 : 0.55, minHeight: '46px' }}>
-              <span className="text-xl block leading-none">{catInfo.emoji}</span>
-              {filled ? (
-                <span className="text-xs font-black block mt-0.5" style={{ color: catInfo.color, textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}>{slot!.cards.length}枚</span>
-              ) : (
-                <span className="text-[10px] font-bold block mt-0.5 text-amber-200/30">空</span>
-              )}
+
+      {/* Slot Detail Popup */}
+      {detailSlot && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setDetailSlot(null)}>
+          <div
+            className="rounded-2xl p-5 max-w-xs w-full relative"
+            style={{
+              background: 'linear-gradient(135deg, rgba(21,29,59,0.98), rgba(14,20,45,0.98))',
+              border: `3px solid ${CATEGORY_INFO[detailSlot.card.category].color}`,
+              boxShadow: `0 12px 40px rgba(0,0,0,0.7), 0 0 24px ${CATEGORY_INFO[detailSlot.card.category].color}66`,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button onClick={() => setDetailSlot(null)} className="absolute top-2 right-3 text-amber-200/60 text-2xl font-black hover:text-white">✕</button>
+            <div className="flex justify-center mb-3">
+              <CardDisplay card={detailSlot.card} />
             </div>
-          );
-        })}
-      </div>
-    </div>
+            <div className="text-center">
+              <p className="text-xl font-black text-amber-100 mb-1" style={{ textShadow: '0 2px 4px rgba(0,0,0,0.9)' }}>{detailSlot.name}</p>
+              <p className="text-sm font-bold mb-2" style={{ color: CATEGORY_INFO[detailSlot.card.category].color }}>
+                {CATEGORY_INFO[detailSlot.card.category].label} / {RARITY_INFO[detailSlot.card.rarity].label} / パワー {detailSlot.card.power}
+              </p>
+              <p className="text-xs text-amber-200/80 leading-relaxed mb-3">{detailSlot.card.effectDescription}</p>
+              <div className="rounded-lg p-2" style={{ background: 'rgba(255,215,0,0.1)', border: '1px solid rgba(255,215,0,0.3)' }}>
+                <p className="text-xs font-bold text-amber-200/70">ベンチ内枚数</p>
+                <p className="text-2xl font-black" style={{ color: '#ffd700', textShadow: '0 0 10px rgba(255,215,0,0.5)' }}>×{detailSlot.count}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

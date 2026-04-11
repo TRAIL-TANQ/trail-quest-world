@@ -724,61 +724,133 @@ const INITIAL_CARDS: BattleCard[] = [
   },
 ];
 
-// Enforce SSR deck limit (max 1 SSR per deck)
-function enforceSSRLimit(deck: BattleCard[], pool: BattleCard[], prefix: string): BattleCard[] {
-  const ssrCount = deck.filter(c => c.rarity === 'SSR').length;
-  if (ssrCount <= 1) return deck;
-  // Keep only the first SSR, replace rest with non-SSR cards
-  let kept = false;
-  const nonSSRPool = pool.filter(c => c.rarity !== 'SSR');
-  return deck.map((c, idx) => {
-    if (c.rarity !== 'SSR') return c;
-    if (!kept) { kept = true; return c; }
-    const replacement = nonSSRPool[idx % nonSSRPool.length];
-    return { ...replacement, id: `${prefix}-${replacement.id}-r${idx}` };
+// ===== Deck Building Rules =====
+export const DECK_SIZE = 20;
+export const MAX_SAME_NAME = 3;
+export const MAX_SSR = 1;
+export const MAX_SR = 2;
+
+export interface DeckValidation {
+  valid: boolean;
+  errors: string[];
+  warnings: string[];
+  totalCount: number;
+  ssrCount: number;
+  srCount: number;
+  nameOverflow: string[]; // card names that exceed MAX_SAME_NAME
+}
+
+// Validate deck against all rules
+export function validateDeck(deck: BattleCard[]): DeckValidation {
+  const nameCount = new Map<string, number>();
+  let ssrCount = 0;
+  let srCount = 0;
+  for (const c of deck) {
+    nameCount.set(c.name, (nameCount.get(c.name) ?? 0) + 1);
+    if (c.rarity === 'SSR') ssrCount++;
+    if (c.rarity === 'SR') srCount++;
+  }
+  const nameOverflow: string[] = [];
+  nameCount.forEach((count, name) => {
+    if (count > MAX_SAME_NAME) nameOverflow.push(name);
   });
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  if (deck.length < DECK_SIZE) {
+    errors.push(`デッキが${DECK_SIZE}枚未満です（${deck.length}/${DECK_SIZE}枚、あと${DECK_SIZE - deck.length}枚必要）`);
+  } else if (deck.length > DECK_SIZE) {
+    errors.push(`デッキが${DECK_SIZE}枚を超えています（${deck.length}/${DECK_SIZE}枚）`);
+  }
+  if (ssrCount > MAX_SSR) errors.push(`SSRは${MAX_SSR}枚までです（現在${ssrCount}枚）`);
+  if (srCount > MAX_SR) errors.push(`SRは${MAX_SR}枚までです（現在${srCount}枚）`);
+  for (const name of nameOverflow) {
+    errors.push(`「${name}」は${MAX_SAME_NAME}枚までです（現在${nameCount.get(name)}枚）`);
+  }
+  return {
+    valid: errors.length === 0,
+    errors,
+    warnings,
+    totalCount: deck.length,
+    ssrCount,
+    srCount,
+    nameOverflow,
+  };
 }
 
-// Build initial deck from COLLECTION_CARDS (6 cards, balanced categories)
+// Check if adding a card would violate rules
+export function canAddCardToDeck(deck: BattleCard[], card: BattleCard): { ok: boolean; reason?: string } {
+  if (deck.length >= DECK_SIZE) return { ok: false, reason: `デッキは${DECK_SIZE}枚までです` };
+  const sameNameCount = deck.filter(c => c.name === card.name).length;
+  if (sameNameCount >= MAX_SAME_NAME) return { ok: false, reason: `「${card.name}」は${MAX_SAME_NAME}枚までです` };
+  if (card.rarity === 'SSR') {
+    const ssrCount = deck.filter(c => c.rarity === 'SSR').length;
+    if (ssrCount >= MAX_SSR) return { ok: false, reason: `SSRは${MAX_SSR}枚までです` };
+  }
+  if (card.rarity === 'SR') {
+    const srCount = deck.filter(c => c.rarity === 'SR').length;
+    if (srCount >= MAX_SR) return { ok: false, reason: `SRは${MAX_SR}枚までです` };
+  }
+  return { ok: true };
+}
+
+// Build a valid deck by repeatedly trying to add random cards respecting rules
+function buildValidDeck(pool: BattleCard[], prefix: string): BattleCard[] {
+  const shuffled = [...pool].sort(() => Math.random() - 0.5);
+  const deck: BattleCard[] = [];
+  const byRarity = {
+    SSR: shuffled.filter(c => c.rarity === 'SSR'),
+    SR: shuffled.filter(c => c.rarity === 'SR'),
+    R: shuffled.filter(c => c.rarity === 'R'),
+    N: shuffled.filter(c => c.rarity === 'N'),
+  };
+
+  // Seed with rare cards at target counts
+  const tryAdd = (card: BattleCard) => {
+    const check = canAddCardToDeck(deck, card);
+    if (check.ok) {
+      deck.push({ ...card, id: `${prefix}-${card.id}-${deck.length}` });
+      return true;
+    }
+    return false;
+  };
+
+  // Add up to 1 SSR
+  if (byRarity.SSR.length > 0) tryAdd(byRarity.SSR[0]);
+  // Add up to 2 SR (different names)
+  for (const c of byRarity.SR) {
+    if (deck.filter(d => d.rarity === 'SR').length >= MAX_SR) break;
+    tryAdd(c);
+  }
+  // Fill with R cards
+  for (const c of byRarity.R) {
+    if (deck.length >= DECK_SIZE) break;
+    tryAdd(c);
+  }
+  // Fill remainder with N cards
+  for (const c of byRarity.N) {
+    if (deck.length >= DECK_SIZE) break;
+    tryAdd(c);
+  }
+  // Fallback: allow duplicates (up to MAX_SAME_NAME) from any R/N card
+  let attempt = 0;
+  while (deck.length < DECK_SIZE && attempt < 200) {
+    attempt++;
+    const pickPool = [...byRarity.N, ...byRarity.R];
+    const card = pickPool[Math.floor(Math.random() * pickPool.length)];
+    if (card) tryAdd(card);
+  }
+
+  return deck;
+}
+
+// Build initial deck (20 cards) respecting all deck rules
 export function createInitialDeck(): BattleCard[] {
-  const shuffled = [...ALL_BATTLE_CARDS].sort(() => Math.random() - 0.5);
-  const deck: BattleCard[] = [];
-  const categories: CardCategory[] = ['great_person', 'creature', 'heritage', 'invention', 'discovery'];
-  // Pick one card per category
-  for (const cat of categories) {
-    const card = shuffled.find(c => c.category === cat && !deck.includes(c));
-    if (card) deck.push({ ...card, id: `player-${card.id}` });
-  }
-  // Fill remaining slot with a random card not already in deck
-  const remaining = shuffled.find(c => !deck.some(d => d.id === `player-${c.id}`));
-  if (remaining) deck.push({ ...remaining, id: `player-${remaining.id}` });
-  // Ensure at least 6 cards
-  while (deck.length < 6) {
-    const card = shuffled[Math.floor(Math.random() * shuffled.length)];
-    deck.push({ ...card, id: `player-extra-${deck.length}` });
-  }
-  return enforceSSRLimit(deck, ALL_BATTLE_CARDS, 'player');
+  return buildValidDeck(ALL_BATTLE_CARDS, 'player');
 }
 
-// AI deck: uses random cards from collection
+// AI deck: 20 cards respecting the same rules
 export function createAIDeck(): BattleCard[] {
-  const shuffled = [...ALL_BATTLE_CARDS].sort(() => Math.random() - 0.5);
-  // Pick 6 cards with balanced categories
-  const deck: BattleCard[] = [];
-  const categories: CardCategory[] = ['great_person', 'creature', 'heritage', 'invention', 'discovery'];
-  for (const cat of categories) {
-    const card = shuffled.find(c => c.category === cat && !deck.includes(c));
-    if (card) deck.push({ ...card, id: `ai-${card.id}` });
-  }
-  // Fill remaining slot
-  const remaining = shuffled.find(c => !deck.some(d => d.id === `ai-${c.id}`));
-  if (remaining) deck.push({ ...remaining, id: `ai-${remaining.id}` });
-  // Ensure at least 6 cards
-  while (deck.length < 6) {
-    const card = shuffled[Math.floor(Math.random() * shuffled.length)];
-    deck.push({ ...card, id: `ai-extra-${deck.length}` });
-  }
-  return enforceSSRLimit(deck, ALL_BATTLE_CARDS, 'ai');
+  return buildValidDeck(ALL_BATTLE_CARDS, 'ai');
 }
 
 // Legacy exports for compatibility
