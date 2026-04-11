@@ -748,11 +748,15 @@ const INITIAL_CARDS: BattleCard[] = [
   },
 ];
 
-// ===== Deck Building Rules =====
-export const DECK_SIZE = 20;
+// ===== Deck Building Rules (Phase 1: growth-based) =====
+// Initial deck = 10 cards. Deck grows +1~2 per round via the deck phase, max 15.
+export const INITIAL_DECK_SIZE = 10;
+export const MAX_DECK_SIZE = 15;
 export const MAX_SAME_NAME = 3;
 export const MAX_SSR = 1;
 export const MAX_SR = 2;
+// Back-compat: some call sites still reference DECK_SIZE.
+export const DECK_SIZE = INITIAL_DECK_SIZE;
 
 export interface DeckValidation {
   valid: boolean;
@@ -761,10 +765,10 @@ export interface DeckValidation {
   totalCount: number;
   ssrCount: number;
   srCount: number;
-  nameOverflow: string[]; // card names that exceed MAX_SAME_NAME
+  nameOverflow: string[];
 }
 
-// Validate deck against all rules
+// Validate a starter deck: must be exactly INITIAL_DECK_SIZE, respect rarity/name caps.
 export function validateDeck(deck: BattleCard[]): DeckValidation {
   const nameCount = new Map<string, number>();
   let ssrCount = 0;
@@ -780,10 +784,10 @@ export function validateDeck(deck: BattleCard[]): DeckValidation {
   });
   const errors: string[] = [];
   const warnings: string[] = [];
-  if (deck.length < DECK_SIZE) {
-    errors.push(`デッキが${DECK_SIZE}枚未満です（${deck.length}/${DECK_SIZE}枚、あと${DECK_SIZE - deck.length}枚必要）`);
-  } else if (deck.length > DECK_SIZE) {
-    errors.push(`デッキが${DECK_SIZE}枚を超えています（${deck.length}/${DECK_SIZE}枚）`);
+  if (deck.length < INITIAL_DECK_SIZE) {
+    errors.push(`デッキが${INITIAL_DECK_SIZE}枚未満です（${deck.length}/${INITIAL_DECK_SIZE}枚、あと${INITIAL_DECK_SIZE - deck.length}枚必要）`);
+  } else if (deck.length > MAX_DECK_SIZE) {
+    errors.push(`デッキが${MAX_DECK_SIZE}枚を超えています（${deck.length}/${MAX_DECK_SIZE}枚）`);
   }
   if (ssrCount > MAX_SSR) errors.push(`SSRは${MAX_SSR}枚までです（現在${ssrCount}枚）`);
   if (srCount > MAX_SR) errors.push(`SRは${MAX_SR}枚までです（現在${srCount}枚）`);
@@ -801,24 +805,16 @@ export function validateDeck(deck: BattleCard[]): DeckValidation {
   };
 }
 
-// Check if adding a card would violate rules
+// Check if adding a card to a live deck would violate the growth cap.
 export function canAddCardToDeck(deck: BattleCard[], card: BattleCard): { ok: boolean; reason?: string } {
-  if (deck.length >= DECK_SIZE) return { ok: false, reason: `デッキは${DECK_SIZE}枚までです` };
+  if (deck.length >= MAX_DECK_SIZE) return { ok: false, reason: `デッキは${MAX_DECK_SIZE}枚までです` };
   const sameNameCount = deck.filter(c => c.name === card.name).length;
   if (sameNameCount >= MAX_SAME_NAME) return { ok: false, reason: `「${card.name}」は${MAX_SAME_NAME}枚までです` };
-  if (card.rarity === 'SSR') {
-    const ssrCount = deck.filter(c => c.rarity === 'SSR').length;
-    if (ssrCount >= MAX_SSR) return { ok: false, reason: `SSRは${MAX_SSR}枚までです` };
-  }
-  if (card.rarity === 'SR') {
-    const srCount = deck.filter(c => c.rarity === 'SR').length;
-    if (srCount >= MAX_SR) return { ok: false, reason: `SRは${MAX_SR}枚までです` };
-  }
   return { ok: true };
 }
 
-// Build a valid deck by repeatedly trying to add random cards respecting rules
-function buildValidDeck(pool: BattleCard[], prefix: string): BattleCard[] {
+// Build a starter deck of `targetSize` cards, respecting rarity caps.
+function buildValidDeck(pool: BattleCard[], prefix: string, targetSize: number): BattleCard[] {
   const shuffled = [...pool].sort(() => Math.random() - 0.5);
   const deck: BattleCard[] = [];
   const byRarity = {
@@ -828,53 +824,55 @@ function buildValidDeck(pool: BattleCard[], prefix: string): BattleCard[] {
     N: shuffled.filter(c => c.rarity === 'N'),
   };
 
-  // Seed with rare cards at target counts
   const tryAdd = (card: BattleCard) => {
-    const check = canAddCardToDeck(deck, card);
-    if (check.ok) {
-      deck.push({ ...card, id: `${prefix}-${card.id}-${deck.length}` });
-      return true;
-    }
-    return false;
+    if (deck.length >= targetSize) return false;
+    const sameNameCount = deck.filter(c => c.name === card.name).length;
+    if (sameNameCount >= MAX_SAME_NAME) return false;
+    if (card.rarity === 'SSR' && deck.filter(d => d.rarity === 'SSR').length >= MAX_SSR) return false;
+    if (card.rarity === 'SR' && deck.filter(d => d.rarity === 'SR').length >= MAX_SR) return false;
+    deck.push({ ...card, id: `${prefix}-${card.id}-${deck.length}` });
+    return true;
   };
 
-  // Add up to 1 SSR
+  // Seed with 1 SSR + 2 SR
   if (byRarity.SSR.length > 0) tryAdd(byRarity.SSR[0]);
-  // Add up to 2 SR (different names)
   for (const c of byRarity.SR) {
     if (deck.filter(d => d.rarity === 'SR').length >= MAX_SR) break;
     tryAdd(c);
   }
-  // Fill with R cards
   for (const c of byRarity.R) {
-    if (deck.length >= DECK_SIZE) break;
+    if (deck.length >= targetSize) break;
     tryAdd(c);
   }
-  // Fill remainder with N cards
   for (const c of byRarity.N) {
-    if (deck.length >= DECK_SIZE) break;
+    if (deck.length >= targetSize) break;
     tryAdd(c);
   }
-  // Fallback: allow duplicates (up to MAX_SAME_NAME) from any R/N card
   let attempt = 0;
-  while (deck.length < DECK_SIZE && attempt < 200) {
+  while (deck.length < targetSize && attempt < 200) {
     attempt++;
     const pickPool = [...byRarity.N, ...byRarity.R];
     const card = pickPool[Math.floor(Math.random() * pickPool.length)];
     if (card) tryAdd(card);
   }
-
   return deck;
 }
 
-// Build initial deck (20 cards) respecting all deck rules
+// Build a 10-card starter deck.
 export function createInitialDeck(): BattleCard[] {
-  return buildValidDeck(ALL_BATTLE_CARDS, 'player');
+  return buildValidDeck(ALL_BATTLE_CARDS, 'player', INITIAL_DECK_SIZE);
 }
 
-// AI deck: 20 cards respecting the same rules
+// AI starter deck: 10 cards (grows alongside the player between rounds).
 export function createAIDeck(): BattleCard[] {
-  return buildValidDeck(ALL_BATTLE_CARDS, 'ai');
+  return buildValidDeck(ALL_BATTLE_CARDS, 'ai', INITIAL_DECK_SIZE);
+}
+
+// Pick `n` random cards from the pool, returned with freshly-prefixed ids.
+// Used by the deck phase to offer the player 2 cards per round, and for AI growth.
+export function sampleCards(n: number, prefix: string): BattleCard[] {
+  const shuffled = [...ALL_BATTLE_CARDS].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, n).map((c, i) => ({ ...c, id: `${prefix}-${c.id}-${Date.now()}-${i}` }));
 }
 
 // Legacy exports for compatibility
