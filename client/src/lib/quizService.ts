@@ -24,6 +24,49 @@ import { supabase } from './supabase';
 import type { CardRarity } from './knowledgeCards';
 import { calculateLevel } from './level';
 
+// ---------- localStorage fallback cache ----------
+// 2026-04: Supabase が 400 / ネットワーク失敗を返してもゲームが機能し続ける
+// ように、child_status を localStorage にキャッシュする。
+// Supabase 成功時は常にキャッシュを書き戻すので、オフライン復帰時に自動で同期される。
+const LS_PREFIX = 'kc_child_status_';
+
+function lsKey(childId: string) {
+  return `${LS_PREFIX}${childId}`;
+}
+
+function readCachedStatus(childId: string): ChildStatus | null {
+  try {
+    const raw = localStorage.getItem(lsKey(childId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (
+      typeof parsed?.alt_points === 'number' &&
+      typeof parsed?.xp === 'number' &&
+      typeof parsed?.level === 'number'
+    ) {
+      return { child_id: childId, ...parsed };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedStatus(status: ChildStatus): void {
+  try {
+    localStorage.setItem(
+      lsKey(status.child_id),
+      JSON.stringify({ alt_points: status.alt_points, xp: status.xp, level: status.level }),
+    );
+  } catch {
+    // storage full / disabled — ignore
+  }
+}
+
+function initialCachedStatus(childId: string): ChildStatus {
+  return { child_id: childId, alt_points: 0, xp: 0, level: 1 };
+}
+
 // ---------- Types ----------
 
 export interface QuizAttemptRecord {
@@ -102,28 +145,36 @@ export async function fetchChildStatus(childId: string): Promise<ChildStatus | n
       .single();
 
     if (error) {
-      // レコードが存在しない場合、新規作成を試みる
+      // レコード無し → 作成を試みる
       if (error.code === 'PGRST116') {
-        const { data: newData, error: insertError } = await supabase
-          .from('child_status')
-          .insert({ child_id: childId, alt_points: 0, xp: 0, level: 1 })
-          .select('child_id, alt_points, xp, level')
-          .single();
-
-        if (insertError) {
-          console.error('[QuizService] Failed to create child_status:', insertError);
-          return null;
+        try {
+          const { data: newData, error: insertError } = await supabase
+            .from('child_status')
+            .insert({ child_id: childId, alt_points: 0, xp: 0, level: 1 })
+            .select('child_id, alt_points, xp, level')
+            .single();
+          if (insertError) {
+            console.warn('[QuizService] insert failed, using cache:', insertError.message);
+          } else if (newData) {
+            const status = newData as ChildStatus;
+            writeCachedStatus(status);
+            return status;
+          }
+        } catch (insertErr) {
+          console.warn('[QuizService] insert threw, using cache:', insertErr);
         }
-        return newData as ChildStatus;
+      } else {
+        console.warn('[QuizService] fetch failed, using cache:', error.message);
       }
-      console.error('[QuizService] Failed to fetch child_status:', error);
-      return null;
+      return readCachedStatus(childId) ?? initialCachedStatus(childId);
     }
 
-    return data as ChildStatus;
+    const status = data as ChildStatus;
+    writeCachedStatus(status);
+    return status;
   } catch (err) {
-    console.error('[QuizService] fetchChildStatus error:', err);
-    return null;
+    console.warn('[QuizService] fetchChildStatus threw, using cache:', err);
+    return readCachedStatus(childId) ?? initialCachedStatus(childId);
   }
 }
 
@@ -166,34 +217,38 @@ export async function updateChildStatus(
   altDelta: number,
   xpDelta: number,
 ): Promise<ChildStatus | null> {
+  const current = (await fetchChildStatus(childId)) ?? initialCachedStatus(childId);
+  const newAlt = Math.max(0, current.alt_points + altDelta);
+  const newXp = Math.max(0, current.xp + xpDelta);
+  const newLevel = calculateLevel(newAlt).level;
+  const optimistic: ChildStatus = {
+    child_id: childId,
+    alt_points: newAlt,
+    xp: newXp,
+    level: newLevel,
+  };
+  // Always write the optimistic result to cache so the game stays consistent
+  // even when Supabase is unreachable.
+  writeCachedStatus(optimistic);
+
   try {
-    const current = await fetchChildStatus(childId);
-    if (!current) return null;
-
-    const newAlt = Math.max(0, current.alt_points + altDelta);
-    const newXp = Math.max(0, current.xp + xpDelta);
-    const newLevel = calculateLevel(newAlt).level;
-
     const { data, error } = await supabase
       .from('child_status')
-      .update({
-        alt_points: newAlt,
-        xp: newXp,
-        level: newLevel,
-      })
+      .update({ alt_points: newAlt, xp: newXp, level: newLevel })
       .eq('child_id', childId)
       .select('child_id, alt_points, xp, level')
       .single();
 
     if (error) {
-      console.error('[QuizService] Failed to update child_status:', error);
-      return null;
+      console.warn('[QuizService] update failed, using cached value:', error.message);
+      return optimistic;
     }
-
-    return data as ChildStatus;
+    const status = data as ChildStatus;
+    writeCachedStatus(status);
+    return status;
   } catch (err) {
-    console.error('[QuizService] updateChildStatus error:', err);
-    return null;
+    console.warn('[QuizService] updateChildStatus threw, using cached value:', err);
+    return optimistic;
   }
 }
 

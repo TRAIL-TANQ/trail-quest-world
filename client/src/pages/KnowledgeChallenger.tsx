@@ -103,8 +103,10 @@ export default function KnowledgeChallenger() {
     | 'resolve'
     | 'game_over';
   const [cineStep, setCineStep] = useState<CinematicStep>('idle');
-  // Skip request flag — when true, the auto-advance effect short-circuits all waits.
-  const [skipRequested, setSkipRequested] = useState(false);
+  // Skip request flag — read via ref inside the auto-advance loop so a click
+  // during the cinematic does NOT re-trigger the useEffect (which would cancel
+  // the running loop and leave the battle frozen mid-step — 2026-04 bugfix).
+  const skipRequestedRef = useRef(false);
   const [fastMode, setFastMode] = useState(false);
   const fastModeRef = useRef(false);
   useEffect(() => { fastModeRef.current = fastMode; }, [fastMode]);
@@ -208,7 +210,7 @@ export default function KnowledgeChallenger() {
     setGameState(state);
     setScreen('playing');
     setCineStep('idle');
-    setSkipRequested(false);
+    skipRequestedRef.current = false;
     setDeckOffer(null);
     setActiveQuiz(null);
     setSwapState(null);
@@ -277,16 +279,22 @@ export default function KnowledgeChallenger() {
     if (cineStep !== 'idle' && cineStep !== 'resolve') return;
 
     let cancelled = false;
+    // Per-step watchdog: if a wait takes more than 5s, bail out of that wait
+    // so the loop can keep progressing even if something hangs.
+    const wait = async (ms: number) => {
+      if (skipRequestedRef.current) return;
+      await Promise.race([waitMs(ms), waitMs(5000)]);
+    };
     const run = async () => {
       console.log('[KC] battle auto-loop: start battle_intro');
       // Step 1: turn banner
       setCineStep('turn_banner');
-      if (!skipRequested) await waitMs(TURN_BANNER_MS);
+      await wait(TURN_BANNER_MS);
       if (cancelled) return;
 
       // Step 2: defender shown
       setCineStep('defender_show');
-      if (!skipRequested) await waitMs(DEFENDER_SHOW_MS);
+      await wait(DEFENDER_SHOW_MS);
       if (cancelled) return;
 
       // Step 3: attack reveal loop — call revealNextAttackCard until success or failure
@@ -297,7 +305,7 @@ export default function KnowledgeChallenger() {
       let loopGuard = 30; // safety: max 30 reveals
       while (loopGuard-- > 0) {
         if (cancelled) return;
-        if (!skipRequested) await waitMs(ATTACK_CARD_REVEAL_MS);
+        await wait(ATTACK_CARD_REVEAL_MS);
         if (cancelled) return;
 
         // Reveal one more card atomically
@@ -317,7 +325,7 @@ export default function KnowledgeChallenger() {
         if ((resultState as GameState).phase === 'game_over') {
           console.log('[KC] battle: game_over during reveal');
           setCineStep('game_over');
-          if (!skipRequested) await waitMs(RESOLVE_BANNER_MS);
+          await wait(RESOLVE_BANNER_MS);
           if (!cancelled) {
             window.setTimeout(() => setScreen('result'), 600);
           }
@@ -327,7 +335,7 @@ export default function KnowledgeChallenger() {
         if (hasAttackSucceeded(resultState as GameState)) {
           console.log('[KC] battle: attack succeeded, resolving');
           // Brief pause then resolve
-          if (!skipRequested) await waitMs(400);
+          await wait(400);
           if (cancelled) return;
           let resolved: GameState | null = null;
           setGameState((prev) => {
@@ -343,17 +351,17 @@ export default function KnowledgeChallenger() {
           setCineStep('resolve');
           const rs = resolved as GameState;
           if (rs.phase === 'game_over') {
-            if (!skipRequested) await waitMs(RESOLVE_BANNER_MS);
+            await wait(RESOLVE_BANNER_MS);
             if (!cancelled) setCineStep('game_over');
             if (!cancelled) window.setTimeout(() => setScreen('result'), 600);
             return;
           }
-          if (!skipRequested) await waitMs(RESOLVE_BANNER_MS);
+          await wait(RESOLVE_BANNER_MS);
           if (cancelled) return;
 
           // Continue to next sub-battle
           setGameState((prev) => (prev ? continueAfterResolve(prev) : prev));
-          setSkipRequested(false);
+          skipRequestedRef.current = false;
           // The useEffect will re-trigger on the new battle_intro phase
           setCineStep('idle');
           return;
@@ -365,12 +373,13 @@ export default function KnowledgeChallenger() {
     run();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gameState?.phase, cineStep, skipRequested]);
+  }, [gameState?.phase]);
 
   // ===== Skip button: short-circuit all waits in current cinematic =====
+  // Uses a ref so toggling it does NOT re-trigger the battle useEffect.
   const handleSkipReveal = useCallback(() => {
     console.log('[KC] skip requested');
-    setSkipRequested(true);
+    skipRequestedRef.current = true;
   }, []);
 
   // ===== Deck phase: tap card → show quiz =====
@@ -525,7 +534,7 @@ export default function KnowledgeChallenger() {
     console.log('[KC] handleStartBattle: phase =', next.phase, 'defenseCard =', next.defenseCard?.name);
     setGameState(next);
     setCineStep('idle');
-    setSkipRequested(false);
+    skipRequestedRef.current = false;
   }, [gameState]);
 
   // ===== Swap resolution =====
@@ -926,7 +935,7 @@ export default function KnowledgeChallenger() {
           if (!shouldShowDefender || !defenderCard) {
             return (
               <div className="inline-block rounded-xl" style={{
-                width: 200, height: 260,
+                width: 180, height: 250,
                 background: defenderSide === 'ai' ? 'rgba(239,68,68,0.08)' : 'rgba(34,197,94,0.08)',
                 border: `2px dashed ${defenderSide === 'ai' ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)'}`,
               }}>
@@ -937,7 +946,7 @@ export default function KnowledgeChallenger() {
           const shatter = attackerWonSub;
           return (
             <div className={`relative ${shatter ? 'kc-card-shatter' : 'kc-defender-glow'}`}>
-              <CardDisplay card={defenderCard} size="md" mode="defense" />
+              <CardDisplay card={defenderCard} size="battle" mode="defense" />
               {cineStep === 'defender_show' && (
                 <div className="absolute left-1/2 -translate-x-1/2 -bottom-12 whitespace-nowrap kc-defense-label z-20">
                   <p style={{ fontSize: '1.5rem', fontWeight: 900, color: '#60a5fa', textShadow: '0 0 16px rgba(96,165,250,0.95), 0 2px 4px rgba(0,0,0,0.9)' }}>
@@ -954,7 +963,7 @@ export default function KnowledgeChallenger() {
             // During battle_intro and turn_banner and defender_show, show a placeholder
             return (
               <div className="inline-block rounded-xl" style={{
-                width: 200, height: 260,
+                width: 180, height: 250,
                 background: attackerSide === 'ai' ? 'rgba(239,68,68,0.08)' : 'rgba(34,197,94,0.08)',
                 border: `2px dashed ${attackerSide === 'ai' ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)'}`,
               }}>
@@ -967,7 +976,7 @@ export default function KnowledgeChallenger() {
           const priorCount = attackCards.length - 1;
           const enterClass = attackerSide === 'ai' ? 'kc-ai-card-enter' : 'kc-player-card-enter';
           return (
-            <div className="relative" style={{ width: 200, height: 260 }}>
+            <div className="relative" style={{ width: 180, height: 250 }}>
               {/* Earlier attack cards stacked behind (offset by a bit) */}
               {attackCards.slice(0, -1).map((c, i) => (
                 <div key={`stack-${i}`} className="absolute"
@@ -979,12 +988,12 @@ export default function KnowledgeChallenger() {
                     zIndex: i,
                   }}
                 >
-                  <CardDisplay card={c} size="md" mode="attack" />
+                  <CardDisplay card={c} size="battle" mode="attack" />
                 </div>
               ))}
               {/* Latest card on top with kcCardFlip animation on mount */}
               <div key={`latest-${attackCards.length}`} className={`absolute inset-0 ${enterClass}`} style={{ zIndex: 100 }}>
-                <CardDisplay card={lastCard} size="md" mode="attack" />
+                <CardDisplay card={lastCard} size="battle" mode="attack" />
               </div>
               {/* Cumulative power label below */}
               <div className="absolute left-1/2 -translate-x-1/2 -bottom-12 whitespace-nowrap z-[120] kc-attack-label">
@@ -1837,19 +1846,22 @@ function CardDisplay({ card, isDefense, isWinner, size, mode }: {
   card: BattleCard;
   isDefense?: boolean;
   isWinner?: boolean;
-  size?: 'sm' | 'md';
+  size?: 'sm' | 'md' | 'battle';
   mode?: 'attack' | 'defense' | 'neutral';
 }) {
   const catInfo = CATEGORY_INFO[card.category];
   const rarInfo = RARITY_INFO[card.rarity];
   const [imgLoaded, setImgLoaded] = useState(false);
-  const w = size === 'sm' ? 120 : 200;
-  const h = size === 'sm' ? 150 : 260;
+  // 2026-04 バトル用に "battle" サイズを追加: 防御/攻撃スロットで使用。
+  // sm は overlay (deck phase, モーダル) 用。
+  const w = size === 'sm' ? 120 : size === 'battle' ? 180 : 200;
+  const h = size === 'sm' ? 150 : size === 'battle' ? 250 : 260;
   const activeMode = mode ?? 'neutral';
   const atk = card.attackPower ?? card.power;
   const def = card.defensePower ?? card.power;
-  const fontAtk = size === 'sm' ? '14px' : '20px';
-  const fontDef = size === 'sm' ? '14px' : '20px';
+  const fontAtk = size === 'sm' ? '14px' : size === 'battle' ? '26px' : '24px';
+  const fontDef = size === 'sm' ? '14px' : size === 'battle' ? '26px' : '24px';
+  const isBig = size !== 'sm';
 
   return (
     <div
@@ -1865,7 +1877,7 @@ function CardDisplay({ card, isDefense, isWinner, size, mode }: {
     >
       {!imgLoaded && (
         <div className="absolute inset-0 flex items-center justify-center animate-pulse" style={{ background: `linear-gradient(135deg, ${catInfo.color}15, rgba(14,20,45,0.95))` }}>
-          <span className={`${size === 'sm' ? 'text-4xl' : 'text-6xl'} opacity-40`}>{catInfo.emoji}</span>
+          <span className={`${isBig ? 'text-6xl' : 'text-4xl'} opacity-40`}>{catInfo.emoji}</span>
         </div>
       )}
       {card.imageUrl && (
@@ -1881,13 +1893,16 @@ function CardDisplay({ card, isDefense, isWinner, size, mode }: {
       )}
       <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent flex flex-col justify-between p-2">
         <div className="flex items-start justify-between">
-          <div className={size === 'sm' ? 'text-xl' : 'text-3xl'}>{catInfo.emoji}</div>
-          <div className={`px-${size === 'sm' ? '1.5' : '2'} py-0.5 rounded text-[${size === 'sm' ? '10px' : '12px'}] font-black`} style={{ background: rarInfo.bgColor, color: rarInfo.color }}>
+          <div className={isBig ? 'text-3xl' : 'text-xl'}>{catInfo.emoji}</div>
+          <div className={`px-${isBig ? '2' : '1.5'} py-0.5 rounded font-black`} style={{ background: rarInfo.bgColor, color: rarInfo.color, fontSize: isBig ? '13px' : '10px' }}>
             {rarInfo.label}
           </div>
         </div>
         <div>
-          <p className={`font-black text-white drop-shadow-lg ${size === 'sm' ? 'text-sm leading-tight mb-1' : 'text-lg leading-tight mb-1'}`} style={{ textShadow: '0 2px 6px rgba(0,0,0,0.95)' }}>
+          <p
+            className="font-black text-white drop-shadow-lg leading-tight mb-1"
+            style={{ fontSize: isBig ? '20px' : '14px', textShadow: '0 2px 6px rgba(0,0,0,0.95)' }}
+          >
             {card.name}
           </p>
           {/* Attack / Defense power badges — always visible */}
@@ -1933,8 +1948,8 @@ function CardDisplay({ card, isDefense, isWinner, size, mode }: {
           </div>
         </div>
       </div>
-      {isDefense && <div className="absolute top-1.5 left-1.5"><span className={size === 'sm' ? 'text-base' : 'text-xl'}>🛡️</span></div>}
-      {isWinner && <div className="absolute top-1.5 right-1.5 kc-win-badge"><span className={`${size === 'sm' ? 'text-lg' : 'text-2xl'} drop-shadow-lg`}>👑</span></div>}
+      {isDefense && <div className="absolute top-1.5 left-1.5"><span className={isBig ? 'text-xl' : 'text-base'}>🛡️</span></div>}
+      {isWinner && <div className="absolute top-1.5 right-1.5 kc-win-badge"><span className={`${isBig ? 'text-2xl' : 'text-lg'} drop-shadow-lg`}>👑</span></div>}
     </div>
   );
 }
@@ -1946,8 +1961,8 @@ function CardBack({ side }: { side: 'player' | 'ai' }) {
     <div
       className="inline-block rounded-xl relative overflow-hidden"
       style={{
-        width: 200,
-        height: 260,
+        width: 180,
+        height: 250,
         background: `linear-gradient(135deg, ${color}33, rgba(14,20,45,0.95))`,
         border: `3px solid ${color}88`,
         boxShadow: `0 6px 20px rgba(0,0,0,0.6), 0 0 18px ${color}44`,
