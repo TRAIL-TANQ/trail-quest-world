@@ -12,6 +12,7 @@ import HomePage from "./pages/HomePage";
 import GameListPage from "./pages/GameListPage";
 import KnowledgeChallenger from "./pages/KnowledgeChallenger";
 import StageSelectPage from "./pages/StageSelectPage";
+import HallOfFamePage from "./pages/HallOfFamePage";
 import GachaPage from "./pages/GachaPage";
 import RankingPage from "./pages/RankingPage";
 import CollectionPage from "./pages/CollectionPage";
@@ -34,6 +35,7 @@ function Router() {
             <Route path="/" component={HomePage} />
             <Route path="/games" component={GameListPage} />
             <Route path="/games/stages" component={StageSelectPage} />
+            <Route path="/hall-of-fame" component={HallOfFamePage} />
             <Route path="/gacha" component={GachaPage} />
             <Route path="/ranking" component={RankingPage} />
             <Route path="/collection" component={CollectionPage} />

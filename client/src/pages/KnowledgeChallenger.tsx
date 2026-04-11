@@ -47,6 +47,7 @@ import {
 import { getStage, createStageAIDeck } from '@/lib/stages';
 import { useStageProgressStore } from '@/lib/stageProgressStore';
 import { applyRatingChange } from '@/lib/ratingService';
+import { saveHallOfFame } from '@/lib/hallOfFameService';
 import { toast } from 'sonner';
 
 type ScreenPhase = 'title' | 'playing' | 'result';
@@ -401,6 +402,24 @@ export default function KnowledgeChallenger() {
         if (res) {
           toast.info(`レート ${res.delta >= 0 ? '+' : ''}${res.delta} (${res.newRating})`);
         }
+      });
+    }
+
+    // 変更11: 5-0 全勝なら殿堂入りデッキを保存（フリープレイでもOK）
+    if (won && gameState.history.length === 5 && gameState.history.every((r) => r.winner === 'player')) {
+      const totalFans = gameState.playerFans;
+      // 現在のデッキ = 残りのデッキ + ベンチ上のカード（バトル終了時点で手元にあったカード全て）
+      const deckSnapshot = [
+        ...gameState.player.deck,
+        ...gameState.player.bench.flatMap((slot) => Array.from({ length: slot.count }, () => slot.card)),
+      ];
+      void saveHallOfFame({
+        childId: userId,
+        deck: deckSnapshot,
+        totalFans,
+        stageId: currentStage?.id ?? null,
+      }).then((ok) => {
+        if (ok) toast.success('🏆 殿堂入り！ 5-0 パーフェクトクリア！');
       });
     }
 

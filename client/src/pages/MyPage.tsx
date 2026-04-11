@@ -189,6 +189,13 @@ export default function MyPage() {
             <span className="text-amber-200/25 text-sm">→</span>
           </div>
         </Link>
+        <Link href="/hall-of-fame">
+          <div className="rounded-xl p-3 flex items-center justify-between transition-all hover:scale-[1.01] active:scale-[0.99]"
+            style={{ background: 'linear-gradient(135deg, rgba(255,215,0,0.1), rgba(255,215,0,0.03))', border: '1px solid rgba(255,215,0,0.25)' }}>
+            <div className="flex items-center gap-2"><span>🏆</span><span className="text-sm text-amber-100">殿堂入りデッキ</span></div>
+            <span className="text-amber-200/25 text-sm">→</span>
+          </div>
+        </Link>
         <Link href="/shop">
           <div className="rounded-xl p-3 flex items-center justify-between transition-all hover:scale-[1.01] active:scale-[0.99]"
             style={{ background: 'linear-gradient(135deg, rgba(255,215,0,0.06), rgba(255,215,0,0.02))', border: '1px solid rgba(255,215,0,0.15)' }}>
