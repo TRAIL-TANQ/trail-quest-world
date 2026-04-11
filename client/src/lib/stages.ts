@@ -162,6 +162,20 @@ export function createStageAIDeck(stageId: number): BattleCard[] {
     }
     case 'balanced':
     default: {
+      // ステージ1: 初心者向けにプレイヤー初期デッキより少し弱く。
+      //   8N (1/1 ×6 + 2/2 ×2) + 2R (2/2 ×2)、SR/SSR なし。
+      if (stage.id === 1) {
+        const sig = (c: BattleCard) => `${c.attackPower ?? c.power}/${c.defensePower ?? c.power}`;
+        const n11 = shuffled(ALL_BATTLE_CARDS.filter((c) => c.rarity === 'N' && sig(c) === '1/1' && c.category !== 'heritage'));
+        const n22 = shuffled(ALL_BATTLE_CARDS.filter((c) => c.rarity === 'N' && sig(c) === '2/2'));
+        const r22 = shuffled(ALL_BATTLE_CARDS.filter((c) => c.rarity === 'R' && sig(c) === '2/2'));
+        const seeds = [
+          ...n11.slice(0, 6),
+          ...n22.slice(0, 2),
+          ...r22.slice(0, 2),
+        ];
+        return buildDeck('ai-stage1', seeds, { ssrMax: 0, srMax: 0 }, ['N', 'R']);
+      }
       // 難易度に応じてレア度のブーストを変える
       const srBoost = Math.min(3, Math.floor(stage.id / 3));  // 後半ステージで SR を多めに
       const srPool  = ALL_BATTLE_CARDS.filter((c) => c.rarity === 'SR');

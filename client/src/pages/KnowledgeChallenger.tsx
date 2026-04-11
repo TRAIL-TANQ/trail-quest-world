@@ -101,7 +101,6 @@ export default function KnowledgeChallenger() {
     | 'defender_show'
     | 'attack_reveal'
     | 'resolve'
-    | 'sub_battle_summary'
     | 'game_over';
   const [cineStep, setCineStep] = useState<CinematicStep>('idle');
   // Skip / manual advance via a latch: the battle loop creates an
@@ -437,16 +436,40 @@ export default function KnowledgeChallenger() {
             await waitStep(RESOLVE_BANNER_MS);
             if (unmountedRef.current) return;
 
-            // Sub-battle summary overlay: shows flag / bench / next-turn,
-            // waits ~2s or until the player taps 続ける.
-            console.log('[KC] → sub_battle_summary');
-            setCineStep('sub_battle_summary');
-            await waitStep(2000);
-            if (unmountedRef.current) return;
-
-            // Transition to next sub-battle
+            // 攻守交代テロップ: 旧フルスクリーンサマリーを廃止し、中央に
+            // 一瞬だけ「攻守交代！～」とテロップを流す。
             console.log('[KC] → continueAfterResolve (next sub-battle)');
-            setGameState((prev) => (prev ? continueAfterResolve(prev) : prev));
+            const continued: GameState | null = (() => {
+              let captured: GameState | null = null;
+              setGameState((prev) => {
+                if (!prev) return prev;
+                const c = continueAfterResolve(prev);
+                captured = c;
+                return c;
+              });
+              return captured;
+            })();
+            await waitMs(16);
+            if (unmountedRef.current) return;
+            if (continued) {
+              const c = continued as GameState;
+              const nextAttackerIsPlayer = c.flagHolder === 'ai';
+              const telopText = nextAttackerIsPlayer
+                ? '⚔️ 攻守交代！あなたの攻撃！'
+                : '🛡️ 攻守交代！あなたが防御！';
+              setGameState((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      effectTelop: {
+                        text: telopText,
+                        color: nextAttackerIsPlayer ? '#ff6b6b' : '#60a5fa',
+                        key: Date.now() + Math.floor(Math.random() * 1000),
+                      },
+                    }
+                  : prev,
+              );
+            }
             setCineStep('idle');
             return;
           }
@@ -476,6 +499,19 @@ export default function KnowledgeChallenger() {
     advanceLatchRef.current?.();
   }, []);
   const handleSkipReveal = handleAdvance;
+
+  // Player resigns the current attack: revealed cards stay in flight, but the
+  // game ends as a loss. Resolves the player-action latch so the run loop can
+  // detect game_over on the next iteration.
+  const handleForfeitAttack = useCallback(() => {
+    console.log('[KC] forfeit attack');
+    setGameState((prev) =>
+      prev
+        ? { ...prev, phase: 'game_over', winner: 'ai', message: '攻撃を諦めた' }
+        : prev,
+    );
+    playerActionLatchRef.current?.();
+  }, []);
 
   // ===== Deck phase: tap card → show quiz =====
   // NOTE: クイズ出題は deck_phase 限定。バトル中は絶対に走らない。
@@ -1000,7 +1036,7 @@ export default function KnowledgeChallenger() {
       </div>
 
       {/* AI Bench */}
-      <BenchDisplay side="ai" bench={gameState.ai.bench} deckCount={gameState.ai.deck.length} quarantineCount={gameState.quarantine.ai.length} />
+      <BenchDisplay side="ai" bench={gameState.ai.bench} deckCount={gameState.ai.deck.length} quarantineCount={gameState.quarantine.ai.length} animKey={gameState.history.length} />
 
       {/* ===== Battle Field =====
           Layout:
@@ -1028,15 +1064,7 @@ export default function KnowledgeChallenger() {
 
         const renderDefenderSlot = () => {
           if (!shouldShowDefender || !defenderCard) {
-            return (
-              <div className="inline-block rounded-xl" style={{
-                width: 180, height: 250,
-                background: defenderSide === 'ai' ? 'rgba(239,68,68,0.08)' : 'rgba(34,197,94,0.08)',
-                border: `2px dashed ${defenderSide === 'ai' ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)'}`,
-              }}>
-                <div className="flex items-center justify-center h-full text-4xl opacity-30">🎴</div>
-              </div>
-            );
+            return <CardBack side={defenderSide} />;
           }
           const shatter = attackerWonSub;
           return (
@@ -1055,16 +1083,8 @@ export default function KnowledgeChallenger() {
 
         const renderAttackerSlot = () => {
           if (!shouldShowAttackPile || attackCards.length === 0) {
-            // During battle_intro and turn_banner and defender_show, show a placeholder
-            return (
-              <div className="inline-block rounded-xl" style={{
-                width: 180, height: 250,
-                background: attackerSide === 'ai' ? 'rgba(239,68,68,0.08)' : 'rgba(34,197,94,0.08)',
-                border: `2px dashed ${attackerSide === 'ai' ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)'}`,
-              }}>
-                <div className="flex items-center justify-center h-full text-4xl opacity-30">🎴</div>
-              </div>
-            );
+            // Before any reveals, show the attacker's deck top as a card back.
+            return <CardBack side={attackerSide} />;
           }
           // Show the attack pile as a stacked fan of cards. Most recent on top.
           const lastCard = attackCards[attackCards.length - 1];
@@ -1168,7 +1188,6 @@ export default function KnowledgeChallenger() {
             defender_show: '攻撃を見る ▶',
             attack_reveal: '比較する ▶',
             resolve: '次のサブバトルへ ▶',
-            sub_battle_summary: '続ける ▶',
             game_over: '結果を見る ▶',
           };
           const label = waitingForPlayerReveal
@@ -1276,64 +1295,66 @@ export default function KnowledgeChallenger() {
       })()}
 
       {/* Player Bench */}
-      <BenchDisplay side="player" bench={gameState.player.bench} deckCount={gameState.player.deck.length} quarantineCount={gameState.quarantine.player.length} />
+      <BenchDisplay side="player" bench={gameState.player.bench} deckCount={gameState.player.deck.length} quarantineCount={gameState.quarantine.player.length} animKey={gameState.history.length} />
 
-      {/* ===== Sub-battle Summary Overlay ===== */}
-      {cineStep === 'sub_battle_summary' && gameState.lastSubBattle && (() => {
-        const last = gameState.lastSubBattle;
-        const subIdx = last.idx;
-        const flagHolderLabel = gameState.flagHolder === 'player' ? 'あなた 🏆' : '相手 🏆';
-        const playerBench = gameState.player.bench.length;
-        const aiBench = gameState.ai.bench.length;
-        const playerQuarantine = gameState.quarantine.player.length;
-        const aiQuarantine = gameState.quarantine.ai.length;
-        // After continueAfterResolve, the new attacker is the OPPOSITE of the new flag holder.
-        const nextAttackerIsPlayer = gameState.flagHolder === 'ai';
-        const nextTurnText = nextAttackerIsPlayer ? '次は あなたの攻撃！' : '次は あなたが防御！';
+      {/* ===== Player Attack Reveal Modal =====
+           Shown when the player is the attacker, the loop is waiting on a
+           reveal click, and there's at least one revealed card so the
+           comparison is meaningful. */}
+      {waitingForPlayerReveal &&
+       gameState.flagHolder === 'ai' &&
+       gameState.defenseCard &&
+       gameState.attackRevealed.length > 0 && (() => {
+        const atk = gameState.attackCurrentPower;
+        const def = Math.max(0, (gameState.defenseCard.defensePower ?? gameState.defenseCard.power) + gameState.defenderBonus);
+        const gap = def - atk;
         return (
-          <div className="fixed inset-0 z-[165] flex items-center justify-center p-5" style={{ background: 'rgba(0,0,0,0.88)' }}>
+          <div className="fixed inset-0 z-[160] flex items-end justify-center pointer-events-none">
             <div
-              className="rounded-2xl p-6 w-full max-w-sm text-center kc-summary-pop"
+              className="rounded-2xl mb-24 mx-4 p-5 max-w-sm w-full pointer-events-auto kc-summary-pop"
               style={{
-                background: 'linear-gradient(135deg, rgba(21,29,59,0.98), rgba(14,20,45,0.98))',
-                border: '3px solid rgba(255,215,0,0.6)',
-                boxShadow: '0 12px 40px rgba(0,0,0,0.8), 0 0 32px rgba(255,215,0,0.35)',
+                background: 'linear-gradient(135deg, rgba(21,29,59,0.97), rgba(14,20,45,0.97))',
+                border: '3px solid rgba(255,200,0,0.6)',
+                boxShadow: '0 12px 40px rgba(0,0,0,0.85), 0 0 32px rgba(255,200,0,0.35)',
               }}
             >
-              <h3 className="font-black mb-3" style={{ fontSize: '22px', color: '#ffd700' }}>
-                サブバトル{subIdx} 終了
-              </h3>
-              <div className="rounded-xl p-3 mb-3 text-left" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,215,0,0.25)' }}>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs font-bold text-amber-200/70">フラッグ</span>
-                  <span className="text-sm font-black" style={{ color: '#ffd700' }}>{flagHolderLabel}</span>
-                </div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs font-bold text-amber-200/70">あなたのベンチ</span>
-                  <span className="text-sm font-black text-green-300">{playerBench}/{BENCH_MAX_SLOTS}{playerQuarantine > 0 ? ` (隔離 +${playerQuarantine})` : ''}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-amber-200/70">相手のベンチ</span>
-                  <span className="text-sm font-black text-red-300">{aiBench}/{BENCH_MAX_SLOTS}{aiQuarantine > 0 ? ` (隔離 +${aiQuarantine})` : ''}</span>
-                </div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-black" style={{ fontSize: '18px', color: '#ff6b6b' }}>
+                  ⚔️ あなたの攻撃: {atk}
+                </span>
+                <span className="font-black" style={{ fontSize: '18px', color: '#60a5fa' }}>
+                  🛡️ 相手の防御: {def}
+                </span>
               </div>
-              <p className="font-black mb-4" style={{ fontSize: '18px', color: nextAttackerIsPlayer ? '#f87171' : '#60a5fa' }}>
-                {nextTurnText}
+              <p className="text-center font-black mb-3" style={{ fontSize: '17px', color: '#ffd700', textShadow: '0 0 12px rgba(255,200,0,0.5)' }}>
+                あと{gap}パワー足りない！
               </p>
               <button
                 onClick={handleAdvance}
-                className="w-full rounded-xl font-black active:scale-[0.98]"
+                className="w-full rounded-xl font-black active:scale-[0.98] mb-2"
                 style={{
-                  minHeight: '56px',
-                  fontSize: '17px',
+                  minHeight: '60px',
+                  fontSize: '18px',
                   color: '#fff',
                   background: 'linear-gradient(180deg, #22c55e 0%, #16a34a 100%)',
                   border: '3px solid #4ade80',
-                  boxShadow: '0 6px 24px rgba(34,197,94,0.55)',
+                  boxShadow: '0 6px 24px rgba(34,197,94,0.6), 0 0 24px rgba(74,222,128,0.4)',
                   textShadow: '0 1px 3px rgba(0,0,0,0.6)',
                 }}
               >
-                続ける ▶
+                🎴 もう1枚出す ▶
+              </button>
+              <button
+                onClick={handleForfeitAttack}
+                className="w-full text-center py-1.5"
+                style={{
+                  fontSize: '12px',
+                  color: 'rgba(255,255,255,0.5)',
+                  background: 'transparent',
+                  textDecoration: 'underline',
+                }}
+              >
+                🏳️ 攻撃をやめる
               </button>
             </div>
           </div>
@@ -1803,6 +1824,19 @@ export default function KnowledgeChallenger() {
           100% { opacity: 1; transform: scale(1); }
         }
         .kc-summary-pop { animation: kcSummaryPop 0.45s ease-out; }
+        @keyframes kcBenchPop {
+          0%   { transform: scale(0.4) translateY(-40px); opacity: 0; }
+          55%  { transform: scale(1.18) translateY(0); opacity: 1; }
+          75%  { transform: scale(0.95); }
+          100% { transform: scale(1); }
+        }
+        .kc-bench-pop { animation: kcBenchPop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        @keyframes kcCountBump {
+          0%   { transform: scale(1); }
+          40%  { transform: scale(1.5); background: #ff6b6b !important; }
+          100% { transform: scale(1); }
+        }
+        .kc-count-bump { animation: kcCountBump 0.45s ease-out; }
         @keyframes kcTurnBannerPop {
           0%   { opacity: 0; transform: translateY(-30px) scale(0.7); }
           40%  { opacity: 1; transform: translateY(0) scale(1.1); }
@@ -1914,9 +1948,18 @@ export default function KnowledgeChallenger() {
 
 type BenchSlotUI = { name: string; card: BattleCard; count: number };
 
-function BenchDisplay({ side, bench, deckCount, quarantineCount }: {
-  side: 'player' | 'ai'; bench: BenchSlotUI[]; deckCount: number; quarantineCount?: number;
+function BenchDisplay({ side, bench, deckCount, quarantineCount, animKey }: {
+  side: 'player' | 'ai'; bench: BenchSlotUI[]; deckCount: number; quarantineCount?: number; animKey?: number;
 }) {
+  // Track which slot names existed last render → newly added (or count-bumped)
+  // slots get the kc-bench-pop animation. Reset whenever animKey changes
+  // (i.e. on each new sub-battle resolve).
+  const prevBenchRef = useRef<Map<string, number>>(new Map());
+  useEffect(() => {
+    const m = new Map<string, number>();
+    bench.forEach((s) => m.set(s.name, s.count));
+    prevBenchRef.current = m;
+  }, [animKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const isPlayer = side === 'player';
   const label = isPlayer ? 'あなた' : 'AI';
   const labelColor = isPlayer ? '#22c55e' : '#ef4444';
@@ -1976,11 +2019,17 @@ function BenchDisplay({ side, bench, deckCount, quarantineCount }: {
               );
             }
             const catInfo = CATEGORY_INFO[slot.card.category];
+            const prevCount = prevBenchRef.current.get(slot.name) ?? 0;
+            const isNew = prevCount === 0;
+            const isCountBumped = prevCount > 0 && prevCount < slot.count;
+            // Re-mounting via key forces the slot animation to replay each time
+            // animKey changes (i.e. each new sub-battle resolution).
+            const slotKey = `${slot.name}-${animKey ?? 0}`;
             return (
               <button
-                key={slot.name}
+                key={slotKey}
                 onClick={() => isPlayer && setDetailSlot(slot)}
-                className="flex-1 rounded-lg relative overflow-hidden transition-all active:scale-95"
+                className={`flex-1 rounded-lg relative overflow-hidden transition-all active:scale-95 ${isNew ? 'kc-bench-pop' : ''}`}
                 style={{ background: `${catInfo.color}1a`, border: `2px solid ${catInfo.color}77`, minHeight: '54px', cursor: isPlayer ? 'pointer' : 'default' }}
               >
                 {slot.card.imageUrl ? (
@@ -1993,7 +2042,7 @@ function BenchDisplay({ side, bench, deckCount, quarantineCount }: {
                   <p className="text-[9px] font-black text-white leading-tight truncate" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.95)' }}>{slot.name}</p>
                 </div>
                 {slot.count > 1 && (
-                  <div className="absolute top-0.5 right-0.5 z-20 rounded-full min-w-[16px] h-[16px] flex items-center justify-center px-1" style={{ background: '#ffd700', border: '1.5px solid rgba(0,0,0,0.6)' }}>
+                  <div className={`absolute top-0.5 right-0.5 z-20 rounded-full min-w-[16px] h-[16px] flex items-center justify-center px-1 ${isCountBumped ? 'kc-count-bump' : ''}`} style={{ background: '#ffd700', border: '1.5px solid rgba(0,0,0,0.6)' }}>
                     <span className="text-[9px] font-black text-black">×{slot.count}</span>
                   </div>
                 )}
@@ -2166,16 +2215,31 @@ function CardBack({ side }: { side: 'player' | 'ai' }) {
       style={{
         width: 180,
         height: 250,
-        background: `linear-gradient(135deg, ${color}33, rgba(14,20,45,0.95))`,
-        border: `3px solid ${color}88`,
-        boxShadow: `0 6px 20px rgba(0,0,0,0.6), 0 0 18px ${color}44`,
+        background: `linear-gradient(135deg, rgba(21,29,59,0.98) 0%, rgba(14,20,45,0.98) 50%, ${color}22 100%)`,
+        border: `3px solid ${color}aa`,
+        boxShadow: `0 6px 20px rgba(0,0,0,0.6), 0 0 22px ${color}55, inset 0 0 30px ${color}22`,
       }}
     >
-      <div className="absolute inset-3 rounded-lg flex items-center justify-center"
-        style={{ border: `2px dashed ${color}aa` }}>
-        <span className="text-5xl opacity-80">🎴</span>
+      <div
+        className="absolute inset-3 rounded-lg flex items-center justify-center"
+        style={{ border: `2px dashed ${color}99`, background: `radial-gradient(circle, ${color}18, transparent 70%)` }}
+      >
+        <span
+          className="font-black"
+          style={{
+            fontSize: '88px',
+            lineHeight: 1,
+            color,
+            textShadow: `0 0 24px ${color}cc, 0 4px 10px rgba(0,0,0,0.85)`,
+          }}
+        >
+          ?
+        </span>
       </div>
-      <div className="absolute bottom-2 left-0 right-0 text-center text-xs font-black" style={{ color, textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}>
+      <div
+        className="absolute bottom-2 left-0 right-0 text-center font-black"
+        style={{ fontSize: '13px', color, textShadow: '0 1px 4px rgba(0,0,0,0.9)' }}
+      >
         {isPlayer ? 'あなた' : '相手'}
       </div>
     </div>
