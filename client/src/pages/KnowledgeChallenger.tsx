@@ -364,7 +364,7 @@ export default function KnowledgeChallenger() {
         attackerPower,
         attackerImage: attackerCard.imageUrl,
         defenderName: defenderCard.name,
-        defenderPower: defenderCard.power,
+        defenderPower: defenderCard.defensePower ?? defenderCard.power,
         attackerWins,
         decisive,
       });
@@ -540,7 +540,7 @@ export default function KnowledgeChallenger() {
         ? result.aiAttackCards[result.aiAttackCards.length - 1]
         : result.aiCard ?? null;
     const attackerPower = result.aiAttackTotal;
-    const defenderPower = defender?.power ?? 0;
+    const defenderPower = defender ? (defender.defensePower ?? defender.power) : 0;
     const attackerWins = result.winningCardSide === 'ai';
 
     // If there's no meaningful card (edge case: empty deck → game_over), just apply immediately
@@ -878,8 +878,8 @@ export default function KnowledgeChallenger() {
   const isPlayerAttacking = gameState.flagHolder === 'ai';
 
   const defenderPower = isPlayerAttacking
-    ? (gameState.aiCard?.power ?? 0)
-    : (gameState.playerCard?.power ?? 0);
+    ? (gameState.aiCard ? (gameState.aiCard.defensePower ?? gameState.aiCard.power) : 0)
+    : (gameState.playerCard ? (gameState.playerCard.defensePower ?? gameState.playerCard.power) : 0);
   const attackerPower = isPlayerAttacking
     ? gameState.playerPowerTotal
     : gameState.aiAttackTotal;
@@ -2288,7 +2288,10 @@ function BenchDisplay({ side, bench, deckCount }: {
             <div className="text-center">
               <p className="text-xl font-black text-amber-100 mb-1" style={{ textShadow: '0 2px 4px rgba(0,0,0,0.9)' }}>{detailSlot.name}</p>
               <p className="text-sm font-bold mb-2" style={{ color: CATEGORY_INFO[detailSlot.card.category].color }}>
-                {CATEGORY_INFO[detailSlot.card.category].label} / {RARITY_INFO[detailSlot.card.rarity].label} / パワー {detailSlot.card.power}
+                {CATEGORY_INFO[detailSlot.card.category].label} / {RARITY_INFO[detailSlot.card.rarity].label}
+                {detailSlot.card.attackPower !== undefined && detailSlot.card.defensePower !== undefined
+                  ? <> / ⚔️{detailSlot.card.attackPower} / 🛡️{detailSlot.card.defensePower}</>
+                  : <> / パワー {detailSlot.card.power}</>}
               </p>
               <p className="text-xs text-amber-200/80 leading-relaxed mb-3">{detailSlot.card.effectDescription}</p>
               <div className="rounded-lg p-2" style={{ background: 'rgba(255,215,0,0.1)', border: '1px solid rgba(255,215,0,0.3)' }}>
@@ -2331,10 +2334,17 @@ function CardDisplay({ card, isDefense, isWinner, size }: { card: BattleCard; is
           <p className={`font-black text-white drop-shadow-lg ${size === 'sm' ? 'text-sm leading-tight mb-0.5' : 'text-lg leading-tight mb-1'}`} style={{ textShadow: '0 2px 6px rgba(0,0,0,0.95), 0 0 3px rgba(0,0,0,0.8)' }}>{card.name}</p>
           <div className="flex items-center justify-between">
             {size !== 'sm' && <p className="text-sm font-bold" style={{ color: catInfo.color, textShadow: '0 1px 3px rgba(0,0,0,0.9)' }}>{catInfo.label}</p>}
-            <div className="flex items-baseline gap-0.5 ml-auto">
-              <span className={`font-black ${size === 'sm' ? 'text-xl' : 'text-3xl'}`} style={{ color: '#ffd700', textShadow: '0 0 10px rgba(255,215,0,0.7), 0 2px 4px rgba(0,0,0,0.95)' }}>{card.power}</span>
-              <span className={`font-bold ${size === 'sm' ? 'text-xs' : 'text-sm'}`} style={{ color: '#ffd700', textShadow: '0 1px 3px rgba(0,0,0,0.9)' }}>P</span>
-            </div>
+            {card.attackPower !== undefined && card.defensePower !== undefined ? (
+              <div className="flex flex-col items-end gap-0 ml-auto leading-none">
+                <span className={`font-black ${size === 'sm' ? 'text-xs' : 'text-sm'}`} style={{ color: '#ff6b6b', textShadow: '0 1px 3px rgba(0,0,0,0.95)' }}>⚔️{card.attackPower}</span>
+                <span className={`font-black ${size === 'sm' ? 'text-xs' : 'text-sm'}`} style={{ color: '#64b5ff', textShadow: '0 1px 3px rgba(0,0,0,0.95)' }}>🛡️{card.defensePower}</span>
+              </div>
+            ) : (
+              <div className="flex items-baseline gap-0.5 ml-auto">
+                <span className={`font-black ${size === 'sm' ? 'text-xl' : 'text-3xl'}`} style={{ color: '#ffd700', textShadow: '0 0 10px rgba(255,215,0,0.7), 0 2px 4px rgba(0,0,0,0.95)' }}>{card.power}</span>
+                <span className={`font-bold ${size === 'sm' ? 'text-xs' : 'text-sm'}`} style={{ color: '#ffd700', textShadow: '0 1px 3px rgba(0,0,0,0.9)' }}>P</span>
+              </div>
+            )}
           </div>
         </div>
       </div>

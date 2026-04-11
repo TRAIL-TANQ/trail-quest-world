@@ -17,6 +17,8 @@ export interface BattleCard {
   category: CardCategory;
   rarity: CardRarity;
   power: number;
+  attackPower?: number;   // Optional override when attacking (falls back to power)
+  defensePower?: number;  // Optional override when defending (falls back to power)
   effectDescription: string;
   quizzes: Quiz[];
   correctBonus: number;
@@ -26,6 +28,17 @@ export interface BattleCard {
   comboRequires?: string[];    // Names of bench cards required for combo trigger
   fromTheBench?: boolean;      // Effect active while on bench
 }
+
+// Specific overrides for world heritage cards: defense-specialized with asymmetric atk/def
+export const HERITAGE_STAT_OVERRIDES: Record<string, { attackPower: number; defensePower: number }> = {
+  '万里の長城':   { attackPower: 1, defensePower: 8 },
+  'ピラミッド':   { attackPower: 2, defensePower: 7 },
+  'コロッセオ':   { attackPower: 1, defensePower: 6 },
+  'タージ・マハル': { attackPower: 1, defensePower: 7 },
+  'アンコールワット': { attackPower: 2, defensePower: 7 },
+  'マチュ・ピチュ': { attackPower: 1, defensePower: 8 },
+  '自由の女神':   { attackPower: 2, defensePower: 6 },
+};
 
 // Combo card IDs for detection
 export const COMBO_CARD_IDS = {
@@ -658,6 +671,15 @@ function toBattleCard(cc: CollectionCard): BattleCard {
     effectDescription = '公開時発動：ベンチに「マンハッタン計画」と「トリニティ実験」がある場合、相手の場を破壊し、相手デッキ上から5枚を隔離。条件不足時は不発（基本パワー2）。';
   }
 
+  // Heritage-specific attack/defense stat overrides
+  let attackPower: number | undefined;
+  let defensePower: number | undefined;
+  const heritageOverride = HERITAGE_STAT_OVERRIDES[cc.name];
+  if (heritageOverride) {
+    attackPower = heritageOverride.attackPower;
+    defensePower = heritageOverride.defensePower;
+  }
+
   const quizzes = QUIZ_DATA[cc.id] || [
     { question: `${cc.name}について正しいのは？`, choices: [cc.description, '宇宙で発見された', '1000年前に消えた', '南極にある'], correctIndex: 0 },
     { question: `${cc.name}のカテゴリは？`, choices: [CATEGORY_INFO[category].label, '未知', '伝説', '架空'], correctIndex: 0 },
@@ -670,6 +692,8 @@ function toBattleCard(cc: CollectionCard): BattleCard {
     category,
     rarity,
     power,
+    attackPower,
+    defensePower,
     effectDescription,
     quizzes,
     correctBonus,

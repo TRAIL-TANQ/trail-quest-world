@@ -121,9 +121,17 @@ function cloneBench(bench: BenchSlot[]): BenchSlot[] {
   return bench.map(s => ({ ...s }));
 }
 
+// Get base attack/defense power for a card, using overrides if present
+export function getBaseAttack(card: BattleCard): number {
+  return card.attackPower ?? card.power;
+}
+export function getBaseDefense(card: BattleCard): number {
+  return card.defensePower ?? card.power;
+}
+
 // Calculate effective power with category-based effects
 function calculatePower(card: BattleCard, quizCorrect: boolean, bench: BenchSlot[], isDefending: boolean): number {
-  let power = card.power;
+  let power = isDefending ? getBaseDefense(card) : getBaseAttack(card);
 
   if (quizCorrect) {
     power += card.correctBonus;
@@ -280,7 +288,7 @@ export function processQuizAnswer(state: GameState, correct: boolean): GameState
 
   if (isPlayerAttacking) {
     // プレイヤーが攻撃中
-    const aiPower = aiCard.power;
+    const aiPower = getBaseDefense(aiCard);
 
     // 攻撃側 >= 防御側 で攻撃側の勝ち（同値は攻撃側勝利）
     if (newPlayerPowerTotal >= aiPower) {
@@ -363,7 +371,7 @@ export function aiTurn(state: GameState): GameState {
     };
   }
 
-  const playerCardPower = state.playerCard ? state.playerCard.power : 0;
+  const playerCardPower = state.playerCard ? getBaseDefense(state.playerCard) : 0;
   let aiDeck = [...state.ai.deck];
   let aiAttackCards: BattleCard[] = [];
   let aiAttackTotal = 0;
