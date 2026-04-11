@@ -13,11 +13,16 @@
  *   不正解: +0 ALT
  *
  * XPルール:
- *   正解: +10 XP
- *   レベル = Math.floor(XP / 100) + 1
+ *   正解: +10 XP（child_status.xp に蓄積）
+ *
+ * レベル:
+ *   レベルは lifetime ALT ベースで計算（client/src/lib/level.ts の LEVEL_TABLE）
+ *   XPから計算する旧ロジック (floor(xp/100)+1) は廃止（変更15）
+ *   child_status.level への書き込みは updateChildStatus から除外。
  */
 import { supabase } from './supabase';
 import type { CardRarity } from './knowledgeCards';
+import { calculateLevel } from './level';
 
 // ---------- Types ----------
 
@@ -80,13 +85,6 @@ export function calculateAltReward(
  */
 export function calculateXpReward(isCorrect: boolean): number {
   return isCorrect ? 10 : 0;
-}
-
-/**
- * XPからレベルを計算
- */
-export function calculateLevelFromXp(xp: number): number {
-  return Math.floor(xp / 100) + 1;
 }
 
 // ---------- Supabase Operations ----------
@@ -157,7 +155,11 @@ export async function saveQuizAttempt(attempt: QuizAttemptRecord): Promise<boole
 }
 
 /**
- * child_statusのALTポイントとXPを更新
+ * child_statusのALTポイントとXPを更新。
+ * level は lifetime ALT ベース（calculateLevel）で計算して同期書き込みする。
+ * 注: 現状 child_status には lifetime total_alt カラムがないため、
+ *     alt_points を lifetime 相当として扱う。ショップ等の消費を考慮した
+ *     厳密な lifetime 集計が必要になったら child_status に total_alt を追加する。
  */
 export async function updateChildStatus(
   childId: string,
@@ -165,13 +167,12 @@ export async function updateChildStatus(
   xpDelta: number,
 ): Promise<ChildStatus | null> {
   try {
-    // 現在の値を取得
     const current = await fetchChildStatus(childId);
     if (!current) return null;
 
     const newAlt = Math.max(0, current.alt_points + altDelta);
     const newXp = Math.max(0, current.xp + xpDelta);
-    const newLevel = calculateLevelFromXp(newXp);
+    const newLevel = calculateLevel(newAlt).level;
 
     const { data, error } = await supabase
       .from('child_status')
