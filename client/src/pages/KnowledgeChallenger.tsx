@@ -221,6 +221,15 @@ export default function KnowledgeChallenger() {
     }
   }, [gameState?.phase, gameState?.round, cineStep]);
 
+  // ===== Effect telop auto-clear (1.5s) =====
+  useEffect(() => {
+    if (!gameState?.effectTelop) return;
+    const id = window.setTimeout(() => {
+      setGameState((prev) => (prev && prev.effectTelop ? { ...prev, effectTelop: null } : prev));
+    }, 1500);
+    return () => clearTimeout(id);
+  }, [gameState?.effectTelop?.key]);
+
   // ===== Bug 2 safety: clear activeQuiz when phase leaves deck_phase =====
   useEffect(() => {
     if (gameState?.phase && gameState.phase !== 'deck_phase') {
@@ -1127,6 +1136,36 @@ export default function KnowledgeChallenger() {
       {/* Player Bench */}
       <BenchDisplay side="player" bench={gameState.player.bench} deckCount={gameState.player.deck.length} />
 
+      {/* ===== Effect Telop (card on-reveal effect) ===== */}
+      {gameState.effectTelop && (
+        <div
+          key={gameState.effectTelop.key}
+          className="fixed inset-0 z-[175] flex items-center justify-center pointer-events-none"
+        >
+          <div
+            className="kc-effect-telop px-6 py-4 rounded-2xl text-center"
+            style={{
+              background: 'linear-gradient(180deg, rgba(0,0,0,0.85), rgba(10,10,25,0.85))',
+              border: `3px solid ${gameState.effectTelop.color}`,
+              boxShadow: `0 0 32px ${gameState.effectTelop.color}aa, 0 8px 32px rgba(0,0,0,0.7)`,
+              maxWidth: '90vw',
+            }}
+          >
+            <p
+              className="font-black"
+              style={{
+                fontSize: '30px',
+                lineHeight: 1.25,
+                color: gameState.effectTelop.color,
+                textShadow: '0 2px 10px rgba(0,0,0,0.9), 0 0 20px rgba(0,0,0,0.6)',
+              }}
+            >
+              {gameState.effectTelop.text}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* ===== Deck Phase Overlay ===== */}
       {gameState.phase === 'deck_phase' && deckOffer && !activeQuiz && !swapState && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-3" style={{ background: 'rgba(0,0,0,0.85)' }}>
@@ -1488,6 +1527,14 @@ export default function KnowledgeChallenger() {
           100% { opacity: 1; transform: scale(1) rotate(0); }
         }
         .kc-outcome-banner { animation: kcOutcomePop 0.6s ease-out; }
+        @keyframes kcEffectTelop {
+          0%   { opacity: 0; transform: scale(0.6) translateY(-12px); }
+          20%  { opacity: 1; transform: scale(1.12) translateY(0); }
+          35%  { transform: scale(1) translateY(0); }
+          85%  { opacity: 1; transform: scale(1); }
+          100% { opacity: 0; transform: scale(0.95); }
+        }
+        .kc-effect-telop { animation: kcEffectTelop 1.5s ease-out forwards; }
         @keyframes kcTurnBannerPop {
           0%   { opacity: 0; transform: translateY(-30px) scale(0.7); }
           40%  { opacity: 1; transform: translateY(0) scale(1.1); }

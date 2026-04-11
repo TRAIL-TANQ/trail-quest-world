@@ -33,6 +33,72 @@ export type CardRarity = 'N' | 'R' | 'SR' | 'SSR';
 
 export type SpecialEffect = 'nuke_trigger' | 'nuke_ingredient_manhattan' | 'nuke_ingredient_trinity';
 
+// ===== On-reveal card effects =====
+// category: decides the color of the floating "effect telop" shown on reveal.
+//   atk     = 赤 (味方攻撃アップ / 火薬二倍 など)
+//   def     = 青 (味方防御アップ)
+//   debuff  = 紫 (相手弱体化)
+//   bench   = 緑 (ベンチ / デッキ構造操作)
+//   special = 金 (その他の特殊効果)
+export type CardEffectCategory = 'atk' | 'def' | 'debuff' | 'bench' | 'special';
+
+export interface CardEffect {
+  id: string;
+  name: string;
+  description: string;
+  category: CardEffectCategory;
+}
+
+export const EFFECT_COLORS: Record<CardEffectCategory, string> = {
+  atk: '#ef4444',     // 赤
+  def: '#3b82f6',     // 青
+  debuff: '#a855f7',  // 紫
+  bench: '#22c55e',   // 緑
+  special: '#ffd700', // 金
+};
+
+export const EFFECT_DEFS: Record<string, CardEffect> = {
+  davinci:    { id: 'davinci',    name: '万能の天才',         description: '公開時、攻撃時は攻撃+3、防御時は防御+3。', category: 'special' },
+  einstein:   { id: 'einstein',   name: '相対性理論',         description: '公開時、相手の最強カード1枚のパワーを-2する。', category: 'debuff' },
+  curie:      { id: 'curie',      name: '放射能の発見',       description: '公開時、このラウンドの味方攻撃すべて+1。', category: 'atk' },
+  napoleon:   { id: 'napoleon',   name: '電撃戦',             description: '攻撃時、攻撃パワー+3。', category: 'atk' },
+  cleopatra:  { id: 'cleopatra',  name: '魅了',               description: '公開時、相手のデッキ一番上を隔離する。', category: 'bench' },
+  nobunaga:   { id: 'nobunaga',   name: '天下布武',           description: '公開時、相手のベンチ最強カードを封印する。', category: 'bench' },
+  mozart:     { id: 'mozart',     name: '天才の旋律',         description: '公開時、次に公開する味方カードの攻撃+2。', category: 'atk' },
+  galileo:    { id: 'galileo',    name: '地動説',             description: '公開時、味方ベンチ合計 < 相手なら入れ替える。', category: 'bench' },
+  piranha:    { id: 'piranha',    name: '群れの猛攻',         description: '攻撃時、自分のベンチに同名ピラニアが居るほど攻撃+1。', category: 'atk' },
+  dolphin:    { id: 'dolphin',    name: 'エコーロケーション', description: '公開時、相手デッキ上2枚のうち強い方を底へ送る。', category: 'special' },
+  internet:   { id: 'internet',   name: '情報革命',           description: '公開時、自分ベンチからランダム1枚を隔離。', category: 'bench' },
+  phone:      { id: 'phone',      name: '通信',               description: '公開時、次デッキフェイズは5枚中3枚取得可。', category: 'special' },
+  telescope:  { id: 'telescope',  name: '先見',               description: '公開時、相手デッキ上3枚を確認。', category: 'special' },
+  gunpowder:  { id: 'gunpowder',  name: '爆発',               description: '攻撃時、攻撃パワー2倍。', category: 'atk' },
+  compass:    { id: 'compass',    name: '航海術',             description: '公開時、自分デッキの上3枚をパワー順に並べ替える。', category: 'bench' },
+  penicillin: { id: 'penicillin', name: '治療',               description: '公開時、自分ベンチ最強カード1枚をデッキの下へ戻す。', category: 'bench' },
+  paper:      { id: 'paper',      name: '記録',               description: '公開時、このマッチの獲得ALT+5。', category: 'special' },
+};
+
+// Card name → effect id. These are the only cards that carry on-reveal effects.
+// 全世界遺産はステータス特化のまま効果なし。
+export const EFFECT_BY_CARD_NAME: Record<string, string> = {
+  'ダ・ヴィンチ':       'davinci',
+  'アインシュタイン':   'einstein',
+  'キュリー夫人':       'curie',
+  'ナポレオン':         'napoleon',
+  'クレオパトラ':       'cleopatra',
+  '織田信長':           'nobunaga',
+  'モーツァルト':       'mozart',
+  'ガリレオ':           'galileo',
+  'ピラニア':           'piranha',
+  'イルカ':             'dolphin',
+  'インターネット':     'internet',
+  '電話':               'phone',
+  '望遠鏡':             'telescope',
+  '火薬':               'gunpowder',
+  '羅針盤':             'compass',
+  'ペニシリン':         'penicillin',
+  '紙':                 'paper',
+};
+
 export interface BattleCard {
   id: string;
   name: string;
@@ -49,6 +115,7 @@ export interface BattleCard {
   specialEffect?: SpecialEffect;
   comboRequires?: string[];    // Names of bench cards required for combo trigger
   fromTheBench?: boolean;      // Effect active while on bench
+  effect?: CardEffect;         // On-reveal auto-trigger effect (新効果システム)
 }
 
 // Specific overrides for world heritage cards: defense-specialized with asymmetric atk/def
@@ -708,6 +775,11 @@ function toBattleCard(cc: CollectionCard): BattleCard {
     { question: `${cc.name}は有名？`, choices: ['はい', 'いいえ', 'わからない', '聞いたことがない'], correctIndex: 0 },
   ];
 
+  // Attach on-reveal effect if this card name is mapped
+  const effectId = EFFECT_BY_CARD_NAME[cc.name];
+  const effect = effectId ? EFFECT_DEFS[effectId] : undefined;
+  const finalEffectDescription = effect ? `${effect.name}：${effect.description}` : effectDescription;
+
   return {
     id: cc.id,
     name: cc.name,
@@ -716,7 +788,7 @@ function toBattleCard(cc: CollectionCard): BattleCard {
     power,
     attackPower,
     defensePower,
-    effectDescription,
+    effectDescription: finalEffectDescription,
     quizzes,
     correctBonus,
     imageUrl: cc.imageUrl,
@@ -724,6 +796,7 @@ function toBattleCard(cc: CollectionCard): BattleCard {
     specialEffect,
     comboRequires,
     fromTheBench,
+    effect,
   };
 }
 

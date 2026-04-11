@@ -31,6 +31,7 @@
  * resolveBattleStep() when the attacker has accumulated enough power.
  */
 import type { BattleCard } from './knowledgeCards';
+import { EFFECT_COLORS } from './knowledgeCards';
 
 export const BENCH_MAX_SLOTS = 6;
 
@@ -81,6 +82,12 @@ export interface SubBattleResult {
   winner: Side;  // always the attacker (defender cannot win a sub-battle, they can only run out the attacker's deck → game over)
 }
 
+export interface EffectTelop {
+  text: string;
+  color: string;
+  key: number;
+}
+
 export interface GameState {
   phase: GamePhase;
   // Legacy: round counter, mostly for display and compatibility.
@@ -99,6 +106,16 @@ export interface GameState {
   attackRevealed: BattleCard[];         // cards revealed in the current attack
   attackCurrentPower: number;           // cumulative attack power so far
   lastSubBattle: SubBattleResult | null; // last resolved sub-battle (for outcome banner)
+  // ===== Effect system =====
+  // Per-sub-battle buffs (reset at resolveSubBattleWin)
+  defenderBonus: number;                                      // ±defense for current defender
+  roundAttackBonus: { player: number; ai: number };           // added to every reveal this sub-battle
+  pendingAttackBonus: { player: number; ai: number };         // one-shot, consumed on next reveal
+  // Persistent state
+  quarantine: { player: BattleCard[]; ai: BattleCard[] };     // removed-from-play cards
+  sealedBenchNames: { player: string[]; ai: string[] };       // bench names whose effects are disabled
+  altBonus: number;                                           // extra ALT earned this match
+  effectTelop: EffectTelop | null;                            // UI consumes & clears after 1.5s
   // ===== Result =====
   history: SubBattleResult[];
   winner: Side | null;
@@ -161,10 +178,266 @@ export function initGameState(playerDeck: BattleCard[], aiDeck: BattleCard[]): G
     attackRevealed: [],
     attackCurrentPower: 0,
     lastSubBattle: null,
+    defenderBonus: 0,
+    roundAttackBonus: { player: 0, ai: 0 },
+    pendingAttackBonus: { player: 0, ai: 0 },
+    quarantine: { player: [], ai: [] },
+    sealedBenchNames: { player: [], ai: [] },
+    altBonus: 0,
+    effectTelop: null,
     history: [],
     winner: null,
     message: 'デッキフェイズ：カードを選ぼう',
   };
+}
+
+// ---------- Effect system ----------
+
+type Role = 'attacker' | 'defender';
+
+export interface EffectResult {
+  state: GameState;
+  bonusAttack: number;  // extra attackCurrentPower added (attacker reveals only)
+  telop?: { text: string; color: string };
+}
+
+function applySide(state: GameState, side: Side, next: PlayerState): GameState {
+  return side === 'player' ? { ...state, player: next } : { ...state, ai: next };
+}
+
+function removeOneFromBench(bench: BenchSlot[], name: string): BenchSlot[] {
+  return bench.flatMap((s) => {
+    if (s.name !== name) return [s];
+    if (s.count <= 1) return [];
+    return [{ ...s, count: s.count - 1 }];
+  });
+}
+
+/**
+ * Apply a card's on-reveal effect. Called from startBattle (defender) and
+ * revealNextAttackCard (attacker). Returns new state, any bonus attack power
+ * to add on top of the card's base, and an optional telop for the UI.
+ */
+export function applyRevealEffect(
+  state: GameState,
+  card: BattleCard,
+  side: Side,
+  role: Role,
+): EffectResult {
+  const effId = card.effect?.id;
+  if (!effId || !card.effect) return { state, bonusAttack: 0 };
+  const opp = otherSide(side);
+  const color = EFFECT_COLORS[card.effect.category];
+  let next = state;
+  let bonusAttack = 0;
+  let telop: { text: string; color: string } | undefined;
+
+  switch (effId) {
+    case 'davinci': {
+      if (role === 'attacker') {
+        bonusAttack += 3;
+        telop = { text: '🎨ダ・ヴィンチの万能の天才！攻撃+3', color };
+      } else {
+        next = { ...next, defenderBonus: next.defenderBonus + 3 };
+        telop = { text: '🎨ダ・ヴィンチの万能の天才！防御+3', color };
+      }
+      break;
+    }
+    case 'einstein': {
+      if (role === 'attacker') {
+        next = { ...next, defenderBonus: next.defenderBonus - 2 };
+        telop = { text: '🧠アインシュタインの相対性理論！敵防御-2', color };
+      } else {
+        const oppState = opp === 'player' ? next.player : next.ai;
+        if (oppState.deck.length > 0) {
+          let bestIdx = 0;
+          for (let i = 1; i < oppState.deck.length; i++) {
+            if (getBaseAttack(oppState.deck[i]) > getBaseAttack(oppState.deck[bestIdx])) bestIdx = i;
+          }
+          const target = oppState.deck[bestIdx];
+          const weakened: BattleCard = {
+            ...target,
+            attackPower: Math.max(0, getBaseAttack(target) - 2),
+          };
+          const newDeck = [...oppState.deck];
+          newDeck[bestIdx] = weakened;
+          next = applySide(next, opp, { ...oppState, deck: newDeck });
+          telop = { text: '🧠アインシュタインの相対性理論！敵最強-2', color };
+        }
+      }
+      break;
+    }
+    case 'curie': {
+      next = {
+        ...next,
+        roundAttackBonus: { ...next.roundAttackBonus, [side]: next.roundAttackBonus[side] + 1 },
+      };
+      telop = { text: '☢️キュリー夫人の放射能！味方攻撃+1 (ラウンド中)', color };
+      break;
+    }
+    case 'napoleon': {
+      if (role === 'attacker') {
+        bonusAttack += 3;
+        telop = { text: '⚡ナポレオンの電撃戦！攻撃+3', color };
+      }
+      break;
+    }
+    case 'cleopatra': {
+      const oppState = opp === 'player' ? next.player : next.ai;
+      if (oppState.deck.length > 0) {
+        const [top, ...rest] = oppState.deck;
+        next = applySide(
+          { ...next, quarantine: { ...next.quarantine, [opp]: [...next.quarantine[opp], top] } },
+          opp,
+          { ...oppState, deck: rest },
+        );
+        telop = { text: '💋クレオパトラの魅了！敵デッキ上を隔離', color };
+      }
+      break;
+    }
+    case 'nobunaga': {
+      const oppState = opp === 'player' ? next.player : next.ai;
+      if (oppState.bench.length > 0) {
+        const strongest = [...oppState.bench].sort(
+          (a, b) => getBaseAttack(b.card) - getBaseAttack(a.card),
+        )[0];
+        next = {
+          ...next,
+          sealedBenchNames: {
+            ...next.sealedBenchNames,
+            [opp]: [...next.sealedBenchNames[opp], strongest.name],
+          },
+        };
+        telop = { text: `🔥織田信長の天下布武！${strongest.name}を封印`, color };
+      } else {
+        telop = { text: '🔥織田信長の天下布武！対象なし', color };
+      }
+      break;
+    }
+    case 'mozart': {
+      next = {
+        ...next,
+        pendingAttackBonus: {
+          ...next.pendingAttackBonus,
+          [side]: next.pendingAttackBonus[side] + 2,
+        },
+      };
+      telop = { text: '🎵モーツァルトの天才の旋律！次味方攻撃+2', color };
+      break;
+    }
+    case 'galileo': {
+      const myState = side === 'player' ? next.player : next.ai;
+      const oppState = opp === 'player' ? next.player : next.ai;
+      const sumOf = (bench: BenchSlot[]) =>
+        bench.reduce((s, b) => s + getBaseAttack(b.card) * b.count, 0);
+      if (sumOf(oppState.bench) > sumOf(myState.bench)) {
+        const mine = { ...myState, bench: oppState.bench };
+        const theirs = { ...oppState, bench: myState.bench };
+        next = applySide(applySide(next, side, mine), opp, theirs);
+        telop = { text: '🌍ガリレオの地動説！ベンチ入れ替え', color };
+      } else {
+        telop = { text: '🌍ガリレオの地動説！入れ替え見送り', color };
+      }
+      break;
+    }
+    case 'piranha': {
+      if (role === 'attacker') {
+        const myState = side === 'player' ? next.player : next.ai;
+        const same = myState.bench.find((b) => b.name === card.name);
+        const copies = same?.count ?? 0;
+        if (copies > 0) {
+          bonusAttack += copies;
+          telop = { text: `🐟ピラニアの群れの猛攻！攻撃+${copies}`, color };
+        }
+      }
+      break;
+    }
+    case 'dolphin': {
+      const oppState = opp === 'player' ? next.player : next.ai;
+      if (oppState.deck.length >= 2) {
+        const [a, b, ...restDeck] = oppState.deck;
+        const aStronger = getBaseAttack(a) >= getBaseAttack(b);
+        const stronger = aStronger ? a : b;
+        const weaker = aStronger ? b : a;
+        const newDeck = [weaker, ...restDeck, stronger];
+        next = applySide(next, opp, { ...oppState, deck: newDeck });
+        telop = { text: '🐬イルカのエコーロケーション！敵強カード底送り', color };
+      }
+      break;
+    }
+    case 'internet': {
+      const myState = side === 'player' ? next.player : next.ai;
+      if (myState.bench.length > 0) {
+        const pick = myState.bench[Math.floor(Math.random() * myState.bench.length)];
+        const newBench = removeOneFromBench(myState.bench, pick.name);
+        next = applySide(
+          {
+            ...next,
+            quarantine: { ...next.quarantine, [side]: [...next.quarantine[side], pick.card] },
+          },
+          side,
+          { ...myState, bench: newBench },
+        );
+        telop = { text: `🌐インターネットの情報革命！${pick.name}を隔離`, color };
+      } else {
+        telop = { text: '🌐インターネットの情報革命！対象なし', color };
+      }
+      break;
+    }
+    case 'phone': {
+      telop = { text: '📞電話の通信！次デッキフェイズ強化', color };
+      break;
+    }
+    case 'telescope': {
+      telop = { text: '🔭望遠鏡の先見！敵デッキを予見', color };
+      break;
+    }
+    case 'gunpowder': {
+      if (role === 'attacker') {
+        bonusAttack += getBaseAttack(card); // effectively 2x this card's attack
+        telop = { text: '💥火薬の爆発！攻撃パワー2倍', color };
+      }
+      break;
+    }
+    case 'compass': {
+      const myState = side === 'player' ? next.player : next.ai;
+      if (myState.deck.length >= 2) {
+        const top3 = myState.deck.slice(0, 3);
+        const sortedTop = [...top3].sort((a, b) => getBaseAttack(b) - getBaseAttack(a));
+        const newDeck = [...sortedTop, ...myState.deck.slice(3)];
+        next = applySide(next, side, { ...myState, deck: newDeck });
+        telop = { text: '🧭羅針盤の航海術！デッキ上3枚を並べ替え', color };
+      }
+      break;
+    }
+    case 'penicillin': {
+      const myState = side === 'player' ? next.player : next.ai;
+      if (myState.bench.length > 0) {
+        const strongest = [...myState.bench].sort(
+          (a, b) => getBaseAttack(b.card) - getBaseAttack(a.card),
+        )[0];
+        const newBench = removeOneFromBench(myState.bench, strongest.name);
+        const newDeck = [...myState.deck, strongest.card];
+        next = applySide(next, side, { ...myState, bench: newBench, deck: newDeck });
+        telop = { text: `💊ペニシリンの治療！${strongest.name}をデッキへ`, color };
+      } else {
+        telop = { text: '💊ペニシリンの治療！対象なし', color };
+      }
+      break;
+    }
+    case 'paper': {
+      next = { ...next, altBonus: next.altBonus + 5 };
+      telop = { text: '📜紙の記録！+5 ALT', color };
+      break;
+    }
+  }
+
+  return { state: next, bonusAttack, telop };
+}
+
+function withTelop(state: GameState, telop?: { text: string; color: string }): GameState {
+  if (!telop) return state;
+  return { ...state, effectTelop: { ...telop, key: Date.now() + Math.floor(Math.random() * 1000) } };
 }
 
 // ---------- Deck phase helpers (kept from previous version) ----------
@@ -222,7 +495,7 @@ export function startBattle(state: GameState): GameState {
   }
   const [defender, ...rest] = holder.deck;
   const updatedHolder: PlayerState = { ...holder, deck: rest };
-  return {
+  let next: GameState = {
     ...state,
     phase: 'battle_intro',
     player: state.flagHolder === 'player' ? updatedHolder : state.player,
@@ -232,6 +505,13 @@ export function startBattle(state: GameState): GameState {
     attackCurrentPower: 0,
     message: state.flagHolder === 'player' ? 'あなたが防御中！' : 'あなたの攻撃！',
   };
+
+  // Defender reveal triggers effect
+  if (defender.effect) {
+    const eff = applyRevealEffect(next, defender, state.flagHolder, 'defender');
+    next = withTelop(eff.state, eff.telop);
+  }
+  return next;
 }
 
 /**
@@ -267,13 +547,32 @@ export function revealNextAttackCard(state: GameState): GameState {
 
   const [nextCard, ...rest] = attacker.deck;
   const updatedAttacker: PlayerState = { ...attacker, deck: rest };
-  const newPower = state.attackCurrentPower + getBaseAttack(nextCard);
 
-  return {
+  // Pre-compute buffs BEFORE consuming pending
+  const roundBonus = state.roundAttackBonus[attackerSide];
+  const pendingBonus = state.pendingAttackBonus[attackerSide];
+
+  let next: GameState = {
     ...state,
     player: attackerSide === 'player' ? updatedAttacker : state.player,
     ai: attackerSide === 'ai' ? updatedAttacker : state.ai,
     attackRevealed: [...state.attackRevealed, nextCard],
+    // Consume pending buff
+    pendingAttackBonus: { ...state.pendingAttackBonus, [attackerSide]: 0 },
+  };
+
+  let addedPower = getBaseAttack(nextCard) + roundBonus + pendingBonus;
+
+  // Card-specific on-reveal effect
+  if (nextCard.effect) {
+    const eff = applyRevealEffect(next, nextCard, attackerSide, 'attacker');
+    next = withTelop(eff.state, eff.telop);
+    addedPower += eff.bonusAttack;
+  }
+
+  const newPower = state.attackCurrentPower + addedPower;
+  return {
+    ...next,
     attackCurrentPower: newPower,
     message: `${attackerSide === 'player' ? 'あなたの' : '相手の'}攻撃パワー ${newPower}`,
   };
@@ -284,7 +583,8 @@ export function revealNextAttackCard(state: GameState): GameState {
  */
 export function hasAttackSucceeded(state: GameState): boolean {
   if (!state.defenseCard) return false;
-  return state.attackCurrentPower >= getBaseDefense(state.defenseCard);
+  const effectiveDefense = Math.max(0, getBaseDefense(state.defenseCard) + state.defenderBonus);
+  return state.attackCurrentPower >= effectiveDefense;
 }
 
 /**
@@ -364,6 +664,10 @@ export function resolveSubBattleWin(state: GameState): GameState {
     defenseCard: lastAttackCard,
     attackRevealed: [],
     attackCurrentPower: 0,
+    // Reset per-sub-battle buffs
+    defenderBonus: 0,
+    roundAttackBonus: { player: 0, ai: 0 },
+    pendingAttackBonus: { player: 0, ai: 0 },
     lastSubBattle: result,
     history: [...state.history, result],
     round: state.round + 1,
