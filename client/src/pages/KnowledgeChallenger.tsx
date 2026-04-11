@@ -1261,7 +1261,7 @@ export default function KnowledgeChallenger() {
                     style={{ width: 86, height: 116 }}
                     aria-label="デッキをタップしてカードを出す"
                   >
-                    {/* 3 stacked layers (bottom → top) */}
+                    {/* 3 stacked layers (bottom → top), each rendering the card back image */}
                     {[2, 1, 0].map((layer) => (
                       <div
                         key={layer}
@@ -1269,27 +1269,18 @@ export default function KnowledgeChallenger() {
                         style={{
                           inset: 0,
                           transform: `translate(${layer * 3}px, ${layer * -3}px)`,
-                          background: 'linear-gradient(135deg, rgba(21,29,59,0.98) 0%, rgba(14,20,45,0.98) 50%, rgba(34,197,94,0.18) 100%)',
                           border: '2.5px solid rgba(34,197,94,0.85)',
                           boxShadow: layer === 0
                             ? '0 6px 18px rgba(0,0,0,0.55), 0 0 20px rgba(34,197,94,0.5)'
                             : '0 3px 8px rgba(0,0,0,0.4)',
                         }}
                       >
-                        {layer === 0 && (
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <span
-                              className="font-black"
-                              style={{
-                                fontSize: '54px',
-                                color: '#22c55e',
-                                textShadow: '0 0 14px rgba(34,197,94,0.85), 0 3px 6px rgba(0,0,0,0.85)',
-                              }}
-                            >
-                              ?
-                            </span>
-                          </div>
-                        )}
+                        <img
+                          src="/images/card-back.png"
+                          alt="card back"
+                          className="absolute inset-0 w-full h-full"
+                          style={{ objectFit: 'cover' }}
+                        />
                       </div>
                     ))}
                     {/* Remaining count badge */}
@@ -2317,30 +2308,20 @@ function CardBack({ side }: { side: 'player' | 'ai' }) {
       style={{
         width: 180,
         height: 250,
-        background: `linear-gradient(135deg, rgba(21,29,59,0.98) 0%, rgba(14,20,45,0.98) 50%, ${color}22 100%)`,
         border: `3px solid ${color}aa`,
-        boxShadow: `0 6px 20px rgba(0,0,0,0.6), 0 0 22px ${color}55, inset 0 0 30px ${color}22`,
+        boxShadow: `0 6px 20px rgba(0,0,0,0.6), 0 0 22px ${color}55`,
+        background: 'rgba(14,20,45,0.95)',
       }}
     >
+      <img
+        src="/images/card-back.png"
+        alt="card back"
+        className="absolute inset-0 w-full h-full"
+        style={{ objectFit: 'cover' }}
+      />
       <div
-        className="absolute inset-3 rounded-lg flex items-center justify-center"
-        style={{ border: `2px dashed ${color}99`, background: `radial-gradient(circle, ${color}18, transparent 70%)` }}
-      >
-        <span
-          className="font-black"
-          style={{
-            fontSize: '88px',
-            lineHeight: 1,
-            color,
-            textShadow: `0 0 24px ${color}cc, 0 4px 10px rgba(0,0,0,0.85)`,
-          }}
-        >
-          ?
-        </span>
-      </div>
-      <div
-        className="absolute bottom-2 left-0 right-0 text-center font-black"
-        style={{ fontSize: '13px', color, textShadow: '0 1px 4px rgba(0,0,0,0.9)' }}
+        className="absolute bottom-2 left-0 right-0 text-center font-black z-10"
+        style={{ fontSize: '13px', color, textShadow: '0 1px 4px rgba(0,0,0,0.9), 0 0 6px rgba(0,0,0,0.95)' }}
       >
         {isPlayer ? 'あなた' : '相手'}
       </div>
