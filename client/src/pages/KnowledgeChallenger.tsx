@@ -419,6 +419,11 @@ export default function KnowledgeChallenger() {
             await waitStep(400);
             if (unmountedRef.current) return;
 
+            // Capture defender's quarantine BEFORE resolution so we can show
+            // a telop when it flushes into their bench.
+            const defenderSideBefore: 'player' | 'ai' = rs.flagHolder;
+            const quarantineBefore = rs.quarantine[defenderSideBefore].length;
+
             let resolved: GameState | null = null;
             setGameState((prev) => {
               if (!prev) return prev;
@@ -428,6 +433,22 @@ export default function KnowledgeChallenger() {
             });
             await waitMs(16);
             if (unmountedRef.current || !resolved) return;
+
+            // Quarantine flush telop
+            if (quarantineBefore > 0) {
+              setGameState((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      effectTelop: {
+                        text: `📦 隔離 ${quarantineBefore}枚 → ベンチへ流入！`,
+                        color: '#22c55e',
+                        key: Date.now() + Math.floor(Math.random() * 1000),
+                      },
+                    }
+                  : prev,
+              );
+            }
 
             console.log('[KC] → resolve banner');
             setCineStep('resolve');
@@ -1133,9 +1154,11 @@ export default function KnowledgeChallenger() {
           const enterClass = attackerSide === 'ai' ? 'kc-ai-card-enter' : 'kc-player-card-enter';
           return (
             <div className="relative" style={{ width: 180, height: 250 }}>
-              {/* Earlier attack cards stacked behind (offset by a bit) */}
+              {/* Earlier attack cards stacked behind (offset by a bit).
+                  On sub-battle resolve they fade out toward the off-screen
+                  quarantine area via kc-card-exile. */}
               {attackCards.slice(0, -1).map((c, i) => (
-                <div key={`stack-${i}`} className="absolute"
+                <div key={`stack-${i}`} className={`absolute ${attackerWonSub ? 'kc-card-exile' : ''}`}
                   style={{
                     top: 0,
                     left: 0,
@@ -1849,12 +1872,20 @@ export default function KnowledgeChallenger() {
           100% { opacity: 1; transform: translateY(0) scale(1); }
         }
         .kc-turn-banner { animation: kcTurnBannerPop 0.5s ease-out; }
+        /* Defender loses → red flash → slide down to bench + shrink + fade */
         @keyframes kcCardShatter {
-          0%   { opacity: 1; transform: scale(1) rotate(0); filter: brightness(1); }
-          40%  { opacity: 1; transform: scale(1.15) rotate(4deg); filter: brightness(2) saturate(2); }
-          100% { opacity: 0; transform: scale(0.3) rotate(-18deg) translateX(-40px); filter: brightness(0.4); }
+          0%   { opacity: 1; transform: scale(1); filter: brightness(1) drop-shadow(0 0 0 rgba(239,68,68,0)); }
+          15%  { opacity: 1; transform: scale(1.08); filter: brightness(1.5) saturate(1.6) drop-shadow(0 0 24px rgba(239,68,68,0.95)); }
+          35%  { opacity: 1; transform: scale(1.05); filter: brightness(1.4) drop-shadow(0 0 18px rgba(239,68,68,0.85)); }
+          100% { opacity: 0; transform: scale(0.35) translateY(220px); filter: brightness(0.6); }
         }
-        .kc-card-shatter { animation: kcCardShatter 1.2s ease-out forwards; }
+        .kc-card-shatter { animation: kcCardShatter 0.9s ease-in forwards; }
+        /* Non-last attack cards → fade out toward off-screen (quarantine) */
+        @keyframes kcCardExile {
+          0%   { opacity: 1; transform: scale(1) translateY(0); }
+          100% { opacity: 0; transform: scale(0.4) translateY(-80px) translateX(120px); }
+        }
+        .kc-card-exile { animation: kcCardExile 0.7s ease-out forwards; }
         @keyframes kcScreenShake {
           0%, 100% { transform: translate(0, 0); }
           10%      { transform: translate(-6px, 4px); }
