@@ -34,7 +34,7 @@ import {
   initGameState,
   revealRound,
   endRound,
-  startDeckPhase,
+  startCurrentRound,
   advanceToNextRound,
   addCardToDeck,
   swapCardInDeck,
@@ -52,10 +52,13 @@ import { toast } from 'sonner';
 
 type ScreenPhase = 'title' | 'playing' | 'result';
 
-// Timing constants (ms) for the reveal cinematic.
-const REVEAL_INTRO_MS = 1100;
-const REVEAL_COMPARE_MS = 1600;
-const REVEAL_OUTCOME_MS = 1400;
+// Timing constants (ms) for the reveal cinematic. fast mode scales by 0.3.
+const STEP_INTRO_MS     = 1000;   // "ラウンドN バトル開始！" banner
+const STEP_CARD_BACK_MS = 600;    // card backs enter from deck positions
+const STEP_CARD_FLIP_MS = 600;    // cards flip front (CSS 0.6s animation)
+const STEP_CARD_NAME_MS = 800;    // show name + individual power
+const STEP_COMPARE_MS   = 1500;   // big "⚔️ X vs Y 🛡️" panel
+const STEP_OUTCOME_MS   = 2000;   // winner banner + flash + shake
 
 export default function KnowledgeChallenger() {
   const [, navigate] = useLocation();
@@ -81,7 +84,14 @@ export default function KnowledgeChallenger() {
   const imageCache = useRef<Map<string, HTMLImageElement>>(new Map());
 
   // ===== Cinematic state =====
-  type RevealStep = 'intro' | 'cards' | 'compare' | 'outcome' | 'done';
+  // intro      : "ラウンドN バトル開始！" banner
+  // card_back  : both cards appear face-down from deck positions
+  // card_flip  : CSS flip animation 0.6s
+  // card_name  : cards revealed, name + individual power shown
+  // compare    : big power comparison panel (⚔️ X vs Y 🛡️)
+  // outcome    : winner banner + flash/shake + flag fly
+  // done       : cinematic finished
+  type RevealStep = 'intro' | 'card_back' | 'card_flip' | 'card_name' | 'compare' | 'outcome' | 'done';
   const [revealStep, setRevealStep] = useState<RevealStep>('done');
   const [fastMode, setFastMode] = useState(false);
   const fastModeRef = useRef(false);
@@ -185,14 +195,42 @@ export default function KnowledgeChallenger() {
   }, [clearStepTimeouts, previewDeck, stageId]);
 
   // ===== Round reveal cinematic =====
+  // 7 ステップ: intro → card_back → card_flip → card_name → compare → outcome → done
+  // 各ステップの CSS クラスに合わせて演出を切り替え、スキップボタンで途中終了可能。
+  const finalizeRound = useCallback((afterReveal: GameState) => {
+    setRevealStep('done');
+    setTrophyFlash(null);
+    setRoundWinGlow(false);
+    const after = endRound(afterReveal);
+    setGameState(after);
+    if (after.phase === 'game_over') {
+      window.setTimeout(() => setScreen('result'), 1600);
+    }
+  }, []);
+
   const beginRoundReveal = useCallback(() => {
     if (!gameState || gameState.phase !== 'round_intro') return;
     const afterIntro = revealRound(gameState);
     setGameState(afterIntro);
+
+    // Schedule all cinematic steps sequentially
+    let t = 0;
     setRevealStep('intro');
-    scheduleStep(REVEAL_INTRO_MS, () => setRevealStep('cards'));
-    scheduleStep(REVEAL_INTRO_MS + 900, () => setRevealStep('compare'));
-    scheduleStep(REVEAL_INTRO_MS + 900 + REVEAL_COMPARE_MS, () => {
+    t += STEP_INTRO_MS;
+
+    scheduleStep(t, () => setRevealStep('card_back'));
+    t += STEP_CARD_BACK_MS;
+
+    scheduleStep(t, () => setRevealStep('card_flip'));
+    t += STEP_CARD_FLIP_MS;
+
+    scheduleStep(t, () => setRevealStep('card_name'));
+    t += STEP_CARD_NAME_MS;
+
+    scheduleStep(t, () => setRevealStep('compare'));
+    t += STEP_COMPARE_MS;
+
+    scheduleStep(t, () => {
       setRevealStep('outcome');
       if (afterIntro.roundWinner === 'player') {
         setTrophyFlash('player');
@@ -201,18 +239,20 @@ export default function KnowledgeChallenger() {
         setTrophyFlash('ai');
       }
     });
-    scheduleStep(REVEAL_INTRO_MS + 900 + REVEAL_COMPARE_MS + REVEAL_OUTCOME_MS, () => {
-      setRevealStep('done');
-      setTrophyFlash(null);
-      setRoundWinGlow(false);
-      // Advance engine state to round_end / game_over
-      const after = endRound(afterIntro);
-      setGameState(after);
-      if (after.phase === 'game_over') {
-        window.setTimeout(() => setScreen('result'), 1600);
-      }
-    });
-  }, [gameState, scheduleStep]);
+    t += STEP_OUTCOME_MS;
+
+    scheduleStep(t, () => finalizeRound(afterIntro));
+  }, [gameState, scheduleStep, finalizeRound]);
+
+  // Skip button: immediately jump to outcome end.
+  const handleSkipReveal = useCallback(() => {
+    if (!gameState || revealStep === 'done') return;
+    clearStepTimeouts();
+    // If gameState still at round_intro, run revealRound first.
+    const afterIntro = gameState.phase === 'round_intro' ? revealRound(gameState) : gameState;
+    if (gameState.phase === 'round_intro') setGameState(afterIntro);
+    finalizeRound(afterIntro);
+  }, [gameState, revealStep, clearStepTimeouts, finalizeRound]);
 
   // Kick off round reveal automatically on entering round_intro
   useEffect(() => {
@@ -222,29 +262,40 @@ export default function KnowledgeChallenger() {
     }
   }, [gameState?.phase, revealStep, beginRoundReveal]);
 
-  // ===== Enter deck phase =====
-  const enterDeckPhase = useCallback(() => {
-    if (!gameState || gameState.phase !== 'round_end') return;
-    // 変更8: round 引数で現在ラウンドのレア度分布に従って抽選。
-    // 次のラウンド向けのデッキ補充なので round+1 を渡す。
-    // ただし最終ラウンド終了時は deck_phase に入らない（既に game_over 遷移済み）ので安全。
-    const nextRound = gameState.round + 1;
-    const aiNew = sampleCards(2, 'ai-grow', nextRound);
-    const state1 = aiDeckGrowth(gameState, aiNew);
-    const state2 = startDeckPhase(state1);
-    setGameState(state2);
-    const offered = sampleCards(2, 'offer', nextRound);
+  // ===== Deck phase auto-setup =====
+  // phase が 'deck_phase' に遷移するたびに DeckOffer を生成。
+  // 初回（ラウンド1 開始時）と、ラウンド終了後の次ラウンドデッキフェイズの両方で発火。
+  useEffect(() => {
+    if (!gameState || gameState.phase !== 'deck_phase' || deckOffer) return;
+    // 2 ラウンド目以降は AI にも 2 枚成長カードを配布
+    if (gameState.round > 1) {
+      const aiNew = sampleCards(2, 'ai-grow', gameState.round);
+      setGameState((prev) => (prev ? aiDeckGrowth(prev, aiNew) : prev));
+    }
+    // 変更: プレイヤーへ 5 枚提示（2 枚獲得目標）
+    const offered = sampleCards(5, 'offer', gameState.round);
     setDeckOffer({
       cards: offered,
       blocked: new Set(),
       acquired: new Set(),
       redrawsLeft: 1,
     });
-  }, [gameState]);
+  }, [gameState?.phase, gameState?.round, deckOffer]);
+
+  // round_end に到達したら自動的に次ラウンドへ（game_over 以外）
+  useEffect(() => {
+    if (!gameState || gameState.phase !== 'round_end') return;
+    const id = window.setTimeout(() => {
+      setGameState((prev) => (prev ? advanceToNextRound(prev) : prev));
+    }, 1600);
+    return () => clearTimeout(id);
+  }, [gameState?.phase]);
 
   // ===== Deck phase: tap card → show quiz =====
+  // NOTE: クイズ出題は deck_phase 限定。バトル中は絶対に走らない。
   const handleCardTap = useCallback((index: number) => {
     if (!deckOffer || !gameState) return;
+    if (gameState.phase !== 'deck_phase') return;  // hard gate against battle-phase leaks
     if (deckOffer.blocked.has(index) || deckOffer.acquired.has(index)) return;
     const card = deckOffer.cards[index];
     const quiz = card.quizzes[Math.floor(Math.random() * card.quizzes.length)];
@@ -343,8 +394,8 @@ export default function KnowledgeChallenger() {
   // ===== Redraw offer =====
   const handleRedraw = useCallback(() => {
     if (!deckOffer || deckOffer.redrawsLeft <= 0 || !gameState) return;
-    // 変更8: deck_phase 中のラウンド番号に合わせて抽選
-    const offered = sampleCards(2, 'offer', gameState.round + 1);
+    // 現在のラウンド番号に合わせて 5 枚再抽選
+    const offered = sampleCards(5, 'offer', gameState.round);
     setDeckOffer({
       cards: offered,
       blocked: new Set(),
@@ -353,13 +404,14 @@ export default function KnowledgeChallenger() {
     });
   }, [deckOffer, gameState]);
 
-  // ===== Continue to next round =====
-  const handleContinueNextRound = useCallback(() => {
-    if (!gameState) return;
+  // ===== Deck phase → start battle =====
+  // デッキフェイズ終了（「バトル開始」ボタン）で現在ラウンドの round_intro へ遷移
+  const handleStartBattle = useCallback(() => {
+    if (!gameState || gameState.phase !== 'deck_phase') return;
     setDeckOffer(null);
     setActiveQuiz(null);
     setSwapState(null);
-    const next = advanceToNextRound(gameState);
+    const next = startCurrentRound(gameState);
     setGameState(next);
     setRevealStep('done');
   }, [gameState]);
@@ -726,101 +778,250 @@ export default function KnowledgeChallenger() {
       {/* AI Bench */}
       <BenchDisplay side="ai" bench={gameState.ai.bench} deckCount={gameState.ai.deck.length} />
 
-      {/* ===== Battle Field ===== */}
-      <div className="flex-1 flex flex-col items-center justify-center px-3 py-3 gap-3 relative min-h-0 overflow-hidden">
-        {/* AI Card */}
-        <div className="text-center">
-          {gameState.aiCard && revealStep !== 'intro' ? (
-            <div className="relative inline-block">
-              <CardDisplay card={gameState.aiCard} isWinner={revealStep === 'outcome' && gameState.roundWinner === 'ai'} size="sm" />
-              {revealStep === 'compare' || revealStep === 'outcome' ? (
-                <p className="mt-1 text-lg font-black text-red-400" style={{ textShadow: '0 0 10px rgba(239,68,68,0.6)' }}>
-                  ⚔️ {gameState.aiPower}
-                </p>
-              ) : null}
+      {/* ===== Battle Field =====
+          Three-layer grid: AI area (top) / center flag & compare / Player area (bottom).
+          Cards are size="md" (200x260) per phase-3 spec. */}
+      <div
+        className={`flex-1 flex flex-col px-2 py-2 relative min-h-0 overflow-hidden ${revealStep === 'outcome' && gameState.roundWinner === 'ai' ? 'kc-screen-shake' : ''}`}
+      >
+        {/* Red flash overlay on defeat */}
+        {revealStep === 'outcome' && gameState.roundWinner === 'ai' && (
+          <div className="absolute inset-0 pointer-events-none z-30 kc-red-flash" />
+        )}
+        {/* Green flash overlay on victory */}
+        {revealStep === 'outcome' && gameState.roundWinner === 'player' && (
+          <div className="absolute inset-0 pointer-events-none z-30 kc-green-flash" />
+        )}
+
+        {/* Skip button (top-right of field) */}
+        {(revealStep !== 'done' || gameState.phase === 'round_intro') && gameState.phase !== 'deck_phase' && gameState.phase !== 'round_end' && gameState.phase !== 'game_over' && (
+          <button
+            onClick={handleSkipReveal}
+            className="absolute top-1 right-2 z-40 text-[11px] font-black px-3 py-1.5 rounded-lg"
+            style={{
+              background: 'rgba(255,255,255,0.12)',
+              border: '1.5px solid rgba(255,255,255,0.3)',
+              color: 'rgba(255,255,255,0.85)',
+            }}
+          >
+            ⏭ スキップ
+          </button>
+        )}
+
+        {/* ====== AI AREA (top half) ====== */}
+        <div className="flex-1 flex items-center justify-center relative">
+          {gameState.aiCard && (revealStep === 'card_back' || revealStep === 'card_flip' || revealStep === 'card_name' || revealStep === 'compare' || revealStep === 'outcome') ? (
+            <div
+              className={`relative kc-ai-card-enter ${revealStep === 'outcome' && gameState.roundWinner === 'ai' ? '' : ''} ${revealStep === 'outcome' && gameState.roundWinner === 'player' ? 'kc-card-shatter' : ''}`}
+              style={{
+                transformStyle: 'preserve-3d',
+                animation: revealStep === 'card_flip' ? 'kcCardFlip 0.6s ease-out forwards' : undefined,
+              }}
+            >
+              {revealStep === 'card_back' ? (
+                <CardBack side="ai" />
+              ) : (
+                <div className={revealStep === 'card_flip' ? 'kc-flipping' : ''}>
+                  <CardDisplay
+                    card={gameState.aiCard}
+                    isWinner={revealStep === 'outcome' && gameState.roundWinner === 'ai'}
+                    size="md"
+                  />
+                </div>
+              )}
             </div>
           ) : (
-            <div className="inline-block rounded-xl" style={{ width: 120, height: 150, background: 'rgba(239,68,68,0.1)', border: '2px dashed rgba(239,68,68,0.35)' }}>
-              <div className="flex items-center justify-center h-full text-3xl opacity-50">🎴</div>
+            <div className="inline-block rounded-xl" style={{ width: 200, height: 260, background: 'rgba(239,68,68,0.08)', border: '2px dashed rgba(239,68,68,0.3)' }}>
+              <div className="flex items-center justify-center h-full text-4xl opacity-30">🎴</div>
             </div>
           )}
         </div>
 
-        {/* Center trophy banner */}
-        <div className="flex items-center gap-3 w-full max-w-sm justify-center">
+        {/* ====== CENTER BAND (flag + compare / banner) ====== */}
+        <div className="flex items-center justify-center gap-3 py-2 relative min-h-[90px]">
           <div className="h-0.5 flex-1" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,215,0,0.5))' }} />
           <div
-            className={`px-4 py-2 rounded-full ${trophyFlash ? 'kc-flag-pulse' : ''}`}
+            className={`kc-flag ${trophyFlash ? 'kc-flag-pulse' : ''}`}
             style={{
-              background: trophyFlash === 'player' ? 'radial-gradient(circle, rgba(34,197,94,0.4), rgba(34,197,94,0.1))'
-                : trophyFlash === 'ai' ? 'radial-gradient(circle, rgba(239,68,68,0.4), rgba(239,68,68,0.1))'
-                : 'radial-gradient(circle, rgba(255,215,0,0.3), rgba(255,215,0,0.08))',
-              border: `3px solid ${trophyFlash === 'player' ? 'rgba(34,197,94,0.8)' : trophyFlash === 'ai' ? 'rgba(239,68,68,0.8)' : 'rgba(255,215,0,0.7)'}`,
-              boxShadow: '0 0 20px rgba(255,215,0,0.35)',
+              background: trophyFlash === 'player'
+                ? 'radial-gradient(circle, rgba(34,197,94,0.55), rgba(34,197,94,0.1))'
+                : trophyFlash === 'ai'
+                  ? 'radial-gradient(circle, rgba(239,68,68,0.55), rgba(239,68,68,0.1))'
+                  : 'radial-gradient(circle, rgba(255,215,0,0.35), rgba(255,215,0,0.08))',
+              border: `4px solid ${trophyFlash === 'player' ? '#22c55e' : trophyFlash === 'ai' ? '#ef4444' : 'rgba(255,215,0,0.7)'}`,
+              boxShadow: trophyFlash === 'player'
+                ? '0 0 24px rgba(34,197,94,0.7)'
+                : trophyFlash === 'ai'
+                  ? '0 0 24px rgba(239,68,68,0.7)'
+                  : '0 0 20px rgba(255,215,0,0.35)',
             }}
           >
-            <span className="text-3xl">🏆</span>
-            <p className="text-xs font-black mt-0.5" style={{ color: '#ffd700' }}>{currentTrophy} ファン</p>
+            <span style={{ fontSize: '2.25rem' }}>🏆</span>
+            <p className="text-[10px] font-black mt-0.5" style={{ color: '#ffd700' }}>{currentTrophy}</p>
           </div>
           <div className="h-0.5 flex-1" style={{ background: 'linear-gradient(90deg, rgba(255,215,0,0.5), transparent)' }} />
         </div>
 
-        {/* Player Card */}
-        <div className="text-center">
-          {gameState.playerCard && revealStep !== 'intro' ? (
-            <div className="relative inline-block">
-              <CardDisplay card={gameState.playerCard} isWinner={(revealStep === 'outcome' && gameState.roundWinner === 'player') || roundWinGlow} size="sm" />
-              {revealStep === 'compare' || revealStep === 'outcome' ? (
-                <p className="mt-1 text-lg font-black text-green-400" style={{ textShadow: '0 0 10px rgba(34,197,94,0.6)' }}>
-                  ⚔️ {gameState.playerPower}
-                </p>
-              ) : null}
+        {/* ====== PLAYER AREA (bottom half) ====== */}
+        <div className="flex-1 flex items-center justify-center relative">
+          {gameState.playerCard && (revealStep === 'card_back' || revealStep === 'card_flip' || revealStep === 'card_name' || revealStep === 'compare' || revealStep === 'outcome') ? (
+            <div
+              className={`relative kc-player-card-enter ${revealStep === 'outcome' && gameState.roundWinner === 'ai' ? 'kc-card-shatter' : ''}`}
+              style={{
+                transformStyle: 'preserve-3d',
+                animation: revealStep === 'card_flip' ? 'kcCardFlip 0.6s ease-out forwards' : undefined,
+              }}
+            >
+              {revealStep === 'card_back' ? (
+                <CardBack side="player" />
+              ) : (
+                <div className={revealStep === 'card_flip' ? 'kc-flipping' : ''}>
+                  <CardDisplay
+                    card={gameState.playerCard}
+                    isWinner={(revealStep === 'outcome' && gameState.roundWinner === 'player') || roundWinGlow}
+                    size="md"
+                  />
+                </div>
+              )}
             </div>
           ) : (
-            <div className="inline-block rounded-xl" style={{ width: 120, height: 150, background: 'rgba(34,197,94,0.1)', border: '2px dashed rgba(34,197,94,0.35)' }}>
-              <div className="flex items-center justify-center h-full text-3xl opacity-50">🎴</div>
+            <div className="inline-block rounded-xl" style={{ width: 200, height: 260, background: 'rgba(34,197,94,0.08)', border: '2px dashed rgba(34,197,94,0.3)' }}>
+              <div className="flex items-center justify-center h-full text-4xl opacity-30">🎴</div>
             </div>
           )}
         </div>
 
-        {/* Round intro banner */}
-        {gameState.phase === 'round_intro' && revealStep === 'done' && (
-          <div className="kc-round-intro-banner">
-            <p className="text-4xl font-black" style={{ color: '#ffd700', textShadow: '0 0 30px rgba(255,215,0,0.8)' }}>
-              ラウンド {gameState.round}
-            </p>
-            <p className="text-sm font-bold text-amber-200/80 mt-1">🏆 トロフィー: {currentTrophy}ファン</p>
-          </div>
-        )}
+        {/* ====== Overlays ====== */}
+
+        {/* Round intro banner (large) */}
         {revealStep === 'intro' && (
-          <div className="kc-round-intro-banner">
-            <p className="text-3xl font-black" style={{ color: '#ffd700', textShadow: '0 0 30px rgba(255,215,0,0.8)' }}>
-              ⚔️ カード公開！ ⚔️
-            </p>
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-40">
+            <div className="kc-turn-banner" style={{
+              background: 'linear-gradient(135deg, rgba(255,215,0,0.25), rgba(255,170,0,0.08))',
+              border: '4px solid rgba(255,215,0,0.7)',
+              padding: '16px 32px',
+              borderRadius: '16px',
+              textAlign: 'center',
+              boxShadow: '0 0 40px rgba(255,215,0,0.5)',
+            }}>
+              <p style={{ fontSize: '2.25rem', fontWeight: 900, color: '#ffd700', textShadow: '0 0 30px rgba(255,215,0,0.8), 0 2px 6px rgba(0,0,0,0.8)', margin: 0 }}>
+                ⚔️ ラウンド {gameState.round} ⚔️
+              </p>
+              <p style={{ fontSize: '1.125rem', fontWeight: 700, color: '#fff', marginTop: 6 }}>
+                バトル開始！
+              </p>
+            </div>
           </div>
         )}
 
-        {/* Round end / proceed button */}
+        {/* Individual power labels during card_name */}
+        {revealStep === 'card_name' && gameState.aiCard && gameState.playerCard && (
+          <div className="absolute inset-0 pointer-events-none z-30 flex flex-col justify-between py-4">
+            <div className="text-center">
+              <p className="inline-block kc-power-pop" style={{ fontSize: '1.75rem', fontWeight: 900, color: '#ff6b6b', textShadow: '0 0 14px rgba(239,68,68,0.9)' }}>
+                相手 ⚔️ {gameState.aiPower}
+              </p>
+            </div>
+            <div className="text-center">
+              <p className="inline-block kc-power-pop" style={{ fontSize: '1.75rem', fontWeight: 900, color: '#4ade80', textShadow: '0 0 14px rgba(34,197,94,0.9)' }}>
+                あなた ⚔️ {gameState.playerPower}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Big power comparison panel */}
+        {revealStep === 'compare' && gameState.aiCard && gameState.playerCard && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-40 kc-compare-pop">
+            <div className="rounded-2xl px-6 py-5" style={{
+              background: 'linear-gradient(135deg, rgba(0,0,0,0.85), rgba(20,20,50,0.85))',
+              border: '4px solid rgba(255,215,0,0.6)',
+              boxShadow: '0 0 60px rgba(255,215,0,0.4)',
+              textAlign: 'center',
+            }}>
+              <p className="text-xs font-bold text-amber-200/80 mb-2">パワー比較</p>
+              <div className="flex items-center justify-center gap-4">
+                <span
+                  className="font-black"
+                  style={{
+                    fontSize: '3rem',
+                    color: gameState.roundWinner === 'player' ? '#ffd700' : '#4ade80',
+                    textShadow: gameState.roundWinner === 'player'
+                      ? '0 0 24px rgba(255,215,0,0.9)'
+                      : '0 0 16px rgba(34,197,94,0.7)',
+                  }}
+                >
+                  ⚔️ {gameState.playerPower}
+                </span>
+                <span className="font-black" style={{ fontSize: '2rem', color: 'rgba(255,255,255,0.6)' }}>vs</span>
+                <span
+                  className="font-black"
+                  style={{
+                    fontSize: '3rem',
+                    color: gameState.roundWinner === 'ai' ? '#ffd700' : '#ff6b6b',
+                    textShadow: gameState.roundWinner === 'ai'
+                      ? '0 0 24px rgba(255,215,0,0.9)'
+                      : '0 0 16px rgba(239,68,68,0.7)',
+                  }}
+                >
+                  {gameState.aiPower} 🛡️
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Outcome banner */}
+        {revealStep === 'outcome' && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-40">
+            <div className="kc-outcome-banner" style={{
+              padding: '18px 36px',
+              borderRadius: '16px',
+              textAlign: 'center',
+              background: gameState.roundWinner === 'player'
+                ? 'linear-gradient(135deg, rgba(34,197,94,0.4), rgba(22,163,74,0.15))'
+                : 'linear-gradient(135deg, rgba(239,68,68,0.4), rgba(185,28,28,0.15))',
+              border: `4px solid ${gameState.roundWinner === 'player' ? '#22c55e' : '#ef4444'}`,
+              boxShadow: `0 0 50px ${gameState.roundWinner === 'player' ? 'rgba(34,197,94,0.7)' : 'rgba(239,68,68,0.7)'}`,
+            }}>
+              <p style={{
+                fontSize: '2.25rem',
+                fontWeight: 900,
+                color: gameState.roundWinner === 'player' ? '#4ade80' : '#fca5a5',
+                textShadow: `0 0 24px ${gameState.roundWinner === 'player' ? 'rgba(34,197,94,0.9)' : 'rgba(239,68,68,0.9)'}, 0 2px 6px rgba(0,0,0,0.85)`,
+                margin: 0,
+              }}>
+                {gameState.roundWinner === 'player' ? '🏆 フラッグ奪取！' : '💥 フラッグを奪われた！'}
+              </p>
+              <p className="text-lg font-black mt-1" style={{ color: '#ffd700' }}>
+                {gameState.roundWinner === 'player' ? `+${currentTrophy} ファン` : `-${currentTrophy} ファン`}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* round_end: auto-advances via effect. Small transition banner. */}
         {gameState.phase === 'round_end' && revealStep === 'done' && (
-          <div className="text-center">
-            <p className="text-2xl font-black mb-2" style={{ color: gameState.roundWinner === 'player' ? '#4ade80' : '#ff6b6b', textShadow: '0 0 20px currentColor' }}>
-              {gameState.roundWinner === 'player'
-                ? `🏆 +${currentTrophy}ファン 獲得！`
-                : `💥 -${currentTrophy}ファン 奪われた`}
-            </p>
-            <button onClick={enterDeckPhase} className="rpg-btn rpg-btn-gold px-8 py-3 text-base kc-draw-btn">
-              🃏 デッキフェイズへ
-            </button>
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30">
+            <p className="text-2xl font-black text-amber-200/80">次のラウンドへ…</p>
           </div>
         )}
 
-        {/* Game over inline message */}
+        {/* game_over inline */}
         {gameState.phase === 'game_over' && (
-          <div className="text-center kc-card-reveal">
-            <span className="text-5xl block mb-2">{gameState.winner === 'player' ? '🎉' : '💀'}</span>
-            <p className="text-lg font-bold" style={{ color: gameState.winner === 'player' ? '#ffd700' : '#ef4444' }}>
-              {gameState.message}
-            </p>
+          <div className="absolute inset-0 flex items-center justify-center z-50 kc-card-reveal">
+            <div className="text-center">
+              <span className="text-6xl block mb-2">{gameState.winner === 'player' ? '🎉' : '💀'}</span>
+              <p style={{ fontSize: '2.5rem', fontWeight: 900, color: gameState.winner === 'player' ? '#ffd700' : '#ef4444', textShadow: `0 0 24px ${gameState.winner === 'player' ? 'rgba(255,215,0,0.8)' : 'rgba(239,68,68,0.8)'}` }}>
+                {gameState.winner === 'player' ? '勝利！' : '敗北...'}
+              </p>
+              <p className="text-sm text-amber-200/70 mt-2">
+                {gameState.player.bench.length >= BENCH_MAX_SLOTS ? 'ベンチが満杯！' :
+                 gameState.ai.bench.length >= BENCH_MAX_SLOTS ? '相手のベンチが満杯！' :
+                 gameState.player.deck.length === 0 && !gameState.playerCard ? 'デッキ切れ！' :
+                 '5 ラウンド終了'}
+              </p>
+            </div>
           </div>
         )}
       </div>
@@ -840,14 +1041,14 @@ export default function KnowledgeChallenger() {
             }}
           >
             <h3 className="text-xl font-black text-center mb-1" style={{ color: '#ffd700' }}>
-              📚 デッキフェイズ
+              📚 ラウンド{gameState.round} デッキフェイズ
             </h3>
             <p className="text-xs text-amber-200/70 text-center mb-4">
-              カードをタップしてクイズに挑戦！正解でデッキに追加
+              5 枚の中から 2 枚選ぼう。タップでクイズ出題、正解で追加。
               <br />
-              （現在 {gameState.player.deck.length}/{MAX_DECK_SIZE} 枚）
+              獲得 {deckOffer.acquired.size}/2 ・ デッキ {gameState.player.deck.length}/{MAX_DECK_SIZE} 枚
             </p>
-            <div className="grid grid-cols-2 gap-3 mb-4">
+            <div className="grid grid-cols-3 gap-2 mb-4">
               {deckOffer.cards.map((card, i) => {
                 const blocked = deckOffer.blocked.has(i);
                 const acquired = deckOffer.acquired.has(i);
@@ -889,8 +1090,8 @@ export default function KnowledgeChallenger() {
               >
                 🔄 引き直し ({deckOffer.redrawsLeft})
               </button>
-              <button onClick={handleContinueNextRound} className="rpg-btn rpg-btn-gold flex-1 py-2.5 text-sm">
-                次のラウンドへ ▶
+              <button onClick={handleStartBattle} className="rpg-btn rpg-btn-gold flex-1 py-2.5 text-sm">
+                ⚔️ バトル開始 ▶
               </button>
             </div>
           </div>
@@ -1010,17 +1211,94 @@ export default function KnowledgeChallenger() {
 
       {/* ===== Styles ===== */}
       <style>{`
-        @keyframes kcFlagPulse { 0% { transform: scale(1); } 50% { transform: scale(1.25); } 100% { transform: scale(1); } }
+        @keyframes kcFlagPulse { 0% { transform: scale(1); } 50% { transform: scale(1.4); } 100% { transform: scale(1); } }
         .kc-flag-pulse { animation: kcFlagPulse 0.9s ease-out; }
+        .kc-flag {
+          width: 80px; height: 80px; border-radius: 50%;
+          display: flex; flex-direction: column; align-items: center; justify-content: center;
+          transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+        }
         .kc-card-reveal { animation: kcCardReveal 0.5s ease-out; }
         @keyframes kcCardReveal { 0% { opacity: 0; transform: scale(0.7); } 100% { opacity: 1; transform: scale(1); } }
         .kc-pulse-text { animation: kcPulseText 1s ease-in-out infinite; }
         @keyframes kcPulseText { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
         .kc-win-glow { animation: kcWinGlow 1s ease-in-out infinite; border-color: rgba(255,215,0,0.8) !important; }
         @keyframes kcWinGlow {
-          0%, 100% { box-shadow: 0 0 8px rgba(255,215,0,0.3), 0 0 16px rgba(255,215,0,0.1); }
-          50%      { box-shadow: 0 0 20px rgba(255,215,0,0.6), 0 0 40px rgba(255,215,0,0.3); }
+          0%, 100% { box-shadow: 0 0 12px rgba(255,215,0,0.4), 0 0 24px rgba(255,215,0,0.2); }
+          50%      { box-shadow: 0 0 30px rgba(255,215,0,0.85), 0 0 60px rgba(255,215,0,0.45); }
         }
+        /* Phase 3 battle animations ------------------------------------------ */
+        @keyframes kcAiCardEnter {
+          0%   { opacity: 0; transform: translateY(-60px) scale(0.7); }
+          100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .kc-ai-card-enter { animation: kcAiCardEnter 0.5s ease-out; }
+        @keyframes kcPlayerCardEnter {
+          0%   { opacity: 0; transform: translateY(60px) scale(0.7); }
+          100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .kc-player-card-enter { animation: kcPlayerCardEnter 0.5s ease-out; }
+        @keyframes kcCardFlip {
+          0%   { transform: rotateY(180deg) scale(0.92); }
+          60%  { transform: rotateY(0deg) scale(1.06); }
+          100% { transform: rotateY(0deg) scale(1); }
+        }
+        .kc-flipping { animation: kcCardFlip 0.6s ease-out; }
+        @keyframes kcPowerPop {
+          0%   { opacity: 0; transform: scale(0.6) translateY(6px); }
+          50%  { opacity: 1; transform: scale(1.2) translateY(-3px); }
+          100% { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        .kc-power-pop { animation: kcPowerPop 0.55s ease-out; display: inline-block; }
+        @keyframes kcComparePop {
+          0%   { opacity: 0; transform: scale(0.5); }
+          40%  { opacity: 1; transform: scale(1.1); }
+          100% { opacity: 1; transform: scale(1); }
+        }
+        .kc-compare-pop > div { animation: kcComparePop 0.5s ease-out; }
+        @keyframes kcOutcomePop {
+          0%   { opacity: 0; transform: scale(0.4) rotate(-3deg); }
+          40%  { opacity: 1; transform: scale(1.15) rotate(1deg); }
+          100% { opacity: 1; transform: scale(1) rotate(0); }
+        }
+        .kc-outcome-banner { animation: kcOutcomePop 0.6s ease-out; }
+        @keyframes kcTurnBannerPop {
+          0%   { opacity: 0; transform: translateY(-30px) scale(0.7); }
+          40%  { opacity: 1; transform: translateY(0) scale(1.1); }
+          100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .kc-turn-banner { animation: kcTurnBannerPop 0.5s ease-out; }
+        @keyframes kcCardShatter {
+          0%   { opacity: 1; transform: scale(1) rotate(0); filter: brightness(1); }
+          40%  { opacity: 1; transform: scale(1.15) rotate(4deg); filter: brightness(2) saturate(2); }
+          100% { opacity: 0; transform: scale(0.3) rotate(-18deg) translateX(-40px); filter: brightness(0.4); }
+        }
+        .kc-card-shatter { animation: kcCardShatter 1.2s ease-out forwards; }
+        @keyframes kcScreenShake {
+          0%, 100% { transform: translate(0, 0); }
+          10%      { transform: translate(-6px, 4px); }
+          20%      { transform: translate(6px, -4px); }
+          30%      { transform: translate(-5px, -4px); }
+          40%      { transform: translate(5px, 4px); }
+          50%      { transform: translate(-4px, 3px); }
+          60%      { transform: translate(4px, -3px); }
+          70%      { transform: translate(-3px, 2px); }
+          80%      { transform: translate(3px, -2px); }
+          90%      { transform: translate(-1px, 1px); }
+        }
+        .kc-screen-shake { animation: kcScreenShake 0.7s ease-out; }
+        @keyframes kcRedFlash {
+          0%   { opacity: 0; background: rgba(239,68,68,0); }
+          20%  { opacity: 1; background: rgba(239,68,68,0.55); }
+          100% { opacity: 0; background: rgba(239,68,68,0); }
+        }
+        .kc-red-flash { animation: kcRedFlash 0.7s ease-out forwards; }
+        @keyframes kcGreenFlash {
+          0%   { opacity: 0; background: rgba(34,197,94,0); }
+          20%  { opacity: 1; background: rgba(34,197,94,0.4); }
+          100% { opacity: 0; background: rgba(34,197,94,0); }
+        }
+        .kc-green-flash { animation: kcGreenFlash 0.7s ease-out forwards; }
         .kc-win-badge { animation: kcWinBadgePulse 0.8s ease-in-out infinite; }
         @keyframes kcWinBadgePulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.15); } }
         .kc-draw-btn { animation: kcDrawPulse 2s ease-in-out infinite; }
@@ -1246,6 +1524,31 @@ function CardDisplay({ card, isDefense, isWinner, size }: { card: BattleCard; is
       </div>
       {isDefense && <div className="absolute top-1.5 left-1.5"><span className={size === 'sm' ? 'text-base' : 'text-xl'}>🛡️</span></div>}
       {isWinner && <div className="absolute top-1.5 right-1.5 kc-win-badge"><span className={`${size === 'sm' ? 'text-lg' : 'text-2xl'} drop-shadow-lg`}>👑</span></div>}
+    </div>
+  );
+}
+
+function CardBack({ side }: { side: 'player' | 'ai' }) {
+  const isPlayer = side === 'player';
+  const color = isPlayer ? '#22c55e' : '#ef4444';
+  return (
+    <div
+      className="inline-block rounded-xl relative overflow-hidden"
+      style={{
+        width: 200,
+        height: 260,
+        background: `linear-gradient(135deg, ${color}33, rgba(14,20,45,0.95))`,
+        border: `3px solid ${color}88`,
+        boxShadow: `0 6px 20px rgba(0,0,0,0.6), 0 0 18px ${color}44`,
+      }}
+    >
+      <div className="absolute inset-3 rounded-lg flex items-center justify-center"
+        style={{ border: `2px dashed ${color}aa` }}>
+        <span className="text-5xl opacity-80">🎴</span>
+      </div>
+      <div className="absolute bottom-2 left-0 right-0 text-center text-xs font-black" style={{ color, textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}>
+        {isPlayer ? 'あなた' : '相手'}
+      </div>
     </div>
   );
 }

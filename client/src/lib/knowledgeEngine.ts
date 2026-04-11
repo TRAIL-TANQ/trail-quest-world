@@ -90,7 +90,9 @@ function shuffleDeck(deck: BattleCard[]): BattleCard[] {
 export function initGameState(playerDeck: BattleCard[], aiDeck: BattleCard[]): GameState {
   const trophyFans = Array.from({ length: TOTAL_ROUNDS }, (_, i) => rollTrophyFans(i + 1));
   return {
-    phase: 'round_intro',
+    // 正しい順序（変更: deck_phase → battle → next round deck_phase → ...）
+    // まずデッキフェイズで 5 枚提示 → 2 枚選択 → バトル開始
+    phase: 'deck_phase',
     round: 1,
     trophyFans,
     playerFans: 0,
@@ -104,7 +106,7 @@ export function initGameState(playerDeck: BattleCard[], aiDeck: BattleCard[]): G
     roundWinner: null,
     history: [],
     winner: null,
-    message: `ラウンド1開始！トロフィー: ${trophyFans[0]}ファン`,
+    message: 'デッキフェイズ：カードを選ぼう',
   };
 }
 
@@ -306,7 +308,8 @@ export function endRound(state: GameState): GameState {
 }
 
 /**
- * Transition from round_end to the deck phase (between rounds 1..4 only).
+ * Legacy: kept as a no-op compat shim. Use advanceToNextRound or startCurrentRound.
+ * （旧設計: round_end → deck_phase。新設計では advanceToNextRound が直接遷移する）
  */
 export function startDeckPhase(state: GameState): GameState {
   if (state.phase !== 'round_end') return state;
@@ -352,20 +355,41 @@ export function aiDeckGrowth(state: GameState, newCards: BattleCard[]): GameStat
 }
 
 /**
- * Advance to the next round after the deck phase is finished.
+ * デッキフェイズ終了 → 現在ラウンドのバトル開始。
+ * ラウンド番号は増やさない（deck_phase は常に対応する round のバトル前に行われる）。
  */
-export function advanceToNextRound(state: GameState): GameState {
+export function startCurrentRound(state: GameState): GameState {
   if (state.phase !== 'deck_phase') return state;
-  const nextRound = state.round + 1;
   return {
     ...state,
     phase: 'round_intro',
+    playerCard: null,
+    aiCard: null,
+    playerPower: 0,
+    aiPower: 0,
+    roundWinner: null,
+    message: `ラウンド${state.round}開始！トロフィー: ${state.trophyFans[state.round - 1]}ファン`,
+  };
+}
+
+/**
+ * バトル終了 (round_end) → 次のラウンドのデッキフェイズへ。
+ * round をインクリメントしてから deck_phase に遷移する。
+ * 最終ラウンド後はそもそも endRound が game_over に飛ばすのでこの関数は呼ばれない。
+ */
+export function advanceToNextRound(state: GameState): GameState {
+  if (state.phase !== 'round_end') return state;
+  const nextRound = state.round + 1;
+  if (nextRound > TOTAL_ROUNDS) return state;
+  return {
+    ...state,
+    phase: 'deck_phase',
     round: nextRound,
     playerCard: null,
     aiCard: null,
     playerPower: 0,
     aiPower: 0,
     roundWinner: null,
-    message: `ラウンド${nextRound}開始！トロフィー: ${state.trophyFans[nextRound - 1]}ファン`,
+    message: `ラウンド${nextRound} デッキフェイズ：カードを選ぼう`,
   };
 }
