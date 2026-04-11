@@ -30,6 +30,14 @@ import { calculateLevel } from './level';
 // Supabase 成功時は常にキャッシュを書き戻すので、オフライン復帰時に自動で同期される。
 const LS_PREFIX = 'kc_child_status_';
 
+// child_status.child_id は uuid 型なので、"user-001" のような legacy ID を
+// そのまま送ると 400 (invalid input syntax for type uuid) を返す。
+// その場合は Supabase を呼ばず localStorage のみで動作する。
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function isUuid(id: string): boolean {
+  return UUID_RE.test(id);
+}
+
 function lsKey(childId: string) {
   return `${LS_PREFIX}${childId}`;
 }
@@ -137,6 +145,10 @@ export function calculateXpReward(isCorrect: boolean): number {
  * レコードが存在しない場合は初期値で作成
  */
 export async function fetchChildStatus(childId: string): Promise<ChildStatus | null> {
+  // Legacy non-uuid id → local-only mode.
+  if (!isUuid(childId)) {
+    return readCachedStatus(childId) ?? initialCachedStatus(childId);
+  }
   try {
     const { data, error } = await supabase
       .from('child_status')
@@ -182,6 +194,8 @@ export async function fetchChildStatus(childId: string): Promise<ChildStatus | n
  * クイズ回答をquiz_attemptsテーブルに保存
  */
 export async function saveQuizAttempt(attempt: QuizAttemptRecord): Promise<boolean> {
+  // Legacy non-uuid id → skip DB write, pretend it worked.
+  if (!isUuid(attempt.child_id)) return true;
   try {
     const { error } = await supabase
       .from('quiz_attempts')
@@ -230,6 +244,9 @@ export async function updateChildStatus(
   // Always write the optimistic result to cache so the game stays consistent
   // even when Supabase is unreachable.
   writeCachedStatus(optimistic);
+
+  // Legacy non-uuid id → local-only mode, skip DB round-trip entirely.
+  if (!isUuid(childId)) return optimistic;
 
   try {
     const { data, error } = await supabase

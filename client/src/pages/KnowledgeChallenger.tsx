@@ -103,10 +103,17 @@ export default function KnowledgeChallenger() {
     | 'resolve'
     | 'game_over';
   const [cineStep, setCineStep] = useState<CinematicStep>('idle');
-  // Skip request flag — read via ref inside the auto-advance loop so a click
-  // during the cinematic does NOT re-trigger the useEffect (which would cancel
-  // the running loop and leave the battle frozen mid-step — 2026-04 bugfix).
-  const skipRequestedRef = useRef(false);
+  // Skip / manual advance via a latch: the battle loop creates an
+  // `advanceLatchRef` per wait, and clicking "次へ" resolves it early so the
+  // loop jumps straight to the next step. Using a latch (instead of deps-based
+  // cancellation) means the loop is never prematurely killed by state changes.
+  const advanceLatchRef = useRef<(() => void) | null>(null);
+  // Set to true only when the component unmounts, so the long-lived battle
+  // loop can bail out cleanly without being cancelled mid-way by phase changes.
+  const unmountedRef = useRef(false);
+  // Prevents multiple concurrent battle loops. `false` → no loop running,
+  // `true` → loop in progress and the phase-change useEffect should skip.
+  const battleRunningRef = useRef(false);
   const [fastMode, setFastMode] = useState(false);
   const fastModeRef = useRef(false);
   useEffect(() => { fastModeRef.current = fastMode; }, [fastMode]);
@@ -210,7 +217,8 @@ export default function KnowledgeChallenger() {
     setGameState(state);
     setScreen('playing');
     setCineStep('idle');
-    skipRequestedRef.current = false;
+    advanceLatchRef.current = null;
+    battleRunningRef.current = false;
     setDeckOffer(null);
     setActiveQuiz(null);
     setSwapState(null);
@@ -260,10 +268,44 @@ export default function KnowledgeChallenger() {
     });
   }, [gameState?.phase, deckOffer]);
 
-  // ===== Scaled timeout helper =====
-  const waitMs = useCallback((ms: number): Promise<void> => {
+  // Track unmount so the battle loop can exit without relying on effect
+  // cleanup (which would fire on every phase change and kill the cinematic).
+  useEffect(() => () => { unmountedRef.current = true; }, []);
+
+  // ===== Step wait with interruptible latch + 3s fallback =====
+  // Returns a promise that resolves when EITHER:
+  //   - the natural scaled delay elapses
+  //   - a 3000ms hard fallback elapses (safety net per spec)
+  //   - the user clicks the manual advance button (advanceLatchRef)
+  //   - the component unmounts
+  const waitStep = useCallback((ms: number): Promise<void> => {
+    if (unmountedRef.current) return Promise.resolve();
     const scale = fastModeRef.current ? 0.3 : 1;
     const delay = Math.max(80, Math.round(ms * scale));
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        advanceLatchRef.current = null;
+        resolve();
+      };
+      const naturalId = window.setTimeout(finish, delay);
+      // 3s hard fallback (spec: 各ステップに最大3秒のタイムアウト)
+      const fallbackId = window.setTimeout(() => {
+        if (!settled) console.warn('[KC] step fallback fired after 3s');
+        finish();
+      }, 3000);
+      stepTimeoutsRef.current.push(naturalId, fallbackId);
+      advanceLatchRef.current = finish;
+    });
+  }, []);
+
+  // Legacy short wait used for tiny state-flush pauses.
+  const waitMs = useCallback((ms: number): Promise<void> => {
+    if (unmountedRef.current) return Promise.resolve();
+    const scale = fastModeRef.current ? 0.3 : 1;
+    const delay = Math.max(16, Math.round(ms * scale));
     return new Promise((resolve) => {
       const id = window.setTimeout(resolve, delay);
       stepTimeoutsRef.current.push(id);
@@ -271,116 +313,123 @@ export default function KnowledgeChallenger() {
   }, []);
 
   // ===== Battle auto-play loop =====
-  // phase === 'battle_intro' に入ったら自動で cinematic を進める。
-  // プレイヤーの操作はスキップのみ。全ての state 遷移を useEffect で駆動する。
+  // Entry condition: phase becomes 'battle_intro' AND no loop currently running.
+  // The loop runs through: turn_banner → defender_show → attack_reveal (many)
+  // → resolve → continueAfterResolve (which sets phase back to battle_intro
+  // for the next sub-battle, triggering this effect again).
+  //
+  // Key fix (2026-04): phase transitions inside the loop (battle_intro → battle
+  // → battle_resolve) no longer cancel the loop, because we use a persistent
+  // `battleRunningRef` + `unmountedRef` pair instead of effect cleanup. Earlier
+  // versions put `cancelled = true` in the effect cleanup, which fired every
+  // time phase changed and killed the cinematic mid-flight.
   useEffect(() => {
     if (!gameState) return;
     if (gameState.phase !== 'battle_intro') return;
-    if (cineStep !== 'idle' && cineStep !== 'resolve') return;
+    if (battleRunningRef.current) return;
+    battleRunningRef.current = true;
 
-    let cancelled = false;
-    // Per-step watchdog: if a wait takes more than 5s, bail out of that wait
-    // so the loop can keep progressing even if something hangs.
-    const wait = async (ms: number) => {
-      if (skipRequestedRef.current) return;
-      await Promise.race([waitMs(ms), waitMs(5000)]);
-    };
     const run = async () => {
-      console.log('[KC] battle auto-loop: start battle_intro');
-      // Step 1: turn banner
-      setCineStep('turn_banner');
-      await wait(TURN_BANNER_MS);
-      if (cancelled) return;
+      console.log('[KC] battle loop: START (round', gameState.round, ')');
+      try {
+        // Step 1: turn banner
+        console.log('[KC] → turn_banner');
+        setCineStep('turn_banner');
+        await waitStep(TURN_BANNER_MS);
+        if (unmountedRef.current) return;
 
-      // Step 2: defender shown
-      setCineStep('defender_show');
-      await wait(DEFENDER_SHOW_MS);
-      if (cancelled) return;
+        // Step 2: defender shown
+        console.log('[KC] → defender_show');
+        setCineStep('defender_show');
+        await waitStep(DEFENDER_SHOW_MS);
+        if (unmountedRef.current) return;
 
-      // Step 3: attack reveal loop — call revealNextAttackCard until success or failure
-      setCineStep('attack_reveal');
-      setGameState((prev) => (prev ? beginAttackLoop(prev) : prev));
+        // Step 3: attack reveal loop
+        console.log('[KC] → attack_reveal');
+        setCineStep('attack_reveal');
+        setGameState((prev) => (prev ? beginAttackLoop(prev) : prev));
 
-      // Pull from state ref via functional setGameState to avoid stale closure
-      let loopGuard = 30; // safety: max 30 reveals
-      while (loopGuard-- > 0) {
-        if (cancelled) return;
-        await wait(ATTACK_CARD_REVEAL_MS);
-        if (cancelled) return;
+        let loopGuard = 30;
+        while (loopGuard-- > 0) {
+          if (unmountedRef.current) return;
+          await waitStep(ATTACK_CARD_REVEAL_MS);
+          if (unmountedRef.current) return;
 
-        // Reveal one more card atomically
-        let resultState: GameState | null = null;
-        setGameState((prev) => {
-          if (!prev) return prev;
-          const next = revealNextAttackCard(prev);
-          resultState = next;
-          return next;
-        });
-
-        // Wait one tick so state settles, then inspect
-        await waitMs(16);
-        if (cancelled || !resultState) return;
-
-        // If game ended due to deck-out, leave the loop
-        if ((resultState as GameState).phase === 'game_over') {
-          console.log('[KC] battle: game_over during reveal');
-          setCineStep('game_over');
-          await wait(RESOLVE_BANNER_MS);
-          if (!cancelled) {
-            window.setTimeout(() => setScreen('result'), 600);
-          }
-          return;
-        }
-        // Success check
-        if (hasAttackSucceeded(resultState as GameState)) {
-          console.log('[KC] battle: attack succeeded, resolving');
-          // Brief pause then resolve
-          await wait(400);
-          if (cancelled) return;
-          let resolved: GameState | null = null;
+          // Reveal one card atomically
+          let resultState: GameState | null = null;
           setGameState((prev) => {
             if (!prev) return prev;
-            const r = resolveSubBattleWin(prev);
-            resolved = r;
-            return r;
+            const next = revealNextAttackCard(prev);
+            resultState = next;
+            return next;
           });
           await waitMs(16);
-          if (cancelled || !resolved) return;
+          if (unmountedRef.current || !resultState) return;
 
-          // Step 4: resolve banner
-          setCineStep('resolve');
-          const rs = resolved as GameState;
+          const rs = resultState as GameState;
           if (rs.phase === 'game_over') {
-            await wait(RESOLVE_BANNER_MS);
-            if (!cancelled) setCineStep('game_over');
-            if (!cancelled) window.setTimeout(() => setScreen('result'), 600);
+            console.log('[KC] → game_over during reveal');
+            setCineStep('game_over');
+            await waitStep(RESOLVE_BANNER_MS);
+            if (!unmountedRef.current) window.setTimeout(() => setScreen('result'), 600);
             return;
           }
-          await wait(RESOLVE_BANNER_MS);
-          if (cancelled) return;
 
-          // Continue to next sub-battle
-          setGameState((prev) => (prev ? continueAfterResolve(prev) : prev));
-          skipRequestedRef.current = false;
-          // The useEffect will re-trigger on the new battle_intro phase
-          setCineStep('idle');
-          return;
+          if (hasAttackSucceeded(rs)) {
+            console.log('[KC] → attack succeeded, resolving');
+            await waitStep(400);
+            if (unmountedRef.current) return;
+
+            let resolved: GameState | null = null;
+            setGameState((prev) => {
+              if (!prev) return prev;
+              const r = resolveSubBattleWin(prev);
+              resolved = r;
+              return r;
+            });
+            await waitMs(16);
+            if (unmountedRef.current || !resolved) return;
+
+            console.log('[KC] → resolve banner');
+            setCineStep('resolve');
+            const rzs = resolved as GameState;
+            if (rzs.phase === 'game_over') {
+              await waitStep(RESOLVE_BANNER_MS);
+              if (!unmountedRef.current) setCineStep('game_over');
+              if (!unmountedRef.current) window.setTimeout(() => setScreen('result'), 600);
+              return;
+            }
+            await waitStep(RESOLVE_BANNER_MS);
+            if (unmountedRef.current) return;
+
+            // Transition to next sub-battle
+            console.log('[KC] → continueAfterResolve (next sub-battle)');
+            setGameState((prev) => (prev ? continueAfterResolve(prev) : prev));
+            setCineStep('idle');
+            return;
+          }
         }
+        console.warn('[KC] battle loop safety break reached');
+      } finally {
+        battleRunningRef.current = false;
+        console.log('[KC] battle loop: END');
       }
-      console.warn('[KC] battle loop safety break reached');
     };
 
     run();
-    return () => { cancelled = true; };
+    // No cleanup: loop is guarded by battleRunningRef + unmountedRef.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState?.phase]);
 
-  // ===== Skip button: short-circuit all waits in current cinematic =====
-  // Uses a ref so toggling it does NOT re-trigger the battle useEffect.
-  const handleSkipReveal = useCallback(() => {
-    console.log('[KC] skip requested');
-    skipRequestedRef.current = true;
+  // ===== Manual advance: resolves the current wait latch immediately =====
+  // Used by both the skip button and the bottom "次へ" button. Because waits
+  // are latch-driven, this jumps straight to the next step without altering
+  // any state flags — zero risk of re-triggering the effect or racing.
+  const handleAdvance = useCallback(() => {
+    console.log('[KC] manual advance');
+    advanceLatchRef.current?.();
   }, []);
+  const handleSkipReveal = handleAdvance;
 
   // ===== Deck phase: tap card → show quiz =====
   // NOTE: クイズ出題は deck_phase 限定。バトル中は絶対に走らない。
@@ -534,7 +583,7 @@ export default function KnowledgeChallenger() {
     console.log('[KC] handleStartBattle: phase =', next.phase, 'defenseCard =', next.defenseCard?.name);
     setGameState(next);
     setCineStep('idle');
-    skipRequestedRef.current = false;
+    advanceLatchRef.current = null;
   }, [gameState]);
 
   // ===== Swap resolution =====
@@ -1064,6 +1113,38 @@ export default function KnowledgeChallenger() {
         <div className="flex-1 flex items-center justify-center relative">
           {playerIsDefender ? renderDefenderSlot() : renderAttackerSlot()}
         </div>
+
+        {/* ====== Manual advance button (always visible during battle) ====== */}
+        {gameState.phase !== 'deck_phase' && gameState.phase !== 'game_over' && (() => {
+          const labelByStep: Record<string, string> = {
+            idle: 'バトル開始 ▶',
+            turn_banner: 'バトル開始 ▶',
+            defender_show: '攻撃を見る ▶',
+            attack_reveal: '比較する ▶',
+            resolve: '次のサブバトルへ ▶',
+            game_over: '結果を見る ▶',
+          };
+          const label = labelByStep[cineStep] ?? '次へ ▶';
+          return (
+            <div className="shrink-0 px-3 pb-2 pt-1 z-40 relative">
+              <button
+                onClick={handleAdvance}
+                className="w-full rounded-xl font-black active:scale-[0.98] transition-all"
+                style={{
+                  minHeight: '48px',
+                  fontSize: '16px',
+                  color: '#fff',
+                  background: 'linear-gradient(180deg, #ffd700 0%, #daa520 100%)',
+                  border: '2.5px solid #ffe066',
+                  boxShadow: '0 4px 16px rgba(255,215,0,0.45), 0 0 20px rgba(255,215,0,0.25)',
+                  textShadow: '0 1px 3px rgba(0,0,0,0.6)',
+                }}
+              >
+                {label}
+              </button>
+            </div>
+          );
+        })()}
 
         {/* ====== Turn Banner ====== */}
         {cineStep === 'turn_banner' && (
