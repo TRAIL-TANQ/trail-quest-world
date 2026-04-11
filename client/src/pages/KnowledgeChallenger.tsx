@@ -208,13 +208,15 @@ export default function KnowledgeChallenger() {
   // ===== Enter deck phase =====
   const enterDeckPhase = useCallback(() => {
     if (!gameState || gameState.phase !== 'round_end') return;
-    // Give AI 2 random cards (simple growth)
-    const aiNew = sampleCards(2, 'ai-grow');
+    // 変更8: round 引数で現在ラウンドのレア度分布に従って抽選。
+    // 次のラウンド向けのデッキ補充なので round+1 を渡す。
+    // ただし最終ラウンド終了時は deck_phase に入らない（既に game_over 遷移済み）ので安全。
+    const nextRound = gameState.round + 1;
+    const aiNew = sampleCards(2, 'ai-grow', nextRound);
     const state1 = aiDeckGrowth(gameState, aiNew);
     const state2 = startDeckPhase(state1);
     setGameState(state2);
-    // Offer player 2 random cards
-    const offered = sampleCards(2, 'offer');
+    const offered = sampleCards(2, 'offer', nextRound);
     setDeckOffer({
       cards: offered,
       blocked: new Set(),
@@ -323,15 +325,16 @@ export default function KnowledgeChallenger() {
 
   // ===== Redraw offer =====
   const handleRedraw = useCallback(() => {
-    if (!deckOffer || deckOffer.redrawsLeft <= 0) return;
-    const offered = sampleCards(2, 'offer');
+    if (!deckOffer || deckOffer.redrawsLeft <= 0 || !gameState) return;
+    // 変更8: deck_phase 中のラウンド番号に合わせて抽選
+    const offered = sampleCards(2, 'offer', gameState.round + 1);
     setDeckOffer({
       cards: offered,
       blocked: new Set(),
       acquired: new Set(),
       redrawsLeft: deckOffer.redrawsLeft - 1,
     });
-  }, [deckOffer]);
+  }, [deckOffer, gameState]);
 
   // ===== Continue to next round =====
   const handleContinueNextRound = useCallback(() => {

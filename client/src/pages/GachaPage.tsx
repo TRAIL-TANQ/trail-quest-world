@@ -11,6 +11,8 @@ import { COLLECTION_CARDS, GACHA_RARITY_RATES } from '@/lib/cardData';
 import { useUserStore, useGachaStore, useCollectionStore, useMissionStore } from '@/lib/stores';
 import type { GachaHistoryEntry } from '@/lib/stores';
 import type { CollectionCard, CollectionRarity } from '@/lib/types';
+import { availableRarities, levelToGachaPhase } from '@/lib/knowledgeCards';
+import { calculateLevel } from '@/lib/level';
 import { toast } from 'sonner';
 
 // --- Constants ---
@@ -46,22 +48,35 @@ function pickFromPool(rarity: CollectionRarity): CollectionCard {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
-function rollRarity(premium: boolean, pityCount: number): CollectionRarity {
-  const rand = Math.random();
-  if (premium) {
-    // プレミアム天井: 30回でSSR確定
-    if (pityCount >= PITY_LIMIT_PREMIUM - 1) return 'SSR';
-    if (rand < 0.15) return 'SSR';
-    if (rand < 0.50) return 'SR';
-    return 'R';
-  } else {
-    // ノーマル天井: 50回でSSR確定
-    if (pityCount >= PITY_LIMIT_NORMAL - 1) return 'SSR';
-    if (rand < GACHA_RARITY_RATES.SSR) return 'SSR';
-    if (rand < GACHA_RARITY_RATES.SSR + GACHA_RARITY_RATES.SR) return 'SR';
-    if (rand < GACHA_RARITY_RATES.SSR + GACHA_RARITY_RATES.SR + GACHA_RARITY_RATES.R) return 'R';
-    return 'N';
+/**
+ * 変更8: プレイヤーレベルに対応するガチャフェーズのレア度分布で抽選。
+ * - フェーズは levelToGachaPhase(level) で決定（1..5）
+ * - premium は通常より 1 フェーズ先のレア度分布を使う（ただし上限5にクランプ）
+ * - 天井到達時は許容レア度の最高を強制返却
+ * - 許容レア度外のレアがロールされたら、availableRarities 内に丸める（ノーマル側ガード）
+ */
+function rollRarity(premium: boolean, pityCount: number, playerLevel: number): CollectionRarity {
+  const basePhase = levelToGachaPhase(playerLevel);
+  const phase = premium ? Math.min(5, basePhase + 1) : basePhase;
+  const weights = availableRarities(phase);
+  const allowed = weights.map(([r]) => r as CollectionRarity);
+  const highest: CollectionRarity =
+    allowed.includes('SSR') ? 'SSR' :
+    allowed.includes('SR')  ? 'SR'  :
+    allowed.includes('R')   ? 'R'   : 'N';
+
+  // 天井: 許容内の最高レアを返す
+  if (premium && pityCount >= PITY_LIMIT_PREMIUM - 1) return highest;
+  if (!premium && pityCount >= PITY_LIMIT_NORMAL - 1) return highest;
+
+  // 重み抽選
+  const total = weights.reduce((s, [, w]) => s + w, 0);
+  let r = Math.random() * total;
+  for (const [rarity, w] of weights) {
+    r -= w;
+    if (r <= 0) return rarity as CollectionRarity;
   }
+  return highest;
 }
 
 type GachaPhase = 'idle' | 'shake' | 'burst' | 'flip' | 'reveal' | 'multi_reveal';
@@ -69,6 +84,8 @@ type GachaPhase = 'idle' | 'shake' | 'burst' | 'flip' | 'reveal' | 'multi_reveal
 export default function GachaPage() {
   const user = useUserStore((s) => s.user);
   const updateAlt = useUserStore((s) => s.updateAlt);
+  // 変更8: レベルベースのガチャフェーズ決定に使う
+  const playerLevel = useMemo(() => calculateLevel(user.totalAlt).level, [user.totalAlt]);
   const pityCount = useGachaStore((s) => s.pityCount);
   const premiumPityCount = useGachaStore((s) => s.premiumPityCount);
   const incrementPity = useGachaStore((s) => s.incrementPity);
@@ -108,7 +125,7 @@ export default function GachaPage() {
     setPhase('shake');
 
     const currentPity = type === 'premium' ? premiumPityCount : pityCount;
-    const rarity = rollRarity(type === 'premium', currentPity);
+    const rarity = rollRarity(type === 'premium', currentPity, playerLevel);
     const card = pickFromPool(rarity);
 
     if (rarity === 'SSR' || rarity === 'SR') {
@@ -140,7 +157,7 @@ export default function GachaPage() {
     setTimeout(() => { setPulledCard(card); setPhase('burst'); }, 500);
     setTimeout(() => setPhase('flip'), 500 + burstDuration);
     setTimeout(() => setPhase('reveal'), 500 + burstDuration + 600);
-  }, [user.currentAlt, phase, updateAlt, pityCount, premiumPityCount, incrementPity, resetPity, addCard, addHistory, ownedCardIds]);
+  }, [user.currentAlt, phase, updateAlt, pityCount, premiumPityCount, incrementPity, resetPity, addCard, addHistory, ownedCardIds, playerLevel, updateMissionProgress]);
 
   // 10連引き
   const handlePull10 = useCallback((type: 'normal' | 'premium') => {
@@ -168,7 +185,7 @@ export default function GachaPage() {
         resetPity(type === 'premium');
         currentPity = 0;
       } else {
-        rarity = rollRarity(type === 'premium', currentPity);
+        rarity = rollRarity(type === 'premium', currentPity, playerLevel);
         if (rarity === 'SSR' || rarity === 'SR') {
           hasSROrAbove = true;
           resetPity(type === 'premium');
@@ -209,7 +226,7 @@ export default function GachaPage() {
 
     setPulledCards(cards);
     setTimeout(() => setPhase('multi_reveal'), 1000);
-  }, [user.currentAlt, phase, updateAlt, pityCount, premiumPityCount, incrementPity, resetPity, addCards, addHistory, ownedCardIds]);
+  }, [user.currentAlt, phase, updateAlt, pityCount, premiumPityCount, incrementPity, resetPity, addCards, addHistory, ownedCardIds, playerLevel, updateMissionProgress]);
 
   const handleDismiss = () => { setPhase('idle'); setPulledCard(null); setPulledCards([]); };
 

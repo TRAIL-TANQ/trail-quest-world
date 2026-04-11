@@ -868,11 +868,93 @@ export function createAIDeck(): BattleCard[] {
   return buildValidDeck(ALL_BATTLE_CARDS, 'ai', INITIAL_DECK_SIZE);
 }
 
-// Pick `n` random cards from the pool, returned with freshly-prefixed ids.
-// Used by the deck phase to offer the player 2 cards per round, and for AI growth.
-export function sampleCards(n: number, prefix: string): BattleCard[] {
-  const shuffled = [...ALL_BATTLE_CARDS].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, n).map((c, i) => ({ ...c, id: `${prefix}-${c.id}-${Date.now()}-${i}` }));
+// ===== Round-gated rarity availability (変更8) =====
+// ラウンドが進むほど高レアが出現する。5ラウンド全体の進行曲線:
+//   R1: N / R のみ                (チュートリアル～序盤)
+//   R2: N / R / SR(低確率)        (SR 初出現)
+//   R3: R / SR                    (N を卒業、中レア中心)
+//   R4: R / SR / SSR(低確率)      (SSR 初出現)
+//   R5: SR / SSR                  (終盤のピーク)
+// 各ラウンドの [rarity, weight] タプル配列。weight は相対値。
+export type RarityWeight = [CardRarity, number];
+
+export const ROUND_RARITY_WEIGHTS: Record<number, RarityWeight[]> = {
+  1: [['N', 70], ['R', 30]],
+  2: [['N', 45], ['R', 45], ['SR', 10]],
+  3: [['R', 70], ['SR', 30]],
+  4: [['R', 40], ['SR', 50], ['SSR', 10]],
+  5: [['SR', 70], ['SSR', 30]],
+};
+
+/** round に対応するレア度分布を取得。範囲外は R5 相当にクランプ。 */
+export function availableRarities(round: number): RarityWeight[] {
+  if (round <= 1) return ROUND_RARITY_WEIGHTS[1];
+  if (round >= 5) return ROUND_RARITY_WEIGHTS[5];
+  return ROUND_RARITY_WEIGHTS[round];
+}
+
+/**
+ * ガチャでのプレイヤーレベル → 進行フェーズ (1..5) マッピング（変更8）。
+ * バトルのラウンド進行をガチャにも適用するためのブリッジ。
+ */
+export function levelToGachaPhase(level: number): 1 | 2 | 3 | 4 | 5 {
+  if (level <= 2) return 1;
+  if (level <= 4) return 2;
+  if (level <= 6) return 3;
+  if (level <= 9) return 4;
+  return 5;
+}
+
+/** weighted に1つのレア度を抽選 */
+function rollRarityByRound(round: number): CardRarity {
+  const weights = availableRarities(round);
+  const total = weights.reduce((s, [, w]) => s + w, 0);
+  let r = Math.random() * total;
+  for (const [rarity, w] of weights) {
+    r -= w;
+    if (r <= 0) return rarity;
+  }
+  return weights[weights.length - 1][0];
+}
+
+/**
+ * Pick `n` random cards from the pool, returned with freshly-prefixed ids.
+ * Used by the deck phase to offer the player 2 cards per round, and for AI growth.
+ *
+ * round を渡すと、そのラウンドのレア度分布に従って抽選する（変更8）。
+ * round を省略するとフラット抽選（後方互換、ガチャ等の用途向け）。
+ */
+export function sampleCards(n: number, prefix: string, round?: number): BattleCard[] {
+  const result: BattleCard[] = [];
+  const timestamp = Date.now();
+
+  if (round === undefined) {
+    const shuffled = [...ALL_BATTLE_CARDS].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, n).map((c, i) => ({ ...c, id: `${prefix}-${c.id}-${timestamp}-${i}` }));
+  }
+
+  // レア度別にプールを事前分割
+  const byRarity: Record<CardRarity, BattleCard[]> = {
+    N:   ALL_BATTLE_CARDS.filter((c) => c.rarity === 'N'),
+    R:   ALL_BATTLE_CARDS.filter((c) => c.rarity === 'R'),
+    SR:  ALL_BATTLE_CARDS.filter((c) => c.rarity === 'SR'),
+    SSR: ALL_BATTLE_CARDS.filter((c) => c.rarity === 'SSR'),
+  };
+
+  for (let i = 0; i < n; i++) {
+    let rarity = rollRarityByRound(round);
+    // プールが空ならフォールバック: N→R→SR→SSR の順で存在する最初のものへ
+    if (byRarity[rarity].length === 0) {
+      const order: CardRarity[] = ['N', 'R', 'SR', 'SSR'];
+      const fallback = order.find((r) => byRarity[r].length > 0);
+      if (!fallback) break;
+      rarity = fallback;
+    }
+    const pool = byRarity[rarity];
+    const pick = pool[Math.floor(Math.random() * pool.length)];
+    result.push({ ...pick, id: `${prefix}-${pick.id}-${timestamp}-${i}` });
+  }
+  return result;
 }
 
 // Legacy exports for compatibility
