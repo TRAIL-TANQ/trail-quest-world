@@ -1129,23 +1129,27 @@ export default function KnowledgeChallenger() {
 
       {/* ===== Deck Phase Overlay ===== */}
       {gameState.phase === 'deck_phase' && deckOffer && !activeQuiz && !swapState && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-5" style={{ background: 'rgba(0,0,0,0.85)' }}>
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-3" style={{ background: 'rgba(0,0,0,0.85)' }}>
           <div
-            className="rounded-2xl p-5 w-full max-w-md"
+            className="rounded-2xl w-full max-w-md flex flex-col"
             style={{
               background: 'linear-gradient(135deg, rgba(21,29,59,0.98), rgba(14,20,45,0.98))',
               border: '3px solid rgba(255,215,0,0.5)',
               boxShadow: '0 12px 40px rgba(0,0,0,0.7), 0 0 32px rgba(255,215,0,0.2)',
+              maxHeight: '92vh',
             }}
           >
-            <h3 className="text-xl font-black text-center mb-1" style={{ color: '#ffd700' }}>
-              📚 ラウンド{gameState.round} デッキフェイズ
-            </h3>
-            <p className="text-xs text-amber-200/70 text-center mb-4">
-              5 枚の中から 2 枚選ぼう。タップでクイズ出題、正解で追加。
-              <br />
-              獲得 {deckOffer.acquired.size}/2 ・ デッキ {gameState.player.deck.length}/{MAX_DECK_SIZE} 枚
-            </p>
+            <div className="p-4 pb-2 shrink-0">
+              <h3 className="text-xl font-black text-center mb-1" style={{ color: '#ffd700' }}>
+                📚 ラウンド{gameState.round} デッキフェイズ
+              </h3>
+              <p className="text-xs text-amber-200/70 text-center">
+                5 枚の中から 2 枚選ぼう。タップでクイズ出題、正解で追加。
+                <br />
+                獲得 {deckOffer.acquired.size}/2 ・ デッキ {gameState.player.deck.length}/{MAX_DECK_SIZE} 枚
+              </p>
+            </div>
+            <div className="px-4 overflow-y-auto flex-1 min-h-0">
             <div className="grid grid-cols-3 gap-2 mb-4">
               {deckOffer.cards.map((card, i) => {
                 const blocked = deckOffer.blocked.has(i);
@@ -1237,25 +1241,55 @@ export default function KnowledgeChallenger() {
                 💡 デッキ整理のコツ: 攻撃と防御のバランスを考えよう
               </p>
             </div>
-
-            <div className="flex gap-2">
-              <button
-                onClick={handleRedraw}
-                disabled={deckOffer.redrawsLeft <= 0 || deckOffer.acquired.size > 0}
-                className="rpg-btn rpg-btn-blue flex-1 py-2.5 text-sm"
-                style={{ opacity: (deckOffer.redrawsLeft <= 0 || deckOffer.acquired.size > 0) ? 0.5 : 1 }}
-              >
-                🔄 引き直し ({deckOffer.redrawsLeft})
-              </button>
-              <button
-                onClick={handleStartBattle}
-                disabled={gameState.player.deck.length < MIN_DECK_SIZE}
-                className="rpg-btn rpg-btn-gold flex-1 py-2.5 text-sm"
-                style={{ opacity: gameState.player.deck.length < MIN_DECK_SIZE ? 0.5 : 1 }}
-              >
-                ⚔️ バトル開始 ▶
-              </button>
             </div>
+            {/* ===== Sticky footer: 引き直し + バトル開始 ===== */}
+            {(() => {
+              const acquiredCount = deckOffer.acquired.size;
+              const deckOk = gameState.player.deck.length >= MIN_DECK_SIZE;
+              const startEnabled = acquiredCount >= 2 && deckOk;
+              const label =
+                !deckOk
+                  ? `デッキ最低${MIN_DECK_SIZE}枚必要`
+                  : acquiredCount < 2
+                    ? `あと${2 - acquiredCount}枚選んでください`
+                    : '⚔️ バトル開始 ▶';
+              return (
+                <div
+                  className="p-4 pt-3 shrink-0"
+                  style={{ borderTop: '1px solid rgba(255,215,0,0.2)', background: 'rgba(10,14,30,0.6)' }}
+                >
+                  <button
+                    onClick={handleRedraw}
+                    disabled={deckOffer.redrawsLeft <= 0 || deckOffer.acquired.size > 0}
+                    className="rpg-btn rpg-btn-blue w-full py-2 text-xs mb-2"
+                    style={{ opacity: (deckOffer.redrawsLeft <= 0 || deckOffer.acquired.size > 0) ? 0.5 : 1 }}
+                  >
+                    🔄 引き直し ({deckOffer.redrawsLeft})
+                  </button>
+                  <button
+                    onClick={handleStartBattle}
+                    disabled={!startEnabled}
+                    className="w-full rounded-xl font-black active:scale-[0.98] transition-all"
+                    style={{
+                      minHeight: '64px',
+                      fontSize: '1.15rem',
+                      color: '#fff',
+                      background: startEnabled
+                        ? 'linear-gradient(180deg, #22c55e 0%, #16a34a 100%)'
+                        : 'rgba(90,90,100,0.5)',
+                      border: startEnabled ? '3px solid #4ade80' : '3px solid rgba(255,255,255,0.15)',
+                      boxShadow: startEnabled
+                        ? '0 6px 24px rgba(34,197,94,0.55), 0 0 24px rgba(74,222,128,0.35)'
+                        : 'none',
+                      textShadow: startEnabled ? '0 2px 6px rgba(0,0,0,0.5)' : 'none',
+                      cursor: startEnabled ? 'pointer' : 'not-allowed',
+                    }}
+                  >
+                    {label}
+                  </button>
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}
