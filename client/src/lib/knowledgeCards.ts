@@ -118,16 +118,59 @@ export interface BattleCard {
   effect?: CardEffect;         // On-reveal auto-trigger effect (新効果システム)
 }
 
-// Specific overrides for world heritage cards: defense-specialized with asymmetric atk/def
-export const HERITAGE_STAT_OVERRIDES: Record<string, { attackPower: number; defensePower: number }> = {
-  '万里の長城':   { attackPower: 1, defensePower: 8 },
-  'ピラミッド':   { attackPower: 2, defensePower: 7 },
-  'コロッセオ':   { attackPower: 1, defensePower: 6 },
-  'タージ・マハル': { attackPower: 1, defensePower: 7 },
-  'アンコールワット': { attackPower: 2, defensePower: 7 },
-  'マチュ・ピチュ': { attackPower: 1, defensePower: 8 },
-  '自由の女神':   { attackPower: 2, defensePower: 6 },
+// ===== Category × Rarity 攻防バランス表 (2026-04 rebalance) =====
+// Each entry lists the stat profile pool for that (category, rarity). When a
+// card has multiple profiles, toBattleCard picks deterministically via id so
+// N 偉人 splits roughly 50/50 between (1/1) and (2/1), etc.
+//
+// ジャンル別方針:
+//   偉人:      攻撃やや高 / 防御やや低
+//   生き物:    攻撃高 / 防御低
+//   世界遺産:  攻撃低 / 防御特化 (効果なし)
+//   発明:      バランス型
+//   発見:      バランス型 (発明と同じ)
+type StatProfile = { attackPower: number; defensePower: number };
+export const CATEGORY_RARITY_STATS: Record<CardCategory, Record<CardRarity, StatProfile[]>> = {
+  great_person: {
+    N:   [{ attackPower: 1, defensePower: 1 }, { attackPower: 2, defensePower: 1 }],
+    R:   [{ attackPower: 3, defensePower: 2 }],
+    SR:  [{ attackPower: 5, defensePower: 3 }],
+    SSR: [{ attackPower: 6, defensePower: 4 }],
+  },
+  creature: {
+    N:   [{ attackPower: 2, defensePower: 1 }, { attackPower: 1, defensePower: 1 }],
+    R:   [{ attackPower: 3, defensePower: 1 }],
+    SR:  [{ attackPower: 5, defensePower: 2 }],
+    SSR: [{ attackPower: 7, defensePower: 2 }],
+  },
+  heritage: {
+    N:   [{ attackPower: 1, defensePower: 3 }],
+    R:   [{ attackPower: 1, defensePower: 5 }],
+    SR:  [{ attackPower: 1, defensePower: 6 }],
+    SSR: [{ attackPower: 1, defensePower: 8 }],
+  },
+  invention: {
+    N:   [{ attackPower: 1, defensePower: 1 }, { attackPower: 2, defensePower: 2 }],
+    R:   [{ attackPower: 2, defensePower: 2 }, { attackPower: 3, defensePower: 3 }],
+    SR:  [{ attackPower: 4, defensePower: 4 }],
+    SSR: [{ attackPower: 5, defensePower: 5 }],
+  },
+  discovery: {
+    N:   [{ attackPower: 1, defensePower: 1 }, { attackPower: 2, defensePower: 2 }],
+    R:   [{ attackPower: 2, defensePower: 2 }, { attackPower: 3, defensePower: 3 }],
+    SR:  [{ attackPower: 4, defensePower: 4 }],
+    SSR: [{ attackPower: 5, defensePower: 5 }],
+  },
 };
+
+// Deterministic profile pick based on card id → stable across reloads.
+function pickStatProfile(id: string, profiles: StatProfile[]): StatProfile {
+  if (profiles.length === 1) return profiles[0];
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) | 0;
+  const idx = Math.abs(hash) % profiles.length;
+  return profiles[idx];
+}
 
 // Combo card IDs for detection
 export const COMBO_CARD_IDS = {
@@ -168,7 +211,8 @@ export const RARITY_INFO: Record<CardRarity, { label: string; color: string; bgC
 };
 
 // Power by rarity
-const RARITY_POWER: Record<CardRarity, number> = { N: 2, R: 4, SR: 6, SSR: 9 };
+// RARITY_POWER was removed in the 2026-04 rebalance — stats now come from
+// CATEGORY_RARITY_STATS. RARITY_BONUS is kept for correctBonus on quiz rewards.
 const RARITY_BONUS: Record<CardRarity, number> = { N: 1, R: 1, SR: 2, SSR: 2 };
 
 // ===== Quiz data for all 100 cards =====
@@ -735,38 +779,42 @@ const CATEGORY_EFFECTS: Record<CardCategory, Record<CardRarity, string>> = {
 function toBattleCard(cc: CollectionCard): BattleCard {
   const category = CATEGORY_MAP[cc.category];
   const rarity = cc.rarity as CardRarity;
-  let power = RARITY_POWER[rarity];
   const correctBonus = RARITY_BONUS[rarity];
   let effectDescription = CATEGORY_EFFECTS[category][rarity];
   let specialEffect: SpecialEffect | undefined;
   let comboRequires: string[] | undefined;
   let fromTheBench = false;
 
-  // Combo card overrides
+  // 2026-04 rebalance: stats come from CATEGORY_RARITY_STATS per (category, rarity).
+  // `power` is kept as a legacy fallback (= attackPower) for the few call sites
+  // that still read it before attackPower/defensePower were always populated.
+  const profile = pickStatProfile(cc.id, CATEGORY_RARITY_STATS[category][rarity]);
+  let attackPower: number = profile.attackPower;
+  let defensePower: number = profile.defensePower;
+  let power = attackPower;
+
+  // Combo card overrides (keep original combo identity; ignore category stats)
   if (cc.id === COMBO_CARD_IDS.MANHATTAN) {
-    power = 3;
+    attackPower = 2;
+    defensePower = 2;
+    power = attackPower;
     specialEffect = 'nuke_ingredient_manhattan';
     fromTheBench = true;
     effectDescription = 'From the bench: 「原子爆弾」の発動条件。ベンチにある限り効果継続。';
   } else if (cc.id === COMBO_CARD_IDS.TRINITY) {
-    power = 3;
+    attackPower = 2;
+    defensePower = 2;
+    power = attackPower;
     specialEffect = 'nuke_ingredient_trinity';
     fromTheBench = true;
     effectDescription = 'From the bench: 「原子爆弾」の発動条件。ベンチにある限り効果継続。';
   } else if (cc.id === COMBO_CARD_IDS.NUKE) {
-    power = 2;
+    attackPower = 2;
+    defensePower = 2;
+    power = attackPower;
     specialEffect = 'nuke_trigger';
     comboRequires = ['マンハッタン計画', 'トリニティ実験'];
     effectDescription = '公開時発動：ベンチに「マンハッタン計画」と「トリニティ実験」がある場合、相手の場を破壊し、相手デッキ上から5枚を隔離。条件不足時は不発（基本パワー2）。';
-  }
-
-  // Heritage-specific attack/defense stat overrides
-  let attackPower: number | undefined;
-  let defensePower: number | undefined;
-  const heritageOverride = HERITAGE_STAT_OVERRIDES[cc.name];
-  if (heritageOverride) {
-    attackPower = heritageOverride.attackPower;
-    defensePower = heritageOverride.defensePower;
   }
 
   const quizzes = QUIZ_DATA[cc.id] || [
@@ -935,48 +983,63 @@ export function canAddCardToDeck(deck: BattleCard[], card: BattleCard): { ok: bo
   return { ok: true };
 }
 
-// Build a starter deck of `targetSize` cards, respecting rarity caps.
+// Build a starter deck respecting the 2026-04 balance spec:
+//   7 N (5 of atk1/def1 + 2 of atk2/def2-ish "heavier" N) including 1 N 世界遺産 (atk1/def3)
+//   2 R (1 atk2/def2 + 1 atk3/def3)
+//   1 SR (atk4/def4)
+//   0 SSR
+// The spec is easier to hit by filtering the pool via stat signature rather
+// than trying to satisfy arbitrary rarity caps.
 function buildValidDeck(pool: BattleCard[], prefix: string, targetSize: number): BattleCard[] {
-  const shuffled = [...pool].sort(() => Math.random() - 0.5);
+  const rng = () => Math.random() - 0.5;
+  const shuffled = [...pool].sort(rng);
   const deck: BattleCard[] = [];
-  const byRarity = {
-    SSR: shuffled.filter(c => c.rarity === 'SSR'),
-    SR: shuffled.filter(c => c.rarity === 'SR'),
-    R: shuffled.filter(c => c.rarity === 'R'),
-    N: shuffled.filter(c => c.rarity === 'N'),
-  };
+  const seenNames = new Map<string, number>();
 
-  const tryAdd = (card: BattleCard) => {
-    if (deck.length >= targetSize) return false;
-    const sameNameCount = deck.filter(c => c.name === card.name).length;
-    if (sameNameCount >= maxSameNameFor(card.rarity)) return false;
-    if (card.rarity === 'SSR' && deck.filter(d => d.rarity === 'SSR').length >= MAX_SSR) return false;
-    if (card.rarity === 'SR' && deck.filter(d => d.rarity === 'SR').length >= MAX_SR) return false;
+  const sig = (c: BattleCard) => `${c.attackPower ?? c.power}/${c.defensePower ?? c.power}`;
+
+  const tryAdd = (card: BattleCard): boolean => {
+    const nameCount = seenNames.get(card.name) ?? 0;
+    if (nameCount >= maxSameNameFor(card.rarity)) return false;
     deck.push({ ...card, id: `${prefix}-${card.id}-${deck.length}` });
+    seenNames.set(card.name, nameCount + 1);
     return true;
   };
 
-  // Seed with 1 SSR + 2 SR
-  if (byRarity.SSR.length > 0) tryAdd(byRarity.SSR[0]);
-  for (const c of byRarity.SR) {
-    if (deck.filter(d => d.rarity === 'SR').length >= MAX_SR) break;
-    tryAdd(c);
-  }
-  for (const c of byRarity.R) {
-    if (deck.length >= targetSize) break;
-    tryAdd(c);
-  }
-  for (const c of byRarity.N) {
-    if (deck.length >= targetSize) break;
-    tryAdd(c);
-  }
-  let attempt = 0;
-  while (deck.length < targetSize && attempt < 200) {
-    attempt++;
-    const pickPool = [...byRarity.N, ...byRarity.R];
-    const card = pickPool[Math.floor(Math.random() * pickPool.length)];
-    if (card) tryAdd(card);
-  }
+  // Pick up to `count` cards matching the predicate; stops early if pool dry.
+  const drawFrom = (predicate: (c: BattleCard) => boolean, count: number) => {
+    let remaining = count;
+    for (const c of shuffled) {
+      if (remaining <= 0) return;
+      if (!predicate(c)) continue;
+      if (tryAdd(c)) remaining--;
+    }
+  };
+
+  // ---------- N cards (7 total) ----------
+  // 1 世界遺産 N (atk1/def3) — defensive slot
+  drawFrom((c) => c.rarity === 'N' && c.category === 'heritage', 1);
+  // 4 N with 1/1 (non-heritage)
+  drawFrom(
+    (c) => c.rarity === 'N' && c.category !== 'heritage' && sig(c) === '1/1',
+    4,
+  );
+  // 2 N with 2/2 (from 発明/発見) as the "heavier" N
+  drawFrom((c) => c.rarity === 'N' && sig(c) === '2/2', 2);
+  // Fill any remaining N slots with any N
+  drawFrom((c) => c.rarity === 'N', 7 - deck.filter((c) => c.rarity === 'N').length);
+
+  // ---------- R cards (2 total) ----------
+  drawFrom((c) => c.rarity === 'R' && sig(c) === '2/2', 1);
+  drawFrom((c) => c.rarity === 'R' && sig(c) === '3/3', 1);
+  drawFrom((c) => c.rarity === 'R', 2 - deck.filter((c) => c.rarity === 'R').length);
+
+  // ---------- SR (1 total) ----------
+  drawFrom((c) => c.rarity === 'SR', 1);
+
+  // ---------- Safety top-up with any N ----------
+  drawFrom((c) => c.rarity === 'N', targetSize - deck.length);
+
   return deck;
 }
 
