@@ -134,12 +134,16 @@ export default function KnowledgeChallenger() {
 
   // ===== Deck phase state =====
   interface DeckOffer {
-    cards: BattleCard[];       // 2 cards offered this round
-    blocked: Set<number>;      // indices of cards the player failed the quiz on
+    cards: BattleCard[];       // 5 cards offered this round
+    blocked: Set<number>;      // indices the player failed the quiz on
     acquired: Set<number>;     // indices already added
     redrawsLeft: number;
+    addedCardIds: string[];    // ids added to player.deck this offer (for redraw rollback)
   }
   const [deckOffer, setDeckOffer] = useState<DeckOffer | null>(null);
+  // Round → max cards the player may keep this deck phase.
+  // R5 is special: only 1 SR/SSR may be acquired. Other rounds: up to 2.
+  const maxPicksForRound = (round: number): number => (round >= 5 ? 1 : 2);
   const [activeQuiz, setActiveQuiz] = useState<{
     quiz: Quiz;
     cardIndex: number;
@@ -269,6 +273,7 @@ export default function KnowledgeChallenger() {
       blocked: new Set(),
       acquired: new Set(),
       redrawsLeft: 1,
+      addedCardIds: [],
     });
   }, [gameState?.phase, deckOffer]);
 
@@ -519,6 +524,12 @@ export default function KnowledgeChallenger() {
     if (!deckOffer || !gameState) return;
     if (gameState.phase !== 'deck_phase') return;  // hard gate against battle-phase leaks
     if (deckOffer.blocked.has(index) || deckOffer.acquired.has(index)) return;
+    // Enforce per-round pick limit (R5 = 1, otherwise 2)
+    const maxPicks = maxPicksForRound(gameState.round);
+    if (deckOffer.acquired.size >= maxPicks) {
+      toast.info(`このラウンドは${maxPicks}枚までです`);
+      return;
+    }
     const card = deckOffer.cards[index];
     const quiz = card.quizzes[Math.floor(Math.random() * card.quizzes.length)];
     setActiveQuiz({ quiz, cardIndex: index, card });
@@ -585,12 +596,12 @@ export default function KnowledgeChallenger() {
       setShowQuizResult(false);
       setSelectedAnswer(null);
       if (correct) {
-        // Add to deck (with swap UI if over max)
+        // Add to deck (with swap UI if over max). Track id for redraw rollback.
         setDeckOffer((prev) => {
           if (!prev) return prev;
           const acquired = new Set(prev.acquired);
           acquired.add(idx);
-          return { ...prev, acquired };
+          return { ...prev, acquired, addedCardIds: [...prev.addedCardIds, card.id] };
         });
         setGameState((prev) => {
           if (!prev) return prev;
@@ -614,15 +625,30 @@ export default function KnowledgeChallenger() {
   }, [activeQuiz, deckOffer, gameState, selectedAnswer, consecutiveCorrect, userId, addTotalAlt]);
 
   // ===== Redraw offer =====
+  // Allowed even after picks: rolls back any added cards from player.deck
+  // and re-samples 5 fresh offers. One redraw per deck phase.
   const handleRedraw = useCallback(() => {
     if (!deckOffer || deckOffer.redrawsLeft <= 0 || !gameState) return;
-    // 現在のラウンド番号に合わせて 5 枚再抽選
+    const idsToRemove = deckOffer.addedCardIds;
+    if (idsToRemove.length > 0) {
+      setGameState((prev) => {
+        if (!prev) return prev;
+        // Remove ONE copy per id (deck may have legitimate duplicates).
+        const remaining = [...prev.player.deck];
+        for (const id of idsToRemove) {
+          const idx = remaining.findIndex((c) => c.id === id);
+          if (idx >= 0) remaining.splice(idx, 1);
+        }
+        return { ...prev, player: { ...prev.player, deck: remaining } };
+      });
+    }
     const offered = sampleCards(5, 'offer', gameState.round);
     setDeckOffer({
       cards: offered,
       blocked: new Set(),
       acquired: new Set(),
       redrawsLeft: deckOffer.redrawsLeft - 1,
+      addedCardIds: [],
     });
   }, [deckOffer, gameState]);
 
@@ -1541,9 +1567,9 @@ export default function KnowledgeChallenger() {
                 📚 ラウンド{gameState.round} デッキフェイズ
               </h3>
               <p className="text-xs text-amber-200/70 text-center">
-                5 枚の中から 2 枚選ぼう。タップでクイズ出題、正解で追加。
+                5 枚の中から{maxPicksForRound(gameState.round)}枚まで選べる。タップでクイズ出題、正解で追加。
                 <br />
-                獲得 {deckOffer.acquired.size}/2 ・ デッキ {deckCount}/{MAX_DECK_SIZE} 枚
+                獲得 {deckOffer.acquired.size}/{maxPicksForRound(gameState.round)} ・ デッキ {deckCount}/{MAX_DECK_SIZE} 枚
               </p>
             </div>
 
@@ -1552,7 +1578,7 @@ export default function KnowledgeChallenger() {
               {/* 左: 提示カード */}
               <div className="mb-3 md:mb-0 md:flex md:flex-col md:min-h-0">
                 <p className="text-[11px] font-bold text-amber-100 mb-1.5 md:mb-2">
-                  🎴 提示カード（5枚 / 獲得 {deckOffer.acquired.size}/2）
+                  🎴 提示カード（5枚 / 獲得 {deckOffer.acquired.size}/{maxPicksForRound(gameState.round)}）
                 </p>
                 <div className="md:flex-1 md:overflow-y-auto md:min-h-0">
                   {OfferGrid}
@@ -1581,14 +1607,22 @@ export default function KnowledgeChallenger() {
             {/* ===== Sticky footer: 引き直し + バトル開始 ===== */}
             {(() => {
               const acquiredCount = deckOffer.acquired.size;
+              const maxPicks = maxPicksForRound(gameState.round);
               const deckOk = gameState.player.deck.length >= MIN_DECK_SIZE;
-              const startEnabled = acquiredCount >= 2 && deckOk;
-              const label =
-                !deckOk
-                  ? `デッキ最低${MIN_DECK_SIZE}枚必要`
-                  : acquiredCount < 2
-                    ? `あと${2 - acquiredCount}枚選んでください`
-                    : '⚔️ バトル開始 ▶';
+              // Battle can always start when deck >= MIN. Picks are optional (0/1/2).
+              const startEnabled = deckOk;
+              const isFullPicks = acquiredCount >= maxPicks;
+              const isZeroPicks = acquiredCount === 0;
+              const label = !deckOk
+                ? `デッキ最低${MIN_DECK_SIZE}枚必要`
+                : isZeroPicks
+                  ? '🃏 カードを取らずにバトル ▶'
+                  : isFullPicks
+                    ? '⚔️ バトル開始 ▶'
+                    : `あと${maxPicks - acquiredCount}枚選べます ⚔️ バトル開始 ▶`;
+              // 0-pick start uses a grey button (subtle), 1+ pick uses green
+              const isPositive = startEnabled && !isZeroPicks;
+              const redrawDisabled = deckOffer.redrawsLeft <= 0;
               return (
                 <div
                   className="p-4 pt-3 shrink-0"
@@ -1596,11 +1630,11 @@ export default function KnowledgeChallenger() {
                 >
                   <button
                     onClick={handleRedraw}
-                    disabled={deckOffer.redrawsLeft <= 0 || deckOffer.acquired.size > 0}
+                    disabled={redrawDisabled}
                     className="rpg-btn rpg-btn-blue w-full py-2 text-xs mb-2"
-                    style={{ opacity: (deckOffer.redrawsLeft <= 0 || deckOffer.acquired.size > 0) ? 0.5 : 1 }}
+                    style={{ opacity: redrawDisabled ? 0.5 : 1 }}
                   >
-                    🔄 引き直し ({deckOffer.redrawsLeft})
+                    {redrawDisabled ? '🔄 引き直し済み' : `🔄 引き直す（残り${deckOffer.redrawsLeft}回）`}
                   </button>
                   <button
                     onClick={handleStartBattle}
@@ -1608,15 +1642,23 @@ export default function KnowledgeChallenger() {
                     className="w-full rounded-xl font-black active:scale-[0.98] transition-all"
                     style={{
                       minHeight: '64px',
-                      fontSize: '1.15rem',
+                      fontSize: '1.1rem',
                       color: '#fff',
-                      background: startEnabled
-                        ? 'linear-gradient(180deg, #22c55e 0%, #16a34a 100%)'
-                        : 'rgba(90,90,100,0.5)',
-                      border: startEnabled ? '3px solid #4ade80' : '3px solid rgba(255,255,255,0.15)',
-                      boxShadow: startEnabled
+                      background: !startEnabled
+                        ? 'rgba(90,90,100,0.5)'
+                        : isPositive
+                          ? 'linear-gradient(180deg, #22c55e 0%, #16a34a 100%)'
+                          : 'linear-gradient(180deg, #6b7280 0%, #4b5563 100%)',
+                      border: !startEnabled
+                        ? '3px solid rgba(255,255,255,0.15)'
+                        : isPositive
+                          ? '3px solid #4ade80'
+                          : '3px solid rgba(180,180,190,0.6)',
+                      boxShadow: isPositive
                         ? '0 6px 24px rgba(34,197,94,0.55), 0 0 24px rgba(74,222,128,0.35)'
-                        : 'none',
+                        : startEnabled
+                          ? '0 4px 16px rgba(0,0,0,0.4)'
+                          : 'none',
                       textShadow: startEnabled ? '0 2px 6px rgba(0,0,0,0.5)' : 'none',
                       cursor: startEnabled ? 'pointer' : 'not-allowed',
                     }}
