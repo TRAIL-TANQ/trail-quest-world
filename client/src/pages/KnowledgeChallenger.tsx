@@ -140,6 +140,9 @@ export default function KnowledgeChallenger() {
   // デッキフェイズ中のカード削除: 確認ダイアログと削除アニメ用 state
   const [pendingRemoveIdx, setPendingRemoveIdx] = useState<number | null>(null);
   const [fadingOutIdx, setFadingOutIdx] = useState<number | null>(null);
+  // Mobile-only collapse toggle for the "current deck" panel in the deck phase.
+  // PC (md+) always shows it expanded.
+  const [deckPanelCollapsed, setDeckPanelCollapsed] = useState(false);
 
   // ALT/XP
   const userId = useUserStore((s) => s.user.id);
@@ -1166,11 +1169,129 @@ export default function KnowledgeChallenger() {
         </div>
       )}
 
-      {/* ===== Deck Phase Overlay ===== */}
-      {gameState.phase === 'deck_phase' && deckOffer && !activeQuiz && !swapState && (
+      {/* ===== Deck Phase Overlay (レスポンシブ: PC 2-col / モバイル 縦) ===== */}
+      {gameState.phase === 'deck_phase' && deckOffer && !activeQuiz && !swapState && (() => {
+        const deckCards = gameState.player.deck;
+        const deckCount = deckCards.length;
+        const avgAtk = deckCount > 0
+          ? deckCards.reduce((s, c) => s + (c.attackPower ?? c.power), 0) / deckCount
+          : 0;
+        const avgDef = deckCount > 0
+          ? deckCards.reduce((s, c) => s + (c.defensePower ?? c.power), 0) / deckCount
+          : 0;
+
+        const OfferGrid = (
+          <div className="grid grid-cols-3 gap-2">
+            {deckOffer.cards.map((card, i) => {
+              const blocked = deckOffer.blocked.has(i);
+              const acquired = deckOffer.acquired.has(i);
+              return (
+                <button
+                  key={i}
+                  onClick={() => handleCardTap(i)}
+                  disabled={blocked || acquired}
+                  className="rounded-xl p-2 relative overflow-hidden transition-all active:scale-95"
+                  style={{
+                    background: acquired ? 'rgba(34,197,94,0.15)' : blocked ? 'rgba(239,68,68,0.1)' : 'rgba(255,255,255,0.04)',
+                    border: acquired ? '2px solid rgba(34,197,94,0.6)' : blocked ? '2px solid rgba(239,68,68,0.5)' : '2px solid rgba(255,215,0,0.4)',
+                    opacity: blocked ? 0.5 : 1,
+                  }}
+                >
+                  <div className="flex justify-center">
+                    <CardDisplay card={card} size="sm" />
+                  </div>
+                  {acquired && (
+                    <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.5)' }}>
+                      <span className="text-3xl">✅</span>
+                    </div>
+                  )}
+                  {blocked && (
+                    <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.5)' }}>
+                      <span className="text-3xl">❌</span>
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        );
+
+        const DeckPanelHeader = (
+          <div className="flex items-center justify-between mb-1.5">
+            <button
+              type="button"
+              onClick={() => setDeckPanelCollapsed((v) => !v)}
+              className="text-[12px] font-bold text-amber-100 flex items-center gap-1 md:cursor-default"
+              // md 以上ではクリック無効化 (常に展開)
+              style={{ pointerEvents: 'auto' }}
+            >
+              🃏 現在のデッキ {deckCount}/{MAX_DECK_SIZE}枚
+              <span className="md:hidden text-amber-200/60">
+                {deckPanelCollapsed ? '▶' : '▼'}
+              </span>
+            </button>
+            <span
+              className="text-[10px] font-bold"
+              style={{ color: deckCount < MIN_DECK_SIZE ? '#ff6b6b' : '#4ade80' }}
+            >
+              最低{MIN_DECK_SIZE}枚
+            </span>
+          </div>
+        );
+
+        const DeckStatsLine = deckCount > 0 && (
+          <div className="text-[10px] text-amber-200/70 text-center mb-1.5">
+            平均 <span style={{ color: '#ff6b6b' }}>⚔️{avgAtk.toFixed(1)}</span>
+            {' / '}
+            <span style={{ color: '#60a5fa' }}>🛡️{avgDef.toFixed(1)}</span>
+          </div>
+        );
+
+        const DeckGrid = (
+          <div className="grid grid-cols-5 md:grid-cols-4 gap-1 overflow-y-auto" style={{ maxHeight: '100%' }}>
+            {deckCards.map((c, i) => {
+              const canRemove = deckCount > MIN_DECK_SIZE;
+              const isFading = fadingOutIdx === i;
+              return (
+                <div
+                  key={c.id + '-' + i}
+                  className="relative rounded-md p-0.5"
+                  style={{
+                    background: 'rgba(255,255,255,0.04)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    opacity: isFading ? 0 : 1,
+                    transform: isFading ? 'scale(0.85)' : 'scale(1)',
+                    transition: 'opacity 0.28s ease, transform 0.28s ease',
+                  }}
+                >
+                  <CardDisplay card={c} size="sm" />
+                  {canRemove && !isFading && (
+                    <button
+                      onClick={() => handleRequestRemoveCard(i)}
+                      aria-label="このカードを外す"
+                      className="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center active:scale-90 transition-transform"
+                      style={{
+                        background: '#ef4444',
+                        color: '#fff',
+                        fontSize: '11px',
+                        fontWeight: 900,
+                        boxShadow: '0 2px 6px rgba(0,0,0,0.6)',
+                        border: '1.5px solid rgba(255,255,255,0.85)',
+                      }}
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        );
+
+        return (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-3" style={{ background: 'rgba(0,0,0,0.85)' }}>
           <div
-            className="rounded-2xl w-full max-w-md flex flex-col"
+            className="rounded-2xl w-full max-w-md md:max-w-4xl flex flex-col"
             style={{
               background: 'linear-gradient(135deg, rgba(21,29,59,0.98), rgba(14,20,45,0.98))',
               border: '3px solid rgba(255,215,0,0.5)',
@@ -1185,102 +1306,41 @@ export default function KnowledgeChallenger() {
               <p className="text-xs text-amber-200/70 text-center">
                 5 枚の中から 2 枚選ぼう。タップでクイズ出題、正解で追加。
                 <br />
-                獲得 {deckOffer.acquired.size}/2 ・ デッキ {gameState.player.deck.length}/{MAX_DECK_SIZE} 枚
+                獲得 {deckOffer.acquired.size}/2 ・ デッキ {deckCount}/{MAX_DECK_SIZE} 枚
               </p>
             </div>
-            <div className="px-4 overflow-y-auto flex-1 min-h-0">
-            <div className="grid grid-cols-3 gap-2 mb-4">
-              {deckOffer.cards.map((card, i) => {
-                const blocked = deckOffer.blocked.has(i);
-                const acquired = deckOffer.acquired.has(i);
-                return (
-                  <button
-                    key={i}
-                    onClick={() => handleCardTap(i)}
-                    disabled={blocked || acquired}
-                    className="rounded-xl p-2 relative overflow-hidden transition-all active:scale-95"
-                    style={{
-                      background: acquired ? 'rgba(34,197,94,0.15)' : blocked ? 'rgba(239,68,68,0.1)' : 'rgba(255,255,255,0.04)',
-                      border: acquired ? '2px solid rgba(34,197,94,0.6)' : blocked ? '2px solid rgba(239,68,68,0.5)' : '2px solid rgba(255,215,0,0.4)',
-                      opacity: blocked ? 0.5 : 1,
-                    }}
-                  >
-                    <div className="flex justify-center">
-                      <CardDisplay card={card} size="sm" />
-                    </div>
-                    {acquired && (
-                      <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.5)' }}>
-                        <span className="text-3xl">✅</span>
-                      </div>
-                    )}
-                    {blocked && (
-                      <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.5)' }}>
-                        <span className="text-3xl">❌</span>
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-            {/* 現在のデッキ: ✕ ボタンで削除可能 */}
-            <div
-              className="rounded-xl p-2 mb-3"
-              style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,215,0,0.2)' }}
-            >
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[11px] font-bold text-amber-100">
-                  🃏 現在のデッキ {gameState.player.deck.length}/{MAX_DECK_SIZE}枚
-                </span>
-                <span
-                  className="text-[10px] font-bold"
-                  style={{ color: gameState.player.deck.length < MIN_DECK_SIZE ? '#ff6b6b' : '#4ade80' }}
-                >
-                  最低{MIN_DECK_SIZE}枚
-                </span>
+
+            {/* ===== 2-col (md+) / stacked (mobile) ===== */}
+            <div className="flex-1 min-h-0 overflow-y-auto md:overflow-hidden px-4 md:grid md:grid-cols-2 md:gap-4">
+              {/* 左: 提示カード */}
+              <div className="mb-3 md:mb-0 md:flex md:flex-col md:min-h-0">
+                <p className="text-[11px] font-bold text-amber-100 mb-1.5 md:mb-2">
+                  🎴 提示カード（5枚 / 獲得 {deckOffer.acquired.size}/2）
+                </p>
+                <div className="md:flex-1 md:overflow-y-auto md:min-h-0">
+                  {OfferGrid}
+                </div>
               </div>
-              <div className="grid grid-cols-5 gap-1 max-h-40 overflow-y-auto">
-                {gameState.player.deck.map((c, i) => {
-                  const canRemove = gameState.player.deck.length > MIN_DECK_SIZE;
-                  const isFading = fadingOutIdx === i;
-                  return (
-                    <div
-                      key={c.id + '-' + i}
-                      className="relative rounded-md p-0.5"
-                      style={{
-                        background: 'rgba(255,255,255,0.04)',
-                        border: '1px solid rgba(255,255,255,0.1)',
-                        opacity: isFading ? 0 : 1,
-                        transform: isFading ? 'scale(0.85)' : 'scale(1)',
-                        transition: 'opacity 0.28s ease, transform 0.28s ease',
-                      }}
-                    >
-                      <CardDisplay card={c} size="sm" />
-                      {canRemove && !isFading && (
-                        <button
-                          onClick={() => handleRequestRemoveCard(i)}
-                          aria-label="このカードを外す"
-                          className="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center active:scale-90 transition-transform"
-                          style={{
-                            background: '#ef4444',
-                            color: '#fff',
-                            fontSize: '11px',
-                            fontWeight: 900,
-                            boxShadow: '0 2px 6px rgba(0,0,0,0.6)',
-                            border: '1.5px solid rgba(255,255,255,0.85)',
-                          }}
-                        >
-                          ✕
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
+
+              {/* 右 (md+) / 下 (mobile): 現在のデッキ */}
+              <div
+                className="rounded-xl p-2 md:p-3 md:flex md:flex-col md:min-h-0"
+                style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,215,0,0.2)' }}
+              >
+                {DeckPanelHeader}
+                {/* モバイル折りたたみ: md+ では常に展開 */}
+                <div className={`${deckPanelCollapsed ? 'hidden' : 'block'} md:block md:flex-1 md:min-h-0 md:flex md:flex-col`}>
+                  {DeckStatsLine}
+                  <div className="md:flex-1 md:min-h-0 md:overflow-y-auto">
+                    {DeckGrid}
+                  </div>
+                  <p className="text-[10px] text-amber-200/50 mt-1.5 text-center">
+                    💡 デッキ整理のコツ: 攻撃と防御のバランスを考えよう
+                  </p>
+                </div>
               </div>
-              <p className="text-[10px] text-amber-200/50 mt-1.5 text-center">
-                💡 デッキ整理のコツ: 攻撃と防御のバランスを考えよう
-              </p>
             </div>
-            </div>
+
             {/* ===== Sticky footer: 引き直し + バトル開始 ===== */}
             {(() => {
               const acquiredCount = deckOffer.acquired.size;
@@ -1331,7 +1391,8 @@ export default function KnowledgeChallenger() {
             })()}
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* ===== Confirm remove card dialog ===== */}
       {pendingRemoveIdx !== null && gameState && gameState.player.deck[pendingRemoveIdx] && (

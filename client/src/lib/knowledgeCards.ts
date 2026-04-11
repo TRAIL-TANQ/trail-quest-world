@@ -1064,11 +1064,11 @@ export function createAIDeck(): BattleCard[] {
 export type RarityWeight = [CardRarity, number];
 
 export const ROUND_RARITY_WEIGHTS: Record<number, RarityWeight[]> = {
-  1: [['N', 70], ['R', 30]],
-  2: [['N', 45], ['R', 45], ['SR', 10]],
-  3: [['R', 70], ['SR', 30]],
-  4: [['R', 40], ['SR', 50], ['SSR', 10]],
-  5: [['SR', 70], ['SSR', 30]],
+  1: [['N', 100]],
+  2: [['N', 50], ['R', 50]],
+  3: [['R', 50], ['SR', 50]],
+  4: [['SR', 100]],
+  5: [['SR', 50], ['SSR', 50]],
 };
 
 /** round に対応するレア度分布を取得。範囲外は R5 相当にクランプ。 */
