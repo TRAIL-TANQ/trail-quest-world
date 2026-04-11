@@ -356,7 +356,7 @@ export default function KnowledgeChallenger() {
     battleRunningRef.current = true;
 
     const run = async () => {
-      console.log('[KC] battle loop: START (round', gameState.round, ')');
+      console.log('[KC] battle loop: START (round', gameState.round, ', flagHolder', gameState.flagHolder, ')');
       try {
         // Step 1: turn banner
         console.log('[KC] → turn_banner');
@@ -379,13 +379,11 @@ export default function KnowledgeChallenger() {
         const attackerSide: 'player' | 'ai' =
           gameStateRef.current?.flagHolder === 'player' ? 'ai' : 'player';
         const isPlayerAttacker = attackerSide === 'player';
-        console.log('[KC] reveal loop: attacker =', attackerSide);
 
         let loopGuard = 30;
         while (loopGuard-- > 0) {
           if (unmountedRef.current) return;
           if (isPlayerAttacker) {
-            // Wait for the player to click "カードを出す ▶"
             setWaitingForPlayerReveal(true);
             await waitForPlayerAction();
             setWaitingForPlayerReveal(false);
@@ -509,15 +507,17 @@ export default function KnowledgeChallenger() {
 
     run();
     // No cleanup: loop is guarded by battleRunningRef + unmountedRef.
+    // cineStep is in deps so the effect re-fires when run() ends with
+    // setCineStep('idle') — that's how we kick off the NEXT sub-battle.
+    // battleRunningRef gates re-entry mid-loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gameState?.phase]);
+  }, [gameState?.phase, cineStep]);
 
   // ===== Manual advance: resolves whichever latch is currently active =====
   // Used by the skip button, the bottom "次へ" button, and "カードを出す ▶"
   // during the player-attacker reveal phase. Only touches a ref — no state
   // change, no risk of re-triggering the effect.
   const handleAdvance = useCallback(() => {
-    console.log('[KC] manual advance');
     if (playerActionLatchRef.current) {
       playerActionLatchRef.current();
       return;
