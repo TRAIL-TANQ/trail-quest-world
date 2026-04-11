@@ -1,22 +1,22 @@
 -- =====================================================================
--- 変更7: ガチャシステム Supabase 永続化
+-- Change 7: Gacha system Supabase persistence
 --
--- Supabase SQL Editor でこのファイルを実行してください。
--- 既存の child_status / shop_items と同じ DB に追加されます。
+-- Run this file in the Supabase SQL Editor.
+-- Adds tables to the same DB as existing child_status / shop_items.
 --
 -- 2 tables:
---   gacha_pulls : 個別のガチャ引き履歴（全件保存）
---   gacha_pity  : 天井カウンタ（ユーザーごと normal / premium を保持）
+--   gacha_pulls : Individual gacha pull history (all records saved)
+--   gacha_pity  : Pity counters (one row per user, normal / premium)
 --
--- 注意:
---   - child_id は text 型（既存 child_status.child_id と揃える）
---   - RLS は明示的に無効化（anon key + 認証なし運用の暫定措置）
+-- Notes:
+--   - child_id is text type (matches existing child_status.child_id)
+--   - RLS is explicitly disabled (temporary measure for anon key + no-auth usage)
 -- =====================================================================
 
 set client_encoding = 'UTF8';
 
 -- ---------- gacha_pulls ----------
--- 1 引き = 1 行。10連は 10 行同時 insert される。
+-- 1 pull = 1 row. A 10-pull inserts 10 rows at once.
 create table if not exists public.gacha_pulls (
   id            uuid primary key default gen_random_uuid(),
   child_id      text not null,
@@ -33,7 +33,7 @@ create index if not exists idx_gacha_pulls_child_time
 alter table public.gacha_pulls disable row level security;
 
 -- ---------- gacha_pity ----------
--- ユーザーごと 1 行。normal / premium それぞれの天井カウンタを保持。
+-- 1 row per user. Holds pity counters for normal and premium separately.
 create table if not exists public.gacha_pity (
   child_id             text primary key,
   normal_pity          integer not null default 0 check (normal_pity >= 0),

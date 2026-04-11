@@ -1,19 +1,19 @@
 -- =====================================================================
--- 変更17: ユーザープロファイル永続化
+-- Change 17: User profile persistence
 --
--- Supabase SQL Editor でこのファイルを実行してください。
--- 既存の child_status / shop_items / gacha_* と同じ DB に追加されます。
+-- Run this file in the Supabase SQL Editor.
+-- Adds tables to the same DB as existing child_status / shop_items / gacha_*.
 --
 -- 1 table:
---   user_profile : nickname / avatar_type をユーザーごとに保持
+--   user_profile : Holds nickname / avatar_type per user
 --
--- 注意:
---   - child_id は text 型（既存 child_status.child_id と揃える）
---   - avatar_type は 'boy' | 'girl' の2値制約
---   - equipped_avatar_id / 購入済みスキンは shop_items / owned_skins /
---     equipped_skin の既存テーブルで管理される（重複を避けるため profile では
---     基本情報のみ扱う）
---   - RLS は明示的に無効化（anon key + 認証なし運用の暫定措置）
+-- Notes:
+--   - child_id is text type (matches existing child_status.child_id)
+--   - avatar_type is constrained to 'boy' | 'girl'
+--   - equipped_avatar_id and purchased skins are managed in the existing
+--     shop_items / owned_skins / equipped_skin tables. To avoid duplication,
+--     this profile table only holds basic info.
+--   - RLS is explicitly disabled (temporary measure for anon key + no-auth usage)
 -- =====================================================================
 
 set client_encoding = 'UTF8';
