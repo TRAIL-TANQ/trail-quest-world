@@ -1,6 +1,28 @@
 /**
- * Knowledge Challenger - Card & Quiz Data
- * COLLECTION_CARDS（100枚）をベースにしたカードバトルゲームデータ
+ * Knowledge Challenger - Battle Card & Quiz Data
+ *
+ * ===== カード分離アーキテクチャ (変更6) =====
+ * このプロジェクトのカードは 2 系統に分離されている:
+ *
+ *   1. CollectionCard  (client/src/lib/cardData.ts, types.ts)
+ *      - 図鑑（コレクション）とガチャの排出対象
+ *      - フィールド: id / name / category / rarity / description / imageUrl
+ *      - 状態管理: useCollectionStore (ownedCardIds, newCardIds, acquiredOrder)
+ *      - 表示: CollectionPage, GachaPage
+ *
+ *   2. BattleCard  (このファイル)
+ *      - KnowledgeChallenger バトルでの対戦用。デッキ構築・ベンチ・パワー計算に使う
+ *      - CollectionCard から toBattleCard() で派生生成される（同一 id を保持）
+ *      - CollectionCard にはない battle 専用フィールドを持つ:
+ *          power, attackPower, defensePower, correctBonus,
+ *          effectDescription, quizzes, specialEffect, comboRequires, fromTheBench
+ *      - 状態: KnowledgeChallenger の gameState (player/ai deck/bench)
+ *
+ * 2 系統は「同じ世界観のカードの異なる側面」を表す。id は共通なので
+ * コレクションに追加された id から BattleCard を検索することは可能。
+ * ただしプールの進行ゲート (ROUND_RARITY_WEIGHTS / availableRarities, 変更8) は
+ * BattleCard 側（sampleCards）と CollectionCard 側（GachaPage.rollRarity）に
+ * それぞれ適用されており、両プールとも levelToGachaPhase で同じラウンド軸を共有する。
  */
 import { COLLECTION_CARDS } from './cardData';
 import type { CollectionCard, CollectionCategory } from './types';
