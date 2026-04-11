@@ -1221,27 +1221,130 @@ export default function KnowledgeChallenger() {
           {playerIsDefender ? renderDefenderSlot() : renderAttackerSlot()}
         </div>
 
-        {/* ====== Manual advance button (always visible during battle) ====== */}
+        {/* ====== Bottom action area ======
+             - Player attacker waiting for reveal → tappable deck stack + forfeit
+             - Otherwise (AI turn / wait period) → small "次へ ▶" advance button */}
         {gameState.phase !== 'deck_phase' && gameState.phase !== 'game_over' && (() => {
+          const playerIsAttacker = gameState.flagHolder === 'ai';
+          const showDeckTap = playerIsAttacker && waitingForPlayerReveal && cineStep === 'attack_reveal';
+
+          if (showDeckTap) {
+            const playerDeck = gameState.player.deck;
+            const defenderEffectiveDef = gameState.defenseCard
+              ? Math.max(0, (gameState.defenseCard.defensePower ?? gameState.defenseCard.power) + gameState.defenderBonus)
+              : 0;
+            const atk = gameState.attackCurrentPower;
+            const gap = Math.max(0, defenderEffectiveDef - atk);
+            return (
+              <div className="shrink-0 px-3 pb-2 pt-1 z-40 relative flex flex-col items-center">
+                {/* Power compare line */}
+                <div className="flex items-center gap-3 mb-1">
+                  <span className="font-black" style={{ fontSize: '15px', color: '#ff6b6b', textShadow: '0 0 8px rgba(239,68,68,0.6)' }}>
+                    ⚔️ {atk}
+                  </span>
+                  <span className="text-amber-200/60 font-black">vs</span>
+                  <span className="font-black" style={{ fontSize: '15px', color: '#60a5fa', textShadow: '0 0 8px rgba(96,165,250,0.6)' }}>
+                    🛡️ {defenderEffectiveDef}
+                  </span>
+                  {gap > 0 && (
+                    <span className="font-black" style={{ fontSize: '13px', color: '#ffd700' }}>
+                      あと {gap}
+                    </span>
+                  )}
+                </div>
+                {/* Deck stack: 3 stacked card backs, tappable */}
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={handleAdvance}
+                    disabled={playerDeck.length === 0}
+                    className="kc-deck-stack relative active:scale-95 transition-transform"
+                    style={{ width: 86, height: 116 }}
+                    aria-label="デッキをタップしてカードを出す"
+                  >
+                    {/* 3 stacked layers (bottom → top) */}
+                    {[2, 1, 0].map((layer) => (
+                      <div
+                        key={layer}
+                        className="absolute rounded-lg overflow-hidden"
+                        style={{
+                          inset: 0,
+                          transform: `translate(${layer * 3}px, ${layer * -3}px)`,
+                          background: 'linear-gradient(135deg, rgba(21,29,59,0.98) 0%, rgba(14,20,45,0.98) 50%, rgba(34,197,94,0.18) 100%)',
+                          border: '2.5px solid rgba(34,197,94,0.85)',
+                          boxShadow: layer === 0
+                            ? '0 6px 18px rgba(0,0,0,0.55), 0 0 20px rgba(34,197,94,0.5)'
+                            : '0 3px 8px rgba(0,0,0,0.4)',
+                        }}
+                      >
+                        {layer === 0 && (
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <span
+                              className="font-black"
+                              style={{
+                                fontSize: '54px',
+                                color: '#22c55e',
+                                textShadow: '0 0 14px rgba(34,197,94,0.85), 0 3px 6px rgba(0,0,0,0.85)',
+                              }}
+                            >
+                              ?
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    {/* Remaining count badge */}
+                    <div
+                      className="absolute -top-1 -right-1 z-30 rounded-full min-w-[22px] h-[22px] flex items-center justify-center px-1.5"
+                      style={{
+                        background: '#ffd700',
+                        border: '2px solid rgba(0,0,0,0.7)',
+                        color: '#000',
+                        fontSize: '11px',
+                        fontWeight: 900,
+                      }}
+                    >
+                      {playerDeck.length}
+                    </div>
+                  </button>
+                  <div className="flex flex-col items-start">
+                    <p className="font-black text-amber-100 mb-1" style={{ fontSize: '13px' }}>
+                      タップしてカードを出す
+                    </p>
+                    <button
+                      onClick={handleForfeitAttack}
+                      className="text-left"
+                      style={{
+                        fontSize: '11px',
+                        color: 'rgba(255,255,255,0.5)',
+                        textDecoration: 'underline',
+                      }}
+                    >
+                      🏳️ 攻撃をやめる
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          // Default: small advance button for AI turns and waits.
           const labelByStep: Record<string, string> = {
-            idle: 'バトル開始 ▶',
-            turn_banner: 'バトル開始 ▶',
+            idle: '次へ ▶',
+            turn_banner: '次へ ▶',
             defender_show: '攻撃を見る ▶',
-            attack_reveal: '比較する ▶',
+            attack_reveal: '次へ ▶',
             resolve: '次のサブバトルへ ▶',
             game_over: '結果を見る ▶',
           };
-          const label = waitingForPlayerReveal
-            ? '🎴 カードを出す ▶'
-            : (labelByStep[cineStep] ?? '次へ ▶');
+          const label = labelByStep[cineStep] ?? '次へ ▶';
           return (
             <div className="shrink-0 px-3 pb-2 pt-1 z-40 relative">
               <button
                 onClick={handleAdvance}
                 className="w-full rounded-xl font-black active:scale-[0.98] transition-all"
                 style={{
-                  minHeight: '48px',
-                  fontSize: '16px',
+                  minHeight: '44px',
+                  fontSize: '15px',
                   color: '#fff',
                   background: 'linear-gradient(180deg, #ffd700 0%, #daa520 100%)',
                   border: '2.5px solid #ffe066',
@@ -1337,70 +1440,6 @@ export default function KnowledgeChallenger() {
 
       {/* Player Bench */}
       <BenchDisplay side="player" bench={gameState.player.bench} deckCount={gameState.player.deck.length} quarantineCount={gameState.quarantine.player.length} animKey={gameState.history.length} />
-
-      {/* ===== Player Attack Reveal Modal =====
-           Shown when the player is the attacker, the loop is waiting on a
-           reveal click, and there's at least one revealed card so the
-           comparison is meaningful. */}
-      {waitingForPlayerReveal &&
-       gameState.flagHolder === 'ai' &&
-       gameState.defenseCard &&
-       gameState.attackRevealed.length > 0 && (() => {
-        const atk = gameState.attackCurrentPower;
-        const def = Math.max(0, (gameState.defenseCard.defensePower ?? gameState.defenseCard.power) + gameState.defenderBonus);
-        const gap = def - atk;
-        return (
-          <div className="fixed inset-0 z-[160] flex items-end justify-center pointer-events-none">
-            <div
-              className="rounded-2xl mb-24 mx-4 p-5 max-w-sm w-full pointer-events-auto kc-summary-pop"
-              style={{
-                background: 'linear-gradient(135deg, rgba(21,29,59,0.97), rgba(14,20,45,0.97))',
-                border: '3px solid rgba(255,200,0,0.6)',
-                boxShadow: '0 12px 40px rgba(0,0,0,0.85), 0 0 32px rgba(255,200,0,0.35)',
-              }}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-black" style={{ fontSize: '18px', color: '#ff6b6b' }}>
-                  ⚔️ あなたの攻撃: {atk}
-                </span>
-                <span className="font-black" style={{ fontSize: '18px', color: '#60a5fa' }}>
-                  🛡️ 相手の防御: {def}
-                </span>
-              </div>
-              <p className="text-center font-black mb-3" style={{ fontSize: '17px', color: '#ffd700', textShadow: '0 0 12px rgba(255,200,0,0.5)' }}>
-                あと{gap}パワー足りない！
-              </p>
-              <button
-                onClick={handleAdvance}
-                className="w-full rounded-xl font-black active:scale-[0.98] mb-2"
-                style={{
-                  minHeight: '60px',
-                  fontSize: '18px',
-                  color: '#fff',
-                  background: 'linear-gradient(180deg, #22c55e 0%, #16a34a 100%)',
-                  border: '3px solid #4ade80',
-                  boxShadow: '0 6px 24px rgba(34,197,94,0.6), 0 0 24px rgba(74,222,128,0.4)',
-                  textShadow: '0 1px 3px rgba(0,0,0,0.6)',
-                }}
-              >
-                🎴 もう1枚出す ▶
-              </button>
-              <button
-                onClick={handleForfeitAttack}
-                className="w-full text-center py-1.5"
-                style={{
-                  fontSize: '12px',
-                  color: 'rgba(255,255,255,0.5)',
-                  background: 'transparent',
-                  textDecoration: 'underline',
-                }}
-              >
-                🏳️ 攻撃をやめる
-              </button>
-            </div>
-          </div>
-        );
-      })()}
 
       {/* ===== Effect Telop (card on-reveal effect) ===== */}
       {gameState.effectTelop && (
@@ -1888,6 +1927,12 @@ export default function KnowledgeChallenger() {
           100% { transform: scale(1); }
         }
         .kc-bench-pop { animation: kcBenchPop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        @keyframes kcDeckStackPulse {
+          0%, 100% { transform: translateY(0); }
+          50%      { transform: translateY(-3px); }
+        }
+        .kc-deck-stack { animation: kcDeckStackPulse 1.6s ease-in-out infinite; }
+        .kc-deck-stack:active { animation: none; }
         @keyframes kcCountBump {
           0%   { transform: scale(1); }
           40%  { transform: scale(1.5); background: #ff6b6b !important; }
