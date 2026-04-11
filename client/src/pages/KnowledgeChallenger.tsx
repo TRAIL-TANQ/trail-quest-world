@@ -101,6 +101,7 @@ export default function KnowledgeChallenger() {
     | 'defender_show'
     | 'attack_reveal'
     | 'resolve'
+    | 'sub_battle_summary'
     | 'game_over';
   const [cineStep, setCineStep] = useState<CinematicStep>('idle');
   // Skip / manual advance via a latch: the battle loop creates an
@@ -114,6 +115,10 @@ export default function KnowledgeChallenger() {
   // Prevents multiple concurrent battle loops. `false` → no loop running,
   // `true` → loop in progress and the phase-change useEffect should skip.
   const battleRunningRef = useRef(false);
+  // Player-action latch for manual attacker reveals (no auto-timeout).
+  const playerActionLatchRef = useRef<(() => void) | null>(null);
+  // True while the loop is waiting for the player to click "カードを出す".
+  const [waitingForPlayerReveal, setWaitingForPlayerReveal] = useState(false);
   const [fastMode, setFastMode] = useState(false);
   const fastModeRef = useRef(false);
   useEffect(() => { fastModeRef.current = fastMode; }, [fastMode]);
@@ -272,6 +277,23 @@ export default function KnowledgeChallenger() {
   // cleanup (which would fire on every phase change and kill the cinematic).
   useEffect(() => () => { unmountedRef.current = true; }, []);
 
+  // Mirror gameState into a ref so the async battle loop can read the latest
+  // state (e.g. flagHolder) without recreating the effect on every render.
+  const gameStateRef = useRef<GameState | null>(null);
+  useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
+
+  // Waits indefinitely until the player clicks the manual-reveal button.
+  // Used only when the PLAYER is the attacker (AI turns remain automatic).
+  const waitForPlayerAction = useCallback((): Promise<void> => {
+    if (unmountedRef.current) return Promise.resolve();
+    return new Promise((resolve) => {
+      playerActionLatchRef.current = () => {
+        playerActionLatchRef.current = null;
+        resolve();
+      };
+    });
+  }, []);
+
   // ===== Step wait with interruptible latch + 3s fallback =====
   // Returns a promise that resolves when EITHER:
   //   - the natural scaled delay elapses
@@ -344,15 +366,28 @@ export default function KnowledgeChallenger() {
         await waitStep(DEFENDER_SHOW_MS);
         if (unmountedRef.current) return;
 
-        // Step 3: attack reveal loop
+        // Step 3: attack reveal loop. Branch on who's attacking — player turns
+        // wait for manual reveal clicks; AI turns auto-progress.
         console.log('[KC] → attack_reveal');
         setCineStep('attack_reveal');
         setGameState((prev) => (prev ? beginAttackLoop(prev) : prev));
 
+        const attackerSide: 'player' | 'ai' =
+          gameStateRef.current?.flagHolder === 'player' ? 'ai' : 'player';
+        const isPlayerAttacker = attackerSide === 'player';
+        console.log('[KC] reveal loop: attacker =', attackerSide);
+
         let loopGuard = 30;
         while (loopGuard-- > 0) {
           if (unmountedRef.current) return;
-          await waitStep(ATTACK_CARD_REVEAL_MS);
+          if (isPlayerAttacker) {
+            // Wait for the player to click "カードを出す ▶"
+            setWaitingForPlayerReveal(true);
+            await waitForPlayerAction();
+            setWaitingForPlayerReveal(false);
+          } else {
+            await waitStep(ATTACK_CARD_REVEAL_MS);
+          }
           if (unmountedRef.current) return;
 
           // Reveal one card atomically
@@ -402,6 +437,13 @@ export default function KnowledgeChallenger() {
             await waitStep(RESOLVE_BANNER_MS);
             if (unmountedRef.current) return;
 
+            // Sub-battle summary overlay: shows flag / bench / next-turn,
+            // waits ~2s or until the player taps 続ける.
+            console.log('[KC] → sub_battle_summary');
+            setCineStep('sub_battle_summary');
+            await waitStep(2000);
+            if (unmountedRef.current) return;
+
             // Transition to next sub-battle
             console.log('[KC] → continueAfterResolve (next sub-battle)');
             setGameState((prev) => (prev ? continueAfterResolve(prev) : prev));
@@ -421,12 +463,16 @@ export default function KnowledgeChallenger() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState?.phase]);
 
-  // ===== Manual advance: resolves the current wait latch immediately =====
-  // Used by both the skip button and the bottom "次へ" button. Because waits
-  // are latch-driven, this jumps straight to the next step without altering
-  // any state flags — zero risk of re-triggering the effect or racing.
+  // ===== Manual advance: resolves whichever latch is currently active =====
+  // Used by the skip button, the bottom "次へ" button, and "カードを出す ▶"
+  // during the player-attacker reveal phase. Only touches a ref — no state
+  // change, no risk of re-triggering the effect.
   const handleAdvance = useCallback(() => {
     console.log('[KC] manual advance');
+    if (playerActionLatchRef.current) {
+      playerActionLatchRef.current();
+      return;
+    }
     advanceLatchRef.current?.();
   }, []);
   const handleSkipReveal = handleAdvance;
@@ -954,7 +1000,7 @@ export default function KnowledgeChallenger() {
       </div>
 
       {/* AI Bench */}
-      <BenchDisplay side="ai" bench={gameState.ai.bench} deckCount={gameState.ai.deck.length} />
+      <BenchDisplay side="ai" bench={gameState.ai.bench} deckCount={gameState.ai.deck.length} quarantineCount={gameState.quarantine.ai.length} />
 
       {/* ===== Battle Field =====
           Layout:
@@ -1122,9 +1168,12 @@ export default function KnowledgeChallenger() {
             defender_show: '攻撃を見る ▶',
             attack_reveal: '比較する ▶',
             resolve: '次のサブバトルへ ▶',
+            sub_battle_summary: '続ける ▶',
             game_over: '結果を見る ▶',
           };
-          const label = labelByStep[cineStep] ?? '次へ ▶';
+          const label = waitingForPlayerReveal
+            ? '🎴 カードを出す ▶'
+            : (labelByStep[cineStep] ?? '次へ ▶');
           return (
             <div className="shrink-0 px-3 pb-2 pt-1 z-40 relative">
               <button
@@ -1227,7 +1276,69 @@ export default function KnowledgeChallenger() {
       })()}
 
       {/* Player Bench */}
-      <BenchDisplay side="player" bench={gameState.player.bench} deckCount={gameState.player.deck.length} />
+      <BenchDisplay side="player" bench={gameState.player.bench} deckCount={gameState.player.deck.length} quarantineCount={gameState.quarantine.player.length} />
+
+      {/* ===== Sub-battle Summary Overlay ===== */}
+      {cineStep === 'sub_battle_summary' && gameState.lastSubBattle && (() => {
+        const last = gameState.lastSubBattle;
+        const subIdx = last.idx;
+        const flagHolderLabel = gameState.flagHolder === 'player' ? 'あなた 🏆' : '相手 🏆';
+        const playerBench = gameState.player.bench.length;
+        const aiBench = gameState.ai.bench.length;
+        const playerQuarantine = gameState.quarantine.player.length;
+        const aiQuarantine = gameState.quarantine.ai.length;
+        // After continueAfterResolve, the new attacker is the OPPOSITE of the new flag holder.
+        const nextAttackerIsPlayer = gameState.flagHolder === 'ai';
+        const nextTurnText = nextAttackerIsPlayer ? '次は あなたの攻撃！' : '次は あなたが防御！';
+        return (
+          <div className="fixed inset-0 z-[165] flex items-center justify-center p-5" style={{ background: 'rgba(0,0,0,0.88)' }}>
+            <div
+              className="rounded-2xl p-6 w-full max-w-sm text-center kc-summary-pop"
+              style={{
+                background: 'linear-gradient(135deg, rgba(21,29,59,0.98), rgba(14,20,45,0.98))',
+                border: '3px solid rgba(255,215,0,0.6)',
+                boxShadow: '0 12px 40px rgba(0,0,0,0.8), 0 0 32px rgba(255,215,0,0.35)',
+              }}
+            >
+              <h3 className="font-black mb-3" style={{ fontSize: '22px', color: '#ffd700' }}>
+                サブバトル{subIdx} 終了
+              </h3>
+              <div className="rounded-xl p-3 mb-3 text-left" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,215,0,0.25)' }}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs font-bold text-amber-200/70">フラッグ</span>
+                  <span className="text-sm font-black" style={{ color: '#ffd700' }}>{flagHolderLabel}</span>
+                </div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs font-bold text-amber-200/70">あなたのベンチ</span>
+                  <span className="text-sm font-black text-green-300">{playerBench}/{BENCH_MAX_SLOTS}{playerQuarantine > 0 ? ` (隔離 +${playerQuarantine})` : ''}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-amber-200/70">相手のベンチ</span>
+                  <span className="text-sm font-black text-red-300">{aiBench}/{BENCH_MAX_SLOTS}{aiQuarantine > 0 ? ` (隔離 +${aiQuarantine})` : ''}</span>
+                </div>
+              </div>
+              <p className="font-black mb-4" style={{ fontSize: '18px', color: nextAttackerIsPlayer ? '#f87171' : '#60a5fa' }}>
+                {nextTurnText}
+              </p>
+              <button
+                onClick={handleAdvance}
+                className="w-full rounded-xl font-black active:scale-[0.98]"
+                style={{
+                  minHeight: '56px',
+                  fontSize: '17px',
+                  color: '#fff',
+                  background: 'linear-gradient(180deg, #22c55e 0%, #16a34a 100%)',
+                  border: '3px solid #4ade80',
+                  boxShadow: '0 6px 24px rgba(34,197,94,0.55)',
+                  textShadow: '0 1px 3px rgba(0,0,0,0.6)',
+                }}
+              >
+                続ける ▶
+              </button>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ===== Effect Telop (card on-reveal effect) ===== */}
       {gameState.effectTelop && (
@@ -1686,6 +1797,12 @@ export default function KnowledgeChallenger() {
           100% { opacity: 0; transform: scale(0.95); }
         }
         .kc-effect-telop { animation: kcEffectTelop 1.5s ease-out forwards; }
+        @keyframes kcSummaryPop {
+          0%   { opacity: 0; transform: scale(0.8) translateY(12px); }
+          60%  { opacity: 1; transform: scale(1.04) translateY(0); }
+          100% { opacity: 1; transform: scale(1); }
+        }
+        .kc-summary-pop { animation: kcSummaryPop 0.45s ease-out; }
         @keyframes kcTurnBannerPop {
           0%   { opacity: 0; transform: translateY(-30px) scale(0.7); }
           40%  { opacity: 1; transform: translateY(0) scale(1.1); }
@@ -1797,8 +1914,8 @@ export default function KnowledgeChallenger() {
 
 type BenchSlotUI = { name: string; card: BattleCard; count: number };
 
-function BenchDisplay({ side, bench, deckCount }: {
-  side: 'player' | 'ai'; bench: BenchSlotUI[]; deckCount: number;
+function BenchDisplay({ side, bench, deckCount, quarantineCount }: {
+  side: 'player' | 'ai'; bench: BenchSlotUI[]; deckCount: number; quarantineCount?: number;
 }) {
   const isPlayer = side === 'player';
   const label = isPlayer ? 'あなた' : 'AI';
@@ -1823,6 +1940,11 @@ function BenchDisplay({ side, bench, deckCount }: {
           <div className="flex items-center gap-2">
             <span className="text-sm font-black" style={{ color: labelColor, textShadow: `0 0 8px ${labelColor}66` }}>{label}</span>
             <span className="text-xs font-bold text-amber-200/70">山札: <span className="text-amber-100">{deckCount}</span></span>
+            {quarantineCount !== undefined && quarantineCount > 0 && (
+              <span className="text-xs font-bold text-amber-200/70" title="隔離スペース — 防御で負けるとベンチに流入">
+                📦 隔離: <span className="text-amber-100">{quarantineCount}</span>
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <span className={`text-sm font-black ${isWarning || isFull ? 'text-red-400' : 'text-amber-100'}`}>

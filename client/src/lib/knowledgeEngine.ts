@@ -588,12 +588,18 @@ export function hasAttackSucceeded(state: GameState): boolean {
 }
 
 /**
- * Resolve a successful sub-battle:
- *  - defender card → defender's bench (overflow → game over, attacker wins match)
- *  - all attack cards except the last → attacker's bench (overflow → game over, defender wins)
- *  - last attack card becomes the new defender
- *  - flagHolder swaps to the old attacker
- *  - phase → battle_resolve (UI shows outcome banner then calls continueAfterResolve)
+ * Resolve a successful sub-battle (2026-04 quarantine rules):
+ *  - Defender loses: defender card → defender's bench, AND defender's existing
+ *    quarantine flows into defender's bench (cumulative flush).
+ *    If the flush overflows (>BENCH_MAX_SLOTS distinct names) → game over, attacker wins.
+ *  - Attacker wins: all non-last attack cards → attacker's quarantine (NOT bench).
+ *    Last attack card → new defender.
+ *  - flagHolder swaps to the old attacker.
+ *  - phase → battle_resolve (UI shows summary then calls continueAfterResolve).
+ *
+ * Quarantine is a temporary holding zone: it does NOT count as bench space
+ * while the player still holds the flag, but one lost defense dumps the
+ * whole backlog onto the bench. High-risk / high-reward.
  */
 export function resolveSubBattleWin(state: GameState): GameState {
   if (state.phase !== 'battle' || !state.defenseCard || state.attackRevealed.length === 0) return state;
@@ -602,36 +608,34 @@ export function resolveSubBattleWin(state: GameState): GameState {
   const attackerSide: Side = otherSide(defenderSide);
   const defenderCard = state.defenseCard;
 
-  // defender card → defender's bench
+  // Defender's bench receives: (old defender card) + (flushed quarantine).
   const defenderState = defenderSide === 'player' ? state.player : state.ai;
-  if (!canAddToBench(defenderState.bench, defenderCard)) {
-    return {
-      ...state,
-      phase: 'game_over',
-      winner: attackerSide,
-      message: `${defenderSide === 'player' ? 'あなた' : '相手'}のベンチが満杯！6種類目のカードで敗北`,
-    };
-  }
-  const newDefenderBench = addToBench(defenderState.bench, defenderCard);
-
-  // Split attack cards: all except last go to attacker's bench, last becomes new defender
-  const attackCards = state.attackRevealed;
-  const lastAttackCard = attackCards[attackCards.length - 1];
-  const otherAttackCards = attackCards.slice(0, -1);
-
-  const attackerState = attackerSide === 'player' ? state.player : state.ai;
-  let newAttackerBench = attackerState.bench;
-  for (const card of otherAttackCards) {
-    if (!canAddToBench(newAttackerBench, card)) {
+  const flushedCards = [defenderCard, ...state.quarantine[defenderSide]];
+  let newDefenderBench = defenderState.bench;
+  for (const c of flushedCards) {
+    if (!canAddToBench(newDefenderBench, c)) {
       return {
         ...state,
         phase: 'game_over',
-        winner: defenderSide,
-        message: `${attackerSide === 'player' ? 'あなた' : '相手'}のベンチが満杯！6種類目のカードで敗北`,
+        winner: attackerSide,
+        message: `${defenderSide === 'player' ? 'あなた' : '相手'}のベンチが満杯！隔離スペースの一斉流入で敗北`,
       };
     }
-    newAttackerBench = addToBench(newAttackerBench, card);
+    newDefenderBench = addToBench(newDefenderBench, c);
   }
+
+  // Split attack cards: all except last → attacker's quarantine; last becomes new defender.
+  const attackCards = state.attackRevealed;
+  const lastAttackCard = attackCards[attackCards.length - 1];
+  const otherAttackCards = attackCards.slice(0, -1);
+  const newAttackerQuarantine = [...state.quarantine[attackerSide], ...otherAttackCards];
+
+  // Update quarantine map: defender's cleared (flushed to bench), attacker's appended.
+  const newQuarantine = {
+    ...state.quarantine,
+    [defenderSide]: [] as BattleCard[],
+    [attackerSide]: newAttackerQuarantine,
+  };
 
   const result: SubBattleResult = {
     idx: state.history.length + 1,
@@ -651,14 +655,16 @@ export function resolveSubBattleWin(state: GameState): GameState {
   return {
     ...state,
     phase: 'battle_resolve',
+    // Attacker's bench is untouched; only the defender's bench grows.
     player: {
       ...state.player,
-      bench: defenderSide === 'player' ? newDefenderBench : newAttackerBench,
+      bench: defenderSide === 'player' ? newDefenderBench : state.player.bench,
     },
     ai: {
       ...state.ai,
-      bench: defenderSide === 'ai' ? newDefenderBench : newAttackerBench,
+      bench: defenderSide === 'ai' ? newDefenderBench : state.ai.bench,
     },
+    quarantine: newQuarantine,
     // Role swap: new flag holder is the old attacker. New defense card is the last attack card.
     flagHolder: attackerSide,
     defenseCard: lastAttackCard,
