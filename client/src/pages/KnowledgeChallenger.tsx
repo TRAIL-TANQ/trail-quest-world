@@ -32,10 +32,14 @@ import {
   BENCH_MAX_SLOTS,
   TOTAL_ROUNDS,
   initGameState,
-  revealRound,
-  endRound,
-  startCurrentRound,
-  advanceToNextRound,
+  startBattle,
+  beginAttackLoop,
+  revealNextAttackCard,
+  hasAttackSucceeded,
+  resolveSubBattleWin,
+  continueAfterResolve,
+  getBaseAttack,
+  getBaseDefense,
   addCardToDeck,
   swapCardInDeck,
   aiDeckGrowth,
@@ -52,14 +56,11 @@ import { toast } from 'sonner';
 
 type ScreenPhase = 'title' | 'playing' | 'result';
 
-// Timing constants (ms) for the reveal cinematic. fast mode scales by 0.3.
-const STEP_INTRO_MS         = 1000;   // "あなたの攻撃！" / "あなたが防御中！"
-const STEP_DEFENDER_SHOW_MS = 900;    // defender's card with power label
-const STEP_ATTACKER_BACK_MS = 500;    // attacker card back enters
-const STEP_ATTACKER_FLIP_MS = 600;    // attacker card flips
-const STEP_ATTACKER_COUNT_MS = 900;   // attacker power counts up 0 → N
-const STEP_COMPARE_MS       = 1500;   // big "⚔️ X vs Y 🛡️" panel (48px)
-const STEP_OUTCOME_MS       = 2000;   // success/failure animation
+// Timing constants (ms) for the battle cinematic. fast mode scales by 0.3.
+const TURN_BANNER_MS      = 1000;  // "あなたの攻撃！" / "あなたが防御中！"
+const DEFENDER_SHOW_MS    = 800;   // defender's card with power label
+const ATTACK_CARD_REVEAL_MS = 800; // each attacker card back → flip → power label
+const RESOLVE_BANNER_MS   = 2000;  // "🏆 フラッグ奪取！" outcome banner
 
 export default function KnowledgeChallenger() {
   const [, navigate] = useLocation();
@@ -85,25 +86,23 @@ export default function KnowledgeChallenger() {
   const imageCache = useRef<Map<string, HTMLImageElement>>(new Map());
 
   // ===== Cinematic state =====
-  // intro          : ターンバナー ("あなたの攻撃！" 赤 / "あなたが防御中！" 青)
-  // defender_show  : 防御側のカードを表面固定表示 + 防御パワーラベル
-  // attacker_back  : 攻撃側のカード裏面が自陣から出現
-  // attacker_flip  : 攻撃カードが CSS rotateY で表面にフリップ
-  // attacker_count : 攻撃パワーが 0 → 最終値までカウントアップ
-  // compare        : 48px の大きな比較パネル "⚔️ X vs Y 🛡️"
-  // outcome        : 成功/失敗演出 (shatter / shake / flash)
-  // done           : クリーンアップ済み
-  type RevealStep = 'intro' | 'defender_show' | 'attacker_back' | 'attacker_flip' | 'attacker_count' | 'compare' | 'outcome' | 'done';
-  const [revealStep, setRevealStep] = useState<RevealStep>('done');
-  // 攻撃側の表示用パワー（カウントアップアニメーション中は 0 から最終値まで増える）
-  const [attackerDisplayPower, setAttackerDisplayPower] = useState<number>(0);
-  const countIntervalRef = useRef<number | null>(null);
-  const clearCountInterval = useCallback(() => {
-    if (countIntervalRef.current !== null) {
-      clearInterval(countIntervalRef.current);
-      countIntervalRef.current = null;
-    }
-  }, []);
+  // CinematicStep drives the battle animation lifecycle:
+  //   idle          : no animation (deck phase etc.)
+  //   turn_banner   : "あなたの攻撃！" / "あなたが防御中！" 1s
+  //   defender_show : defender card on field, "🛡️ 防御パワー X" 0.8s
+  //   attack_reveal : one attacker card animating in (back → flip → settled)
+  //   resolve       : "🏆 フラッグ奪取！" outcome banner 2s
+  //   game_over     : end banner
+  type CinematicStep =
+    | 'idle'
+    | 'turn_banner'
+    | 'defender_show'
+    | 'attack_reveal'
+    | 'resolve'
+    | 'game_over';
+  const [cineStep, setCineStep] = useState<CinematicStep>('idle');
+  // Skip request flag — when true, the auto-advance effect short-circuits all waits.
+  const [skipRequested, setSkipRequested] = useState(false);
   const [fastMode, setFastMode] = useState(false);
   const fastModeRef = useRef(false);
   useEffect(() => { fastModeRef.current = fastMode; }, [fastMode]);
@@ -200,26 +199,24 @@ export default function KnowledgeChallenger() {
     console.log('[KC] startGame: initial phase =', state.phase, 'round =', state.round);
     setGameState(state);
     setScreen('playing');
-    setRevealStep('done');
+    setCineStep('idle');
+    setSkipRequested(false);
     setDeckOffer(null);
     setActiveQuiz(null);
     setSwapState(null);
   }, [clearStepTimeouts, previewDeck, stageId]);
 
   // ===== Phase transition tracking (debug) =====
-  // ゲームフェーズが遷移するたびに console に出力し、想定外の遷移を検知できるようにする。
   const lastLoggedPhaseRef = useRef<string | null>(null);
   useEffect(() => {
     const phase = gameState?.phase;
     if (phase && phase !== lastLoggedPhaseRef.current) {
-      console.log('[KC] Current phase:', phase, '/ round:', gameState?.round, '/ revealStep:', revealStep);
+      console.log('[KC] Current phase:', phase, '/ round:', gameState?.round, '/ cineStep:', cineStep);
       lastLoggedPhaseRef.current = phase;
     }
-  }, [gameState?.phase, gameState?.round, revealStep]);
+  }, [gameState?.phase, gameState?.round, cineStep]);
 
   // ===== Bug 2 safety: clear activeQuiz when phase leaves deck_phase =====
-  // デッキフェイズ以外に入ったら強制的にクイズモーダルを閉じる。バトル中にクイズが
-  // 残り続ける経路を完全に塞ぐ。
   useEffect(() => {
     if (gameState?.phase && gameState.phase !== 'deck_phase') {
       setActiveQuiz((prev) => {
@@ -231,115 +228,10 @@ export default function KnowledgeChallenger() {
     }
   }, [gameState?.phase]);
 
-  // ===== Round reveal cinematic =====
-  // 役割の決定: 各ラウンドで勝者側を「攻撃側」、敗者側を「防御側」とテーマ付けする。
-  // draw は player が勝つ仕様なので、player を attacker として扱う。
-  // 8 ステップ: intro → defender_show → attacker_back → attacker_flip
-  //            → attacker_count → compare → outcome → done
-  const finalizeRound = useCallback((afterReveal: GameState) => {
-    clearCountInterval();
-    setRevealStep('done');
-    setAttackerDisplayPower(0);
-    setTrophyFlash(null);
-    setRoundWinGlow(false);
-    const after = endRound(afterReveal);
-    setGameState(after);
-    if (after.phase === 'game_over') {
-      window.setTimeout(() => setScreen('result'), 1600);
-    }
-  }, [clearCountInterval]);
-
-  const beginRoundReveal = useCallback(() => {
-    if (!gameState || gameState.phase !== 'round_intro') return;
-    console.log('[KC] beginRoundReveal: round', gameState.round);
-    const afterIntro = revealRound(gameState);
-    setGameState(afterIntro);
-
-    // 役割決定: player が勝つ or draw なら player が attacker、ai が勝つなら ai が attacker
-    const playerWins = afterIntro.roundWinner !== 'ai';
-    const attackerPower = playerWins ? afterIntro.playerPower : afterIntro.aiPower;
-    setAttackerDisplayPower(0);
-    clearCountInterval();
-
-    let t = 0;
-    setRevealStep('intro');
-    t += STEP_INTRO_MS;
-
-    scheduleStep(t, () => setRevealStep('defender_show'));
-    t += STEP_DEFENDER_SHOW_MS;
-
-    scheduleStep(t, () => setRevealStep('attacker_back'));
-    t += STEP_ATTACKER_BACK_MS;
-
-    scheduleStep(t, () => setRevealStep('attacker_flip'));
-    t += STEP_ATTACKER_FLIP_MS;
-
-    scheduleStep(t, () => {
-      setRevealStep('attacker_count');
-      // Count up 0 → attackerPower over STEP_ATTACKER_COUNT_MS
-      const steps = Math.max(attackerPower, 1);
-      const scale = fastModeRef.current ? 0.3 : 1;
-      const intervalMs = Math.max(30, (STEP_ATTACKER_COUNT_MS * scale) / steps);
-      let current = 0;
-      clearCountInterval();
-      countIntervalRef.current = window.setInterval(() => {
-        current++;
-        setAttackerDisplayPower(current);
-        if (current >= attackerPower) clearCountInterval();
-      }, intervalMs);
-    });
-    t += STEP_ATTACKER_COUNT_MS;
-
-    scheduleStep(t, () => {
-      clearCountInterval();
-      setAttackerDisplayPower(attackerPower);
-      setRevealStep('compare');
-    });
-    t += STEP_COMPARE_MS;
-
-    scheduleStep(t, () => {
-      setRevealStep('outcome');
-      if (afterIntro.roundWinner === 'player') {
-        setTrophyFlash('player');
-        setRoundWinGlow(true);
-      } else if (afterIntro.roundWinner === 'ai') {
-        setTrophyFlash('ai');
-      }
-    });
-    t += STEP_OUTCOME_MS;
-
-    scheduleStep(t, () => finalizeRound(afterIntro));
-  }, [gameState, scheduleStep, finalizeRound, clearCountInterval]);
-
-  // Skip button: immediately jump to outcome end.
-  const handleSkipReveal = useCallback(() => {
-    if (!gameState || revealStep === 'done') return;
-    clearStepTimeouts();
-    clearCountInterval();
-    const afterIntro = gameState.phase === 'round_intro' ? revealRound(gameState) : gameState;
-    if (gameState.phase === 'round_intro') setGameState(afterIntro);
-    finalizeRound(afterIntro);
-  }, [gameState, revealStep, clearStepTimeouts, finalizeRound, clearCountInterval]);
-
-  // Kick off round reveal automatically on entering round_intro
-  useEffect(() => {
-    if (gameState?.phase === 'round_intro' && revealStep === 'done') {
-      const id = window.setTimeout(beginRoundReveal, 600);
-      return () => clearTimeout(id);
-    }
-  }, [gameState?.phase, revealStep, beginRoundReveal]);
-
-  // ===== Deck phase auto-setup =====
-  // phase が 'deck_phase' に遷移するたびに DeckOffer を生成。
-  // 初回（ラウンド1 開始時）と、ラウンド終了後の次ラウンドデッキフェイズの両方で発火。
+  // ===== Deck phase setup (ONE-TIME at round 1) =====
+  // 新しいバトルモデル: デッキフェイズは開始時の1回のみ。5枚提示→2枚取得でバトルへ。
   useEffect(() => {
     if (!gameState || gameState.phase !== 'deck_phase' || deckOffer) return;
-    // 2 ラウンド目以降は AI にも 2 枚成長カードを配布
-    if (gameState.round > 1) {
-      const aiNew = sampleCards(2, 'ai-grow', gameState.round);
-      setGameState((prev) => (prev ? aiDeckGrowth(prev, aiNew) : prev));
-    }
-    // 変更: プレイヤーへ 5 枚提示（2 枚獲得目標）
     const offered = sampleCards(5, 'offer', gameState.round);
     setDeckOffer({
       cards: offered,
@@ -347,16 +239,122 @@ export default function KnowledgeChallenger() {
       acquired: new Set(),
       redrawsLeft: 1,
     });
-  }, [gameState?.phase, gameState?.round, deckOffer]);
+  }, [gameState?.phase, deckOffer]);
 
-  // round_end に到達したら自動的に次ラウンドへ（game_over 以外）
+  // ===== Scaled timeout helper =====
+  const waitMs = useCallback((ms: number): Promise<void> => {
+    const scale = fastModeRef.current ? 0.3 : 1;
+    const delay = Math.max(80, Math.round(ms * scale));
+    return new Promise((resolve) => {
+      const id = window.setTimeout(resolve, delay);
+      stepTimeoutsRef.current.push(id);
+    });
+  }, []);
+
+  // ===== Battle auto-play loop =====
+  // phase === 'battle_intro' に入ったら自動で cinematic を進める。
+  // プレイヤーの操作はスキップのみ。全ての state 遷移を useEffect で駆動する。
   useEffect(() => {
-    if (!gameState || gameState.phase !== 'round_end') return;
-    const id = window.setTimeout(() => {
-      setGameState((prev) => (prev ? advanceToNextRound(prev) : prev));
-    }, 1600);
-    return () => clearTimeout(id);
-  }, [gameState?.phase]);
+    if (!gameState) return;
+    if (gameState.phase !== 'battle_intro') return;
+    if (cineStep !== 'idle' && cineStep !== 'resolve') return;
+
+    let cancelled = false;
+    const run = async () => {
+      console.log('[KC] battle auto-loop: start battle_intro');
+      // Step 1: turn banner
+      setCineStep('turn_banner');
+      if (!skipRequested) await waitMs(TURN_BANNER_MS);
+      if (cancelled) return;
+
+      // Step 2: defender shown
+      setCineStep('defender_show');
+      if (!skipRequested) await waitMs(DEFENDER_SHOW_MS);
+      if (cancelled) return;
+
+      // Step 3: attack reveal loop — call revealNextAttackCard until success or failure
+      setCineStep('attack_reveal');
+      setGameState((prev) => (prev ? beginAttackLoop(prev) : prev));
+
+      // Pull from state ref via functional setGameState to avoid stale closure
+      let loopGuard = 30; // safety: max 30 reveals
+      while (loopGuard-- > 0) {
+        if (cancelled) return;
+        if (!skipRequested) await waitMs(ATTACK_CARD_REVEAL_MS);
+        if (cancelled) return;
+
+        // Reveal one more card atomically
+        let resultState: GameState | null = null;
+        setGameState((prev) => {
+          if (!prev) return prev;
+          const next = revealNextAttackCard(prev);
+          resultState = next;
+          return next;
+        });
+
+        // Wait one tick so state settles, then inspect
+        await waitMs(16);
+        if (cancelled || !resultState) return;
+
+        // If game ended due to deck-out, leave the loop
+        if ((resultState as GameState).phase === 'game_over') {
+          console.log('[KC] battle: game_over during reveal');
+          setCineStep('game_over');
+          if (!skipRequested) await waitMs(RESOLVE_BANNER_MS);
+          if (!cancelled) {
+            window.setTimeout(() => setScreen('result'), 600);
+          }
+          return;
+        }
+        // Success check
+        if (hasAttackSucceeded(resultState as GameState)) {
+          console.log('[KC] battle: attack succeeded, resolving');
+          // Brief pause then resolve
+          if (!skipRequested) await waitMs(400);
+          if (cancelled) return;
+          let resolved: GameState | null = null;
+          setGameState((prev) => {
+            if (!prev) return prev;
+            const r = resolveSubBattleWin(prev);
+            resolved = r;
+            return r;
+          });
+          await waitMs(16);
+          if (cancelled || !resolved) return;
+
+          // Step 4: resolve banner
+          setCineStep('resolve');
+          const rs = resolved as GameState;
+          if (rs.phase === 'game_over') {
+            if (!skipRequested) await waitMs(RESOLVE_BANNER_MS);
+            if (!cancelled) setCineStep('game_over');
+            if (!cancelled) window.setTimeout(() => setScreen('result'), 600);
+            return;
+          }
+          if (!skipRequested) await waitMs(RESOLVE_BANNER_MS);
+          if (cancelled) return;
+
+          // Continue to next sub-battle
+          setGameState((prev) => (prev ? continueAfterResolve(prev) : prev));
+          setSkipRequested(false);
+          // The useEffect will re-trigger on the new battle_intro phase
+          setCineStep('idle');
+          return;
+        }
+      }
+      console.warn('[KC] battle loop safety break reached');
+    };
+
+    run();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameState?.phase, cineStep, skipRequested]);
+
+  // ===== Skip button: short-circuit all waits in current cinematic =====
+  const handleSkipReveal = useCallback(() => {
+    console.log('[KC] skip requested');
+    setSkipRequested(true);
+  }, []);
 
   // ===== Deck phase: tap card → show quiz =====
   // NOTE: クイズ出題は deck_phase 限定。バトル中は絶対に走らない。
@@ -472,15 +470,18 @@ export default function KnowledgeChallenger() {
   }, [deckOffer, gameState]);
 
   // ===== Deck phase → start battle =====
-  // デッキフェイズ終了（「バトル開始」ボタン）で現在ラウンドの round_intro へ遷移
+  // デッキフェイズ終了（「バトル開始」ボタン）で battle_intro へ遷移
+  // startBattle は flagHolder のデッキトップから最初の defender カードを引く
   const handleStartBattle = useCallback(() => {
     if (!gameState || gameState.phase !== 'deck_phase') return;
     setDeckOffer(null);
     setActiveQuiz(null);
     setSwapState(null);
-    const next = startCurrentRound(gameState);
+    const next = startBattle(gameState);
+    console.log('[KC] handleStartBattle: phase =', next.phase, 'defenseCard =', next.defenseCard?.name);
     setGameState(next);
-    setRevealStep('done');
+    setCineStep('idle');
+    setSkipRequested(false);
   }, [gameState]);
 
   // ===== Swap resolution =====
@@ -524,10 +525,10 @@ export default function KnowledgeChallenger() {
       });
     }
 
-    // 変更11: 5-0 全勝なら殿堂入りデッキを保存（フリープレイでもOK）
-    if (won && gameState.history.length === 5 && gameState.history.every((r) => r.winner === 'player')) {
-      const totalFans = gameState.playerFans;
-      // 現在のデッキ = 残りのデッキ + ベンチ上のカード（バトル終了時点で手元にあったカード全て）
+    // 変更11: パーフェクトクリアなら殿堂入りデッキを保存。
+    // 新モデルでの「パーフェクト」= 勝利 かつ 1度もフラッグを奪われていない（history 全て player 勝利）
+    if (won && gameState.history.length > 0 && gameState.history.every((r) => r.winner === 'player')) {
+      const subBattleCount = gameState.history.length;
       const deckSnapshot = [
         ...gameState.player.deck,
         ...gameState.player.bench.flatMap((slot) => Array.from({ length: slot.count }, () => slot.card)),
@@ -535,10 +536,10 @@ export default function KnowledgeChallenger() {
       void saveHallOfFame({
         childId: userId,
         deck: deckSnapshot,
-        totalFans,
+        totalFans: subBattleCount,
         stageId: currentStage?.id ?? null,
       }).then((ok) => {
-        if (ok) toast.success('🏆 殿堂入り！ 5-0 パーフェクトクリア！');
+        if (ok) toast.success(`🏆 殿堂入り！ ${subBattleCount}連続フラッグ奪取 パーフェクトクリア！`);
       });
     }
 
@@ -569,7 +570,7 @@ export default function KnowledgeChallenger() {
           <h1 className="text-xl font-bold mb-1" style={{ color: '#ffd700', textShadow: '0 0 15px rgba(255,215,0,0.3)' }}>
             ナレッジ・チャレンジャー
           </h1>
-          <p className="text-amber-200/50 text-xs mb-5">5ラウンド・トロフィー争奪カードバトル</p>
+          <p className="text-amber-200/50 text-xs mb-5">攻守交代フラッグバトル</p>
 
           <div className="rounded-xl p-3 mb-3" style={{ background: 'rgba(255,215,0,0.05)', border: '1px solid rgba(255,215,0,0.15)' }}>
             <p className="text-amber-200/60 text-[11px] text-left leading-relaxed">
@@ -577,13 +578,15 @@ export default function KnowledgeChallenger() {
               <br />
               ・初期デッキ{INITIAL_DECK_SIZE}枚 / 最大{MAX_DECK_SIZE}枚
               <br />
-              ・5ラウンド制（トロフィー: 各ラウンドでファン数獲得）
+              ・バトル中は自動進行（プレイヤー操作はスキップのみ）
               <br />
-              ・各ラウンド、カード公開 → 効果自動発動 → パワー比較
+              ・フラッグ保持者の top カード = 防御。攻撃側が top から 1 枚ずつ公開しパワー合計が防御を超えたら奪取
               <br />
-              ・ベンチ{BENCH_MAX_SLOTS}種類目で敗北、同名カードは重ねられる
+              ・奪取後は攻守交代、最後の攻撃カードが新防御に
               <br />
-              ・ラウンド間のデッキフェイズでクイズに正解するとカード獲得
+              ・デッキ切れ or ベンチ{BENCH_MAX_SLOTS}種類目で決着
+              <br />
+              ・プレイヤーがカードを選ぶのはゲーム開始時のデッキフェイズのみ
             </p>
           </div>
 
@@ -725,24 +728,28 @@ export default function KnowledgeChallenger() {
 
           <div className="flex items-center justify-center gap-4 mb-4">
             <div className="text-center px-3 py-2 rounded-lg" style={{ background: 'rgba(34,197,94,0.12)' }}>
-              <p className="text-[9px] text-green-200/60 mb-0.5">あなたのファン</p>
-              <span className="text-2xl font-black text-green-300">{gameState.playerFans}</span>
+              <p className="text-[9px] text-green-200/60 mb-0.5">奪取した数</p>
+              <span className="text-2xl font-black text-green-300">{gameState.history.filter(h => h.winner === 'player').length}</span>
             </div>
             <span className="text-xl font-black text-amber-200/50">VS</span>
             <div className="text-center px-3 py-2 rounded-lg" style={{ background: 'rgba(239,68,68,0.12)' }}>
-              <p className="text-[9px] text-red-200/60 mb-0.5">相手のファン</p>
-              <span className="text-2xl font-black text-red-300">{gameState.aiFans}</span>
+              <p className="text-[9px] text-red-200/60 mb-0.5">奪われた数</p>
+              <span className="text-2xl font-black text-red-300">{gameState.history.filter(h => h.winner === 'ai').length}</span>
             </div>
           </div>
 
-          {/* Round history */}
-          <div className="rounded-lg p-2 mb-4 text-left" style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.05)' }}>
-            {gameState.history.map((r) => (
-              <div key={r.round} className="flex items-center justify-between text-[11px] py-0.5">
-                <span className="text-amber-200/60">R{r.round}</span>
-                <span className="text-amber-100 truncate mx-2">{r.playerCard.name} vs {r.aiCard.name}</span>
-                <span className={`font-black ${r.winner === 'player' ? 'text-green-400' : r.winner === 'ai' ? 'text-red-400' : 'text-amber-300'}`}>
-                  {r.winner === 'player' ? `+${r.trophyFans}` : r.winner === 'ai' ? `-${r.trophyFans}` : '—'}
+          {/* Sub-battle history */}
+          <div className="rounded-lg p-2 mb-4 text-left max-h-40 overflow-y-auto" style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.05)' }}>
+            {gameState.history.length === 0 ? (
+              <p className="text-[11px] text-amber-200/40 text-center py-2">（サブバトルなし）</p>
+            ) : gameState.history.map((r) => (
+              <div key={r.idx} className="flex items-center justify-between text-[11px] py-0.5">
+                <span className="text-amber-200/60">#{r.idx}</span>
+                <span className="text-amber-100 truncate mx-2">
+                  {r.attackerSide === 'player' ? 'あなた' : '相手'} → {r.defenderCard.name}
+                </span>
+                <span className={`font-black ${r.winner === 'player' ? 'text-green-400' : 'text-red-400'}`}>
+                  ⚔️{r.attackPower}
                 </span>
               </div>
             ))}
@@ -800,24 +807,26 @@ export default function KnowledgeChallenger() {
         </div>
         <div className="flex items-center gap-3">
           <div className="text-center">
-            <p className="text-[10px] font-bold text-amber-200/50">R</p>
+            <p className="text-[10px] font-bold text-amber-200/50">SB</p>
             <p className="text-xl font-black" style={{ color: '#ffd700', textShadow: '0 0 8px rgba(255,215,0,0.5)' }}>
-              {gameState.round}/{TOTAL_ROUNDS}
+              {gameState.history.length + (gameState.phase === 'game_over' ? 0 : 1)}
             </p>
           </div>
           <div className="text-center px-2 py-1 rounded-lg" style={{ background: 'rgba(255,215,0,0.12)', border: '1.5px solid rgba(255,215,0,0.4)' }}>
-            <p className="text-[9px] font-bold text-amber-200/70">トロフィー</p>
-            <p className="text-sm font-black" style={{ color: '#ffd700' }}>🏆 {currentTrophy}ファン</p>
+            <p className="text-[9px] font-bold text-amber-200/70">フラッグ</p>
+            <p className="text-sm font-black" style={{ color: gameState.flagHolder === 'player' ? '#22c55e' : '#ef4444' }}>
+              🏆 {gameState.flagHolder === 'player' ? 'あなた' : '相手'}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-3">
           <div className="text-center">
-            <p className="text-[10px] font-bold text-green-200/60">あなた</p>
-            <p className="text-lg font-black text-green-300">{gameState.playerFans}</p>
+            <p className="text-[10px] font-bold text-green-200/60">山札</p>
+            <p className="text-lg font-black text-green-300">{gameState.player.deck.length}</p>
           </div>
           <div className="text-center">
-            <p className="text-[10px] font-bold text-red-200/60">相手</p>
-            <p className="text-lg font-black text-red-300">{gameState.aiFans}</p>
+            <p className="text-[10px] font-bold text-red-200/60">相手山札</p>
+            <p className="text-lg font-black text-red-300">{gameState.ai.deck.length}</p>
           </div>
           <div className="text-center relative">
             <p className="text-[10px] font-bold text-amber-200/50">ALT</p>
@@ -846,88 +855,49 @@ export default function KnowledgeChallenger() {
       <BenchDisplay side="ai" bench={gameState.ai.bench} deckCount={gameState.ai.deck.length} />
 
       {/* ===== Battle Field =====
-          3 段レイアウト: AI area (top) / center flag / Player area (bottom)
-          攻撃側/防御側のテーマは revealStep と gameState.roundWinner から決定する */}
+          Layout:
+            AI bench (already rendered above)
+            Top:    defender card OR attacker reveal pile, depending on who is flag holder
+            Center: flag + trophy count
+            Bottom: opposite side
+            Player bench (rendered below)
+
+          playerIsDefender = (gameState.flagHolder === 'player')
+          When player defends: defender card at bottom (player side), attacker reveals at top (AI side)
+          When player attacks: defender card at top (AI side), attacker reveals at bottom (player side) */}
       {(() => {
-        // 役割の決定: player が勝つ（または draw）なら player が attacker
-        const playerWins = gameState.roundWinner !== 'ai';
-        const playerIsAttacker = playerWins;
-        const showingAttackerCard = revealStep === 'attacker_back' || revealStep === 'attacker_flip' ||
-                                     revealStep === 'attacker_count' || revealStep === 'compare' || revealStep === 'outcome';
-        const showingDefenderCard = revealStep === 'defender_show' || showingAttackerCard;
-        const attackerCard = playerIsAttacker ? gameState.playerCard : gameState.aiCard;
-        const defenderCard = playerIsAttacker ? gameState.aiCard : gameState.playerCard;
-        const attackerPowerFinal = playerIsAttacker ? gameState.playerPower : gameState.aiPower;
-        const defenderPowerFinal = playerIsAttacker ? gameState.aiPower : gameState.playerPower;
-        const aiCardSlot = playerIsAttacker ? 'defender' : 'attacker';
-        const playerCardSlot = playerIsAttacker ? 'attacker' : 'defender';
-        const attackerWon = gameState.roundWinner === (playerIsAttacker ? 'player' : 'ai');
-        // Render helpers: decide what to show in the AI slot (top) and player slot (bottom)
-        const renderSlot = (slotRole: 'attacker' | 'defender', side: 'ai' | 'player') => {
-          if (slotRole === 'defender') {
-            // Defender shows from defender_show step onward
-            if (!showingDefenderCard || !defenderCard) {
-              return (
-                <div className="inline-block rounded-xl" style={{
-                  width: 200, height: 260,
-                  background: side === 'ai' ? 'rgba(239,68,68,0.08)' : 'rgba(34,197,94,0.08)',
-                  border: `2px dashed ${side === 'ai' ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)'}`,
-                }}>
-                  <div className="flex items-center justify-center h-full text-4xl opacity-30">🎴</div>
-                </div>
-              );
-            }
-            const shatter = revealStep === 'outcome' && attackerWon;
-            return (
-              <div className={`relative kc-defender-glow ${shatter ? 'kc-card-shatter' : ''}`}>
-                <CardDisplay card={defenderCard} size="md" />
-                {/* Defense power label below the card */}
-                {revealStep === 'defender_show' && (
-                  <div className="absolute left-1/2 -translate-x-1/2 -bottom-12 whitespace-nowrap kc-defense-label">
-                    <p style={{ fontSize: '1.5rem', fontWeight: 900, color: '#60a5fa', textShadow: '0 0 16px rgba(96,165,250,0.9), 0 2px 4px rgba(0,0,0,0.9)' }}>
-                      🛡️ 防御パワー {defenderPowerFinal}
-                    </p>
-                  </div>
-                )}
-              </div>
-            );
-          }
-          // attacker slot
-          if (!showingAttackerCard || !attackerCard) {
+        const playerIsDefender = gameState.flagHolder === 'player';
+        const defenderCard = gameState.defenseCard;
+        const defenderSide: 'player' | 'ai' = playerIsDefender ? 'player' : 'ai';
+        const attackerSide: 'player' | 'ai' = playerIsDefender ? 'ai' : 'player';
+        const defenderPower = defenderCard ? getBaseDefense(defenderCard) : 0;
+        const attackCards = gameState.attackRevealed;
+        const attackPower = gameState.attackCurrentPower;
+
+        const shouldShowDefender = cineStep === 'defender_show' || cineStep === 'attack_reveal' || cineStep === 'resolve';
+        const shouldShowAttackPile = cineStep === 'attack_reveal' || cineStep === 'resolve';
+        const attackerWonSub = cineStep === 'resolve' && gameState.lastSubBattle?.winner === attackerSide;
+
+        const renderDefenderSlot = () => {
+          if (!shouldShowDefender || !defenderCard) {
             return (
               <div className="inline-block rounded-xl" style={{
                 width: 200, height: 260,
-                background: side === 'ai' ? 'rgba(239,68,68,0.08)' : 'rgba(34,197,94,0.08)',
-                border: `2px dashed ${side === 'ai' ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)'}`,
+                background: defenderSide === 'ai' ? 'rgba(239,68,68,0.08)' : 'rgba(34,197,94,0.08)',
+                border: `2px dashed ${defenderSide === 'ai' ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)'}`,
               }}>
                 <div className="flex items-center justify-center h-full text-4xl opacity-30">🎴</div>
               </div>
             );
           }
-          const defenderBounceOut = revealStep === 'outcome' && !attackerWon;
-          const enterClass = side === 'ai' ? 'kc-ai-card-enter' : 'kc-player-card-enter';
+          const shatter = attackerWonSub;
           return (
-            <div className={`relative ${enterClass} ${defenderBounceOut ? 'kc-card-bounce' : ''}`}
-              style={{
-                transformStyle: 'preserve-3d',
-                animation: revealStep === 'attacker_flip' ? 'kcCardFlip 0.6s ease-out forwards' : undefined,
-              }}>
-              {revealStep === 'attacker_back' ? (
-                <CardBack side={side} />
-              ) : (
-                <div className={revealStep === 'attacker_flip' ? 'kc-flipping' : ''}>
-                  <CardDisplay
-                    card={attackerCard}
-                    isWinner={(revealStep === 'outcome' && attackerWon) || (side === 'player' && roundWinGlow)}
-                    size="md"
-                  />
-                </div>
-              )}
-              {/* Attack power count-up label */}
-              {revealStep === 'attacker_count' && (
-                <div className="absolute left-1/2 -translate-x-1/2 -bottom-12 whitespace-nowrap kc-attack-label">
-                  <p style={{ fontSize: '1.75rem', fontWeight: 900, color: '#ff6b6b', textShadow: '0 0 16px rgba(239,68,68,0.9), 0 2px 4px rgba(0,0,0,0.9)' }}>
-                    ⚔️ 攻撃パワー {attackerDisplayPower}
+            <div className={`relative ${shatter ? 'kc-card-shatter' : 'kc-defender-glow'}`}>
+              <CardDisplay card={defenderCard} size="md" mode="defense" />
+              {cineStep === 'defender_show' && (
+                <div className="absolute left-1/2 -translate-x-1/2 -bottom-12 whitespace-nowrap kc-defense-label z-20">
+                  <p style={{ fontSize: '1.5rem', fontWeight: 900, color: '#60a5fa', textShadow: '0 0 16px rgba(96,165,250,0.95), 0 2px 4px rgba(0,0,0,0.9)' }}>
+                    🛡️ 防御パワー {defenderPower}
                   </p>
                 </div>
               )}
@@ -935,25 +905,67 @@ export default function KnowledgeChallenger() {
           );
         };
 
+        const renderAttackerSlot = () => {
+          if (!shouldShowAttackPile || attackCards.length === 0) {
+            // During battle_intro and turn_banner and defender_show, show a placeholder
+            return (
+              <div className="inline-block rounded-xl" style={{
+                width: 200, height: 260,
+                background: attackerSide === 'ai' ? 'rgba(239,68,68,0.08)' : 'rgba(34,197,94,0.08)',
+                border: `2px dashed ${attackerSide === 'ai' ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)'}`,
+              }}>
+                <div className="flex items-center justify-center h-full text-4xl opacity-30">🎴</div>
+              </div>
+            );
+          }
+          // Show the attack pile as a stacked fan of cards. Most recent on top.
+          const lastCard = attackCards[attackCards.length - 1];
+          const priorCount = attackCards.length - 1;
+          const enterClass = attackerSide === 'ai' ? 'kc-ai-card-enter' : 'kc-player-card-enter';
+          return (
+            <div className="relative" style={{ width: 200, height: 260 }}>
+              {/* Earlier attack cards stacked behind (offset by a bit) */}
+              {attackCards.slice(0, -1).map((c, i) => (
+                <div key={`stack-${i}`} className="absolute"
+                  style={{
+                    top: 0,
+                    left: 0,
+                    transform: `translate(${(i - priorCount / 2) * 12}px, ${(i - priorCount / 2) * 6}px) rotate(${(i - priorCount / 2) * 3}deg)`,
+                    opacity: 0.5,
+                    zIndex: i,
+                  }}
+                >
+                  <CardDisplay card={c} size="md" mode="attack" />
+                </div>
+              ))}
+              {/* Latest card on top with kcCardFlip animation on mount */}
+              <div key={`latest-${attackCards.length}`} className={`absolute inset-0 ${enterClass}`} style={{ zIndex: 100 }}>
+                <CardDisplay card={lastCard} size="md" mode="attack" />
+              </div>
+              {/* Cumulative power label below */}
+              <div className="absolute left-1/2 -translate-x-1/2 -bottom-12 whitespace-nowrap z-[120] kc-attack-label">
+                <p style={{ fontSize: '1.75rem', fontWeight: 900, color: '#ff6b6b', textShadow: '0 0 16px rgba(239,68,68,0.95), 0 2px 4px rgba(0,0,0,0.9)' }}>
+                  ⚔️ 攻撃パワー {attackPower}{defenderCard ? ` / ${defenderPower}` : ''}
+                </p>
+              </div>
+            </div>
+          );
+        };
+
         return (
       <div
-        className={`flex-1 flex flex-col px-2 py-2 relative min-h-0 overflow-hidden ${revealStep === 'outcome' && gameState.roundWinner === 'ai' ? 'kc-screen-shake' : ''}`}
+        className={`flex-1 flex flex-col px-2 py-2 relative min-h-0 overflow-hidden ${cineStep === 'resolve' && gameState.lastSubBattle?.winner === 'ai' ? 'kc-screen-shake' : ''}`}
       >
-        {/* Red flash overlay on defeat */}
-        {revealStep === 'outcome' && gameState.roundWinner === 'ai' && (
+        {/* Flash overlays on resolve */}
+        {cineStep === 'resolve' && gameState.lastSubBattle?.winner === 'ai' && (
           <div className="absolute inset-0 pointer-events-none z-30 kc-red-flash" />
         )}
-        {/* Green flash overlay on victory */}
-        {revealStep === 'outcome' && gameState.roundWinner === 'player' && (
+        {cineStep === 'resolve' && gameState.lastSubBattle?.winner === 'player' && (
           <div className="absolute inset-0 pointer-events-none z-30 kc-green-flash" />
         )}
-        {/* Blue defense-success flash */}
-        {revealStep === 'outcome' && !playerIsAttacker && gameState.roundWinner === 'player' && (
-          <div className="absolute inset-0 pointer-events-none z-30 kc-blue-flash" />
-        )}
 
-        {/* Skip button (top-right of field) */}
-        {(revealStep !== 'done' || gameState.phase === 'round_intro') && gameState.phase !== 'deck_phase' && gameState.phase !== 'round_end' && gameState.phase !== 'game_over' && (
+        {/* Skip button */}
+        {gameState.phase !== 'deck_phase' && gameState.phase !== 'game_over' && (
           <button
             onClick={handleSkipReveal}
             className="absolute top-1 right-2 z-50 text-[11px] font-black px-3 py-1.5 rounded-lg"
@@ -969,152 +981,98 @@ export default function KnowledgeChallenger() {
 
         {/* ====== AI AREA (top half) ====== */}
         <div className="flex-1 flex items-center justify-center relative">
-          {renderSlot(aiCardSlot, 'ai')}
+          {playerIsDefender ? renderAttackerSlot() : renderDefenderSlot()}
         </div>
 
         {/* ====== CENTER BAND (flag) ====== */}
         <div className="flex items-center justify-center gap-3 py-2 relative min-h-[90px]">
           <div className="h-0.5 flex-1" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,215,0,0.5))' }} />
           <div
-            className={`kc-flag ${trophyFlash ? 'kc-flag-pulse' : ''}`}
+            className={`kc-flag ${cineStep === 'resolve' ? 'kc-flag-pulse' : ''}`}
             style={{
-              background: trophyFlash === 'player'
+              background: gameState.flagHolder === 'player'
                 ? 'radial-gradient(circle, rgba(34,197,94,0.55), rgba(34,197,94,0.1))'
-                : trophyFlash === 'ai'
-                  ? 'radial-gradient(circle, rgba(239,68,68,0.55), rgba(239,68,68,0.1))'
-                  : 'radial-gradient(circle, rgba(255,215,0,0.35), rgba(255,215,0,0.08))',
-              border: `4px solid ${trophyFlash === 'player' ? '#22c55e' : trophyFlash === 'ai' ? '#ef4444' : 'rgba(255,215,0,0.7)'}`,
-              boxShadow: trophyFlash === 'player'
+                : 'radial-gradient(circle, rgba(239,68,68,0.55), rgba(239,68,68,0.1))',
+              border: `4px solid ${gameState.flagHolder === 'player' ? '#22c55e' : '#ef4444'}`,
+              boxShadow: gameState.flagHolder === 'player'
                 ? '0 0 24px rgba(34,197,94,0.7)'
-                : trophyFlash === 'ai'
-                  ? '0 0 24px rgba(239,68,68,0.7)'
-                  : '0 0 20px rgba(255,215,0,0.35)',
+                : '0 0 24px rgba(239,68,68,0.7)',
             }}
           >
             <span style={{ fontSize: '2.25rem' }}>🏆</span>
-            <p className="text-[10px] font-black mt-0.5" style={{ color: '#ffd700' }}>{currentTrophy}</p>
+            <p className="text-[9px] font-black mt-0.5" style={{ color: '#ffd700' }}>
+              {gameState.flagHolder === 'player' ? 'あなた' : '相手'}
+            </p>
           </div>
           <div className="h-0.5 flex-1" style={{ background: 'linear-gradient(90deg, rgba(255,215,0,0.5), transparent)' }} />
         </div>
 
         {/* ====== PLAYER AREA (bottom half) ====== */}
         <div className="flex-1 flex items-center justify-center relative">
-          {renderSlot(playerCardSlot, 'player')}
+          {playerIsDefender ? renderDefenderSlot() : renderAttackerSlot()}
         </div>
 
-        {/* ====== Overlays ====== */}
-
-        {/* Turn banner: attack (red) / defense (blue) */}
-        {revealStep === 'intro' && (
+        {/* ====== Turn Banner ====== */}
+        {cineStep === 'turn_banner' && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-40">
             <div className="kc-turn-banner" style={{
-              background: playerIsAttacker
-                ? 'linear-gradient(135deg, rgba(239,68,68,0.45), rgba(185,28,28,0.15))'
-                : 'linear-gradient(135deg, rgba(59,130,246,0.45), rgba(37,99,235,0.15))',
-              border: `4px solid ${playerIsAttacker ? '#ef4444' : '#3b82f6'}`,
+              background: playerIsDefender
+                ? 'linear-gradient(135deg, rgba(59,130,246,0.45), rgba(37,99,235,0.15))'
+                : 'linear-gradient(135deg, rgba(239,68,68,0.45), rgba(185,28,28,0.15))',
+              border: `4px solid ${playerIsDefender ? '#3b82f6' : '#ef4444'}`,
               padding: '16px 32px',
               borderRadius: '16px',
               textAlign: 'center',
-              boxShadow: `0 0 50px ${playerIsAttacker ? 'rgba(239,68,68,0.6)' : 'rgba(59,130,246,0.6)'}`,
+              boxShadow: `0 0 50px ${playerIsDefender ? 'rgba(59,130,246,0.7)' : 'rgba(239,68,68,0.7)'}`,
             }}>
               <p style={{
                 fontSize: '2.25rem',
                 fontWeight: 900,
-                color: playerIsAttacker ? '#fca5a5' : '#93c5fd',
-                textShadow: `0 0 30px ${playerIsAttacker ? 'rgba(239,68,68,0.9)' : 'rgba(59,130,246,0.9)'}, 0 2px 6px rgba(0,0,0,0.85)`,
+                color: playerIsDefender ? '#93c5fd' : '#fca5a5',
+                textShadow: `0 0 30px ${playerIsDefender ? 'rgba(59,130,246,0.95)' : 'rgba(239,68,68,0.95)'}, 0 2px 6px rgba(0,0,0,0.85)`,
                 margin: 0,
               }}>
-                {playerIsAttacker ? '⚔️ あなたの攻撃！' : '🛡️ あなたが防御中！'}
+                {playerIsDefender ? '🛡️ あなたが防御中！' : '⚔️ あなたの攻撃！'}
               </p>
-              <p style={{ fontSize: '1rem', fontWeight: 700, color: '#fff', marginTop: 6 }}>
-                ラウンド {gameState.round}
+              <p style={{ fontSize: '0.9rem', fontWeight: 700, color: '#fff', marginTop: 6 }}>
+                サブバトル {gameState.round}
               </p>
             </div>
           </div>
         )}
 
-        {/* Big power comparison panel (48px) */}
-        {revealStep === 'compare' && gameState.aiCard && gameState.playerCard && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-40 kc-compare-pop">
-            <div className="rounded-2xl px-6 py-5" style={{
-              background: 'linear-gradient(135deg, rgba(0,0,0,0.9), rgba(20,20,50,0.9))',
-              border: '4px solid rgba(255,215,0,0.6)',
-              boxShadow: '0 0 60px rgba(255,215,0,0.5)',
-              textAlign: 'center',
-            }}>
-              <p className="text-xs font-bold text-amber-200/80 mb-2">パワー比較</p>
-              <div className="flex items-center justify-center gap-3">
-                {/* Left side: player */}
-                <div className="text-center">
-                  <p className="text-[10px] font-bold text-amber-200/60 mb-0.5">あなた</p>
-                  <span className="font-black" style={{
-                    fontSize: '3rem',
-                    color: gameState.roundWinner === 'player' ? '#ffd700' : (playerIsAttacker ? '#ff6b6b' : '#60a5fa'),
-                    textShadow: gameState.roundWinner === 'player'
-                      ? '0 0 28px rgba(255,215,0,0.95)'
-                      : '0 0 16px rgba(0,0,0,0.5)',
-                  }}>
-                    {playerIsAttacker ? '⚔️' : '🛡️'} {gameState.playerPower}
-                  </span>
-                </div>
-                <span className="font-black" style={{ fontSize: '2rem', color: 'rgba(255,255,255,0.6)' }}>vs</span>
-                {/* Right side: AI */}
-                <div className="text-center">
-                  <p className="text-[10px] font-bold text-amber-200/60 mb-0.5">相手</p>
-                  <span className="font-black" style={{
-                    fontSize: '3rem',
-                    color: gameState.roundWinner === 'ai' ? '#ffd700' : (playerIsAttacker ? '#60a5fa' : '#ff6b6b'),
-                    textShadow: gameState.roundWinner === 'ai'
-                      ? '0 0 28px rgba(255,215,0,0.95)'
-                      : '0 0 16px rgba(0,0,0,0.5)',
-                  }}>
-                    {gameState.aiPower} {playerIsAttacker ? '🛡️' : '⚔️'}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Outcome banner */}
-        {revealStep === 'outcome' && (
+        {/* ====== Resolve Banner ====== */}
+        {cineStep === 'resolve' && gameState.lastSubBattle && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-40">
             <div className="kc-outcome-banner" style={{
               padding: '18px 36px',
               borderRadius: '16px',
               textAlign: 'center',
-              background: gameState.roundWinner === 'player'
+              background: gameState.lastSubBattle.winner === 'player'
                 ? 'linear-gradient(135deg, rgba(34,197,94,0.45), rgba(22,163,74,0.15))'
                 : 'linear-gradient(135deg, rgba(239,68,68,0.45), rgba(185,28,28,0.15))',
-              border: `4px solid ${gameState.roundWinner === 'player' ? '#22c55e' : '#ef4444'}`,
-              boxShadow: `0 0 60px ${gameState.roundWinner === 'player' ? 'rgba(34,197,94,0.8)' : 'rgba(239,68,68,0.8)'}`,
+              border: `4px solid ${gameState.lastSubBattle.winner === 'player' ? '#22c55e' : '#ef4444'}`,
+              boxShadow: `0 0 60px ${gameState.lastSubBattle.winner === 'player' ? 'rgba(34,197,94,0.8)' : 'rgba(239,68,68,0.8)'}`,
             }}>
               <p style={{
                 fontSize: '2rem',
                 fontWeight: 900,
-                color: gameState.roundWinner === 'player' ? '#4ade80' : '#fca5a5',
-                textShadow: `0 0 24px ${gameState.roundWinner === 'player' ? 'rgba(34,197,94,0.9)' : 'rgba(239,68,68,0.9)'}, 0 2px 6px rgba(0,0,0,0.85)`,
+                color: gameState.lastSubBattle.winner === 'player' ? '#4ade80' : '#fca5a5',
+                textShadow: `0 0 24px ${gameState.lastSubBattle.winner === 'player' ? 'rgba(34,197,94,0.95)' : 'rgba(239,68,68,0.95)'}, 0 2px 6px rgba(0,0,0,0.85)`,
                 margin: 0,
               }}>
-                {playerIsAttacker
-                  ? (gameState.roundWinner === 'player' ? '🏆 フラッグ奪取！' : '🛡️ 防御された…')
-                  : (gameState.roundWinner === 'player' ? '🛡️ 防御成功！' : '💥 フラッグを奪われた！')}
+                {gameState.lastSubBattle.winner === 'player'
+                  ? '🏆 フラッグ奪取！'
+                  : '💥 フラッグを奪われた！'}
               </p>
-              <p className="text-lg font-black mt-1" style={{ color: '#ffd700' }}>
-                {gameState.roundWinner === 'player' ? `+${currentTrophy} ファン` : `-${currentTrophy} ファン`}
+              <p className="text-xs text-amber-200/70 mt-1">
+                攻撃 {gameState.lastSubBattle.attackPower} vs 防御 {getBaseDefense(gameState.lastSubBattle.defenderCard)}
               </p>
             </div>
           </div>
         )}
 
-        {/* round_end: auto-advances via effect */}
-        {gameState.phase === 'round_end' && revealStep === 'done' && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30">
-            <p className="text-2xl font-black text-amber-200/80">次のラウンドへ…</p>
-          </div>
-        )}
-
-        {/* game_over inline */}
+        {/* ====== game_over inline ====== */}
         {gameState.phase === 'game_over' && (
           <div className="absolute inset-0 flex items-center justify-center z-50 kc-card-reveal">
             <div className="text-center">
@@ -1123,10 +1081,9 @@ export default function KnowledgeChallenger() {
                 {gameState.winner === 'player' ? '勝利！' : '敗北...'}
               </p>
               <p className="text-sm text-amber-200/70 mt-2">
-                {gameState.player.bench.length >= BENCH_MAX_SLOTS ? 'ベンチが満杯！' :
+                {gameState.player.bench.length >= BENCH_MAX_SLOTS ? 'あなたのベンチが満杯！' :
                  gameState.ai.bench.length >= BENCH_MAX_SLOTS ? '相手のベンチが満杯！' :
-                 gameState.player.deck.length === 0 && !gameState.playerCard ? 'デッキ切れ！' :
-                 '5 ラウンド終了'}
+                 'デッキ切れ！'}
               </p>
             </div>
           </div>
@@ -1602,12 +1559,31 @@ function BenchDisplay({ side, bench, deckCount }: {
   );
 }
 
-function CardDisplay({ card, isDefense, isWinner, size }: { card: BattleCard; isDefense?: boolean; isWinner?: boolean; size?: 'sm' | 'md'; }) {
+/**
+ * CardDisplay
+ *  - Always shows both ⚔️ attackPower (left-bottom, red) and 🛡️ defensePower (right-bottom, blue)
+ *  - mode='attack'   : ⚔️ glows red, 🛡️ greyed out
+ *  - mode='defense'  : 🛡️ glows blue, ⚔️ greyed out
+ *  - mode='neutral'  : both at normal brightness
+ */
+function CardDisplay({ card, isDefense, isWinner, size, mode }: {
+  card: BattleCard;
+  isDefense?: boolean;
+  isWinner?: boolean;
+  size?: 'sm' | 'md';
+  mode?: 'attack' | 'defense' | 'neutral';
+}) {
   const catInfo = CATEGORY_INFO[card.category];
   const rarInfo = RARITY_INFO[card.rarity];
   const [imgLoaded, setImgLoaded] = useState(false);
   const w = size === 'sm' ? 120 : 200;
   const h = size === 'sm' ? 150 : 260;
+  const activeMode = mode ?? 'neutral';
+  const atk = card.attackPower ?? card.power;
+  const def = card.defensePower ?? card.power;
+  const fontAtk = size === 'sm' ? '14px' : '20px';
+  const fontDef = size === 'sm' ? '14px' : '20px';
+
   return (
     <div
       className={`inline-block rounded-xl p-0 relative overflow-hidden ${isWinner ? 'kc-win-glow' : ''}`}
@@ -1644,21 +1620,49 @@ function CardDisplay({ card, isDefense, isWinner, size }: { card: BattleCard; is
           </div>
         </div>
         <div>
-          <p className={`font-black text-white drop-shadow-lg ${size === 'sm' ? 'text-sm leading-tight mb-0.5' : 'text-lg leading-tight mb-1'}`} style={{ textShadow: '0 2px 6px rgba(0,0,0,0.95)' }}>
+          <p className={`font-black text-white drop-shadow-lg ${size === 'sm' ? 'text-sm leading-tight mb-1' : 'text-lg leading-tight mb-1'}`} style={{ textShadow: '0 2px 6px rgba(0,0,0,0.95)' }}>
             {card.name}
           </p>
-          <div className="flex items-center justify-between">
-            {card.attackPower !== undefined && card.defensePower !== undefined ? (
-              <div className="flex flex-col items-end gap-0 ml-auto leading-none">
-                <span className={`font-black ${size === 'sm' ? 'text-xs' : 'text-sm'}`} style={{ color: '#ff6b6b' }}>⚔️{card.attackPower}</span>
-                <span className={`font-black ${size === 'sm' ? 'text-xs' : 'text-sm'}`} style={{ color: '#64b5ff' }}>🛡️{card.defensePower}</span>
-              </div>
-            ) : (
-              <div className="flex items-baseline gap-0.5 ml-auto">
-                <span className={`font-black ${size === 'sm' ? 'text-xl' : 'text-3xl'}`} style={{ color: '#ffd700' }}>{card.power}</span>
-                <span className={`font-bold ${size === 'sm' ? 'text-xs' : 'text-sm'}`} style={{ color: '#ffd700' }}>P</span>
-              </div>
-            )}
+          {/* Attack / Defense power badges — always visible */}
+          <div className="flex items-end justify-between gap-1">
+            {/* ⚔️ Attack badge (left-bottom) */}
+            <div
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded-md font-black"
+              style={{
+                background: activeMode === 'attack'
+                  ? 'rgba(239,68,68,0.85)'
+                  : activeMode === 'defense'
+                    ? 'rgba(80,80,90,0.6)'
+                    : 'rgba(239,68,68,0.55)',
+                border: `1.5px solid ${activeMode === 'attack' ? '#ff6b6b' : activeMode === 'defense' ? 'rgba(120,120,130,0.6)' : 'rgba(239,68,68,0.7)'}`,
+                color: activeMode === 'defense' ? 'rgba(255,255,255,0.45)' : '#fff',
+                fontSize: fontAtk,
+                textShadow: activeMode === 'attack' ? '0 0 10px rgba(255,107,107,0.95), 0 1px 2px rgba(0,0,0,0.9)' : '0 1px 2px rgba(0,0,0,0.9)',
+                boxShadow: activeMode === 'attack' ? '0 0 14px rgba(239,68,68,0.7)' : 'none',
+                lineHeight: 1,
+              }}
+            >
+              ⚔️<span>{atk}</span>
+            </div>
+            {/* 🛡️ Defense badge (right-bottom) */}
+            <div
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded-md font-black"
+              style={{
+                background: activeMode === 'defense'
+                  ? 'rgba(59,130,246,0.85)'
+                  : activeMode === 'attack'
+                    ? 'rgba(80,80,90,0.6)'
+                    : 'rgba(59,130,246,0.55)',
+                border: `1.5px solid ${activeMode === 'defense' ? '#60a5fa' : activeMode === 'attack' ? 'rgba(120,120,130,0.6)' : 'rgba(59,130,246,0.7)'}`,
+                color: activeMode === 'attack' ? 'rgba(255,255,255,0.45)' : '#fff',
+                fontSize: fontDef,
+                textShadow: activeMode === 'defense' ? '0 0 10px rgba(96,165,250,0.95), 0 1px 2px rgba(0,0,0,0.9)' : '0 1px 2px rgba(0,0,0,0.9)',
+                boxShadow: activeMode === 'defense' ? '0 0 14px rgba(59,130,246,0.7)' : 'none',
+                lineHeight: 1,
+              }}
+            >
+              🛡️<span>{def}</span>
+            </div>
           </div>
         </div>
       </div>

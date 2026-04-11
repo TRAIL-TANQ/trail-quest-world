@@ -11,7 +11,21 @@ import { useState, useMemo, useEffect } from 'react';
 import { COLLECTION_CARDS } from '@/lib/cardData';
 import { CARD_RARITY_COLORS, CARD_CATEGORY_INFO } from '@/lib/constants';
 import { useCollectionStore } from '@/lib/stores';
+import { ALL_BATTLE_CARDS } from '@/lib/knowledgeCards';
 import type { CollectionCard, CollectionRarity } from '@/lib/types';
+
+// Build a lookup from collection card id → {attack, defense} so the collection
+// grid can display both power values without importing the whole engine.
+const BATTLE_STATS_BY_ID: Record<string, { attack: number; defense: number }> = (() => {
+  const m: Record<string, { attack: number; defense: number }> = {};
+  for (const bc of ALL_BATTLE_CARDS) {
+    m[bc.id] = {
+      attack: bc.attackPower ?? bc.power,
+      defense: bc.defensePower ?? bc.power,
+    };
+  }
+  return m;
+})();
 
 const categoryTabs = [
   { id: 'all', label: 'すべて' },
@@ -406,10 +420,22 @@ export default function CollectionPage() {
                     style={{ background: 'linear-gradient(135deg, rgba(168,85,247,0.1), rgba(236,72,153,0.05), rgba(139,92,246,0.1))', animation: 'shimmer 3s ease-in-out infinite' }} />
                 )}
               </div>
-              {/* カード名 */}
-              <div className="px-1.5 py-1.5 text-center"
+              {/* カード名 + ⚔️/🛡️ */}
+              <div className="px-1.5 py-1 text-center"
                 style={{ borderTop: `1px solid ${owned ? rarityColor + '25' : 'rgba(255,255,255,0.04)'}`, background: 'rgba(11,17,40,0.7)' }}>
                 <p className="text-[10px] font-bold text-amber-100 truncate">{owned ? card.name : '???'}</p>
+                {owned && BATTLE_STATS_BY_ID[card.id] && (
+                  <div className="flex items-center justify-center gap-1 mt-0.5">
+                    <span className="text-[9px] font-black px-1 py-0.5 rounded"
+                      style={{ background: 'rgba(239,68,68,0.7)', color: '#fff', lineHeight: 1 }}>
+                      ⚔️{BATTLE_STATS_BY_ID[card.id].attack}
+                    </span>
+                    <span className="text-[9px] font-black px-1 py-0.5 rounded"
+                      style={{ background: 'rgba(59,130,246,0.7)', color: '#fff', lineHeight: 1 }}>
+                      🛡️{BATTLE_STATS_BY_ID[card.id].defense}
+                    </span>
+                  </div>
+                )}
               </div>
             </button>
           );

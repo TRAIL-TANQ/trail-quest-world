@@ -1,34 +1,56 @@
 /**
- * Knowledge Challenger - Game Engine (Phase 1: 5-round trophy model, 1v1)
+ * Knowledge Challenger - Game Engine
  *
- * - 5 rounds. Each round has a trophy with a "fans" value rolled from a per-round range.
- * - Each round, both sides reveal one card. Effects apply automatically (no in-battle quiz).
- *   Higher effective power wins the round and earns the trophy fans.
- * - Both revealed cards are then placed on their owner's bench (same-named cards stack).
- * - If a side tries to place a 6th DISTINCT card name on the bench -> that side instantly loses.
- * - After 5 rounds, the side with more total fans wins. Ties break to the player.
- * - Deck phase (between rounds) is handled in the UI layer and adds cards to `player.deck`.
+ * === Correct battle model (attack/defense auto-loop) ===
+ *
+ * 1. Deck phase (one time at the start): player picks 2 of 5 offered cards via quizzes.
+ *    Player's deck becomes 10 (starter) + up to 2 = 12 cards.
+ * 2. Battle phase: entirely automatic. The engine runs a loop of sub-battles.
+ *
+ *    Each sub-battle:
+ *      a. flagHolder draws top of their deck as the defense card (uses defensePower)
+ *      b. The attacker (the other side) reveals cards from the top of their deck one by one
+ *         - each reveal adds card.attackPower to attackCurrentPower
+ *      c. When attackCurrentPower >= defenseCard.defensePower the attacker wins the sub-battle
+ *      d. Resolution:
+ *          - defense card → defender's bench (check overflow)
+ *          - all attack cards except the last → attacker's bench (check overflow)
+ *          - last attack card becomes the new defender (held by the new flag holder)
+ *          - flagHolder swaps to the old attacker
+ *          - next sub-battle begins with the same defender card, new attacker draws from their deck
+ *      e. If the attacker runs out of cards before beating the defender: game over,
+ *         defender wins the match (deck-out condition)
+ *      f. If any bench would overflow (>6 distinct card names): that side loses the match
+ *
+ * 3. Winner:
+ *      - side whose opponent ran out of deck / bench first
+ *      - ties are broken in favour of the player (ties cannot really happen in this model)
+ *
+ * === The player only interacts during the deck phase. ===
+ * Battle is purely cinematic. The UI calls revealNextAttackCard() on a timer and
+ * resolveBattleStep() when the attacker has accumulated enough power.
  */
 import type { BattleCard } from './knowledgeCards';
 
 export const BENCH_MAX_SLOTS = 6;
+
+// Legacy exports kept for compatibility with ratingService, stages, etc.
+// The real battle model no longer uses rounds or trophy fans, but some UI
+// copy still refers to "round" as a display label for the current sub-battle.
 export const TOTAL_ROUNDS = 5;
-
-// Trophy fan ranges per round: [min, max] inclusive
 export const TROPHY_FAN_RANGES: Array<[number, number]> = [
-  [2, 3],   // Round 1
-  [3, 5],   // Round 2
-  [5, 7],   // Round 3
-  [7, 9],   // Round 4
-  [9, 11],  // Round 5
+  [2, 3], [3, 5], [5, 7], [7, 9], [9, 11],
 ];
-
 export function rollTrophyFans(round: number): number {
   const range = TROPHY_FAN_RANGES[round - 1];
   if (!range) return 0;
   const [min, max] = range;
   return min + Math.floor(Math.random() * (max - min + 1));
 }
+
+// ---------- Types ----------
+
+export type Side = 'player' | 'ai';
 
 export interface BenchSlot {
   name: string;
@@ -43,40 +65,47 @@ export interface PlayerState {
 }
 
 export type GamePhase =
-  | 'round_intro'   // showing round banner + trophy
-  | 'reveal'        // both cards revealed, effects resolving
-  | 'round_end'     // trophy awarded, cards going to bench
-  | 'deck_phase'    // between rounds, player picks new cards via quiz
+  | 'deck_phase'      // player picks cards via quiz (one-time at game start)
+  | 'battle_intro'    // turn banner "あなたの攻撃！" / "あなたが防御中！"
+  | 'battle'          // attacker reveal loop, UI drives per-card reveals
+  | 'battle_resolve'  // sub-battle ended: benches updated, about to swap roles
   | 'game_over';
 
-export interface RoundResult {
-  round: number;
-  playerCard: BattleCard;
-  aiCard: BattleCard;
-  playerPower: number;
-  aiPower: number;
-  winner: 'player' | 'ai' | 'draw';
-  trophyFans: number;
+export interface SubBattleResult {
+  idx: number;
+  defenderSide: Side;
+  defenderCard: BattleCard;
+  attackerSide: Side;
+  attackCards: BattleCard[];
+  attackPower: number;
+  winner: Side;  // always the attacker (defender cannot win a sub-battle, they can only run out the attacker's deck → game over)
 }
 
 export interface GameState {
   phase: GamePhase;
-  round: number;                    // 1..TOTAL_ROUNDS
-  trophyFans: number[];             // rolled fan values per round, length TOTAL_ROUNDS
+  // Legacy: round counter, mostly for display and compatibility.
+  // Incremented once per completed sub-battle.
+  round: number;
+  // Trophy fans kept as legacy display flavour; the real winner is whoever
+  // doesn't fail first.
+  trophyFans: number[];
   playerFans: number;
   aiFans: number;
   player: PlayerState;
   ai: PlayerState;
-  // Current round reveal
-  playerCard: BattleCard | null;
-  aiCard: BattleCard | null;
-  playerPower: number;
-  aiPower: number;
-  roundWinner: 'player' | 'ai' | 'draw' | null;
-  history: RoundResult[];
-  winner: 'player' | 'ai' | null;
+  // ===== Battle state =====
+  flagHolder: Side;                     // side currently defending the flag
+  defenseCard: BattleCard | null;       // defender card on the field
+  attackRevealed: BattleCard[];         // cards revealed in the current attack
+  attackCurrentPower: number;           // cumulative attack power so far
+  lastSubBattle: SubBattleResult | null; // last resolved sub-battle (for outcome banner)
+  // ===== Result =====
+  history: SubBattleResult[];
+  winner: Side | null;
   message: string;
 }
+
+// ---------- Utilities ----------
 
 function shuffleDeck(deck: BattleCard[]): BattleCard[] {
   const arr = [...deck];
@@ -87,52 +116,6 @@ function shuffleDeck(deck: BattleCard[]): BattleCard[] {
   return arr;
 }
 
-export function initGameState(playerDeck: BattleCard[], aiDeck: BattleCard[]): GameState {
-  const trophyFans = Array.from({ length: TOTAL_ROUNDS }, (_, i) => rollTrophyFans(i + 1));
-  return {
-    // 正しい順序（変更: deck_phase → battle → next round deck_phase → ...）
-    // まずデッキフェイズで 5 枚提示 → 2 枚選択 → バトル開始
-    phase: 'deck_phase',
-    round: 1,
-    trophyFans,
-    playerFans: 0,
-    aiFans: 0,
-    player: { deck: shuffleDeck(playerDeck), bench: [], isAI: false },
-    ai: { deck: shuffleDeck(aiDeck), bench: [], isAI: true },
-    playerCard: null,
-    aiCard: null,
-    playerPower: 0,
-    aiPower: 0,
-    roundWinner: null,
-    history: [],
-    winner: null,
-    message: 'デッキフェイズ：カードを選ぼう',
-  };
-}
-
-// ===== Bench helpers =====
-function distinctCount(bench: BenchSlot[]): number {
-  return bench.length;
-}
-
-function canAddToBench(bench: BenchSlot[], card: BattleCard): boolean {
-  if (bench.some(s => s.name === card.name)) return true; // stack
-  return distinctCount(bench) < BENCH_MAX_SLOTS;
-}
-
-function addToBench(bench: BenchSlot[], card: BattleCard): BenchSlot[] {
-  const existing = bench.find(s => s.name === card.name);
-  if (existing) {
-    return bench.map(s => s.name === card.name ? { ...s, count: s.count + 1 } : s);
-  }
-  return [...bench, { name: card.name, card, count: 1 }];
-}
-
-function cloneBench(bench: BenchSlot[]): BenchSlot[] {
-  return bench.map(s => ({ ...s }));
-}
-
-// ===== Power calculation =====
 export function getBaseAttack(card: BattleCard): number {
   return card.attackPower ?? card.power;
 }
@@ -140,190 +123,52 @@ export function getBaseDefense(card: BattleCard): number {
   return card.defensePower ?? card.power;
 }
 
-/**
- * Phase 1: no in-battle quiz. Card effects fire automatically on reveal.
- * We use the average of attack/defense as the "duel power" for one-reveal-per-round combat.
- * Category/rarity synergies with the current bench still apply.
- */
-function calculateRevealPower(card: BattleCard, bench: BenchSlot[]): number {
-  const base = Math.round((getBaseAttack(card) + getBaseDefense(card)) / 2);
-  let power = base + card.correctBonus;
-
-  const { category, rarity } = card;
-  if (category === 'great_person') {
-    const sameCount = bench.filter(s => s.card.category === 'great_person').reduce((sum, s) => sum + s.count, 0);
-    if (rarity === 'R') power += sameCount * 1;
-    else if (rarity === 'SR') power += sameCount * 2;
-    else if (rarity === 'SSR') power += bench.reduce((sum, s) => sum + s.count, 0) * 1;
-  } else if (category === 'creature') {
-    if (rarity === 'SR') {
-      const emptySlots = BENCH_MAX_SLOTS - bench.length;
-      if (emptySlots <= 2) power += 4;
-    }
-  } else if (category === 'heritage') {
-    if (rarity === 'R') power += 2;
-    else if (rarity === 'SR') power += 3;
-    else if (rarity === 'SSR') power += 5;
-  } else if (category === 'invention') {
-    if (rarity === 'R') power += 1;
-  } else if (category === 'discovery') {
-    if (rarity === 'R') power += 2;
-    else if (rarity === 'SR') power += 3;
-  }
-  return power;
+function distinctCount(bench: BenchSlot[]): number {
+  return bench.length;
 }
 
-// ===== Round flow =====
-
-/**
- * Begin the reveal phase of the current round. Both sides draw the top card of their deck
- * and effective powers are computed. If either side can't draw (empty deck), that side loses
- * the round automatically (power = 0, card = null on that side is represented as a draw loss).
- */
-export function revealRound(state: GameState): GameState {
-  if (state.phase !== 'round_intro') return state;
-
-  const playerDeck = [...state.player.deck];
-  const aiDeck = [...state.ai.deck];
-  const playerCard = playerDeck.shift() ?? null;
-  const aiCard = aiDeck.shift() ?? null;
-
-  const playerPower = playerCard ? calculateRevealPower(playerCard, state.player.bench) : 0;
-  const aiPower = aiCard ? calculateRevealPower(aiCard, state.ai.bench) : 0;
-
-  let roundWinner: 'player' | 'ai' | 'draw';
-  if (!playerCard && !aiCard) roundWinner = 'draw';
-  else if (!playerCard) roundWinner = 'ai';
-  else if (!aiCard) roundWinner = 'player';
-  else if (playerPower > aiPower) roundWinner = 'player';
-  else if (aiPower > playerPower) roundWinner = 'ai';
-  else roundWinner = 'player'; // tie breaks to player
-
-  return {
-    ...state,
-    phase: 'reveal',
-    player: { ...state.player, deck: playerDeck },
-    ai: { ...state.ai, deck: aiDeck },
-    playerCard,
-    aiCard,
-    playerPower,
-    aiPower,
-    roundWinner,
-    message: roundWinner === 'player'
-      ? 'あなたの勝ち！トロフィー獲得！'
-      : roundWinner === 'ai'
-        ? '相手の勝ち...トロフィーを奪われた'
-        : '引き分け',
-  };
+function canAddToBench(bench: BenchSlot[], card: BattleCard): boolean {
+  if (bench.some((s) => s.name === card.name)) return true; // stack same-name
+  return distinctCount(bench) < BENCH_MAX_SLOTS;
 }
 
-/**
- * Award trophy, send both cards to their benches, advance round (or end game).
- * Instant-lose check: if adding to bench would produce a 6th DISTINCT name on that side,
- * that side immediately loses the whole match.
- */
-export function endRound(state: GameState): GameState {
-  if (state.phase !== 'reveal') return state;
-
-  const trophy = state.trophyFans[state.round - 1] ?? 0;
-  let playerFans = state.playerFans;
-  let aiFans = state.aiFans;
-  if (state.roundWinner === 'player') playerFans += trophy;
-  else if (state.roundWinner === 'ai') aiFans += trophy;
-
-  // Record history
-  const history: RoundResult[] = [
-    ...state.history,
-    {
-      round: state.round,
-      playerCard: state.playerCard!,
-      aiCard: state.aiCard!,
-      playerPower: state.playerPower,
-      aiPower: state.aiPower,
-      winner: state.roundWinner ?? 'draw',
-      trophyFans: trophy,
-    },
-  ];
-
-  // Send cards to benches (with overflow check)
-  let playerBench = cloneBench(state.player.bench);
-  let aiBench = cloneBench(state.ai.bench);
-
-  if (state.playerCard) {
-    if (!canAddToBench(playerBench, state.playerCard)) {
-      return {
-        ...state,
-        phase: 'game_over',
-        winner: 'ai',
-        history,
-        playerFans,
-        aiFans,
-        message: 'あなたのベンチが満杯！6種類目のカードで敗北...',
-      };
-    }
-    playerBench = addToBench(playerBench, state.playerCard);
+function addToBench(bench: BenchSlot[], card: BattleCard): BenchSlot[] {
+  const existing = bench.find((s) => s.name === card.name);
+  if (existing) {
+    return bench.map((s) => (s.name === card.name ? { ...s, count: s.count + 1 } : s));
   }
-  if (state.aiCard) {
-    if (!canAddToBench(aiBench, state.aiCard)) {
-      return {
-        ...state,
-        phase: 'game_over',
-        winner: 'player',
-        history,
-        playerFans,
-        aiFans,
-        message: '相手のベンチが満杯！あなたの勝利！',
-      };
-    }
-    aiBench = addToBench(aiBench, state.aiCard);
-  }
-
-  const isLastRound = state.round >= TOTAL_ROUNDS;
-  if (isLastRound) {
-    const winner: 'player' | 'ai' = playerFans >= aiFans ? 'player' : 'ai';
-    return {
-      ...state,
-      phase: 'game_over',
-      player: { ...state.player, bench: playerBench },
-      ai: { ...state.ai, bench: aiBench },
-      playerFans,
-      aiFans,
-      history,
-      winner,
-      message: winner === 'player'
-        ? `5ラウンド終了！${playerFans} vs ${aiFans} であなたの勝利！`
-        : `5ラウンド終了...${playerFans} vs ${aiFans} で敗北`,
-    };
-  }
-
-  return {
-    ...state,
-    phase: 'round_end',
-    player: { ...state.player, bench: playerBench },
-    ai: { ...state.ai, bench: aiBench },
-    playerFans,
-    aiFans,
-    history,
-  };
+  return [...bench, { name: card.name, card, count: 1 }];
 }
 
-/**
- * Legacy: kept as a no-op compat shim. Use advanceToNextRound or startCurrentRound.
- * （旧設計: round_end → deck_phase。新設計では advanceToNextRound が直接遷移する）
- */
-export function startDeckPhase(state: GameState): GameState {
-  if (state.phase !== 'round_end') return state;
+function otherSide(side: Side): Side {
+  return side === 'player' ? 'ai' : 'player';
+}
+
+// ---------- Initial state ----------
+
+export function initGameState(playerDeck: BattleCard[], aiDeck: BattleCard[]): GameState {
+  const trophyFans = Array.from({ length: TOTAL_ROUNDS }, (_, i) => rollTrophyFans(i + 1));
   return {
-    ...state,
     phase: 'deck_phase',
-    message: 'デッキフェイズ：新しいカードを選ぼう！',
+    round: 1,
+    trophyFans,
+    playerFans: 0,
+    aiFans: 0,
+    player: { deck: shuffleDeck(playerDeck), bench: [], isAI: false },
+    ai: { deck: shuffleDeck(aiDeck), bench: [], isAI: true },
+    flagHolder: 'player',  // player starts as flag holder (AI attacks first)
+    defenseCard: null,
+    attackRevealed: [],
+    attackCurrentPower: 0,
+    lastSubBattle: null,
+    history: [],
+    winner: null,
+    message: 'デッキフェイズ：カードを選ぼう',
   };
 }
 
-/**
- * Add a card to the player's deck during the deck phase.
- * (Swap UI for >15 is handled in the caller.)
- */
+// ---------- Deck phase helpers (kept from previous version) ----------
+
 export function addCardToDeck(state: GameState, card: BattleCard): GameState {
   return {
     ...state,
@@ -331,9 +176,6 @@ export function addCardToDeck(state: GameState, card: BattleCard): GameState {
   };
 }
 
-/**
- * Replace a card in the player's deck with a new one (for swap UI when deck > max).
- */
 export function swapCardInDeck(state: GameState, removeIndex: number, newCard: BattleCard): GameState {
   const deck = [...state.player.deck];
   deck.splice(removeIndex, 1);
@@ -344,9 +186,7 @@ export function swapCardInDeck(state: GameState, removeIndex: number, newCard: B
   };
 }
 
-/**
- * Give the AI two random cards between rounds (Phase 1: simple mirror growth).
- */
+// kept for stages.ts compatibility
 export function aiDeckGrowth(state: GameState, newCards: BattleCard[]): GameState {
   return {
     ...state,
@@ -354,42 +194,191 @@ export function aiDeckGrowth(state: GameState, newCards: BattleCard[]): GameStat
   };
 }
 
+// ---------- Battle transitions ----------
+
 /**
- * デッキフェイズ終了 → 現在ラウンドのバトル開始。
- * ラウンド番号は増やさない（deck_phase は常に対応する round のバトル前に行われる）。
+ * deck_phase → battle_intro.
+ * Draws the initial defense card from the flag holder's deck.
  */
-export function startCurrentRound(state: GameState): GameState {
+export function startBattle(state: GameState): GameState {
   if (state.phase !== 'deck_phase') return state;
+  const holder = state.flagHolder === 'player' ? state.player : state.ai;
+  if (holder.deck.length === 0) {
+    return {
+      ...state,
+      phase: 'game_over',
+      winner: otherSide(state.flagHolder),
+      message: `${state.flagHolder === 'player' ? 'あなた' : '相手'}のデッキが空！敗北`,
+    };
+  }
+  const [defender, ...rest] = holder.deck;
+  const updatedHolder: PlayerState = { ...holder, deck: rest };
   return {
     ...state,
-    phase: 'round_intro',
-    playerCard: null,
-    aiCard: null,
-    playerPower: 0,
-    aiPower: 0,
-    roundWinner: null,
-    message: `ラウンド${state.round}開始！トロフィー: ${state.trophyFans[state.round - 1]}ファン`,
+    phase: 'battle_intro',
+    player: state.flagHolder === 'player' ? updatedHolder : state.player,
+    ai: state.flagHolder === 'ai' ? updatedHolder : state.ai,
+    defenseCard: defender,
+    attackRevealed: [],
+    attackCurrentPower: 0,
+    message: state.flagHolder === 'player' ? 'あなたが防御中！' : 'あなたの攻撃！',
   };
 }
 
 /**
- * バトル終了 (round_end) → 次のラウンドのデッキフェイズへ。
- * round をインクリメントしてから deck_phase に遷移する。
- * 最終ラウンド後はそもそも endRound が game_over に飛ばすのでこの関数は呼ばれない。
+ * battle_intro → battle. No state change beyond phase (the UI uses this
+ * transition to know when to start the reveal loop).
  */
-export function advanceToNextRound(state: GameState): GameState {
-  if (state.phase !== 'round_end') return state;
-  const nextRound = state.round + 1;
-  if (nextRound > TOTAL_ROUNDS) return state;
+export function beginAttackLoop(state: GameState): GameState {
+  if (state.phase !== 'battle_intro') return state;
+  return { ...state, phase: 'battle' };
+}
+
+/**
+ * Reveal the top card of the attacker's deck. Adds it to attackRevealed and
+ * bumps attackCurrentPower by the card's attackPower.
+ *
+ * If the attacker's deck is empty and they haven't beaten the defender,
+ * transitions to game_over with the defender as winner (deck-out rule).
+ */
+export function revealNextAttackCard(state: GameState): GameState {
+  if (state.phase !== 'battle') return state;
+  const attackerSide = otherSide(state.flagHolder);
+  const attacker = attackerSide === 'player' ? state.player : state.ai;
+
+  if (attacker.deck.length === 0) {
+    // Attacker ran out of cards. They lose the match.
+    return {
+      ...state,
+      phase: 'game_over',
+      winner: state.flagHolder,
+      message: `${attackerSide === 'player' ? 'あなた' : '相手'}のデッキ切れ！敗北`,
+    };
+  }
+
+  const [nextCard, ...rest] = attacker.deck;
+  const updatedAttacker: PlayerState = { ...attacker, deck: rest };
+  const newPower = state.attackCurrentPower + getBaseAttack(nextCard);
+
   return {
     ...state,
-    phase: 'deck_phase',
-    round: nextRound,
-    playerCard: null,
-    aiCard: null,
-    playerPower: 0,
-    aiPower: 0,
-    roundWinner: null,
-    message: `ラウンド${nextRound} デッキフェイズ：カードを選ぼう`,
+    player: attackerSide === 'player' ? updatedAttacker : state.player,
+    ai: attackerSide === 'ai' ? updatedAttacker : state.ai,
+    attackRevealed: [...state.attackRevealed, nextCard],
+    attackCurrentPower: newPower,
+    message: `${attackerSide === 'player' ? 'あなたの' : '相手の'}攻撃パワー ${newPower}`,
+  };
+}
+
+/**
+ * True if the attacker has accumulated enough power to beat the current defender.
+ */
+export function hasAttackSucceeded(state: GameState): boolean {
+  if (!state.defenseCard) return false;
+  return state.attackCurrentPower >= getBaseDefense(state.defenseCard);
+}
+
+/**
+ * Resolve a successful sub-battle:
+ *  - defender card → defender's bench (overflow → game over, attacker wins match)
+ *  - all attack cards except the last → attacker's bench (overflow → game over, defender wins)
+ *  - last attack card becomes the new defender
+ *  - flagHolder swaps to the old attacker
+ *  - phase → battle_resolve (UI shows outcome banner then calls continueAfterResolve)
+ */
+export function resolveSubBattleWin(state: GameState): GameState {
+  if (state.phase !== 'battle' || !state.defenseCard || state.attackRevealed.length === 0) return state;
+
+  const defenderSide: Side = state.flagHolder;
+  const attackerSide: Side = otherSide(defenderSide);
+  const defenderCard = state.defenseCard;
+
+  // defender card → defender's bench
+  const defenderState = defenderSide === 'player' ? state.player : state.ai;
+  if (!canAddToBench(defenderState.bench, defenderCard)) {
+    return {
+      ...state,
+      phase: 'game_over',
+      winner: attackerSide,
+      message: `${defenderSide === 'player' ? 'あなた' : '相手'}のベンチが満杯！6種類目のカードで敗北`,
+    };
+  }
+  const newDefenderBench = addToBench(defenderState.bench, defenderCard);
+
+  // Split attack cards: all except last go to attacker's bench, last becomes new defender
+  const attackCards = state.attackRevealed;
+  const lastAttackCard = attackCards[attackCards.length - 1];
+  const otherAttackCards = attackCards.slice(0, -1);
+
+  const attackerState = attackerSide === 'player' ? state.player : state.ai;
+  let newAttackerBench = attackerState.bench;
+  for (const card of otherAttackCards) {
+    if (!canAddToBench(newAttackerBench, card)) {
+      return {
+        ...state,
+        phase: 'game_over',
+        winner: defenderSide,
+        message: `${attackerSide === 'player' ? 'あなた' : '相手'}のベンチが満杯！6種類目のカードで敗北`,
+      };
+    }
+    newAttackerBench = addToBench(newAttackerBench, card);
+  }
+
+  const result: SubBattleResult = {
+    idx: state.history.length + 1,
+    defenderSide,
+    defenderCard,
+    attackerSide,
+    attackCards,
+    attackPower: state.attackCurrentPower,
+    winner: attackerSide,
+  };
+
+  // Award legacy trophy fans (cosmetic) to the attacker
+  const trophy = state.trophyFans[Math.min(state.round - 1, state.trophyFans.length - 1)] ?? 0;
+  const newPlayerFans = attackerSide === 'player' ? state.playerFans + trophy : state.playerFans;
+  const newAiFans = attackerSide === 'ai' ? state.aiFans + trophy : state.aiFans;
+
+  return {
+    ...state,
+    phase: 'battle_resolve',
+    player: {
+      ...state.player,
+      bench: defenderSide === 'player' ? newDefenderBench : newAttackerBench,
+    },
+    ai: {
+      ...state.ai,
+      bench: defenderSide === 'ai' ? newDefenderBench : newAttackerBench,
+    },
+    // Role swap: new flag holder is the old attacker. New defense card is the last attack card.
+    flagHolder: attackerSide,
+    defenseCard: lastAttackCard,
+    attackRevealed: [],
+    attackCurrentPower: 0,
+    lastSubBattle: result,
+    history: [...state.history, result],
+    round: state.round + 1,
+    playerFans: newPlayerFans,
+    aiFans: newAiFans,
+    message: `${attackerSide === 'player' ? 'あなた' : '相手'}がフラッグ奪取！`,
+  };
+}
+
+/**
+ * battle_resolve → battle_intro for the next sub-battle.
+ * The new flag holder keeps the defense card (= last attack card from previous sub-battle).
+ * So we skip the "draw defender" step and go straight into the attacker intro.
+ */
+export function continueAfterResolve(state: GameState): GameState {
+  if (state.phase !== 'battle_resolve') return state;
+  // Sanity check: defender must already be set (from resolveSubBattleWin)
+  if (!state.defenseCard) {
+    // Shouldn't happen; draw from flag holder's deck as fallback
+    return startBattle({ ...state, phase: 'deck_phase' });
+  }
+  return {
+    ...state,
+    phase: 'battle_intro',
+    message: state.flagHolder === 'player' ? 'あなたが防御中！' : 'あなたの攻撃！',
   };
 }
