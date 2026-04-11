@@ -1058,25 +1058,40 @@ export default function KnowledgeChallenger() {
         const attackCards = gameState.attackRevealed;
         const attackPower = gameState.attackCurrentPower;
 
-        const shouldShowDefender = cineStep === 'defender_show' || cineStep === 'attack_reveal' || cineStep === 'resolve';
         const shouldShowAttackPile = cineStep === 'attack_reveal' || cineStep === 'resolve';
         const attackerWonSub = cineStep === 'resolve' && gameState.lastSubBattle?.winner === attackerSide;
 
+        // 防御カードは defenderCard が存在する間、常に表面で表示する。
+        // 裏面 (CardBack) は防御カードがまだ引かれていない (= 試合開始直後の
+        // turn_banner 前) のごく短い時間だけ。攻撃側のカードバックは別ロジック。
         const renderDefenderSlot = () => {
-          if (!shouldShowDefender || !defenderCard) {
+          if (!defenderCard) {
             return <CardBack side={defenderSide} />;
           }
           const shatter = attackerWonSub;
           return (
             <div className={`relative ${shatter ? 'kc-card-shatter' : 'kc-defender-glow'}`}>
+              {/* 防御パワーラベル: カードの上に常時表示。defender_show 中は強調アニメ */}
+              <div
+                className={`absolute left-1/2 -translate-x-1/2 -top-14 whitespace-nowrap z-20 ${cineStep === 'defender_show' ? 'kc-defense-label' : ''}`}
+              >
+                <p
+                  style={{
+                    fontSize: '30px',
+                    fontWeight: 900,
+                    color: '#60a5fa',
+                    textShadow: '0 0 18px rgba(96,165,250,1), 0 0 28px rgba(96,165,250,0.7), 0 2px 6px rgba(0,0,0,0.95)',
+                    background: 'linear-gradient(180deg, rgba(14,20,45,0.85), rgba(21,29,59,0.85))',
+                    border: '2px solid rgba(96,165,250,0.65)',
+                    borderRadius: '10px',
+                    padding: '4px 14px',
+                    boxShadow: '0 0 20px rgba(96,165,250,0.45), 0 4px 12px rgba(0,0,0,0.6)',
+                  }}
+                >
+                  🛡️ 防御パワー {defenderPower}
+                </p>
+              </div>
               <CardDisplay card={defenderCard} size="battle" mode="defense" />
-              {cineStep === 'defender_show' && (
-                <div className="absolute left-1/2 -translate-x-1/2 -bottom-12 whitespace-nowrap kc-defense-label z-20">
-                  <p style={{ fontSize: '1.5rem', fontWeight: 900, color: '#60a5fa', textShadow: '0 0 16px rgba(96,165,250,0.95), 0 2px 4px rgba(0,0,0,0.9)' }}>
-                    🛡️ 防御パワー {defenderPower}
-                  </p>
-                </div>
-              )}
             </div>
           );
         };
