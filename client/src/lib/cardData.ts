@@ -46,7 +46,7 @@ export const COLLECTION_CARDS: CollectionCard[] = [
 
   // ===== 発明 (10枚) =====
   { id: 'card-036', name: '電球', category: 'inventions', rarity: 'N', description: 'エジソンが実用化した照明器具。世界を明るくした。', imageUrl: '/images/cards/card-036.webp' },
-  { id: 'card-037', name: '蒸気機関', category: 'inventions', rarity: 'R', description: '産業革命を起こした動力源。工場や鉄道を動かした。', imageUrl: '/images/cards/card-037.webp' },
+  { id: 'card-037', name: '蒸気機関', category: 'inventions', rarity: 'N', description: '産業革命を起こした動力源。工場や鉄道を動かした。', imageUrl: '/images/cards/steam-engine.png' },
   { id: 'card-038', name: '印刷機', category: 'inventions', rarity: 'R', description: 'グーテンベルクが発明した活版印刷。知識の普及に貢献。', imageUrl: '/images/cards/card-038.webp' },
   { id: 'card-039', name: '飛行機', category: 'inventions', rarity: 'SR', description: 'ライト兄弟が初飛行に成功。人類の空への夢を実現した。', imageUrl: '/images/cards/card-039.webp' },
   { id: 'card-040', name: 'インターネット', category: 'inventions', rarity: 'SR', description: '世界中のコンピュータをつなぐ通信網。情報革命を起こした。', imageUrl: '/images/cards/card-040.webp' },
@@ -193,7 +193,7 @@ export const COLLECTION_CARDS: CollectionCard[] = [
   // ===== 産業革命デッキ (4枚新規 + 蒸気機関は既存card-037) =====
   { id: 'card-156', name: '石炭', category: 'inventions', rarity: 'N', description: '産業革命の燃料。黒いダイヤとも呼ばれた地下資源。', imageUrl: '/images/cards/coal.png' },
   { id: 'card-157', name: '紡績機', category: 'inventions', rarity: 'N', description: '産業革命で最初に機械化された繊維産業の象徴。大量生産を可能にした。', imageUrl: '/images/cards/spinning-machine.png' },
-  { id: 'card-158', name: '蒸気機関車', category: 'inventions', rarity: 'R', description: '蒸気の力で走る鉄道車両。物流を革命し、世界を縮めた。', imageUrl: '/images/cards/james-watt.png' },
+  { id: 'card-158', name: '蒸気機関車', category: 'inventions', rarity: 'R', description: '蒸気の力で走る鉄道車両。物流を革命し、世界を縮めた。', imageUrl: '/images/cards/steam-locomotive.png' },
   { id: 'card-159', name: 'ジェームズ・ワット', category: 'great_people', rarity: 'R', description: '蒸気機関を改良し産業革命の原動力を作った発明家。ワットの由来。', imageUrl: '/images/cards/james-watt.png' },
 
   // ===== ステージモード用追加カード =====
