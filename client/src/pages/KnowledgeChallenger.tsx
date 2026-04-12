@@ -386,19 +386,21 @@ export default function KnowledgeChallenger() {
     battleRunningRef.current = true;
 
     const run = async () => {
-      console.log('[KC] battle loop: START (round', gameState.round, ', flagHolder', gameState.flagHolder, ')');
+      console.log('[KC] battle loop: START (round', gameState.round, ', flagHolder', gameState.flagHolder, ', unmounted:', unmountedRef.current, ')');
       try {
         // Step 1: turn banner
-        console.log('[KC] → turn_banner');
+        console.log('[KC] → turn_banner (unmounted:', unmountedRef.current, ')');
         setCineStep('turn_banner');
         await waitStep(TURN_BANNER_MS);
-        if (unmountedRef.current) return;
+        console.log('[KC] turn_banner waitStep resolved (unmounted:', unmountedRef.current, ')');
+        if (unmountedRef.current) { console.log('[KC] BAIL: unmounted after turn_banner'); return; }
 
         // Step 2: defender shown
-        console.log('[KC] → defender_show');
+        console.log('[KC] → defender_show (unmounted:', unmountedRef.current, ')');
         setCineStep('defender_show');
         await waitStep(DEFENDER_SHOW_MS);
-        if (unmountedRef.current) return;
+        console.log('[KC] defender_show waitStep resolved (unmounted:', unmountedRef.current, ')');
+        if (unmountedRef.current) { console.log('[KC] BAIL: unmounted after defender_show'); return; }
 
         // Step 3: attack reveal loop. Branch on who's attacking — player turns
         // wait for manual reveal clicks; AI turns auto-progress.
