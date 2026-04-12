@@ -1825,22 +1825,23 @@ export function sampleCardsWithSynergy(
     if (targets) targets.forEach((t) => { if (!deckNames.has(t)) synergyTargetNames.add(t); });
   });
 
-  // 1. Synergy cards — weighted by combo concentration in deck
-  // Count how many related cards each synergy target has in the deck
+  // 1. Synergy cards — weighted by combo concentration + rarity in deck
+  const RARITY_WEIGHT: Record<CardRarity, number> = { N: 1, R: 3, SR: 5, SSR: 8 };
   const synergyPool = ALL_BATTLE_CARDS.filter((c) => synergyTargetNames.has(c.name));
-  const deckTotal = playerDeck.length || 1;
   const weightedSynergy = synergyPool.map((card) => {
-    // Count deck cards that share a synergy group with this card
+    // Sum rarity-weighted score of related cards in deck
     const cardSynergies = SYNERGY_MAP[card.name] ?? [];
-    const relatedInDeck = playerDeck.filter((d) =>
+    const relatedCards = playerDeck.filter((d) =>
       d.name === card.name || cardSynergies.includes(d.name) || (SYNERGY_MAP[d.name] ?? []).includes(card.name),
-    ).length;
-    // Weight: 0→0.05, 1→0.10, 2→0.30, 3→0.50, 4+→0.70
-    const weight = relatedInDeck === 0 ? 0.05
-      : relatedInDeck === 1 ? 0.10
-      : relatedInDeck === 2 ? 0.30
-      : relatedInDeck === 3 ? 0.50
-      : 0.70;
+    );
+    const comboScore = relatedCards.reduce((s, d) => s + RARITY_WEIGHT[d.rarity], 0);
+    // Map combo score to weight: 0→0.05, 1→0.10, 2-3→0.20, 4-5→0.40, 6-9→0.55, 10+→0.75
+    const weight = comboScore === 0 ? 0.05
+      : comboScore <= 1 ? 0.10
+      : comboScore <= 3 ? 0.20
+      : comboScore <= 5 ? 0.40
+      : comboScore <= 9 ? 0.55
+      : 0.75;
     return { card, weight: weight + Math.random() * 0.05 }; // tiny random jitter
   });
   weightedSynergy.sort((a, b) => b.weight - a.weight);
