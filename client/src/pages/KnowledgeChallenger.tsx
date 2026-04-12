@@ -264,6 +264,8 @@ export default function KnowledgeChallenger() {
     const rules = stage?.rules ?? undefined;
     const state = initGameState(playerDeck, aiDeckCards, rules);
     console.log('[KC] startGame: initial phase =', state.phase, 'round =', state.round, 'stageRules =', rules);
+    console.log('[KC] playerDeck:', playerDeck.map(c => `${c.name}(${c.rarity},effect=${c.effect?.id ?? 'none'})`).join(', '));
+    console.log('[KC] aiDeck:', aiDeckCards.map(c => `${c.name}(${c.rarity},effect=${c.effect?.id ?? 'none'})`).join(', '));
     setGameState(state);
     setScreen('playing');
     setCineStep('idle');

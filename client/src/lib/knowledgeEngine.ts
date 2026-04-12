@@ -1575,9 +1575,11 @@ export function startBattle(state: GameState): GameState {
   };
 
   // Defender reveal triggers effect
+  console.log(`[Engine] startBattle: defender="${defender.name}" (effect=${defender.effect?.id ?? 'none'}) | flagHolder=${state.flagHolder}`);
   if (defender.effect) {
     const eff = applyRevealEffect(next, defender, state.flagHolder, 'defender');
     next = withTelop(eff.state, eff.telop);
+    console.log(`[Engine]   defender effect "${defender.effect.id}" applied`);
   }
   const defAura = applyDefenderAura(next, state.flagHolder);
   next = defAura.state;
