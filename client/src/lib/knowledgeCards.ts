@@ -59,11 +59,11 @@ export const EFFECT_COLORS: Record<CardEffectCategory, string> = {
 
 export const EFFECT_DEFS: Record<string, CardEffect> = {
   davinci:    { id: 'davinci',    name: '万能の天才',         description: '公開時、攻撃時は攻撃+3、防御時は防御+3。', category: 'special' },
-  einstein:   { id: 'einstein',   name: '相対性理論',         description: '公開時、相手の最強カード1枚のパワーを-2する。', category: 'debuff' },
-  curie:      { id: 'curie',      name: '放射能の発見',       description: '公開時、このラウンドの味方攻撃すべて+1。', category: 'atk' },
-  napoleon:   { id: 'napoleon',   name: '電撃戦',             description: '攻撃時、攻撃パワー+3。', category: 'atk' },
+  einstein:   { id: 'einstein',   name: '天才の頭脳',         description: 'ベンチに「相対性理論の論文」で攻撃+4。「光速」で防御+3。両方あれば相手全攻撃カードパワー-1。', category: 'special' },
+  curie:      { id: 'curie',      name: '二度のノーベル賞',   description: 'ベンチに「ラジウム」で攻撃+3。「研究ノート」で防御+3。両方あれば全味方カード効果2回発動。', category: 'special' },
+  napoleon:   { id: 'napoleon',   name: '皇帝の号令',         description: 'ベンチに「大砲」で攻撃+4。「ナポレオン法典」で防御+3。両方あれば味方全カード攻撃+1。', category: 'special' },
   cleopatra:  { id: 'cleopatra',  name: '魅了',               description: '公開時、相手のデッキ一番上を隔離する。', category: 'bench' },
-  nobunaga:   { id: 'nobunaga',   name: '天下布武',           description: '公開時、相手のベンチ最強カードを封印する。', category: 'bench' },
+  nobunaga:   { id: 'nobunaga',   name: '天下布武',           description: 'ベンチに「鉄砲」で攻撃+3。「楽市楽座」で防御+2。両方あれば相手ベンチ1枚封印。', category: 'special' },
   mozart:     { id: 'mozart',     name: '天才の旋律',         description: '公開時、次に公開する味方カードの攻撃+2。', category: 'atk' },
   // Galileo: keeps the bench-swap effect AND gains +1/+1 per 地動説 on bench.
   galileo:    { id: 'galileo',    name: '地動説の支持者',     description: '公開時、自分ベンチの「地動説」1枚につき攻撃+1/防御+1。さらに味方ベンチ合計が相手未満ならベンチ入れ替え。', category: 'special' },
@@ -79,7 +79,7 @@ export const EFFECT_DEFS: Record<string, CardEffect> = {
   heliocentric: { id: 'heliocentric', name: 'コペルニクスの真理', description: 'From the bench: ベンチにある間、「ガリレオ」の攻撃+1/防御+1 (重複可)。', category: 'special' },
   // Dynamite: gains +2 attack per 火薬 on own bench.
   dynamite:   { id: 'dynamite',   name: '大爆発',             description: '公開時、自分ベンチの「火薬」1枚につき攻撃+2。', category: 'atk' },
-  compass:    { id: 'compass',    name: '航海術',             description: '公開時、自分デッキの上3枚をパワー順に並べ替える。', category: 'bench' },
+  compass:    { id: 'compass',    name: '航海術',             description: '公開時、デッキ内の「コロンブス」or「マゼラン」を上3枚以内に移動。', category: 'bench' },
   penicillin: { id: 'penicillin', name: '治療',               description: '公開時、自分ベンチ最強カード1枚をデッキの下へ戻す。', category: 'bench' },
   paper:      { id: 'paper',      name: '記録',               description: '公開時、このマッチの獲得ALT+5。', category: 'special' },
   // ===== コンボ系（2026-04 追加） =====
@@ -117,6 +117,24 @@ export const EFFECT_DEFS: Record<string, CardEffect> = {
   versailles:      { id: 'versailles',      name: '豪奢なる宮殿',     description: 'From the bench: マリー・アントワネットの防御+4。', category: 'def' },
   cake:            { id: 'cake',            name: '王妃のお菓子',     description: 'From the bench: マリーの攻撃+3。マリーが場を離れる時、相手デッキ上2枚を隔離。', category: 'atk' },
   marie:           { id: 'marie',           name: '最後の女王',       description: 'ベルサイユで防御+4、ケーキで攻撃+3、両方＋デッキ少ないでさらに攻防+2。', category: 'special' },
+  // ===== コンボ系（2026-04 追加 第2弾） =====
+  columbus:        { id: 'columbus',        name: '新大陸発見',       description: 'ベンチに「羅針盤」で攻撃+3。相手デッキ上3枚確認し1枚隔離。', category: 'atk' },
+  magellan:        { id: 'magellan',        name: '世界一周',         description: 'ベンチに「羅針盤」で防御+4。ベンチ全カード効果2倍(このラウンド)。', category: 'def' },
+  caravel:         { id: 'caravel',         name: '大航海の翼',       description: 'From the bench: コロンブスとマゼランの攻防+1。', category: 'special' },
+  spice:           { id: 'spice',           name: '香辛料貿易',       description: 'From the bench: 毎ラウンド終了時ALT+5。羅針盤もあればALT+10。', category: 'special' },
+  gun:             { id: 'gun',             name: '三段撃ち',         description: 'From the bench: 信長の攻撃+3。攻撃時相手防御-2。', category: 'atk' },
+  rakuichi:        { id: 'rakuichi',        name: '自由商業',         description: 'From the bench: 信長の防御+2。', category: 'def' },
+  hideyoshi:       { id: 'hideyoshi',       name: '天下統一',         description: 'ベンチに「織田信長」で攻防+3。「千利休」で防御+2。', category: 'special' },
+  rikyu:           { id: 'rikyu',           name: '侘び茶の極意',     description: 'From the bench: 味方全カード防御+1。デッキ残り3枚以下で攻防+3。', category: 'def' },
+  relativity:      { id: 'relativity',      name: '時空の歪み',       description: 'From the bench: アインシュタインの攻撃+4。', category: 'atk' },
+  lightspeed:      { id: 'lightspeed',      name: '光の壁',           description: 'From the bench: アインシュタインの防御+3。', category: 'def' },
+  emc2:            { id: 'emc2',            name: '質量エネルギー',   description: '公開時、ベンチにアインシュタインがいれば攻撃2倍。', category: 'atk' },
+  radium:          { id: 'radium',          name: '放射能の力',       description: 'From the bench: キュリー夫人の攻撃+3。', category: 'atk' },
+  research_notes:  { id: 'research_notes',  name: '献身の記録',       description: 'From the bench: キュリー夫人の防御+3。', category: 'def' },
+  nobel_medal:     { id: 'nobel_medal',     name: '栄光の証',         description: 'From the bench: キュリー夫人/アインシュタイン/ダーウィンの攻防+2。', category: 'special' },
+  cannon:          { id: 'cannon',          name: '砲撃',             description: 'From the bench: ナポレオンの攻撃+4。', category: 'atk' },
+  napoleon_code:   { id: 'napoleon_code',   name: '法の支配',         description: 'From the bench: ナポレオンの防御+3。', category: 'def' },
+  waterloo:        { id: 'waterloo',        name: '最後の戦い',       description: 'From the bench: デッキ残り3枚以下でナポレオン攻防+5。', category: 'special' },
 };
 
 // Card name → effect id. These are the only cards that carry on-reveal effects.
@@ -176,6 +194,24 @@ export const EFFECT_BY_CARD_NAME: Record<string, string> = {
   'ヴェルサイユ宮殿':   'versailles',
   'ケーキ':             'cake',
   'マリー・アントワネット': 'marie',
+  // ===== コンボ系 第2弾 =====
+  'コロンブス':           'columbus',
+  'マゼラン':             'magellan',
+  'キャラベル船':         'caravel',
+  '香辛料':               'spice',
+  '鉄砲':                 'gun',
+  '楽市楽座':             'rakuichi',
+  '豊臣秀吉':             'hideyoshi',
+  '千利休':               'rikyu',
+  '相対性理論の論文':     'relativity',
+  '光速':                 'lightspeed',
+  'E=mc²':                'emc2',
+  'ラジウム':             'radium',
+  '研究ノート':           'research_notes',
+  'ノーベル賞メダル':     'nobel_medal',
+  '大砲':                 'cannon',
+  'ナポレオン法典':       'napoleon_code',
+  'ワーテルローの戦い':   'waterloo',
 };
 
 export interface BattleCard {
@@ -278,6 +314,29 @@ export const CARD_STAT_OVERRIDES: Record<string, StatProfile> = {
   '軍旗':             { attackPower: 1, defensePower: 2 },
   'ケーキ':           { attackPower: 1, defensePower: 1 },
   '兵馬俑':           { attackPower: 1, defensePower: 4 },
+  // ===== コンボ系 第2弾 =====
+  'コロンブス':       { attackPower: 3, defensePower: 2 },
+  'マゼラン':         { attackPower: 2, defensePower: 3 },
+  'キャラベル船':     { attackPower: 1, defensePower: 2 },
+  '香辛料':           { attackPower: 1, defensePower: 1 },
+  '鉄砲':             { attackPower: 2, defensePower: 1 },
+  '楽市楽座':         { attackPower: 1, defensePower: 1 },
+  '千利休':           { attackPower: 1, defensePower: 3 },
+  '相対性理論の論文': { attackPower: 1, defensePower: 1 },
+  '光速':             { attackPower: 1, defensePower: 2 },
+  'E=mc²':            { attackPower: 2, defensePower: 1 },
+  'ラジウム':         { attackPower: 1, defensePower: 1 },
+  '研究ノート':       { attackPower: 1, defensePower: 2 },
+  'ノーベル賞メダル': { attackPower: 1, defensePower: 1 },
+  '大砲':             { attackPower: 2, defensePower: 1 },
+  'ナポレオン法典':   { attackPower: 1, defensePower: 2 },
+  'ワーテルローの戦い': { attackPower: 1, defensePower: 1 },
+  // ===== ヒーロー ステータス更新 =====
+  'アインシュタイン': { attackPower: 4, defensePower: 3 },
+  'キュリー夫人':     { attackPower: 4, defensePower: 3 },
+  'ナポレオン':       { attackPower: 3, defensePower: 2 },
+  '織田信長':         { attackPower: 3, defensePower: 2 },
+  '豊臣秀吉':        { attackPower: 2, defensePower: 3 },
 };
 
 // Combo card IDs for detection
@@ -622,7 +681,7 @@ const QUIZ_DATA: Record<string, Quiz[]> = {
     { question: 'アレクサンダー大王の師匠は？', choices: ['ソクラテス', 'プラトン', 'アリストテレス', 'ピタゴラス'], correctIndex: 2 },
   ],
   'card-059': [
-    { question: '豊臣秀吉の出身は？', choices: ['武士', '農民', '商人', '僧侶'], correctIndex: 1 },
+    { question: '豊臣秀吉の出世前の名前は？', choices: ['木下藤吉郎', '松平元康', '毛利元就', '上杉謙信'], correctIndex: 0 },
     { question: '秀吉が建てた城は？', choices: ['安土城', '大阪城', '姫路城', '江戸城'], correctIndex: 1 },
     { question: '秀吉の最高の官職は？', choices: ['将軍', '関白', '天皇', '大臣'], correctIndex: 1 },
   ],
@@ -981,86 +1040,86 @@ const QUIZ_DATA: Record<string, Quiz[]> = {
   ],
   // ===== コンボカード: ナポレオン =====
   'card-130': [
-    { question: '大砲が戦場で広く使われるようになった時代は？', choices: ['古代', '中世後期〜近世', '現代', '縄文時代'], correctIndex: 1 },
+    { question: 'ナポレオンが最初に頭角を現した戦いの武器は？', choices: ['大砲', '剣', '銃', '槍'], correctIndex: 0 },
     { question: 'ナポレオンは元々何の兵科の出身？', choices: ['歩兵', '騎兵', '砲兵', '海軍'], correctIndex: 2 },
     { question: '大砲の弾を飛ばす力は？', choices: ['バネ', '火薬の爆発', '蒸気', '電気'], correctIndex: 1 },
   ],
   'card-131': [
-    { question: 'ナポレオン法典は何を定めた法律？', choices: ['刑法', '民法', '憲法', '軍法'], correctIndex: 1 },
+    { question: 'ナポレオン法典が後の世界に与えた影響は？', choices: ['近代法の基礎', '軍事戦略', '経済理論', '宗教改革'], correctIndex: 0 },
     { question: 'ナポレオン法典が制定された年は？', choices: ['1789年', '1804年', '1815年', '1848年'], correctIndex: 1 },
     { question: 'ナポレオン法典が影響を与えた国は？', choices: ['日本だけ', 'フランスだけ', '世界中の多くの国', 'イギリスだけ'], correctIndex: 2 },
   ],
   'card-132': [
-    { question: 'ワーテルローの戦いは何年に起きた？', choices: ['1789年', '1804年', '1815年', '1848年'], correctIndex: 2 },
+    { question: 'ナポレオンが最後に敗れた戦いは？', choices: ['ワーテルロー', 'トラファルガー', 'アウステルリッツ', 'ライプツィヒ'], correctIndex: 0 },
     { question: 'ワーテルローの戦いでナポレオンを破ったのは？', choices: ['ネルソン', 'ウェリントン', 'ビスマルク', 'チャーチル'], correctIndex: 1 },
     { question: 'ワーテルローはどの国にある？', choices: ['フランス', 'ドイツ', 'ベルギー', 'オランダ'], correctIndex: 2 },
   ],
   // ===== コンボカード: アインシュタイン =====
   'card-133': [
-    { question: 'E=mc²の「E」は何を表す？', choices: ['エネルギー', '電子', '地球', '元素'], correctIndex: 0 },
+    { question: 'E=mc²のEは何を表す？', choices: ['エネルギー', '電気', '弾性', '効率'], correctIndex: 0 },
     { question: 'E=mc²の「m」は何を表す？', choices: ['速度', '質量', '磁力', 'モル'], correctIndex: 1 },
     { question: 'E=mc²はどの理論に関係する？', choices: ['進化論', '相対性理論', '量子力学', '万有引力'], correctIndex: 1 },
   ],
   'card-134': [
-    { question: 'アインシュタインの相対性理論が発表された年は？', choices: ['1895年', '1905年', '1915年', '1925年'], correctIndex: 1 },
+    { question: '相対性理論を発表した年は？', choices: ['1905年', '1900年', '1915年', '1920年'], correctIndex: 0 },
     { question: '相対性理論は何の関係を説明する？', choices: ['力と運動', '時間と空間', '生物と環境', '音と光'], correctIndex: 1 },
     { question: '一般相対性理論が予言したのは？', choices: ['進化', 'ブラックホール', '地震', '台風'], correctIndex: 1 },
   ],
   'card-135': [
-    { question: '光速はおよそ秒速何キロメートル？', choices: ['3万km', '30万km', '300万km', '3000万km'], correctIndex: 1 },
+    { question: '光の速さは秒速約何km？', choices: ['30万km', '3万km', '300万km', '3000km'], correctIndex: 0 },
     { question: '光が地球から月まで届く時間は約？', choices: ['1秒', '1.3秒', '10秒', '1分'], correctIndex: 1 },
     { question: '光より速いものは存在する？', choices: ['音', '電波', '何もない', 'ロケット'], correctIndex: 2 },
   ],
   // ===== コンボカード: キュリー夫人 =====
   'card-136': [
-    { question: 'ラジウムを発見したのは？', choices: ['アインシュタイン', 'キュリー夫妻', 'ニュートン', 'ファラデー'], correctIndex: 1 },
+    { question: 'キュリー夫人が発見した元素は？', choices: ['ラジウム', 'ウラン', 'プルトニウム', 'セシウム'], correctIndex: 0 },
     { question: 'ラジウムの特徴は？', choices: ['磁力を持つ', '暗闇で光る', '水に沈む', '非常に軽い'], correctIndex: 1 },
     { question: 'ラジウムは何という性質を持つ元素？', choices: ['放射性', '伝導性', '弾力性', '透明性'], correctIndex: 0 },
   ],
   'card-137': [
-    { question: 'キュリー夫人の研究ノートが今でも危険な理由は？', choices: ['呪われている', '放射線を発している', '毒が塗られている', '壊れやすい'], correctIndex: 1 },
+    { question: 'キュリー夫人の研究ノートが今も放射線を帯びている理由は？', choices: ['ラジウムに触れていたから', '古いから', '特殊な紙だから', 'インクのため'], correctIndex: 0 },
     { question: 'キュリー夫人の研究ノートはどこに保管されている？', choices: ['鉛の箱', 'ガラスケース', '金庫', '図書館'], correctIndex: 0 },
     { question: 'キュリー夫人が研究していた分野は？', choices: ['天文学', '放射線', '生物学', '地質学'], correctIndex: 1 },
   ],
   'card-138': [
-    { question: 'ノーベル賞を創設したのは？', choices: ['エジソン', 'アルフレッド・ノーベル', 'アインシュタイン', 'ダーウィン'], correctIndex: 1 },
+    { question: 'ノーベル賞を2回受賞した最初の人物は？', choices: ['キュリー夫人', 'アインシュタイン', 'ポーリング', 'バーディーン'], correctIndex: 0 },
     { question: 'キュリー夫人がノーベル賞を受賞した回数は？', choices: ['1回', '2回', '3回', '4回'], correctIndex: 1 },
     { question: 'ノーベル賞メダルは何で作られている？', choices: ['銀', '金', 'プラチナ', '銅'], correctIndex: 1 },
   ],
   // ===== コンボカード: 織田信長 =====
   'card-139': [
-    { question: '鉄砲が日本に伝来した年は？', choices: ['1453年', '1543年', '1603年', '1639年'], correctIndex: 1 },
+    { question: '鉄砲が日本に伝来した島は？', choices: ['種子島', '淡路島', '対馬', '佐渡島'], correctIndex: 0 },
     { question: '鉄砲が伝来した場所は？', choices: ['長崎', '種子島', '堺', '京都'], correctIndex: 1 },
     { question: '信長が大量の鉄砲を使った有名な戦いは？', choices: ['桶狭間の戦い', '長篠の戦い', '関ヶ原の戦い', '大坂の陣'], correctIndex: 1 },
   ],
   'card-140': [
-    { question: '楽市楽座の「楽」の意味は？', choices: ['楽しい', '自由な', '大きい', '新しい'], correctIndex: 1 },
+    { question: '楽市楽座を推進した武将は？', choices: ['織田信長', '豊臣秀吉', '徳川家康', '武田信玄'], correctIndex: 0 },
     { question: '楽市楽座で廃止されたのは？', choices: ['武士の特権', '座の特権', '寺の特権', '天皇の特権'], correctIndex: 1 },
     { question: '楽市楽座を推進した武将は？', choices: ['豊臣秀吉', '徳川家康', '織田信長', '武田信玄'], correctIndex: 2 },
   ],
   'card-141': [
-    { question: '千利休が大成した文化は？', choices: ['華道', '茶道', '書道', '剣道'], correctIndex: 1 },
+    { question: '千利休が大成した文化は？', choices: ['茶道', '華道', '書道', '剣道'], correctIndex: 0 },
     { question: '千利休が仕えた武将は？', choices: ['信長と秀吉', '家康と秀忠', '信玄と謙信', '義経と頼朝'], correctIndex: 0 },
     { question: '千利休の茶の流派は？', choices: ['表千家', '裏千家', 'わび茶', '抹茶道'], correctIndex: 2 },
   ],
   // ===== コンボカード: 大航海時代 =====
   'card-142': [
-    { question: 'コロンブスが到達した大陸は？', choices: ['アフリカ', 'アジア', 'アメリカ', 'オーストラリア'], correctIndex: 2 },
+    { question: 'コロンブスが到達した大陸は？', choices: ['アメリカ', 'アフリカ', 'オーストラリア', 'アジア'], correctIndex: 0 },
     { question: 'コロンブスの航海を支援した国は？', choices: ['ポルトガル', 'スペイン', 'イタリア', 'フランス'], correctIndex: 1 },
     { question: 'コロンブスがアメリカに到達した年は？', choices: ['1453年', '1492年', '1519年', '1543年'], correctIndex: 1 },
   ],
   'card-143': [
-    { question: 'マゼランの船隊が達成したことは？', choices: ['北極到達', '南極到達', '世界一周', '大西洋横断'], correctIndex: 2 },
+    { question: 'マゼランの船団が達成したことは？', choices: ['世界一周', '北極到達', '新大陸発見', 'インド航路開拓'], correctIndex: 0 },
     { question: 'マゼランの出身国は？', choices: ['スペイン', 'ポルトガル', 'イタリア', 'フランス'], correctIndex: 1 },
     { question: 'マゼランが命名した海峡は？', choices: ['ジブラルタル海峡', 'マゼラン海峡', 'マラッカ海峡', 'ドーバー海峡'], correctIndex: 1 },
   ],
   'card-144': [
-    { question: 'キャラベル船が活躍した時代は？', choices: ['古代ギリシャ', '大航海時代', '産業革命', '現代'], correctIndex: 1 },
+    { question: '大航海時代に使われた帆船の名前は？', choices: ['キャラベル', 'ガレオン', '戦艦', '空母'], correctIndex: 0 },
     { question: 'キャラベル船の特徴は？', choices: ['蒸気で動く', '小型で外洋航海に優れる', '巨大な戦艦', '潜水できる'], correctIndex: 1 },
     { question: 'キャラベル船を多く使った国は？', choices: ['日本', 'ポルトガル・スペイン', 'イギリス', 'ロシア'], correctIndex: 1 },
   ],
   'card-145': [
-    { question: '大航海時代に求められた香辛料は？', choices: ['砂糖', 'コショウ', 'バター', '醤油'], correctIndex: 1 },
+    { question: '大航海時代にヨーロッパが求めた最も重要な交易品は？', choices: ['香辛料', '金', '絹', '茶'], correctIndex: 0 },
     { question: '香辛料の産地として有名な地域は？', choices: ['北欧', '東南アジア・インド', '北米', '南極'], correctIndex: 1 },
     { question: '香辛料が高価だった理由は？', choices: ['味が悪い', '遠い産地から運ぶ必要があった', '作るのが簡単だった', '誰でも手に入った'], correctIndex: 1 },
   ],
@@ -1467,6 +1526,163 @@ export function sampleCards(n: number, prefix: string, round?: number): BattleCa
     result.push({ ...pick, id: `${prefix}-${pick.id}-${timestamp}-${i}` });
   }
   return result;
+}
+
+// ===== Synergy Map (コンボ シナジー) =====
+export const SYNERGY_MAP: Record<string, string[]> = {
+  // 大航海コンボ
+  '羅針盤': ['コロンブス', 'マゼラン', 'キャラベル船', '香辛料'],
+  'コロンブス': ['羅針盤', 'マゼラン', 'キャラベル船', '香辛料'],
+  'マゼラン': ['羅針盤', 'コロンブス', 'キャラベル船', '香辛料'],
+  'キャラベル船': ['コロンブス', 'マゼラン', '羅針盤', '香辛料'],
+  '香辛料': ['コロンブス', 'マゼラン', '羅針盤', 'キャラベル船'],
+  // 安土桃山コンボ
+  '織田信長': ['鉄砲', '楽市楽座', '千利休', '豊臣秀吉'],
+  '鉄砲': ['織田信長', '楽市楽座', '千利休', '豊臣秀吉'],
+  '楽市楽座': ['織田信長', '鉄砲', '千利休', '豊臣秀吉'],
+  '千利休': ['織田信長', '鉄砲', '楽市楽座', '豊臣秀吉'],
+  '豊臣秀吉': ['織田信長', '鉄砲', '楽市楽座', '千利休'],
+  // アインシュタインコンボ
+  'アインシュタイン': ['相対性理論の論文', '光速', 'E=mc²'],
+  '相対性理論の論文': ['アインシュタイン', '光速', 'E=mc²'],
+  '光速': ['アインシュタイン', '相対性理論の論文', 'E=mc²'],
+  'E=mc²': ['アインシュタイン', '相対性理論の論文', '光速'],
+  // ナポレオンコンボ
+  'ナポレオン': ['大砲', 'ナポレオン法典', 'ワーテルローの戦い'],
+  '大砲': ['ナポレオン', 'ナポレオン法典', 'ワーテルローの戦い'],
+  'ナポレオン法典': ['ナポレオン', '大砲', 'ワーテルローの戦い'],
+  'ワーテルローの戦い': ['ナポレオン', '大砲', 'ナポレオン法典'],
+  // キュリー夫人コンボ
+  'キュリー夫人': ['ラジウム', '研究ノート', 'ノーベル賞メダル'],
+  'ラジウム': ['キュリー夫人', '研究ノート', 'ノーベル賞メダル'],
+  '研究ノート': ['キュリー夫人', 'ラジウム', 'ノーベル賞メダル'],
+  'ノーベル賞メダル': ['キュリー夫人', 'ラジウム', '研究ノート', 'アインシュタイン', 'ダーウィン'],
+  // 既存コンボのシナジー
+  'エジソン': ['電球', '蓄音機'],
+  '電球': ['エジソン', '蓄音機'],
+  '蓄音機': ['エジソン', '電球'],
+  'ダーウィン': ['ゾウガメ', 'ダーウィンフィンチ', 'ノーベル賞メダル'],
+  'ゾウガメ': ['ダーウィン', 'ダーウィンフィンチ'],
+  'ダーウィンフィンチ': ['ダーウィン', 'ゾウガメ'],
+  'ライト兄弟': ['グライダー', '風洞'],
+  'グライダー': ['ライト兄弟', '風洞'],
+  '風洞': ['ライト兄弟', 'グライダー'],
+  '北里柴三郎': ['ペスト菌', '血清'],
+  'ペスト菌': ['北里柴三郎', '血清'],
+  '血清': ['北里柴三郎', 'ペスト菌'],
+  '始皇帝': ['兵馬俑'],
+  '兵馬俑': ['始皇帝'],
+  'アマゾン川': ['アナコンダ', '毒矢カエル'],
+  'アナコンダ': ['アマゾン川', '毒矢カエル'],
+  '毒矢カエル': ['アマゾン川', 'アナコンダ'],
+  'ニュートン': ['リンゴ', 'プリズム', '万有引力'],
+  'リンゴ': ['ニュートン', 'プリズム', '万有引力'],
+  'プリズム': ['ニュートン', 'リンゴ', '万有引力'],
+  '万有引力': ['ニュートン', 'リンゴ', 'プリズム'],
+  'ルター': ['聖書', '活版印刷機', '免罪符'],
+  '聖書': ['ルター', '活版印刷機', '免罪符'],
+  '活版印刷機': ['ルター', '聖書', '免罪符'],
+  '免罪符': ['ルター', '聖書', '活版印刷機'],
+  'ゴッホ': ['ひまわり', '星月夜', '糸杉'],
+  'ひまわり': ['ゴッホ', '星月夜', '糸杉'],
+  '星月夜': ['ゴッホ', 'ひまわり', '糸杉'],
+  '糸杉': ['ゴッホ', 'ひまわり', '星月夜'],
+  'ジャンヌ・ダルク': ['聖剣', '軍旗'],
+  '聖剣': ['ジャンヌ・ダルク', '軍旗'],
+  '軍旗': ['ジャンヌ・ダルク', '聖剣'],
+  'マリー・アントワネット': ['ヴェルサイユ宮殿', 'ケーキ'],
+  'ヴェルサイユ宮殿': ['マリー・アントワネット', 'ケーキ'],
+  'ケーキ': ['マリー・アントワネット', 'ヴェルサイユ宮殿'],
+  'ガリレオ': ['地動説', '望遠鏡'],
+  '地動説': ['ガリレオ', '望遠鏡'],
+  '望遠鏡': ['ガリレオ', '地動説'],
+  '顕微鏡': ['野口英世', '黄熱病', '北里柴三郎', 'ペスト菌'],
+  '野口英世': ['顕微鏡', '黄熱病'],
+  '黄熱病': ['野口英世', '顕微鏡'],
+  'ダイナマイト': ['火薬'],
+  '火薬': ['ダイナマイト'],
+};
+
+// ===== Round-specific offering composition for synergy draft =====
+const ROUND_OFFER_SPEC: Record<number, { synergy: number; random: number; tempt: number; ssrGuarantee: boolean }> = {
+  1: { synergy: 2, random: 2, tempt: 1, ssrGuarantee: false },
+  2: { synergy: 2, random: 2, tempt: 1, ssrGuarantee: false },
+  3: { synergy: 3, random: 1, tempt: 1, ssrGuarantee: false },
+  4: { synergy: 3, random: 2, tempt: 0, ssrGuarantee: false },
+  5: { synergy: 2, random: 2, tempt: 0, ssrGuarantee: true },
+};
+
+export function sampleCardsWithSynergy(
+  n: number,
+  prefix: string,
+  round: number,
+  playerDeck: BattleCard[],
+): BattleCard[] {
+  const spec = ROUND_OFFER_SPEC[round] || ROUND_OFFER_SPEC[1];
+  const timestamp = Date.now();
+  const result: BattleCard[] = [];
+  const usedIds = new Set<string>();
+
+  const addCard = (card: BattleCard) => {
+    if (usedIds.has(card.id)) return false;
+    usedIds.add(card.id);
+    result.push({ ...card, id: `${prefix}-${card.id}-${timestamp}-${result.length}` });
+    return true;
+  };
+
+  // Collect synergy targets from current deck
+  const deckNames = new Set(playerDeck.map((c) => c.name));
+  const synergyTargetNames = new Set<string>();
+  playerDeck.forEach((c) => {
+    const targets = SYNERGY_MAP[c.name];
+    if (targets) targets.forEach((t) => { if (!deckNames.has(t)) synergyTargetNames.add(t); });
+  });
+
+  // 1. Synergy cards
+  const synergyPool = ALL_BATTLE_CARDS.filter((c) => synergyTargetNames.has(c.name));
+  const shuffledSynergy = [...synergyPool].sort(() => Math.random() - 0.5);
+  for (let i = 0; i < spec.synergy && shuffledSynergy.length > 0; i++) {
+    const card = shuffledSynergy.shift();
+    if (card) addCard(card);
+  }
+
+  // 2. SSR guaranteed slot (R5)
+  if (spec.ssrGuarantee) {
+    const ssrPool = ALL_BATTLE_CARDS.filter((c) => c.rarity === 'SSR' && !usedIds.has(c.id));
+    if (ssrPool.length > 0) {
+      addCard(ssrPool[Math.floor(Math.random() * ssrPool.length)]);
+    }
+  }
+
+  // 3. Temptation cards (not synergy with current deck)
+  if (spec.tempt > 0) {
+    const temptPool = ALL_BATTLE_CARDS.filter((c) => !synergyTargetNames.has(c.name) && !deckNames.has(c.name) && !usedIds.has(c.id));
+    const shuffledTempt = [...temptPool].sort(() => Math.random() - 0.5);
+    for (let i = 0; i < spec.tempt && shuffledTempt.length > 0; i++) {
+      const card = shuffledTempt.shift();
+      if (card) addCard(card);
+    }
+  }
+
+  // 4. Random cards to fill remaining slots
+  const remaining = n - result.length;
+  if (remaining > 0) {
+    const randomPool = ALL_BATTLE_CARDS.filter((c) => !usedIds.has(c.id));
+    const shuffledRandom = [...randomPool].sort(() => Math.random() - 0.5);
+    for (let i = 0; i < remaining && shuffledRandom.length > 0; i++) {
+      const rarity = rollRarityByRound(round);
+      const rarityFiltered = shuffledRandom.filter((c) => c.rarity === rarity);
+      const pick = rarityFiltered.length > 0 ? rarityFiltered[0] : shuffledRandom[0];
+      if (pick) {
+        addCard(pick);
+        const idx = shuffledRandom.indexOf(pick);
+        if (idx >= 0) shuffledRandom.splice(idx, 1);
+      }
+    }
+  }
+
+  // Shuffle result to avoid predictable positions
+  return result.sort(() => Math.random() - 0.5);
 }
 
 // Legacy exports for compatibility

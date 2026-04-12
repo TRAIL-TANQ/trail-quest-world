@@ -35,9 +35,12 @@ import { EFFECT_COLORS } from './knowledgeCards';
 
 export const BENCH_MAX_SLOTS = 6;
 
+// 2026-04 rework: 5 sub-battles decide the match via fan totals.
+// Whoever has more fans after 5 sub-battles wins. Ties go to the player.
+export const MAX_SUB_BATTLES = 5;
+
 // Legacy exports kept for compatibility with ratingService, stages, etc.
-// The real battle model no longer uses rounds or trophy fans, but some UI
-// copy still refers to "round" as a display label for the current sub-battle.
+// TOTAL_ROUNDS now aligns with MAX_SUB_BATTLES.
 export const TOTAL_ROUNDS = 5;
 export const TROPHY_FAN_RANGES: Array<[number, number]> = [
   [2, 3], [3, 5], [5, 7], [7, 9], [9, 11],
@@ -116,6 +119,8 @@ export interface GameState {
   sealedBenchNames: { player: string[]; ai: string[] };       // bench names whose effects are disabled
   altBonus: number;                                           // extra ALT earned this match
   effectTelop: EffectTelop | null;                            // UI consumes & clears after 1.5s
+  // Bench glow hint: set by bench-scanning effects. UI glows matching slots for ~1.5s then clears.
+  benchGlow: { side: Side; names: string[]; key: number } | null;
   // ===== Result =====
   history: SubBattleResult[];
   winner: Side | null;
@@ -185,6 +190,7 @@ export function initGameState(playerDeck: BattleCard[], aiDeck: BattleCard[]): G
     sealedBenchNames: { player: [], ai: [] },
     altBonus: 0,
     effectTelop: null,
+    benchGlow: null,
     history: [],
     winner: null,
     message: 'デッキフェイズ：カードを選ぼう',
@@ -244,41 +250,90 @@ export function applyRevealEffect(
       break;
     }
     case 'einstein': {
+      const my = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      const hasRelativity = my.bench.some((b) => b.name === '相対性理論の論文' && !sealed.includes(b.name));
+      const hasLightspeed = my.bench.some((b) => b.name === '光速' && !sealed.includes(b.name));
+      const einsteinGlow: string[] = [];
+      if (hasRelativity) einsteinGlow.push('相対性理論の論文');
+      if (hasLightspeed) einsteinGlow.push('光速');
+      if (einsteinGlow.length > 0) next = withBenchGlow(next, side, einsteinGlow);
       if (role === 'attacker') {
-        next = { ...next, defenderBonus: next.defenderBonus - 2 };
-        telop = { text: '🧠アインシュタインの相対性理論！敵防御-2', color };
-      } else {
-        const oppState = opp === 'player' ? next.player : next.ai;
-        if (oppState.deck.length > 0) {
-          let bestIdx = 0;
-          for (let i = 1; i < oppState.deck.length; i++) {
-            if (getBaseAttack(oppState.deck[i]) > getBaseAttack(oppState.deck[bestIdx])) bestIdx = i;
-          }
-          const target = oppState.deck[bestIdx];
-          const weakened: BattleCard = {
-            ...target,
-            attackPower: Math.max(0, getBaseAttack(target) - 2),
-          };
-          const newDeck = [...oppState.deck];
-          newDeck[bestIdx] = weakened;
-          next = applySide(next, opp, { ...oppState, deck: newDeck });
-          telop = { text: '🧠アインシュタインの相対性理論！敵最強-2', color };
+        const atkBonus = hasRelativity ? 4 : 0;
+        bonusAttack += atkBonus;
+        if (hasRelativity && hasLightspeed) {
+          const oppState = opp === 'player' ? next.player : next.ai;
+          const weakened = oppState.deck.map((c) => ({
+            ...c,
+            attackPower: Math.max(0, getBaseAttack(c) - 1),
+          }));
+          next = applySide(next, opp, { ...oppState, deck: weakened });
         }
+        telop = { text: `🧠アインシュタイン天才の頭脳！攻撃+${atkBonus}`, color };
+      } else {
+        const defBonus = hasLightspeed ? 3 : 0;
+        next = { ...next, defenderBonus: next.defenderBonus + defBonus };
+        if (hasRelativity && hasLightspeed) {
+          const oppState = opp === 'player' ? next.player : next.ai;
+          const weakened = oppState.deck.map((c) => ({
+            ...c,
+            attackPower: Math.max(0, getBaseAttack(c) - 1),
+          }));
+          next = applySide(next, opp, { ...oppState, deck: weakened });
+        }
+        telop = { text: `🧠アインシュタイン天才の頭脳！防御+${defBonus}`, color };
       }
       break;
     }
     case 'curie': {
-      next = {
-        ...next,
-        roundAttackBonus: { ...next.roundAttackBonus, [side]: next.roundAttackBonus[side] + 1 },
-      };
-      telop = { text: '☢️キュリー夫人の放射能！味方攻撃+1 (ラウンド中)', color };
+      const my = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      const hasRadium = my.bench.some((b) => b.name === 'ラジウム' && !sealed.includes(b.name));
+      const hasNotes = my.bench.some((b) => b.name === '研究ノート' && !sealed.includes(b.name));
+      const curieGlow: string[] = [];
+      if (hasRadium) curieGlow.push('ラジウム');
+      if (hasNotes) curieGlow.push('研究ノート');
+      if (curieGlow.length > 0) next = withBenchGlow(next, side, curieGlow);
+      if (role === 'attacker') {
+        const atkBonus = hasRadium ? 3 : 0;
+        bonusAttack += atkBonus;
+        telop = { text: `☢️キュリー夫人！攻撃+${atkBonus}`, color };
+      } else {
+        const defBonus = hasNotes ? 3 : 0;
+        next = { ...next, defenderBonus: next.defenderBonus + defBonus };
+        telop = { text: `☢️キュリー夫人！防御+${defBonus}`, color };
+      }
       break;
     }
     case 'napoleon': {
+      const my = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      const hasCannon = my.bench.some((b) => b.name === '大砲' && !sealed.includes(b.name));
+      const hasCode = my.bench.some((b) => b.name === 'ナポレオン法典' && !sealed.includes(b.name));
+      const napoleonGlow: string[] = [];
+      if (hasCannon) napoleonGlow.push('大砲');
+      if (hasCode) napoleonGlow.push('ナポレオン法典');
+      if (napoleonGlow.length > 0) next = withBenchGlow(next, side, napoleonGlow);
       if (role === 'attacker') {
-        bonusAttack += 3;
-        telop = { text: '⚡ナポレオンの電撃戦！攻撃+3', color };
+        const atkBonus = hasCannon ? 4 : 0;
+        bonusAttack += atkBonus;
+        if (hasCannon && hasCode) {
+          next = {
+            ...next,
+            roundAttackBonus: { ...next.roundAttackBonus, [side]: next.roundAttackBonus[side] + 1 },
+          };
+        }
+        telop = { text: `⚡ナポレオン皇帝の号令！攻撃+${atkBonus}${hasCannon && hasCode ? ' 味方全攻+1' : ''}`, color };
+      } else {
+        const defBonus = hasCode ? 3 : 0;
+        next = { ...next, defenderBonus: next.defenderBonus + defBonus };
+        if (hasCannon && hasCode) {
+          next = {
+            ...next,
+            roundAttackBonus: { ...next.roundAttackBonus, [side]: next.roundAttackBonus[side] + 1 },
+          };
+        }
+        telop = { text: `⚡ナポレオン皇帝の号令！防御+${defBonus}`, color };
       }
       break;
     }
@@ -296,21 +351,48 @@ export function applyRevealEffect(
       break;
     }
     case 'nobunaga': {
-      const oppState = opp === 'player' ? next.player : next.ai;
-      if (oppState.bench.length > 0) {
-        const strongest = [...oppState.bench].sort(
-          (a, b) => getBaseAttack(b.card) - getBaseAttack(a.card),
-        )[0];
-        next = {
-          ...next,
-          sealedBenchNames: {
-            ...next.sealedBenchNames,
-            [opp]: [...next.sealedBenchNames[opp], strongest.name],
-          },
-        };
-        telop = { text: `🔥織田信長の天下布武！${strongest.name}を封印`, color };
+      const my = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      const hasGun = my.bench.some((b) => b.name === '鉄砲' && !sealed.includes(b.name));
+      const hasRakuichi = my.bench.some((b) => b.name === '楽市楽座' && !sealed.includes(b.name));
+      const nobunagaGlow: string[] = [];
+      if (hasGun) nobunagaGlow.push('鉄砲');
+      if (hasRakuichi) nobunagaGlow.push('楽市楽座');
+      if (nobunagaGlow.length > 0) next = withBenchGlow(next, side, nobunagaGlow);
+      if (role === 'attacker') {
+        const atkBonus = hasGun ? 3 : 0;
+        bonusAttack += atkBonus;
+        if (hasGun && hasRakuichi) {
+          const oppState = opp === 'player' ? next.player : next.ai;
+          if (oppState.bench.length > 0) {
+            const target = oppState.bench[0];
+            next = {
+              ...next,
+              sealedBenchNames: {
+                ...next.sealedBenchNames,
+                [opp]: [...next.sealedBenchNames[opp], target.name],
+              },
+            };
+          }
+        }
+        telop = { text: `🔥信長天下布武！攻撃+${atkBonus}${hasGun && hasRakuichi ? ' 敵封印' : ''}`, color };
       } else {
-        telop = { text: '🔥織田信長の天下布武！対象なし', color };
+        const defBonus = hasRakuichi ? 2 : 0;
+        next = { ...next, defenderBonus: next.defenderBonus + defBonus };
+        if (hasGun && hasRakuichi) {
+          const oppState = opp === 'player' ? next.player : next.ai;
+          if (oppState.bench.length > 0) {
+            const target = oppState.bench[0];
+            next = {
+              ...next,
+              sealedBenchNames: {
+                ...next.sealedBenchNames,
+                [opp]: [...next.sealedBenchNames[opp], target.name],
+              },
+            };
+          }
+        }
+        telop = { text: `🔥信長天下布武！防御+${defBonus}${hasGun && hasRakuichi ? ' 敵封印' : ''}`, color };
       }
       break;
     }
@@ -333,9 +415,11 @@ export function applyRevealEffect(
       const heliocentricCount = heliocentricSlot?.count ?? 0;
       if (heliocentricCount > 0 && role === 'attacker') {
         bonusAttack += heliocentricCount;
+        next = withBenchGlow(next, side, ['地動説']);
       }
       if (heliocentricCount > 0 && role === 'defender') {
         next = { ...next, defenderBonus: next.defenderBonus + heliocentricCount };
+        next = withBenchGlow(next, side, ['地動説']);
       }
       // Original bench-swap effect (kept).
       const sumOf = (bench: BenchSlot[]) =>
@@ -437,7 +521,8 @@ export function applyRevealEffect(
         const copies = gunpowderSlot?.count ?? 0;
         if (copies > 0) {
           bonusAttack += copies * 2;
-          telop = { text: `💣ダイナマイトの大爆発！火薬×${copies}で攻撃+${copies * 2}`, color };
+          next = withBenchGlow(next, side, ['火薬']);
+          telop = { text: `📋 火薬のベンチ効果！ダイナマイト 攻撃+${copies * 2}`, color };
         } else {
           telop = { text: '💣ダイナマイトの大爆発！火薬なし...', color };
         }
@@ -445,13 +530,18 @@ export function applyRevealEffect(
       break;
     }
     case 'compass': {
-      const myState = side === 'player' ? next.player : next.ai;
-      if (myState.deck.length >= 2) {
-        const top3 = myState.deck.slice(0, 3);
-        const sortedTop = [...top3].sort((a, b) => getBaseAttack(b) - getBaseAttack(a));
-        const newDeck = [...sortedTop, ...myState.deck.slice(3)];
-        next = applySide(next, side, { ...myState, deck: newDeck });
-        telop = { text: '🧭羅針盤の航海術！デッキ上3枚を並べ替え', color };
+      const my = side === 'player' ? next.player : next.ai;
+      const idx = my.deck.findIndex((c) => c.name === 'コロンブス' || c.name === 'マゼラン');
+      if (idx > 2) {
+        const newDeck = [...my.deck];
+        const [moved] = newDeck.splice(idx, 1);
+        newDeck.splice(2, 0, moved);
+        next = applySide(next, side, { ...my, deck: newDeck });
+        telop = { text: `🧭羅針盤の航海術！${moved.name}を3枚以内に`, color };
+      } else if (idx >= 0) {
+        telop = { text: '🧭羅針盤の航海術！既に近い', color };
+      } else {
+        telop = { text: '🧭羅針盤の航海術！対象なし', color };
       }
       break;
     }
@@ -481,15 +571,21 @@ export function applyRevealEffect(
       const sealed = next.sealedBenchNames[side];
       const hasBulb = my.bench.some((b) => b.name === '電球' && !sealed.includes(b.name));
       const hasPhono = my.bench.some((b) => b.name === '蓄音機' && !sealed.includes(b.name));
+      const glowNames: string[] = [];
+      if (hasBulb) glowNames.push('電球');
+      if (hasPhono) glowNames.push('蓄音機');
       if (role === 'attacker') {
         let bonus = (hasBulb ? 1 : 0) + (hasPhono ? 1 : 0);
         if (hasBulb && hasPhono) bonus += 3;
         bonusAttack += bonus;
-        telop = { text: `💡エジソン発明王！攻撃+${bonus}`, color };
+        if (bonus > 0) {
+          next = withBenchGlow(next, side, glowNames);
+          telop = { text: `📋 ${glowNames.join('・')} のベンチ効果！エジソン 攻撃+${bonus}`, color };
+        }
       } else {
         if (hasPhono) {
-          next = { ...next, defenderBonus: next.defenderBonus + 2 };
-          telop = { text: '💡エジソン (蓄音機の守護)！防御+2', color };
+          next = withBenchGlow({ ...next, defenderBonus: next.defenderBonus + 2 }, side, ['蓄音機']);
+          telop = { text: '📋 蓄音機のベンチ効果！エジソン 防御+2', color };
         }
       }
       break;
@@ -501,20 +597,23 @@ export function applyRevealEffect(
     case 'darwin': {
       const my = side === 'player' ? next.player : next.ai;
       const sealed = next.sealedBenchNames[side];
-      const creatureTypes = new Set(
-        my.bench.filter((b) => !sealed.includes(b.name) && b.card.category === 'creature').map((b) => b.name),
-      );
-      const n = creatureTypes.size;
-      const hasTortoise = my.bench.some((b) => b.name === 'ゾウガメ' && !sealed.includes(b.name));
-      const hasFinch = my.bench.some((b) => b.name === 'ダーウィンフィンチ' && !sealed.includes(b.name));
+      const creatureSlots = my.bench.filter((b) => !sealed.includes(b.name) && b.card.category === 'creature');
+      const creatureNamesSet: Record<string, true> = {};
+      creatureSlots.forEach((b) => { creatureNamesSet[b.name] = true; });
+      const creatureNames = Object.keys(creatureNamesSet);
+      const n = creatureNames.length;
+      const hasTortoise = creatureNames.includes('ゾウガメ');
+      const hasFinch = creatureNames.includes('ダーウィンフィンチ');
       if (role === 'attacker') {
         const total = n + (hasFinch ? 2 : 0);
         bonusAttack += total;
-        telop = { text: `🐢ダーウィン自然選択！攻撃+${total}`, color };
+        if (total > 0) next = withBenchGlow(next, side, creatureNames);
+        telop = { text: `📋 生き物のベンチ効果！ダーウィン 攻撃+${total}`, color };
       } else {
         const total = n + (hasTortoise ? 2 : 0);
         next = { ...next, defenderBonus: next.defenderBonus + total };
-        telop = { text: `🐢ダーウィン自然選択！防御+${total}`, color };
+        if (total > 0) next = withBenchGlow(next, side, creatureNames);
+        telop = { text: `📋 生き物のベンチ効果！ダーウィン 防御+${total}`, color };
       }
       break;
     }
@@ -669,6 +768,11 @@ export function applyRevealEffect(
       const hasApple = my.bench.some((b) => b.name === 'リンゴ' && !sealed.includes(b.name));
       const hasPrism = my.bench.some((b) => b.name === 'プリズム' && !sealed.includes(b.name));
       const hasGrav = my.bench.some((b) => b.name === '万有引力' && !sealed.includes(b.name));
+      const newtonGlow: string[] = [];
+      if (hasApple) newtonGlow.push('リンゴ');
+      if (hasPrism) newtonGlow.push('プリズム');
+      if (hasGrav) newtonGlow.push('万有引力');
+      if (newtonGlow.length > 0) next = withBenchGlow(next, side, newtonGlow);
       const types = (hasApple ? 1 : 0) + (hasPrism ? 1 : 0) + (hasGrav ? 1 : 0);
       const tier = types === 1 ? 1 : types === 2 ? 3 : types === 3 ? 5 : 0;
       if (role === 'attacker') {
@@ -773,6 +877,11 @@ export function applyRevealEffect(
       const hasS = my.bench.some((b) => b.name === 'ひまわり' && !sealed.includes(b.name));
       const hasStar = my.bench.some((b) => b.name === '星月夜' && !sealed.includes(b.name));
       const hasCyp = my.bench.some((b) => b.name === '糸杉' && !sealed.includes(b.name));
+      const goghGlow: string[] = [];
+      if (hasS) goghGlow.push('ひまわり');
+      if (hasStar) goghGlow.push('星月夜');
+      if (hasCyp) goghGlow.push('糸杉');
+      if (goghGlow.length > 0) next = withBenchGlow(next, side, goghGlow);
       const types = (hasS ? 1 : 0) + (hasStar ? 1 : 0) + (hasCyp ? 1 : 0);
       const atkTier = types === 1 ? 2 : types === 2 ? 4 : types === 3 ? 6 : 0;
       const defTier = types === 2 ? 2 : types === 3 ? 4 : 0;
@@ -806,6 +915,10 @@ export function applyRevealEffect(
       const sealed = next.sealedBenchNames[side];
       const hasSword = my.bench.some((b) => b.name === '聖剣' && !sealed.includes(b.name));
       const hasBanner = my.bench.some((b) => b.name === '軍旗' && !sealed.includes(b.name));
+      const jeanneGlow: string[] = [];
+      if (hasSword) jeanneGlow.push('聖剣');
+      if (hasBanner) jeanneGlow.push('軍旗');
+      if (jeanneGlow.length > 0) next = withBenchGlow(next, side, jeanneGlow);
       if (hasSword && hasBanner) {
         if (role === 'attacker') {
           bonusAttack += 4;
@@ -834,6 +947,107 @@ export function applyRevealEffect(
       }
       break;
     }
+    // ===== 新コンボ効果（第2弾） =====
+    case 'columbus': {
+      const my = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      const hasCompass = my.bench.some((b) => b.name === '羅針盤' && !sealed.includes(b.name));
+      if (role === 'attacker' && hasCompass) {
+        bonusAttack += 3;
+        next = withBenchGlow(next, side, ['羅針盤']);
+      }
+      // Exile 1 from top 3 of opponent deck
+      const oppStateC = opp === 'player' ? next.player : next.ai;
+      if (oppStateC.deck.length > 0) {
+        const topN = Math.min(3, oppStateC.deck.length);
+        let bestIdx = 0;
+        for (let i = 1; i < topN; i++) {
+          if (getBaseAttack(oppStateC.deck[i]) > getBaseAttack(oppStateC.deck[bestIdx])) bestIdx = i;
+        }
+        const exiled = oppStateC.deck[bestIdx];
+        const newDeck = [...oppStateC.deck];
+        newDeck.splice(bestIdx, 1);
+        next = applySide(
+          { ...next, quarantine: { ...next.quarantine, [opp]: [...next.quarantine[opp], exiled] } },
+          opp, { ...oppStateC, deck: newDeck },
+        );
+      }
+      telop = { text: hasCompass ? '🧭コロンブス新大陸発見！攻撃+3 & 敵1枚隔離' : '🌊コロンブス新大陸発見！敵1枚隔離', color };
+      break;
+    }
+    case 'magellan': {
+      const my = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      const hasCompass = my.bench.some((b) => b.name === '羅針盤' && !sealed.includes(b.name));
+      if (role === 'defender' && hasCompass) {
+        next = { ...next, defenderBonus: next.defenderBonus + 4 };
+        next = withBenchGlow(next, side, ['羅針盤']);
+        telop = { text: '🌍マゼラン世界一周！防御+4', color };
+      } else {
+        telop = { text: '🌍マゼラン世界一周！', color };
+      }
+      break;
+    }
+    case 'caravel': case 'spice': {
+      telop = { text: '⛵大航海時代の道具！', color };
+      break;
+    }
+    case 'emc2': {
+      if (role === 'attacker') {
+        const my = side === 'player' ? next.player : next.ai;
+        const sealed = next.sealedBenchNames[side];
+        const hasEinstein = my.bench.some((b) => b.name === 'アインシュタイン' && !sealed.includes(b.name));
+        if (hasEinstein) {
+          const baseAtk = card.attackPower ?? card.power;
+          bonusAttack += baseAtk;
+          next = withBenchGlow(next, side, ['アインシュタイン']);
+          telop = { text: `⚛️E=mc²質量エネルギー！攻撃${baseAtk}→${baseAtk * 2}`, color };
+        } else {
+          telop = { text: '⚛️E=mc²！条件未達', color };
+        }
+      }
+      break;
+    }
+    case 'relativity': case 'lightspeed': {
+      telop = { text: '🔬アインシュタインを強化', color };
+      break;
+    }
+    case 'gun': case 'rakuichi': {
+      telop = { text: '🏯安土桃山の道具！', color };
+      break;
+    }
+    case 'cannon': case 'napoleon_code': case 'waterloo': {
+      telop = { text: '🏰ナポレオンの装備！', color };
+      break;
+    }
+    case 'radium': case 'research_notes': case 'nobel_medal': {
+      telop = { text: '🔬科学研究の成果！', color };
+      break;
+    }
+    case 'hideyoshi': {
+      const my = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      const hasNobunaga = my.bench.some((b) => b.name === '織田信長' && !sealed.includes(b.name));
+      const hasRikyu = my.bench.some((b) => b.name === '千利休' && !sealed.includes(b.name));
+      const hideyoshiGlow: string[] = [];
+      if (hasNobunaga) hideyoshiGlow.push('織田信長');
+      if (hasRikyu) hideyoshiGlow.push('千利休');
+      if (hideyoshiGlow.length > 0) next = withBenchGlow(next, side, hideyoshiGlow);
+      const atkBonus = hasNobunaga ? 3 : 0;
+      const defBonus = (hasNobunaga ? 3 : 0) + (hasRikyu ? 2 : 0);
+      if (role === 'attacker') {
+        bonusAttack += atkBonus;
+        telop = { text: `🌸秀吉天下統一！攻撃+${atkBonus}`, color };
+      } else {
+        next = { ...next, defenderBonus: next.defenderBonus + defBonus };
+        telop = { text: `🌸秀吉天下統一！防御+${defBonus}`, color };
+      }
+      break;
+    }
+    case 'rikyu': {
+      telop = { text: '🍵千利休！味方防御強化', color };
+      break;
+    }
     case 'versailles': case 'cake': {
       telop = { text: '🏰マリーの権威', color };
       break;
@@ -843,6 +1057,10 @@ export function applyRevealEffect(
       const sealed = next.sealedBenchNames[side];
       const hasVers = my.bench.some((b) => b.name === 'ヴェルサイユ宮殿' && !sealed.includes(b.name));
       const hasCake = my.bench.some((b) => b.name === 'ケーキ' && !sealed.includes(b.name));
+      const marieGlow: string[] = [];
+      if (hasVers) marieGlow.push('ヴェルサイユ宮殿');
+      if (hasCake) marieGlow.push('ケーキ');
+      if (marieGlow.length > 0) next = withBenchGlow(next, side, marieGlow);
       const deckLow = my.deck.length <= 4;
       let atk = hasCake ? 3 : 0;
       let def = hasVers ? 4 : 0;
@@ -867,6 +1085,14 @@ export function applyRevealEffect(
 function withTelop(state: GameState, telop?: { text: string; color: string }): GameState {
   if (!telop) return state;
   return { ...state, effectTelop: { ...telop, key: Date.now() + Math.floor(Math.random() * 1000) } };
+}
+
+function withBenchGlow(state: GameState, side: Side, names: string[]): GameState {
+  if (names.length === 0) return state;
+  return {
+    ...state,
+    benchGlow: { side, names, key: Date.now() + Math.floor(Math.random() * 1000) },
+  };
 }
 
 // ===== Bench auras (passive buffs from any card on bench, not tied to a hero reveal) =====
@@ -905,6 +1131,7 @@ function applyDefenderAura(state: GameState, defenderSide: Side): GameState {
   let bonus = 0;
   if (names.has('血清')) bonus += 1;
   if (names.has('聖書')) bonus += names.has('活版印刷機') ? 2 : 1;
+  if (names.has('千利休')) bonus += 1;
   if (bonus === 0) return state;
   return { ...state, defenderBonus: state.defenderBonus + bonus };
 }
@@ -1157,14 +1384,23 @@ export function resolveSubBattleWin(state: GameState): GameState {
     winner: attackerSide,
   };
 
-  // Award legacy trophy fans (cosmetic) to the attacker
+  // Fans for this sub-battle (trophyFans schedule, 2-3 / 3-5 / 5-7 / 7-9 / 9-11)
   const trophy = state.trophyFans[Math.min(state.round - 1, state.trophyFans.length - 1)] ?? 0;
   const newPlayerFans = attackerSide === 'player' ? state.playerFans + trophy : state.playerFans;
   const newAiFans = attackerSide === 'ai' ? state.aiFans + trophy : state.aiFans;
 
+  // ===== 5-sub-battle cap: after MAX_SUB_BATTLES completed, fan totals decide the winner =====
+  const completedCount = state.history.length + 1;
+  const finalByFans = completedCount >= MAX_SUB_BATTLES;
+  const fanWinner: Side = finalByFans ? (newPlayerFans >= newAiFans ? 'player' : 'ai') : 'player';
+
   return {
     ...state,
-    phase: 'battle_resolve',
+    phase: finalByFans ? 'game_over' : 'battle_resolve',
+    winner: finalByFans ? fanWinner : state.winner,
+    message: finalByFans
+      ? `最終結果: あなた ${newPlayerFans} ファン vs 相手 ${newAiFans} ファン`
+      : `${attackerSide === 'player' ? 'あなた' : '相手'}がフラッグ奪取！`,
     // Attacker's bench is untouched; only the defender's bench grows.
     player: {
       ...state.player,
@@ -1191,7 +1427,6 @@ export function resolveSubBattleWin(state: GameState): GameState {
     round: state.round + 1,
     playerFans: newPlayerFans,
     aiFans: newAiFans,
-    message: `${attackerSide === 'player' ? 'あなた' : '相手'}がフラッグ奪取！`,
   };
 }
 

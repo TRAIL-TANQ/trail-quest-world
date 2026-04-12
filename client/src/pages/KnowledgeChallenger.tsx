@@ -20,6 +20,7 @@ import {
   validateDeck,
   canAddCardToDeck,
   sampleCards,
+  sampleCardsWithSynergy,
   INITIAL_DECK_SIZE,
   MAX_DECK_SIZE,
   MIN_DECK_SIZE,
@@ -280,7 +281,7 @@ export default function KnowledgeChallenger() {
   // 新しいバトルモデル: デッキフェイズは開始時の1回のみ。5枚提示→2枚取得でバトルへ。
   useEffect(() => {
     if (!gameState || gameState.phase !== 'deck_phase' || deckOffer) return;
-    const offered = sampleCards(5, 'offer', gameState.round);
+    const offered = sampleCardsWithSynergy(5, 'offer', gameState.round, gameState.player.deck);
     setDeckOffer({
       cards: offered,
       blocked: new Set(),
@@ -657,7 +658,7 @@ export default function KnowledgeChallenger() {
         return { ...prev, player: { ...prev.player, deck: remaining } };
       });
     }
-    const offered = sampleCards(5, 'offer', gameState.round);
+    const offered = sampleCardsWithSynergy(5, 'offer', gameState.round, gameState.player.deck);
     setDeckOffer({
       cards: offered,
       blocked: new Set(),
