@@ -1564,28 +1564,34 @@ export function resolveSubBattleWin(state: GameState): GameState {
     ? [...state.quarantine[defenderSide]]
     : [defenderCard, ...state.quarantine[defenderSide]];
   let newDefenderBench = defenderState.bench;
+  console.log(`[Engine] resolveSubBattleWin: ${defenderSide} bench BEFORE flush: ${newDefenderBench.length}/6 slots`, newDefenderBench.map(s => `${s.name}×${s.count}`).join(', '));
+  console.log(`[Engine]   flushing ${flushedCards.length} cards:`, flushedCards.map(c => c.name).join(', '));
   const unflushed: BattleCard[] = [];
   let benchOverflow = false;
   for (let fi = 0; fi < flushedCards.length; fi++) {
     const c = flushedCards[fi];
+    const alreadyOnBench = newDefenderBench.some((s) => s.name === c.name);
+    const slotsUsed = newDefenderBench.length;
     if (!canAddToBench(newDefenderBench, c)) {
-      // Cards that couldn't fit remain visible as unflushed
       unflushed.push(...flushedCards.slice(fi));
       benchOverflow = true;
-      console.log(`[Engine] ベンチ満杯！ ${defenderSide} bench=${newDefenderBench.length}/6 distinct, card="${c.name}" is 7th unique → game_over`);
+      console.log(`[Engine] ベンチ満杯！ ${defenderSide} bench=${slotsUsed}/6 slots, card="${c.name}" alreadyOnBench=${alreadyOnBench} → game_over`);
+      console.log(`[Engine]   bench slots:`, newDefenderBench.map(s => `${s.name}×${s.count}`).join(', '));
       console.log(`[Engine]   flushed ${fi}/${flushedCards.length} cards, ${unflushed.length} stuck`);
       break;
     }
     newDefenderBench = addToBench(newDefenderBench, c);
+    console.log(`[Engine]   +${c.name} → bench now ${newDefenderBench.length}/6 slots`);
   }
   if (benchOverflow) {
     // Update state with the partial flush so result screen shows accurate bench
     const updatedDefender = { ...defenderState, bench: newDefenderBench };
+    const overflowCard = unflushed[0]?.name ?? '?';
     return {
       ...state,
       phase: 'game_over',
       winner: attackerSide,
-      message: `${defenderSide === 'player' ? 'あなた' : '相手'}のベンチが満杯！隔離スペースの一斉流入で敗北`,
+      message: `${defenderSide === 'player' ? 'あなた' : '相手'}のベンチが満杯(${newDefenderBench.length}/6)！「${overflowCard}」が入りきらず敗北`,
       player: defenderSide === 'player' ? updatedDefender : state.player,
       ai: defenderSide === 'ai' ? updatedDefender : state.ai,
       quarantine: {
