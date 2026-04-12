@@ -1742,7 +1742,7 @@ export const SYNERGY_MAP: Record<string, string[]> = {
 // ===== Round-specific offering composition for synergy draft =====
 const ROUND_OFFER_SPEC: Record<number, { synergy: number; random: number; tempt: number; ssrGuarantee: boolean }> = {
   1: { synergy: 2, random: 2, tempt: 1, ssrGuarantee: false },
-  2: { synergy: 2, random: 2, tempt: 1, ssrGuarantee: false },
+  2: { synergy: 3, random: 1, tempt: 1, ssrGuarantee: false },
   3: { synergy: 3, random: 1, tempt: 1, ssrGuarantee: false },
   4: { synergy: 3, random: 2, tempt: 0, ssrGuarantee: false },
   5: { synergy: 2, random: 2, tempt: 0, ssrGuarantee: true },

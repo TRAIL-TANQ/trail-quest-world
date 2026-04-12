@@ -1619,11 +1619,13 @@ export function resolveSubBattleWin(state: GameState): GameState {
   const defenderLeaveQuarantine = [...leaveQuarantineDefender];
   const attackerLeaveQuarantine = [...leaveQuarantineOpp];
   // Update quarantine map: defender's cleared (flushed to bench), attacker's appended.
+  const finalAttackerQuarantine = [...newAttackerQuarantine, ...attackerLeaveQuarantine];
   const newQuarantine = {
     ...state.quarantine,
     [defenderSide]: defenderLeaveQuarantine,
-    [attackerSide]: [...newAttackerQuarantine, ...attackerLeaveQuarantine],
+    [attackerSide]: finalAttackerQuarantine,
   };
+  console.log(`[Engine]   quarantine AFTER: player=[${newQuarantine.player.map(c=>c.name).join(',')}] ai=[${newQuarantine.ai.map(c=>c.name).join(',')}]`);
   // Trim attacker deck when ケーキ triggers.
   const attackerStateForTrim = attackerSide === 'player' ? state.player : state.ai;
   const trimmedAttackerDeck = attackerDeckTrim > 0

@@ -290,7 +290,7 @@ export default function KnowledgeChallenger() {
       cards: offered,
       blocked: new Set(),
       acquired: new Set(),
-      redrawsLeft: 1,
+      redrawsLeft: 3,
       addedCardIds: [],
     });
   }, [gameState?.phase, deckOffer]);
@@ -1651,35 +1651,67 @@ export default function KnowledgeChallenger() {
         {/* ====== Round End Banner ====== */}
         {cineStep === 'round_end' && gameState.phase === 'round_end' && (() => {
           const playerWonRound = gameState.roundWinner === 'player';
+          const trophy = gameState.trophyFans[gameState.round - 1] ?? 0;
+          const cause = gameState.message.includes('デッキ') ? '💀 デッキ切れ！' : '💀 ベンチ満杯！';
           return (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-40">
+            <>
+              {/* Full-screen flash */}
               <div
-                className="kc-turn-transition"
+                className="absolute inset-0 pointer-events-none z-30"
                 style={{
-                  padding: '24px 48px',
-                  borderRadius: '18px',
-                  textAlign: 'center',
-                  background: playerWonRound
-                    ? 'linear-gradient(135deg, rgba(34,197,94,0.6), rgba(22,163,74,0.25))'
-                    : 'linear-gradient(135deg, rgba(239,68,68,0.6), rgba(185,28,28,0.25))',
-                  border: `4px solid ${playerWonRound ? '#22c55e' : '#ef4444'}`,
-                  boxShadow: `0 0 70px ${playerWonRound ? 'rgba(34,197,94,0.85)' : 'rgba(239,68,68,0.85)'}`,
+                  background: playerWonRound ? 'rgba(255,215,0,0.25)' : 'rgba(239,68,68,0.15)',
+                  animation: 'kcRedFlash 1s ease-out forwards',
                 }}
-              >
-                <p
+              />
+              {/* Confetti for wins */}
+              {playerWonRound && (
+                <div className="absolute inset-0 pointer-events-none overflow-hidden z-35">
+                  {Array.from({ length: 24 }).map((_, i) => (
+                    <span
+                      key={`rend-conf-${i}`}
+                      className="kc-confetti-piece"
+                      style={{
+                        left: `${(i * 4.2 + 1) % 100}%`,
+                        background: ['#ffd700', '#ff6b6b', '#4ade80', '#60a5fa', '#f5d76e'][i % 5],
+                        animationDelay: `${(i % 8) * 0.1}s`,
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-40">
+                <div
+                  className="kc-turn-transition"
                   style={{
-                    fontSize: '28px',
-                    fontWeight: 900,
-                    color: playerWonRound ? '#4ade80' : '#fca5a5',
-                    textShadow: `0 0 26px ${playerWonRound ? 'rgba(34,197,94,1)' : 'rgba(239,68,68,1)'}, 0 2px 8px rgba(0,0,0,0.9)`,
-                    margin: 0,
-                    lineHeight: 1.2,
+                    padding: '28px 40px',
+                    borderRadius: '18px',
+                    textAlign: 'center',
+                    background: playerWonRound
+                      ? 'linear-gradient(135deg, rgba(34,197,94,0.7), rgba(22,163,74,0.3))'
+                      : 'linear-gradient(135deg, rgba(239,68,68,0.7), rgba(185,28,28,0.3))',
+                    border: `4px solid ${playerWonRound ? '#22c55e' : '#ef4444'}`,
+                    boxShadow: `0 0 70px ${playerWonRound ? 'rgba(34,197,94,0.85)' : 'rgba(239,68,68,0.85)'}`,
                   }}
                 >
-                  {gameState.message}
-                </p>
+                  <p style={{ fontSize: '20px', fontWeight: 700, color: 'rgba(255,255,255,0.7)', margin: '0 0 4px', textShadow: '0 1px 4px rgba(0,0,0,0.9)' }}>
+                    {cause}
+                  </p>
+                  <p style={{
+                    fontSize: playerWonRound ? '36px' : '30px',
+                    fontWeight: 900,
+                    color: playerWonRound ? '#ffd700' : '#fca5a5',
+                    textShadow: `0 0 26px ${playerWonRound ? 'rgba(255,215,0,0.8)' : 'rgba(239,68,68,0.8)'}, 0 2px 8px rgba(0,0,0,0.9)`,
+                    margin: '0 0 8px',
+                    lineHeight: 1.2,
+                  }}>
+                    {playerWonRound ? `🏆 第${gameState.round}回戦 勝利！` : `第${gameState.round}回戦 敗北...`}
+                  </p>
+                  <p style={{ fontSize: '18px', fontWeight: 800, color: playerWonRound ? '#4ade80' : '#ef4444', margin: 0, textShadow: '0 1px 3px rgba(0,0,0,0.9)' }}>
+                    {playerWonRound ? `+${trophy} ファン！` : `相手に +${trophy} ファン`}
+                  </p>
+                </div>
               </div>
-            </div>
+            </>
           );
         })()}
 
