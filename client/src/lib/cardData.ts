@@ -123,6 +123,32 @@ export const COLLECTION_CARDS: CollectionCard[] = [
   // ===== 追加カード (2枚) =====
   { id: 'card-104', name: '黄熱病', category: 'discovery', rarity: 'R', description: '蛊が媒介する感染症。野口英世が研究に生涯を捧げ、多くの科学者が命を落とした恐ろしい病気。', imageUrl: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-104-yellow-fever-8sPNBXE47MDi5dwUFVSYwM.webp' },
   { id: 'card-105', name: '天動説', category: 'discovery', rarity: 'R', description: '地球が宇宙の中心で、太陽や星が地球の周りを回るという古代の宇宙観。プトレマイオスが体系化した。', imageUrl: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-105-geocentric-model-k99sDiiVkEiQjgR9XatCxW.webp' },
+
+  // ===== コンボカード: エジソン/ダーウィン/ライト兄弟/北里/始皇帝/アマゾン/ニュートン/宗教改革/ゴッホ/ジャンヌ/マリー =====
+  { id: 'card-106', name: '蓄音機', category: 'inventions', rarity: 'N', description: 'エジソンが発明した音を記録する装置。音楽の歴史を変えた。', imageUrl: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-036_00819564.webp' },
+  { id: 'card-107', name: 'ゾウガメ', category: 'creatures', rarity: 'N', description: 'ガラパゴス諸島の大型陸ガメ。100年以上生きる長寿の生き物。', imageUrl: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-073_3e4012aa.webp' },
+  { id: 'card-108', name: 'ダーウィン', category: 'great_people', rarity: 'R', description: '進化論を唱えた博物学者。ビーグル号でガラパゴスを旅し、自然選択説を発表した。', imageUrl: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-008_82121072.webp' },
+  { id: 'card-109', name: 'グライダー', category: 'inventions', rarity: 'N', description: 'ライト兄弟が初飛行前に何度も実験した無動力滑空機。', imageUrl: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-039_80ed3ea0.webp' },
+  { id: 'card-110', name: '風洞', category: 'inventions', rarity: 'N', description: 'ライト兄弟が翼の形を研究するために作った装置。空気の流れを可視化した。', imageUrl: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-091_9b62c7a8.webp' },
+  { id: 'card-111', name: 'ライト兄弟', category: 'great_people', rarity: 'R', description: '世界で初めて動力飛行機による有人飛行に成功した兄弟。人類の空への夢を実現した。', imageUrl: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-039_80ed3ea0.webp' },
+  { id: 'card-112', name: 'ペスト菌', category: 'inventions', rarity: 'N', description: '黒死病と呼ばれた恐るべき感染症の原因菌。北里柴三郎が発見した。', imageUrl: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-104-yellow-fever-8sPNBXE47MDi5dwUFVSYwM.webp' },
+  { id: 'card-113', name: '血清', category: 'inventions', rarity: 'N', description: '抗体を含む治療液。北里柴三郎が破傷風の血清療法を確立した。', imageUrl: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-043_f1b6a5ad.webp' },
+  { id: 'card-114', name: '始皇帝', category: 'great_people', rarity: 'SR', description: '中国を初めて統一した秦の皇帝。万里の長城や兵馬俑を築いた絶対君主。', imageUrl: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-026_f01aa946.webp' },
+  { id: 'card-115', name: 'アマゾン川', category: 'world_heritage', rarity: 'N', description: '南米を貫く世界最大の川。無数の生き物が生息する密林の命の源。', imageUrl: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-085_851fa9c8.webp' },
+  { id: 'card-116', name: 'アナコンダ', category: 'creatures', rarity: 'N', description: 'アマゾンに棲む世界最大級のヘビ。獲物を締め上げて捕食する。', imageUrl: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-025_c9444fd0.webp' },
+  { id: 'card-117', name: '毒矢カエル', category: 'creatures', rarity: 'N', description: '鮮やかな色をしたアマゾンのカエル。先住民が矢毒に使う猛毒を持つ。', imageUrl: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-075_3638571f.webp' },
+  { id: 'card-118', name: 'リンゴ', category: 'inventions', rarity: 'N', description: 'ニュートンが万有引力を思いつくきっかけになったとされる果実。', imageUrl: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-098_fecba667.webp' },
+  { id: 'card-119', name: 'プリズム', category: 'inventions', rarity: 'N', description: '光を虹色に分ける三角柱。ニュートンが光の性質を解き明かした。', imageUrl: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-096_07debb42.webp' },
+  { id: 'card-120', name: '活版印刷機', category: 'inventions', rarity: 'N', description: 'グーテンベルクの発明。聖書を広め、宗教改革のきっかけになった。', imageUrl: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-038_625ca008.webp' },
+  { id: 'card-121', name: '聖書', category: 'inventions', rarity: 'N', description: 'キリスト教の聖典。活版印刷機によって民衆にも広まった。', imageUrl: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-094_7732179c.webp' },
+  { id: 'card-122', name: '免罪符', category: 'inventions', rarity: 'N', description: '罪を赦すと売られた札。ルターが激しく批判し宗教改革の発端となった。', imageUrl: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-094_7732179c.webp' },
+  { id: 'card-123', name: 'ルター', category: 'great_people', rarity: 'R', description: '95ヶ条の論題を掲げ、カトリック教会に対抗して宗教改革を起こした神学者。', imageUrl: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-029_7ae23697.webp' },
+  { id: 'card-124', name: 'ひまわり', category: 'inventions', rarity: 'N', description: 'ゴッホの代表作。黄色の花が燃えるように描かれた油彩画。', imageUrl: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-051_e8741598.webp' },
+  { id: 'card-125', name: '星月夜', category: 'inventions', rarity: 'N', description: '渦を巻く夜空を描いたゴッホの傑作。精神病院から見た風景とされる。', imageUrl: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-051_e8741598.webp' },
+  { id: 'card-126', name: '糸杉', category: 'inventions', rarity: 'N', description: '天へ伸びるように描かれたゴッホの樹木。炎のような筆致が特徴。', imageUrl: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-051_e8741598.webp' },
+  { id: 'card-127', name: '聖剣', category: 'inventions', rarity: 'N', description: 'ジャンヌ・ダルクが神の啓示で見つけたとされる剣。フランス救国の象徴。', imageUrl: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-057_bf6eb0b0.webp' },
+  { id: 'card-128', name: '軍旗', category: 'inventions', rarity: 'N', description: 'ジャンヌ・ダルクが先頭で掲げた白い旗。兵士の士気を奮い立たせた。', imageUrl: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-057_bf6eb0b0.webp' },
+  { id: 'card-129', name: 'ケーキ', category: 'inventions', rarity: 'N', description: '「パンがなければお菓子を食べればいい」と言ったとされるマリーの象徴。', imageUrl: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-054_c8be8e9b.webp' },
 ];
 
 // ガチャ排出率

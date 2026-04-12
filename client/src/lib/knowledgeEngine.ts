@@ -475,6 +475,390 @@ export function applyRevealEffect(
       telop = { text: '📜紙の記録！+5 ALT', color };
       break;
     }
+    // ===== 追加コンボ効果 =====
+    case 'edison': {
+      const my = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      const hasBulb = my.bench.some((b) => b.name === '電球' && !sealed.includes(b.name));
+      const hasPhono = my.bench.some((b) => b.name === '蓄音機' && !sealed.includes(b.name));
+      if (role === 'attacker') {
+        let bonus = (hasBulb ? 1 : 0) + (hasPhono ? 1 : 0);
+        if (hasBulb && hasPhono) bonus += 3;
+        bonusAttack += bonus;
+        telop = { text: `💡エジソン発明王！攻撃+${bonus}`, color };
+      } else {
+        if (hasPhono) {
+          next = { ...next, defenderBonus: next.defenderBonus + 2 };
+          telop = { text: '💡エジソン (蓄音機の守護)！防御+2', color };
+        }
+      }
+      break;
+    }
+    case 'phonograph': {
+      telop = { text: '🎙️蓄音機！ベンチでエジソンを強化', color };
+      break;
+    }
+    case 'darwin': {
+      const my = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      const creatureTypes = new Set(
+        my.bench.filter((b) => !sealed.includes(b.name) && b.card.category === 'creature').map((b) => b.name),
+      );
+      const n = creatureTypes.size;
+      const hasTortoise = my.bench.some((b) => b.name === 'ゾウガメ' && !sealed.includes(b.name));
+      const hasFinch = my.bench.some((b) => b.name === 'ダーウィンフィンチ' && !sealed.includes(b.name));
+      if (role === 'attacker') {
+        const total = n + (hasFinch ? 2 : 0);
+        bonusAttack += total;
+        telop = { text: `🐢ダーウィン自然選択！攻撃+${total}`, color };
+      } else {
+        const total = n + (hasTortoise ? 2 : 0);
+        next = { ...next, defenderBonus: next.defenderBonus + total };
+        telop = { text: `🐢ダーウィン自然選択！防御+${total}`, color };
+      }
+      break;
+    }
+    case 'tortoise': case 'finch': {
+      telop = { text: '🐢ガラパゴスの生き物！ダーウィンを強化', color };
+      break;
+    }
+    case 'glider': {
+      const my = side === 'player' ? next.player : next.ai;
+      const idx = my.deck.findIndex((c) => c.name === 'ライト兄弟');
+      if (idx > 2) {
+        const newDeck = [...my.deck];
+        const [moved] = newDeck.splice(idx, 1);
+        newDeck.splice(2, 0, moved);
+        next = applySide(next, side, { ...my, deck: newDeck });
+        telop = { text: '🛩️グライダー！ライト兄弟を3枚以内に', color };
+      } else {
+        telop = { text: '🛩️グライダー！滑空試験', color };
+      }
+      break;
+    }
+    case 'wind_tunnel': {
+      // 公開時：相手デッキ上2枚を隔離 (攻撃成功扱いを簡略化)
+      const oppState = opp === 'player' ? next.player : next.ai;
+      const slice = oppState.deck.slice(0, 2);
+      if (slice.length > 0) {
+        next = applySide(
+          { ...next, quarantine: { ...next.quarantine, [opp]: [...next.quarantine[opp], ...slice] } },
+          opp,
+          { ...oppState, deck: oppState.deck.slice(slice.length) },
+        );
+      }
+      telop = { text: `🌬️風洞実験！敵デッキ${slice.length}枚隔離`, color };
+      break;
+    }
+    case 'wright_bros': {
+      if (role === 'attacker') {
+        const my = side === 'player' ? next.player : next.ai;
+        const sealed = next.sealedBenchNames[side];
+        const hasGlider = my.bench.some((b) => b.name === 'グライダー' && !sealed.includes(b.name));
+        const hasWT = my.bench.some((b) => b.name === '風洞' && !sealed.includes(b.name));
+        let bonus = 0;
+        if (hasGlider || hasWT) bonus += 3;
+        if (hasWT) bonus += 2;
+        bonusAttack += bonus;
+        telop = { text: `✈️ライト兄弟初飛行！攻撃+${bonus}`, color };
+      }
+      break;
+    }
+    case 'plague': {
+      const oppState = opp === 'player' ? next.player : next.ai;
+      const names = oppState.bench.map((b) => b.name);
+      next = {
+        ...next,
+        sealedBenchNames: {
+          ...next.sealedBenchNames,
+          [opp]: [...next.sealedBenchNames[opp], ...names],
+        },
+      };
+      telop = { text: '🦠ペスト菌！相手ベンチ効果を封印', color };
+      break;
+    }
+    case 'serum': {
+      telop = { text: '💉血清！味方の防御を強化', color };
+      break;
+    }
+    case 'kitasato': {
+      const my = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      const hasPlague = my.bench.some((b) => b.name === 'ペスト菌' && !sealed.includes(b.name));
+      const hasSerum = my.bench.some((b) => b.name === '血清' && !sealed.includes(b.name));
+      if (hasPlague && hasSerum && role === 'defender') {
+        next = {
+          ...next,
+          defenderBonus: next.defenderBonus + 5,
+          sealedBenchNames: { player: [], ai: [] },
+        };
+        telop = { text: '🧫北里柴三郎！防御+5 & 封印全解除', color };
+      } else {
+        telop = { text: '🧫北里柴三郎！医学の父', color };
+      }
+      break;
+    }
+    case 'terracotta': {
+      telop = { text: '🗿兵馬俑！始皇帝を守護', color };
+      break;
+    }
+    case 'qinshi': {
+      const my = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      const heritageCount = my.bench
+        .filter((b) => !sealed.includes(b.name) && b.card.category === 'heritage')
+        .reduce((s, b) => s + b.count, 0);
+      if (role === 'attacker') {
+        bonusAttack += heritageCount * 2;
+        telop = { text: `👑始皇帝天下統一！攻撃+${heritageCount * 2}`, color };
+      } else {
+        next = { ...next, defenderBonus: next.defenderBonus + heritageCount };
+        telop = { text: `👑始皇帝天下統一！防御+${heritageCount}`, color };
+      }
+      break;
+    }
+    case 'amazon_river': {
+      telop = { text: '🌊アマゾン川！生き物を鼓舞', color };
+      break;
+    }
+    case 'anaconda': {
+      if (role === 'attacker') {
+        next = { ...next, defenderBonus: next.defenderBonus - 2 };
+        telop = { text: '🐍アナコンダ締めつけ！敵防御-2', color };
+      }
+      break;
+    }
+    case 'poison_frog': {
+      const my = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      const hasAmazon = my.bench.some((b) => b.name === 'アマゾン川' && !sealed.includes(b.name));
+      const n = hasAmazon ? 2 : 1;
+      const oppState = opp === 'player' ? next.player : next.ai;
+      const slice = oppState.deck.slice(0, n);
+      if (slice.length > 0) {
+        next = applySide(
+          { ...next, quarantine: { ...next.quarantine, [opp]: [...next.quarantine[opp], ...slice] } },
+          opp,
+          { ...oppState, deck: oppState.deck.slice(slice.length) },
+        );
+        telop = { text: `🐸毒矢カエル！敵${slice.length}枚隔離`, color };
+      }
+      break;
+    }
+    case 'apple': {
+      const my = side === 'player' ? next.player : next.ai;
+      const idx = my.deck.findIndex((c) => c.name === 'ニュートン');
+      if (idx > 0) {
+        const newDeck = [...my.deck];
+        const [moved] = newDeck.splice(idx, 1);
+        newDeck.unshift(moved);
+        next = applySide(next, side, { ...my, deck: newDeck });
+        telop = { text: '🍎リンゴ！ニュートンをデッキ上へ', color };
+      } else {
+        telop = { text: '🍎リンゴ！落下', color };
+      }
+      break;
+    }
+    case 'prism': case 'gravity': {
+      telop = { text: '🔮ニュートンを強化', color };
+      break;
+    }
+    case 'newton': {
+      const my = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      const hasApple = my.bench.some((b) => b.name === 'リンゴ' && !sealed.includes(b.name));
+      const hasPrism = my.bench.some((b) => b.name === 'プリズム' && !sealed.includes(b.name));
+      const hasGrav = my.bench.some((b) => b.name === '万有引力' && !sealed.includes(b.name));
+      const types = (hasApple ? 1 : 0) + (hasPrism ? 1 : 0) + (hasGrav ? 1 : 0);
+      const tier = types === 1 ? 1 : types === 2 ? 3 : types === 3 ? 5 : 0;
+      if (role === 'attacker') {
+        const total = tier + (hasPrism ? 2 : 0);
+        bonusAttack += total;
+        if (hasPrism) {
+          // 相手防御効果無効：デバフ消去
+          next = { ...next, defenderBonus: Math.min(0, next.defenderBonus) };
+        }
+        if (types === 3) {
+          const oppState = opp === 'player' ? next.player : next.ai;
+          next = {
+            ...next,
+            sealedBenchNames: {
+              ...next.sealedBenchNames,
+              [opp]: [...next.sealedBenchNames[opp], ...oppState.bench.map((b) => b.name)],
+            },
+          };
+        }
+        telop = { text: `🧠ニュートンプリンキピア！攻撃+${total}`, color };
+      } else {
+        const total = tier + (hasGrav ? 2 : 0);
+        next = { ...next, defenderBonus: next.defenderBonus + total };
+        telop = { text: `🧠ニュートンプリンキピア！防御+${total}`, color };
+      }
+      break;
+    }
+    case 'printing_press': {
+      const my = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      const hasBible = my.bench.some((b) => b.name === '聖書' && !sealed.includes(b.name));
+      const n = hasBible ? 4 : 3;
+      if (my.deck.length >= 2) {
+        const topN = my.deck.slice(0, n);
+        const sorted = [...topN].sort((a, b) => getBaseAttack(b) - getBaseAttack(a));
+        next = applySide(next, side, { ...my, deck: [...sorted, ...my.deck.slice(n)] });
+        telop = { text: `📖活版印刷！上${n}枚を並び替え`, color };
+      }
+      break;
+    }
+    case 'bible': {
+      telop = { text: '✝️聖書！味方防御を強化', color };
+      break;
+    }
+    case 'indulgence': {
+      const my = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      const hasLuther = my.bench.some((b) => b.name === 'ルター' && !sealed.includes(b.name));
+      if (hasLuther) {
+        telop = { text: '📜免罪符！ルターが封じた', color };
+      } else if (my.bench.length > 0) {
+        const strongest = [...my.bench].sort(
+          (a, b) => getBaseAttack(b.card) - getBaseAttack(a.card),
+        )[0];
+        const newBench = removeOneFromBench(my.bench, strongest.name);
+        next = applySide(next, side, { ...my, bench: newBench, deck: [...my.deck, strongest.card] });
+        telop = { text: `📜免罪符！${strongest.name}をデッキへ`, color };
+      }
+      break;
+    }
+    case 'luther': {
+      const my = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      const hasBible = my.bench.some((b) => b.name === '聖書' && !sealed.includes(b.name));
+      const hasPress = my.bench.some((b) => b.name === '活版印刷機' && !sealed.includes(b.name));
+      if (hasBible && hasPress) {
+        if (role === 'attacker') {
+          bonusAttack += 5;
+          const oppState = opp === 'player' ? next.player : next.ai;
+          if (oppState.bench.length > 0) {
+            const target = oppState.bench[0];
+            const newBench = removeOneFromBench(oppState.bench, target.name);
+            next = applySide(
+              {
+                ...next,
+                quarantine: { ...next.quarantine, [opp]: [...next.quarantine[opp], target.card] },
+              },
+              opp,
+              { ...oppState, bench: newBench },
+            );
+          }
+        } else {
+          next = { ...next, defenderBonus: next.defenderBonus + 3 };
+        }
+        telop = { text: '📖ルター95ヶ条！最大強化', color };
+      } else if (hasBible || hasPress) {
+        if (role === 'attacker') bonusAttack += 2;
+        else next = { ...next, defenderBonus: next.defenderBonus + 2 };
+        telop = { text: '📖ルター！強化+2', color };
+      } else {
+        telop = { text: '📖ルター！宗教改革', color };
+      }
+      break;
+    }
+    case 'sunflower': case 'starry_night': case 'cypress': {
+      telop = { text: '🎨ゴッホの画材', color };
+      break;
+    }
+    case 'gogh': {
+      const my = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      const hasS = my.bench.some((b) => b.name === 'ひまわり' && !sealed.includes(b.name));
+      const hasStar = my.bench.some((b) => b.name === '星月夜' && !sealed.includes(b.name));
+      const hasCyp = my.bench.some((b) => b.name === '糸杉' && !sealed.includes(b.name));
+      const types = (hasS ? 1 : 0) + (hasStar ? 1 : 0) + (hasCyp ? 1 : 0);
+      const atkTier = types === 1 ? 2 : types === 2 ? 4 : types === 3 ? 6 : 0;
+      const defTier = types === 2 ? 2 : types === 3 ? 4 : 0;
+      if (role === 'attacker') {
+        const total = atkTier + (hasS ? 2 : 0);
+        bonusAttack += total;
+        if (types === 3) {
+          const oppState = opp === 'player' ? next.player : next.ai;
+          next = {
+            ...next,
+            sealedBenchNames: {
+              ...next.sealedBenchNames,
+              [opp]: [...next.sealedBenchNames[opp], ...oppState.bench.map((b) => b.name)],
+            },
+          };
+        }
+        telop = { text: `🎨ゴッホ炎の画家！攻撃+${total}`, color };
+      } else {
+        const total = defTier + (hasStar ? 2 : 0);
+        next = { ...next, defenderBonus: next.defenderBonus + total };
+        telop = { text: `🎨ゴッホ炎の画家！防御+${total}`, color };
+      }
+      break;
+    }
+    case 'holy_sword': case 'banner': {
+      telop = { text: '⚔️ジャンヌの装備', color };
+      break;
+    }
+    case 'jeanne': {
+      const my = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      const hasSword = my.bench.some((b) => b.name === '聖剣' && !sealed.includes(b.name));
+      const hasBanner = my.bench.some((b) => b.name === '軍旗' && !sealed.includes(b.name));
+      if (hasSword && hasBanner) {
+        if (role === 'attacker') {
+          bonusAttack += 4;
+          const oppState = opp === 'player' ? next.player : next.ai;
+          if (oppState.bench.length > 0) {
+            next = {
+              ...next,
+              sealedBenchNames: {
+                ...next.sealedBenchNames,
+                [opp]: [...next.sealedBenchNames[opp], oppState.bench[0].name],
+              },
+            };
+          }
+        } else {
+          next = { ...next, defenderBonus: next.defenderBonus + 4 };
+        }
+        telop = { text: '⚜️オルレアンの乙女！攻防+4', color };
+      } else if (hasSword) {
+        if (role === 'attacker') bonusAttack += 3;
+        telop = { text: '⚔️聖剣の加護！攻撃+3', color };
+      } else if (hasBanner) {
+        if (role === 'defender') next = { ...next, defenderBonus: next.defenderBonus + 3 };
+        telop = { text: '🚩軍旗の加護！防御+3', color };
+      } else {
+        telop = { text: '⚜️ジャンヌ・ダルク！', color };
+      }
+      break;
+    }
+    case 'versailles': case 'cake': {
+      telop = { text: '🏰マリーの権威', color };
+      break;
+    }
+    case 'marie': {
+      const my = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      const hasVers = my.bench.some((b) => b.name === 'ヴェルサイユ宮殿' && !sealed.includes(b.name));
+      const hasCake = my.bench.some((b) => b.name === 'ケーキ' && !sealed.includes(b.name));
+      const deckLow = my.deck.length <= 4;
+      let atk = hasCake ? 3 : 0;
+      let def = hasVers ? 4 : 0;
+      if (hasVers && hasCake && deckLow) {
+        atk += 2;
+        def += 2;
+      }
+      if (role === 'attacker') {
+        bonusAttack += atk;
+        telop = { text: `👑マリー最後の女王！攻撃+${atk}`, color };
+      } else {
+        next = { ...next, defenderBonus: next.defenderBonus + def };
+        telop = { text: `👑マリー最後の女王！防御+${def}`, color };
+      }
+      break;
+    }
   }
 
   return { state: next, bonusAttack, telop };
@@ -483,6 +867,46 @@ export function applyRevealEffect(
 function withTelop(state: GameState, telop?: { text: string; color: string }): GameState {
   if (!telop) return state;
   return { ...state, effectTelop: { ...telop, key: Date.now() + Math.floor(Math.random() * 1000) } };
+}
+
+// ===== Bench auras (passive buffs from any card on bench, not tied to a hero reveal) =====
+function unsealedBenchNames(state: GameState, side: Side): { names: Set<string>; sunflower: number } {
+  const me = side === 'player' ? state.player : state.ai;
+  const sealed = state.sealedBenchNames[side];
+  const alive = me.bench.filter((b) => !sealed.includes(b.name));
+  return {
+    names: new Set(alive.map((b) => b.name)),
+    sunflower: alive.find((b) => b.name === 'ひまわり')?.count ?? 0,
+  };
+}
+
+function computeAttackerAura(
+  state: GameState,
+  attackerSide: Side,
+  card: BattleCard,
+  priorRevealCount: number,
+): number {
+  const { names, sunflower } = unsealedBenchNames(state, attackerSide);
+  let bonus = 0;
+  if (names.has('軍旗')) bonus += 1;
+  if (names.has('アマゾン川') && card.category === 'creature') bonus += 1;
+  if (sunflower >= 2) bonus += 1;
+  // Opponent 万有引力: 2枚目以降の攻撃 -1
+  const opp = otherSide(attackerSide);
+  const oppMe = opp === 'player' ? state.player : state.ai;
+  const oppSealed = state.sealedBenchNames[opp];
+  const oppHasGravity = oppMe.bench.some((b) => b.name === '万有引力' && !oppSealed.includes(b.name));
+  if (oppHasGravity && priorRevealCount >= 1) bonus -= 1;
+  return bonus;
+}
+
+function applyDefenderAura(state: GameState, defenderSide: Side): GameState {
+  const { names } = unsealedBenchNames(state, defenderSide);
+  let bonus = 0;
+  if (names.has('血清')) bonus += 1;
+  if (names.has('聖書')) bonus += names.has('活版印刷機') ? 2 : 1;
+  if (bonus === 0) return state;
+  return { ...state, defenderBonus: state.defenderBonus + bonus };
 }
 
 // ---------- Deck phase helpers (kept from previous version) ----------
@@ -556,6 +980,7 @@ export function startBattle(state: GameState): GameState {
     const eff = applyRevealEffect(next, defender, state.flagHolder, 'defender');
     next = withTelop(eff.state, eff.telop);
   }
+  next = applyDefenderAura(next, state.flagHolder);
   return next;
 }
 
@@ -615,6 +1040,9 @@ export function revealNextAttackCard(state: GameState): GameState {
     addedPower += eff.bonusAttack;
   }
 
+  // Bench auras from passive cards (any-reveal buffs from own/opponent bench)
+  addedPower += computeAttackerAura(next, attackerSide, nextCard, state.attackRevealed.length);
+
   const newPower = state.attackCurrentPower + addedPower;
   return {
     ...next,
@@ -653,9 +1081,38 @@ export function resolveSubBattleWin(state: GameState): GameState {
   const attackerSide: Side = otherSide(defenderSide);
   const defenderCard = state.defenseCard;
 
-  // Defender's bench receives: (old defender card) + (flushed quarantine).
+  // ===== Leave-field triggers =====
+  // 糸杉: ゴッホが場を離れる時、ベンチではなく隔離へ
+  // 兵馬俑: 始皇帝が場を離れる時、代わりに隔離
+  // ケーキ: マリー・アントワネット が場を離れる時、相手デッキ上2枚を隔離
+  const defenderState0 = defenderSide === 'player' ? state.player : state.ai;
+  const defSealed0 = state.sealedBenchNames[defenderSide];
+  const dBenchNamesSet = new Set(
+    defenderState0.bench.filter((b) => !defSealed0.includes(b.name)).map((b) => b.name),
+  );
+  let reroutedDefender = false;
+  const leaveQuarantineDefender: BattleCard[] = [];
+  if (defenderCard.name === 'ゴッホ' && dBenchNamesSet.has('糸杉')) {
+    reroutedDefender = true;
+    leaveQuarantineDefender.push(defenderCard);
+  }
+  if (defenderCard.name === '始皇帝' && dBenchNamesSet.has('兵馬俑')) {
+    reroutedDefender = true;
+    leaveQuarantineDefender.push(defenderCard);
+  }
+  let attackerDeckTrim = 0;
+  const leaveQuarantineOpp: BattleCard[] = [];
+  if (defenderCard.name === 'マリー・アントワネット' && dBenchNamesSet.has('ケーキ')) {
+    const atkState = attackerSide === 'player' ? state.player : state.ai;
+    leaveQuarantineOpp.push(...atkState.deck.slice(0, 2));
+    attackerDeckTrim = leaveQuarantineOpp.length;
+  }
+
+  // Defender's bench receives: (old defender card unless rerouted) + (flushed quarantine).
   const defenderState = defenderSide === 'player' ? state.player : state.ai;
-  const flushedCards = [defenderCard, ...state.quarantine[defenderSide]];
+  const flushedCards = reroutedDefender
+    ? [...state.quarantine[defenderSide]]
+    : [defenderCard, ...state.quarantine[defenderSide]];
   let newDefenderBench = defenderState.bench;
   for (const c of flushedCards) {
     if (!canAddToBench(newDefenderBench, c)) {
@@ -675,12 +1132,20 @@ export function resolveSubBattleWin(state: GameState): GameState {
   const otherAttackCards = attackCards.slice(0, -1);
   const newAttackerQuarantine = [...state.quarantine[attackerSide], ...otherAttackCards];
 
+  // Apply leave-trigger quarantine additions (糸杉/兵馬俑 reroute defender, ケーキ quarantines opp deck top).
+  const defenderLeaveQuarantine = [...leaveQuarantineDefender];
+  const attackerLeaveQuarantine = [...leaveQuarantineOpp];
   // Update quarantine map: defender's cleared (flushed to bench), attacker's appended.
   const newQuarantine = {
     ...state.quarantine,
-    [defenderSide]: [] as BattleCard[],
-    [attackerSide]: newAttackerQuarantine,
+    [defenderSide]: defenderLeaveQuarantine,
+    [attackerSide]: [...newAttackerQuarantine, ...attackerLeaveQuarantine],
   };
+  // Trim attacker deck when ケーキ triggers.
+  const attackerStateForTrim = attackerSide === 'player' ? state.player : state.ai;
+  const trimmedAttackerDeck = attackerDeckTrim > 0
+    ? attackerStateForTrim.deck.slice(attackerDeckTrim)
+    : attackerStateForTrim.deck;
 
   const result: SubBattleResult = {
     idx: state.history.length + 1,
@@ -704,10 +1169,12 @@ export function resolveSubBattleWin(state: GameState): GameState {
     player: {
       ...state.player,
       bench: defenderSide === 'player' ? newDefenderBench : state.player.bench,
+      deck: attackerSide === 'player' ? trimmedAttackerDeck : state.player.deck,
     },
     ai: {
       ...state.ai,
       bench: defenderSide === 'ai' ? newDefenderBench : state.ai.bench,
+      deck: attackerSide === 'ai' ? trimmedAttackerDeck : state.ai.deck,
     },
     quarantine: newQuarantine,
     // Role swap: new flag holder is the old attacker. New defense card is the last attack card.
