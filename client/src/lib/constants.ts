@@ -24,12 +24,10 @@ export const GACHA_RATES: Record<number, number> = {
 export const PITY_THRESHOLD = 50; // 50回で★5確定
 
 export const GAME_CATEGORIES = [
-  { id: 'math', label: 'ATドリル', emoji: '🔢', color: '#F59E0B' },
-  { id: 'inquiry', label: '探究クイズ', emoji: '💡', color: '#8B5CF6' },
-  { id: 'puzzle', label: '算数ゲーム', emoji: '🧩', color: '#10B981' },
-  { id: 'japanese', label: 'ことわざドロップ', emoji: '📝', color: '#EC4899' },
-  { id: 'social', label: '歴史カルタ', emoji: '🏯', color: '#EF4444' },
-  { id: 'science', label: '編成チーム', emoji: '🔬', color: '#06B6D4' },
+  { id: 'great-person', label: '偉人クエスト', emoji: '👑', color: '#f59e0b', href: '/games/quiz/great-person' },
+  { id: 'creature', label: '生き物クエスト', emoji: '🐟', color: '#22c55e', href: '/games/quiz/creature' },
+  { id: 'heritage', label: '世界遺産クエスト', emoji: '🏛️', color: '#8b5cf6', href: '/games/quiz/heritage' },
+  { id: 'invention', label: '科学発明クエスト', emoji: '🔬', color: '#3b82f6', href: '/games/quiz/invention' },
 ] as const;
 
 export const CLASS_LIST = [

@@ -11,14 +11,7 @@ import { IMAGES, GAME_CATEGORIES, AVATAR_ITEMS } from '@/lib/constants';
 import { useUserStore, useMissionStore, useAltStore } from '@/lib/stores';
 import { calculateLevel } from '@/lib/level';
 
-const categoryIcons: Record<string, string> = {
-  math: '🔢', inquiry: '💡', puzzle: '🧩', japanese: '📝', social: '🏯', science: '🔬',
-};
-const categoryBgColors: Record<string, [string, string]> = {
-  math: ['#f59e0b', '#d97706'], inquiry: ['#8b5cf6', '#7c3aed'],
-  puzzle: ['#22c55e', '#16a34a'], japanese: ['#ec4899', '#db2777'],
-  social: ['#ef4444', '#dc2626'], science: ['#06b6d4', '#0891b2'],
-};
+// Quest board categories use color from GAME_CATEGORIES directly
 
 const categoryEmoji: Record<string, string> = {
   game: '⚔️', gacha: '🎰', collection: '🃏',
@@ -301,43 +294,40 @@ export default function HomePage() {
           </div>
 
           <div className="grid grid-cols-2 gap-2.5">
-            {GAME_CATEGORIES.map((cat, i) => {
-              const [c1] = categoryBgColors[cat.id] || ['#666', '#555'];
-              return (
-                <Link key={cat.id} href="/games">
-                  <div
-                    className="rounded-xl p-3 transition-all duration-200 hover:scale-[1.02] active:scale-[0.97] card-shine relative overflow-hidden animate-slide-up"
-                    style={{
-                      animationDelay: `${i * 70}ms`,
-                      background: 'linear-gradient(135deg, rgba(21,29,59,0.92), rgba(14,20,45,0.95))',
-                      border: `1.5px solid ${c1}44`,
-                      boxShadow: `0 2px 12px rgba(0,0,0,0.3), inset 0 0 20px ${c1}08`,
-                    }}>
-                    <div className="absolute top-0 right-0 w-16 h-16 rounded-full blur-2xl opacity-20"
-                      style={{ background: c1, transform: 'translate(30%, -30%)' }} />
-                    <div className="flex items-center gap-2.5 mb-2 relative">
-                      <div className="w-10 h-10 rounded-lg flex items-center justify-center"
-                        style={{
-                          background: `linear-gradient(135deg, ${c1}33, ${c1}22)`,
-                          border: `1px solid ${c1}55`, boxShadow: `0 0 8px ${c1}22`,
-                        }}>
-                        <span className="text-xl">{categoryIcons[cat.id] || cat.emoji}</span>
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-[13px] font-bold text-amber-100">{cat.label}</p>
-                      </div>
+            {GAME_CATEGORIES.map((cat, i) => (
+              <Link key={cat.id} href={cat.href}>
+                <div
+                  className="rounded-xl p-3 transition-all duration-200 hover:scale-[1.02] active:scale-[0.97] card-shine relative overflow-hidden animate-slide-up"
+                  style={{
+                    animationDelay: `${i * 70}ms`,
+                    background: 'linear-gradient(135deg, rgba(21,29,59,0.92), rgba(14,20,45,0.95))',
+                    border: `1.5px solid ${cat.color}44`,
+                    boxShadow: `0 2px 12px rgba(0,0,0,0.3), inset 0 0 20px ${cat.color}08`,
+                  }}>
+                  <div className="absolute top-0 right-0 w-16 h-16 rounded-full blur-2xl opacity-20"
+                    style={{ background: cat.color, transform: 'translate(30%, -30%)' }} />
+                  <div className="flex items-center gap-2.5 mb-2 relative">
+                    <div className="w-10 h-10 rounded-lg flex items-center justify-center"
+                      style={{
+                        background: `linear-gradient(135deg, ${cat.color}33, ${cat.color}22)`,
+                        border: `1px solid ${cat.color}55`, boxShadow: `0 0 8px ${cat.color}22`,
+                      }}>
+                      <span className="text-xl">{cat.emoji}</span>
                     </div>
-                    <div className="flex items-center justify-between relative">
-                      <span className="text-[10px] text-amber-200/40">タップして挑戦</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold"
-                        style={{ background: `${c1}22`, color: c1, border: `1px solid ${c1}33` }}>
-                        +10 ALT
-                      </span>
+                    <div className="flex-1">
+                      <p className="text-[13px] font-bold text-amber-100">{cat.label}</p>
                     </div>
                   </div>
-                </Link>
-              );
-            })}
+                  <div className="flex items-center justify-between relative">
+                    <span className="text-[10px] text-amber-200/40">タップして挑戦</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold"
+                      style={{ background: `${cat.color}22`, color: cat.color, border: `1px solid ${cat.color}33` }}>
+                      +10 ALT
+                    </span>
+                  </div>
+                </div>
+              </Link>
+            ))}
           </div>
         </div>
 

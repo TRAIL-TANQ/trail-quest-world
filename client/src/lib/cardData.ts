@@ -177,18 +177,18 @@ export const COLLECTION_CARDS: CollectionCard[] = [
   { id: 'card-145', name: '香辛料', category: 'inventions', rarity: 'N', description: 'コショウやシナモンなど東方の貴重な調味料。大航海時代の原動力となった。', imageUrl: '/images/cards/spice.png' },
 
   // ===== 宝石カード (5枚) =====
-  { id: 'card-146', name: 'ダイヤモンド', category: 'inventions', rarity: 'SR', description: '最も硬い天然鉱物。永遠の輝きを放ち、不滅の象徴とされる。', imageUrl: '' },
-  { id: 'card-147', name: 'ルビー', category: 'inventions', rarity: 'N', description: '情熱的な赤色の宝石。コランダムにクロムが含まれて赤く輝く。', imageUrl: '' },
-  { id: 'card-148', name: 'サファイア', category: 'inventions', rarity: 'N', description: '深い青色の宝石。ルビーと同じコランダム鉱物で、知恵の象徴。', imageUrl: '' },
-  { id: 'card-149', name: 'エメラルド', category: 'inventions', rarity: 'N', description: '鮮やかな緑の宝石。クレオパトラも愛した再生と癒しの象徴。', imageUrl: '' },
-  { id: 'card-150', name: 'アメジスト', category: 'inventions', rarity: 'N', description: '美しい紫色の水晶。精神を守り、邪気を払うとされてきた。', imageUrl: '' },
+  { id: 'card-146', name: 'ダイヤモンド', category: 'inventions', rarity: 'SR', description: '最も硬い天然鉱物。永遠の輝きを放ち、不滅の象徴とされる。', imageUrl: '/images/cards/diamond.png' },
+  { id: 'card-147', name: 'ルビー', category: 'inventions', rarity: 'N', description: '情熱的な赤色の宝石。コランダムにクロムが含まれて赤く輝く。', imageUrl: '/images/cards/ruby.png' },
+  { id: 'card-148', name: 'サファイア', category: 'inventions', rarity: 'N', description: '深い青色の宝石。ルビーと同じコランダム鉱物で、知恵の象徴。', imageUrl: '/images/cards/sapphire.png' },
+  { id: 'card-149', name: 'エメラルド', category: 'inventions', rarity: 'N', description: '鮮やかな緑の宝石。クレオパトラも愛した再生と癒しの象徴。', imageUrl: '/images/cards/emerald.png' },
+  { id: 'card-150', name: 'アメジスト', category: 'inventions', rarity: 'N', description: '美しい紫色の水晶。精神を守り、邪気を払うとされてきた。', imageUrl: '/images/cards/amethyst.png' },
 
   // ===== アフリカデッキ (5枚) =====
-  { id: 'card-151', name: 'ネルソン・マンデラ', category: 'great_people', rarity: 'R', description: '南アフリカの指導者。27年間の投獄を経てアパルトヘイトを終わらせた。', imageUrl: '' },
-  { id: 'card-152', name: 'アパルトヘイト', category: 'inventions', rarity: 'N', description: '南アフリカで行われた人種隔離政策。マンデラらの闘いで1994年に廃止された。', imageUrl: '' },
-  { id: 'card-153', name: 'キリマンジャロ', category: 'world_heritage', rarity: 'N', description: 'アフリカ大陸最高峰。標高5895メートルの雪を頂く山。', imageUrl: '' },
+  { id: 'card-151', name: 'ネルソン・マンデラ', category: 'great_people', rarity: 'R', description: '南アフリカの指導者。27年間の投獄を経てアパルトヘイトを終わらせた。', imageUrl: '/images/cards/mandela.png' },
+  { id: 'card-152', name: 'アパルトヘイト', category: 'inventions', rarity: 'N', description: '南アフリカで行われた人種隔離政策。マンデラらの闘いで1994年に廃止された。', imageUrl: '/images/cards/apartheid.png' },
+  { id: 'card-153', name: 'キリマンジャロ', category: 'world_heritage', rarity: 'N', description: 'アフリカ大陸最高峰。標高5895メートルの雪を頂く山。', imageUrl: '/images/cards/kilimanjaro.png' },
   { id: 'card-154', name: 'アフリカゾウ', category: 'creatures', rarity: 'R', description: 'サバンナの王者。巨大な体と長い牙で全てを薙ぎ倒す。', imageUrl: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-019_ca504899.webp' },
-  { id: 'card-155', name: 'サバンナ', category: 'inventions', rarity: 'N', description: 'アフリカの広大な草原地帯。多様な野生動物の生息地。', imageUrl: '' },
+  { id: 'card-155', name: 'サバンナ', category: 'inventions', rarity: 'N', description: 'アフリカの広大な草原地帯。多様な野生動物の生息地。', imageUrl: '/images/cards/savanna.png' },
 
   // ===== 産業革命デッキ (4枚新規 + 蒸気機関は既存card-037) =====
   { id: 'card-156', name: '石炭', category: 'inventions', rarity: 'N', description: '産業革命の燃料。黒いダイヤとも呼ばれた地下資源。', imageUrl: '/images/cards/coal.png' },
