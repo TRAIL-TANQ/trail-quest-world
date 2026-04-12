@@ -300,15 +300,27 @@ export default function KnowledgeChallenger() {
   const gameStateRef = useRef<GameState | null>(null);
   useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
 
-  // Waits indefinitely until the player clicks the manual-reveal button.
+  // Waits until the player clicks the manual-reveal button, with a 30s safety timeout.
   // Used only when the PLAYER is the attacker (AI turns remain automatic).
   const waitForPlayerAction = useCallback((): Promise<void> => {
     if (unmountedRef.current) return Promise.resolve();
     return new Promise((resolve) => {
-      playerActionLatchRef.current = () => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
         playerActionLatchRef.current = null;
         resolve();
       };
+      playerActionLatchRef.current = finish;
+      // 30s safety timeout: auto-resolve if player doesn't act
+      const safetyId = window.setTimeout(() => {
+        if (!settled) {
+          console.warn('[KC] waitForPlayerAction: 30s safety timeout fired');
+          finish();
+        }
+      }, 30000);
+      stepTimeoutsRef.current.push(safetyId);
     });
   }, []);
 
@@ -386,22 +398,25 @@ export default function KnowledgeChallenger() {
 
         // Step 3: attack reveal loop. Branch on who's attacking — player turns
         // wait for manual reveal clicks; AI turns auto-progress.
-        console.log('[KC] → attack_reveal');
+        // Use flagHolder from the closure (guaranteed correct) — NOT gameStateRef
+        // which may lag behind after setGameState batching.
+        const attackerSide: 'player' | 'ai' =
+          gameState.flagHolder === 'player' ? 'ai' : 'player';
+        const isPlayerAttacker = attackerSide === 'player';
+        console.log('[KC] → attack_reveal (attacker:', attackerSide, ', isPlayerAttacker:', isPlayerAttacker, ')');
         setCineStep('attack_reveal');
         setGameState((prev) => (prev ? beginAttackLoop(prev) : prev));
-
-        const attackerSide: 'player' | 'ai' =
-          gameStateRef.current?.flagHolder === 'player' ? 'ai' : 'player';
-        const isPlayerAttacker = attackerSide === 'player';
 
         let loopGuard = 30;
         while (loopGuard-- > 0) {
           if (unmountedRef.current) return;
           if (isPlayerAttacker) {
+            console.log('[KC] waiting for player reveal action...');
             setWaitingForPlayerReveal(true);
             await waitForPlayerAction();
             setWaitingForPlayerReveal(false);
           } else {
+            console.log('[KC] AI auto-reveal: waiting', ATTACK_CARD_REVEAL_MS, 'ms');
             await waitStep(ATTACK_CARD_REVEAL_MS);
           }
           if (unmountedRef.current) return;
