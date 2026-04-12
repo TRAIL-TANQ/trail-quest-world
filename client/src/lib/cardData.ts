@@ -96,7 +96,7 @@ export const COLLECTION_CARDS: CollectionCard[] = [
   { id: 'card-080', name: 'ケルン大聖堂', category: 'world_heritage', rarity: 'R', description: 'ゴシック建築の傑作。157メートルの双塔がそびえるドイツの大聖堂。', imageUrl: '/images/cards/card-080.webp' },
   { id: 'card-081', name: 'ナスカの地上絵', category: 'world_heritage', rarity: 'R', description: 'ペルーの謎の巨大絵。上空からしか全体が見えない古代の地上絵。', imageUrl: '/images/cards/card-081.webp' },
   { id: 'card-082', name: '兵馬俑', category: 'world_heritage', rarity: 'R', description: '秦の始皇帝の軍団。8000体以上の等身大の兵士像が眠る。', imageUrl: '/images/cards/terracotta.png' },
-  { id: 'card-083', name: '厳島神社', category: 'world_heritage', rarity: 'N', description: '海に浮かぶ朱色の大鳥居。満潮時に海上に立つ日本の象徴的景観。', imageUrl: '/images/cards/card-083.webp' },
+  { id: 'card-083', name: '厳島神社', category: 'world_heritage', rarity: 'N', description: '海に浮かぶ朱色の大鳥居。満潮時に海上に立つ日本の象徴的景観。', imageUrl: '' },
   { id: 'card-084', name: 'アヤソフィア', category: 'world_heritage', rarity: 'N', description: 'イスタンブールの大聖堂。ビザンツ建築の最高傑作。巨大なドーム。', imageUrl: '/images/cards/card-084.webp' },
   { id: 'card-085', name: '知床', category: 'world_heritage', rarity: 'N', description: '北海道の自然遺産。流氷とヒグマが共存する手つかずの大自然。', imageUrl: '/images/cards/card-085.webp' },
   { id: 'card-086', name: 'ロケット', category: 'inventions', rarity: 'SR', description: '宇宙への扉。人類を月や宇宙ステーションへ運ぶ巨大な乗り物。', imageUrl: '/images/cards/card-086.webp' },
