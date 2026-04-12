@@ -353,7 +353,11 @@ export default function KnowledgeChallenger() {
 
   // Track unmount so the battle loop can exit without relying on effect
   // cleanup (which would fire on every phase change and kill the cinematic).
-  useEffect(() => () => { unmountedRef.current = true; }, []);
+  // IMPORTANT: Reset to false on mount to handle remount scenarios (React StrictMode, etc.)
+  useEffect(() => {
+    unmountedRef.current = false;
+    return () => { unmountedRef.current = true; };
+  }, []);
 
   // Mirror gameState into a ref so the async battle loop can read the latest
   // state (e.g. flagHolder) without recreating the effect on every render.
@@ -458,6 +462,8 @@ export default function KnowledgeChallenger() {
     if (!gameState) return;
     if (gameState.phase !== 'battle_intro') return;
     if (battleRunningRef.current) return;
+    // Reset unmounted flag in case of remount (React StrictMode / parent re-render)
+    unmountedRef.current = false;
     battleRunningRef.current = true;
 
     const run = async () => {
