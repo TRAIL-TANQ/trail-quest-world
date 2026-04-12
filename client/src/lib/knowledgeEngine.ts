@@ -473,6 +473,7 @@ export function applyRevealEffect(
         const myState = side === 'player' ? next.player : next.ai;
         const same = myState.bench.find((b) => b.name === card.name);
         const copies = same?.count ?? 0;
+        console.log(`[Engine]   piranha check: role=${role}, benchMatch="${same?.name ?? 'none'}", copies=${copies}, bench=[${myState.bench.map(b => `${b.name}×${b.count}`).join(', ')}]`);
         if (copies > 0) {
           bonusAttack += copies;
           telop = { text: `🐟ピラニアの群れの猛攻！攻撃+${copies}`, color };
@@ -1661,15 +1662,19 @@ export function revealNextAttackCard(state: GameState): GameState {
   }
 
   // Card-specific on-reveal effect
+  const myBench = (attackerSide === 'player' ? next.player : next.ai).bench;
+  console.log(`[Engine] revealNextAttackCard: "${nextCard.name}" (effect=${nextCard.effect?.id ?? 'none'}) | attacker=${attackerSide} | bench=[${myBench.map(b => `${b.name}×${b.count}`).join(', ')}]`);
   if (nextCard.effect) {
     const eff = applyRevealEffect(next, nextCard, attackerSide, 'attacker');
     next = withTelop(eff.state, eff.telop);
     addedPower += eff.bonusAttack;
+    console.log(`[Engine]   effect "${nextCard.effect.id}" → bonusAttack=${eff.bonusAttack}, telop="${eff.telop?.text ?? 'none'}"`);
   }
 
   // Bench auras from passive cards (any-reveal buffs from own/opponent bench)
   const aura = computeAttackerAura(next, attackerSide, nextCard, state.attackRevealed.length);
   addedPower += aura.bonus;
+  if (aura.bonus !== 0) console.log(`[Engine]   bench aura → bonus=${aura.bonus}, details=[${aura.details.map(d => `${d.benchCardName}:atk${d.atkBonus}`).join(', ')}]`);
 
   const newPower = state.attackCurrentPower + addedPower;
   return {
