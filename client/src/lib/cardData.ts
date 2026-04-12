@@ -113,7 +113,7 @@ export const COLLECTION_CARDS: CollectionCard[] = [
   { id: 'card-097', name: '量子力学', category: 'discovery', rarity: 'SR', description: 'ミクロの物理法則。原子や電子の振る舞いを記述する革命的理論。', imageUrl: '/images/cards/card-097.webp' },
   { id: 'card-098', name: '万有引力', category: 'discovery', rarity: 'R', description: 'リンゴと月を結ぶ力。ニュートンが発見した宇宙の基本法則。', imageUrl: '/images/cards/card-098.webp' },
   { id: 'card-099', name: '原子核の構造', category: 'discovery', rarity: 'R', description: '物質の核心。陽子と中性子からなる原子の中心構造。', imageUrl: '/images/cards/card-099.webp' },
-  { id: 'card-100', name: '光合成', category: 'discovery', rarity: 'SSR', description: '生命のエネルギー。太陽光を使って酸素と糖を生み出す植物の力。', imageUrl: '/images/cards/card-100.webp' },
+  { id: 'card-100', name: '光合成', category: 'creatures', rarity: 'SSR', description: '密林の生命力。太陽の光がアマゾンの仲間を蘇らせる。', imageUrl: '/images/cards/card-100.webp' },
 
   // ===== コンボカード: 原爆コンボ (3枚) =====
   { id: 'card-101', name: 'マンハッタン計画', category: 'inventions', rarity: 'R', description: '第二次世界大戦中の極秘プロジェクト。世界中の科学者を集めて原子爆弾を開発した。【コンボ素材】', imageUrl: '/images/cards/card-101.webp' },

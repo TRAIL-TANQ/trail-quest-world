@@ -521,6 +521,24 @@ export function applyRevealEffect(
       telop = { text: '💊不老不死の薬！始皇帝の復活を守る', color };
       break;
     }
+    case 'photosynthesis': {
+      // 光合成「密林の再生」: ベンチのアマゾン種族1枚をデッキ一番上に戻す
+      const amazonNames = new Set(['ピラニア', 'アナコンダ', '毒矢カエル', '大蛇']);
+      const my = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      const amazonSlot = my.bench.find((b) => amazonNames.has(b.name) && !sealed.includes(b.name));
+      if (amazonSlot) {
+        // Remove one copy from bench, put on top of deck
+        const newBench = removeOneFromBench(my.bench, amazonSlot.name);
+        const newDeck = [amazonSlot.card, ...my.deck];
+        next = applySide(next, side, { ...my, bench: newBench, deck: newDeck });
+        next = withBenchGlow(next, side, [amazonSlot.name]);
+        telop = { text: `🌿 密林の再生！${amazonSlot.name}をデッキ上に回収`, color };
+      } else {
+        telop = { text: '🌿 密林の再生（対象なし）', color };
+      }
+      break;
+    }
     case 'dolphin': {
       const oppState = opp === 'player' ? next.player : next.ai;
       if (oppState.deck.length >= 2) {

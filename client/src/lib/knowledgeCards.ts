@@ -157,6 +157,7 @@ export const EFFECT_DEFS: Record<string, CardEffect> = {
   book_burning:     { id: 'book_burning',     name: '思想統制',         description: '公開時、相手デッキ上3枚を隔離。ベンチに始皇帝がいればさらに+2枚（計5枚）。', category: 'debuff' },
   elixir:           { id: 'elixir',           name: '永遠の命',         description: 'From the bench: 始皇帝がベンチに送られる時、代わりにデッキの一番下に戻す。', category: 'special' },
   giant_snake:      { id: 'giant_snake',      name: '呑み込む者',       description: '公開時、相手防御カードを即座にベンチ送り（1回戦1回のみ）。2回目以降は通常比較。', category: 'atk' },
+  photosynthesis:   { id: 'photosynthesis',   name: '密林の再生',       description: '公開時、ベンチのアマゾン種族（ピラニア・アナコンダ・毒矢カエル・大蛇）を1枚デッキの一番上に戻す。', category: 'bench' },
 };
 
 // Card name → effect id. These are the only cards that carry on-reveal effects.
@@ -256,6 +257,7 @@ export const EFFECT_BY_CARD_NAME: Record<string, string> = {
   '焚書坑儒':             'book_burning',
   '不老不死の薬':         'elixir',
   '大蛇':                 'giant_snake',
+  '光合成':               'photosynthesis',
 };
 
 export interface BattleCard {
@@ -404,6 +406,7 @@ export const CARD_STAT_OVERRIDES: Record<string, StatProfile> = {
   '焚書坑儒':             { attackPower: 1, defensePower: 1 },
   '不老不死の薬':         { attackPower: 1, defensePower: 1 },
   '大蛇':                 { attackPower: 5, defensePower: 4 },
+  '光合成':               { attackPower: 1, defensePower: 1 },
 };
 
 // Combo card IDs for detection
@@ -1780,6 +1783,7 @@ export const SYNERGY_MAP: Record<string, string[]> = {
   '野口英世': ['顕微鏡', '黄熱病'],
   '黄熱病': ['野口英世', '顕微鏡'],
   'ダイナマイト': ['火薬'],
+  '光合成': ['アマゾン川', 'ピラニア', 'アナコンダ', '毒矢カエル', '大蛇'],
   '火薬': ['ダイナマイト', '大砲', 'ナポレオン'],
   // アフリカコンボ
   'ネルソン・マンデラ': ['アパルトヘイト', 'キリマンジャロ', 'アフリカゾウ', 'サバンナ'],
