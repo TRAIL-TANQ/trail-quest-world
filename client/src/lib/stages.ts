@@ -167,7 +167,7 @@ export const STARTER_DECKS: StarterDeck[] = [
   },
   {
     id: 'starter-heritage',
-    name: '世界遺産デッキ',
+    name: '始皇帝デッキ',
     icon: '🏛️',
     trumpCard: '始皇帝',
     themeCards: ['万里の長城', '焚書坑儒'],
