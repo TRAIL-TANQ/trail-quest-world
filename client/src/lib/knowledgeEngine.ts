@@ -1192,15 +1192,21 @@ export function applyRevealEffect(
       const sealed = next.sealedBenchNames[side];
       const hasSteam = my.bench.some((b) => b.name === '蒸気機関' && !sealed.includes(b.name));
       const hasCoal = my.bench.some((b) => b.name === '石炭' && !sealed.includes(b.name));
+      const wheelSlot = my.bench.find((b) => b.name === '車輪' && !sealed.includes(b.name));
+      const wheelCount = wheelSlot?.count ?? 0;
       const glow: string[] = [];
       if (hasSteam) glow.push('蒸気機関');
       if (hasCoal) glow.push('石炭');
+      if (wheelCount > 0) glow.push('車輪');
       if (glow.length > 0) next = withBenchGlow(next, side, glow);
+      // 車輪ボーナス: +2/+2 per wheel card
+      const wheelAtkBonus = wheelCount * 2;
+      const wheelDefBonus = wheelCount * 2;
       if (hasSteam && hasCoal) {
         if (role === 'attacker') {
-          bonusAttack += 4;
+          bonusAttack += 4 + wheelAtkBonus;
         } else {
-          next = { ...next, defenderBonus: next.defenderBonus + 2 };
+          next = { ...next, defenderBonus: next.defenderBonus + 2 + wheelDefBonus };
         }
         const quarantined = next.quarantine[side];
         if (quarantined.length > 0) {
@@ -1213,10 +1219,25 @@ export function applyRevealEffect(
             { ...my, deck: [...my.deck, ...recovered] },
           );
         }
-        telop = { text: `🚂蒸気機関車！${role === 'attacker' ? '攻撃+4' : '防御+2'} 隔離回収`, color };
+        const atkTotal = role === 'attacker' ? 4 + wheelAtkBonus : 0;
+        const defTotal = role === 'defender' ? 2 + wheelDefBonus : 0;
+        telop = { text: `🚂蒸気機関車！${role === 'attacker' ? `攻撃+${atkTotal}` : `防御+${defTotal}`}${wheelCount > 0 ? ` 車輪×${wheelCount}` : ''} 隔離回収`, color };
+      } else if (wheelCount > 0) {
+        // 車輪のみ（蒸気機関+石炭なし）でも車輪ボーナスは付く
+        if (role === 'attacker') {
+          bonusAttack += wheelAtkBonus;
+          telop = { text: `🚂蒸気機関車！車輪×${wheelCount}で攻撃+${wheelAtkBonus}`, color };
+        } else {
+          next = { ...next, defenderBonus: next.defenderBonus + wheelDefBonus };
+          telop = { text: `🚂蒸気機関車！車輪×${wheelCount}で防御+${wheelDefBonus}`, color };
+        }
       } else {
         telop = { text: '🚂蒸気機関車！条件未達', color };
       }
+      break;
+    }
+    case 'wheel': {
+      telop = { text: '🛞車輪！蒸気機関車を強化', color };
       break;
     }
     case 'watt': {

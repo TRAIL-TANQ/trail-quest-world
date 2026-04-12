@@ -151,6 +151,7 @@ export const EFFECT_DEFS: Record<string, CardEffect> = {
   spinning_machine: { id: 'spinning_machine', name: '繊維革命',         description: 'From the bench: 毎ラウンド終了時ALT+5。蒸気機関もあればALT+10。', category: 'special' },
   steam_locomotive: { id: 'steam_locomotive', name: '鉄道の時代',       description: '蒸気機関+石炭ベンチで攻撃+4/防御+2。隔離2枚回収。', category: 'atk' },
   watt:             { id: 'watt',             name: '改良の天才',       description: 'ベンチ科学発明の枚数で段階強化。4枚以上で攻+5/防+3/味方全攻+1。', category: 'special' },
+  wheel:            { id: 'wheel',            name: '回転の力',         description: 'From the bench: 蒸気機関車の攻撃+2/防御+2（重複可）。蒸気機関車攻撃成功時、相手デッキ上1枚追加隔離。', category: 'special' },
 };
 
 // Card name → effect id. These are the only cards that carry on-reveal effects.
@@ -244,6 +245,7 @@ export const EFFECT_BY_CARD_NAME: Record<string, string> = {
   '紡績機':               'spinning_machine',
   '蒸気機関車':           'steam_locomotive',
   'ジェームズ・ワット':   'watt',
+  '車輪':                 'wheel',
 };
 
 export interface BattleCard {
@@ -1734,6 +1736,7 @@ export const SYNERGY_MAP: Record<string, string[]> = {
   '紡績機': ['蒸気機関', '石炭', '蒸気機関車', 'ジェームズ・ワット'],
   '蒸気機関車': ['蒸気機関', '石炭', '紡績機', 'ジェームズ・ワット'],
   'ジェームズ・ワット': ['蒸気機関', '石炭', '紡績機', '蒸気機関車'],
+  '車輪': ['蒸気機関車', '蒸気機関', '石炭'],
 };
 
 // ===== Round-specific offering composition for synergy draft =====
