@@ -1014,6 +1014,64 @@ export default function KnowledgeChallenger() {
             ))}
           </div>
 
+          {/* ===== ベンチ & 隔離スペース表示 ===== */}
+          {([
+            { label: 'あなたのベンチ', bench: gameState.player.bench, color: '#22c55e', quarantine: gameState.quarantine.player },
+            { label: '相手のベンチ', bench: gameState.ai.bench, color: '#ef4444', quarantine: gameState.quarantine.ai },
+          ] as const).map(({ label, bench, color, quarantine }) => (
+            <div key={label} className="rounded-lg p-2 mb-3 text-left" style={{ background: 'rgba(0,0,0,0.25)', border: `1px solid ${color}22` }}>
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-[10px] font-bold" style={{ color }}>{label}</p>
+                <p className="text-[9px] text-amber-200/50">{bench.length}/6 スロット</p>
+              </div>
+              {bench.length === 0 ? (
+                <p className="text-[10px] text-amber-200/30 text-center py-1">（なし）</p>
+              ) : (
+                <div className="grid grid-cols-3 gap-1.5">
+                  {bench.map((slot) => {
+                    const catInfo = CATEGORY_INFO[slot.card.category];
+                    return (
+                      <div key={slot.name} className="relative rounded-md overflow-hidden" style={{ aspectRatio: '3/4' }}>
+                        {slot.card.imageUrl ? (
+                          <img src={slot.card.imageUrl} alt={slot.name} className="w-full h-full object-cover" loading="lazy" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-lg" style={{ background: `${catInfo.color}15` }}>{catInfo.emoji}</div>
+                        )}
+                        <img src={CARD_RARITY_IMAGES[slot.card.rarity] || CARD_RARITY_IMAGES['N']} alt="" className="absolute inset-0 w-full h-full object-cover pointer-events-none" style={{ zIndex: 2 }} />
+                        <span className="absolute left-0 right-0 text-center font-bold text-white truncate px-0.5" style={{ bottom: '10px', fontSize: '7px', textShadow: '0 1px 3px rgba(0,0,0,0.95)', zIndex: 3 }}>
+                          {slot.name}
+                        </span>
+                        {slot.count > 1 && (
+                          <div className="absolute top-0.5 right-0.5 rounded-full min-w-[14px] h-[14px] flex items-center justify-center px-0.5" style={{ background: '#ffd700', border: '1px solid rgba(0,0,0,0.5)', zIndex: 4 }}>
+                            <span className="text-[8px] font-black text-black">×{slot.count}</span>
+                          </div>
+                        )}
+                        <span className="absolute flex items-center gap-0.5 px-0.5 rounded font-black" style={{ bottom: '1px', left: '5%', background: 'rgba(239,68,68,0.85)', color: '#fff', fontSize: '7px', lineHeight: 1, zIndex: 3 }}>
+                          ⚔️{slot.card.attackPower ?? slot.card.power}
+                        </span>
+                        <span className="absolute flex items-center gap-0.5 px-0.5 rounded font-black" style={{ bottom: '1px', right: '5%', background: 'rgba(59,130,246,0.85)', color: '#fff', fontSize: '7px', lineHeight: 1, zIndex: 3 }}>
+                          🛡️{slot.card.defensePower ?? slot.card.power}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {quarantine.length > 0 && (
+                <div className="mt-2 pt-1.5" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                  <p className="text-[9px] text-amber-200/40 mb-1">🚫 隔離 ({quarantine.length}枚)</p>
+                  <div className="flex flex-wrap gap-1">
+                    {quarantine.map((c, i) => (
+                      <span key={i} className="text-[8px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(156,163,175,0.15)', color: '#9ca3af', border: '1px solid rgba(156,163,175,0.2)' }}>
+                        {c.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+
           <div className="flex flex-col gap-2">
             <button onClick={handleFinish} className="rpg-btn rpg-btn-gold w-full py-3 text-base">
               {won ? '🎯 次のステージへ' : '📋 ステージ選択に戻る'}
