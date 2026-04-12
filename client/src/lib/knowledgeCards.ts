@@ -1825,12 +1825,28 @@ export function sampleCardsWithSynergy(
     if (targets) targets.forEach((t) => { if (!deckNames.has(t)) synergyTargetNames.add(t); });
   });
 
-  // 1. Synergy cards
+  // 1. Synergy cards — weighted by combo concentration in deck
+  // Count how many related cards each synergy target has in the deck
   const synergyPool = ALL_BATTLE_CARDS.filter((c) => synergyTargetNames.has(c.name));
-  const shuffledSynergy = [...synergyPool].sort(() => Math.random() - 0.5);
-  for (let i = 0; i < spec.synergy && shuffledSynergy.length > 0; i++) {
-    const card = shuffledSynergy.shift();
-    if (card) addCard(card);
+  const deckTotal = playerDeck.length || 1;
+  const weightedSynergy = synergyPool.map((card) => {
+    // Count deck cards that share a synergy group with this card
+    const cardSynergies = SYNERGY_MAP[card.name] ?? [];
+    const relatedInDeck = playerDeck.filter((d) =>
+      d.name === card.name || cardSynergies.includes(d.name) || (SYNERGY_MAP[d.name] ?? []).includes(card.name),
+    ).length;
+    // Weight: 0→0.05, 1→0.10, 2→0.30, 3→0.50, 4+→0.70
+    const weight = relatedInDeck === 0 ? 0.05
+      : relatedInDeck === 1 ? 0.10
+      : relatedInDeck === 2 ? 0.30
+      : relatedInDeck === 3 ? 0.50
+      : 0.70;
+    return { card, weight: weight + Math.random() * 0.05 }; // tiny random jitter
+  });
+  weightedSynergy.sort((a, b) => b.weight - a.weight);
+  for (let i = 0; i < spec.synergy && weightedSynergy.length > 0; i++) {
+    const pick = weightedSynergy.shift();
+    if (pick) addCard(pick.card);
   }
 
   // 2. SSR guaranteed slot (R5)
