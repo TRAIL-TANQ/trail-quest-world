@@ -71,12 +71,14 @@ function findCardByName(name: string): BattleCard | undefined {
 }
 
 // Timing constants (ms) for the battle cinematic. fast mode scales by 0.3.
-const TURN_BANNER_MS      = 1000;  // "あなたの攻撃！" / "あなたが防御中！"
-const DEFENDER_SHOW_MS    = 800;   // defender's card with power label
-const ATTACK_CARD_REVEAL_MS = 800; // each attacker card back → flip → power label
-const RESOLVE_BANNER_MS   = 2200;  // "🏆 フラッグ奪取！" outcome banner (派手演出)
+const TURN_BANNER_MS      = 1500;  // "あなたの攻撃！" / "あなたが防御中！"
+const DEFENDER_SHOW_MS    = 1000;  // defender's card with power label
+const ATTACK_CARD_REVEAL_MS = 1000; // each attacker card back → flip → power label
+const RESOLVE_BANNER_MS   = 2500;  // "🏆 フラッグ奪取！" outcome banner
 const TURN_TRANSITION_MS  = 1500;  // "🔄 相手のターン！" big banner between sub-battles
-const FINAL_REVEAL_MS     = 1800;  // hold the final game_over overlay before going to result
+const FINAL_REVEAL_MS     = 2000;  // hold the final game_over overlay before going to result
+const POWER_ADD_PAUSE_MS  = 500;   // pause after card reveal before showing power add
+const POWER_COMPARE_MS    = 800;   // pause for power comparison display
 
 export default function KnowledgeChallenger() {
   const [, navigate] = useLocation();
@@ -577,6 +579,10 @@ export default function KnowledgeChallenger() {
           await waitMs(16);
           if (unmountedRef.current || !resultState) return;
 
+          // Pause for power-add animation
+          await waitMs(POWER_ADD_PAUSE_MS);
+          if (unmountedRef.current) return;
+
           const rs = resultState as GameState;
 
           // ===== Bench boost power-up animation =====
@@ -664,7 +670,7 @@ export default function KnowledgeChallenger() {
 
           if (hasAttackSucceeded(rs)) {
             console.log('[KC] → attack succeeded, resolving');
-            await waitStep(400);
+            await waitStep(POWER_COMPARE_MS);
             if (unmountedRef.current) return;
 
             // Capture defender's quarantine BEFORE resolution so we can show
@@ -1757,8 +1763,8 @@ export default function KnowledgeChallenger() {
                   style={{
                     top: 0,
                     left: 0,
-                    transform: `translate(${(i - priorCount / 2) * 12}px, ${(i - priorCount / 2) * 6}px) rotate(${(i - priorCount / 2) * 3}deg)`,
-                    opacity: 0.5,
+                    transform: `translate(${(i - priorCount / 2) * 16}px, ${(i - priorCount / 2) * 8}px) rotate(${(i - priorCount / 2) * 4}deg)`,
+                    opacity: 0.6,
                     zIndex: i,
                   }}
                 >
@@ -1770,11 +1776,28 @@ export default function KnowledgeChallenger() {
                 <CardDisplay card={lastCard} size="battle" mode="attack" onTap={() => setDetailCard(lastCard)} />
               </div>
               {/* Cumulative power label below */}
-              <div className="absolute left-1/2 -translate-x-1/2 -bottom-12 whitespace-nowrap z-[120] kc-attack-label">
-                <p style={{ fontSize: '1.75rem', fontWeight: 900, color: '#ff6b6b', textShadow: '0 0 16px rgba(239,68,68,0.95), 0 2px 4px rgba(0,0,0,0.9)' }}>
-                  ⚔️ 攻撃パワー {attackPower}{defenderCard ? ` / ${defenderPower}` : ''}
-                </p>
-              </div>
+              {(() => {
+                const ratio = defenderPower > 0 ? attackPower / defenderPower : 0;
+                const exceeded = defenderCard && attackPower >= defenderPower;
+                const powerColor = exceeded ? '#ffd700' : ratio > 0.7 ? '#ff4444' : ratio > 0.4 ? '#ffaa00' : '#ff6b6b';
+                return (
+                  <div className="absolute left-1/2 -translate-x-1/2 -bottom-12 whitespace-nowrap z-[120]">
+                    <p
+                      key={`pow-${attackPower}`}
+                      className="kc-power-bounce"
+                      style={{
+                        fontSize: exceeded ? '2rem' : '1.75rem',
+                        fontWeight: 900,
+                        color: powerColor,
+                        textShadow: `0 0 16px ${powerColor}cc, 0 2px 4px rgba(0,0,0,0.9)`,
+                      }}
+                    >
+                      ⚔️ {attackPower}{defenderCard ? ` / 🛡️ ${defenderPower}` : ''}
+                      {exceeded && ' 突破！'}
+                    </p>
+                  </div>
+                );
+              })()}
             </div>
           );
         };
@@ -2198,13 +2221,13 @@ export default function KnowledgeChallenger() {
           key={gameState.effectTelop.key}
           className="fixed top-0 left-0 right-0 z-[175] pointer-events-none kc-top-banner-slide"
         >
-          <div className="px-4 py-2 text-center" style={{
-            background: `linear-gradient(180deg, rgba(0,0,0,0.85), rgba(0,0,0,0.6))`,
-            borderBottom: `2px solid ${gameState.effectTelop.color}`,
-            boxShadow: `0 4px 16px ${gameState.effectTelop.color}44`,
+          <div className="mx-3 mt-2 px-4 py-2.5 text-center rounded-xl" style={{
+            background: `linear-gradient(180deg, rgba(0,0,0,0.88), rgba(0,0,0,0.7))`,
+            border: `1.5px solid ${gameState.effectTelop.color}60`,
+            boxShadow: `0 4px 20px ${gameState.effectTelop.color}44, 0 2px 8px rgba(0,0,0,0.5)`,
           }}>
             <p className="font-black" style={{
-              fontSize: '18px',
+              fontSize: '16px',
               lineHeight: 1.3,
               color: gameState.effectTelop.color,
               textShadow: '0 2px 8px rgba(0,0,0,0.9)',
@@ -2221,13 +2244,13 @@ export default function KnowledgeChallenger() {
           key={benchBoostTelop.key}
           className="fixed top-0 left-0 right-0 z-[180] pointer-events-none kc-top-banner-slide"
         >
-          <div className="px-4 py-2 text-center" style={{
-            background: 'linear-gradient(180deg, rgba(0,10,40,0.9), rgba(0,5,20,0.7))',
-            borderBottom: '2px solid rgba(96,165,250,0.8)',
-            boxShadow: '0 4px 16px rgba(96,165,250,0.3)',
+          <div className="mx-3 mt-2 px-4 py-2.5 text-center rounded-xl" style={{
+            background: 'linear-gradient(180deg, rgba(0,10,40,0.9), rgba(0,5,20,0.75))',
+            border: '1.5px solid rgba(96,165,250,0.5)',
+            boxShadow: '0 4px 20px rgba(96,165,250,0.3), 0 2px 8px rgba(0,0,0,0.5)',
           }}>
             <p className="font-black" style={{
-              fontSize: '18px',
+              fontSize: '16px',
               lineHeight: 1.3,
               color: benchBoostTelop.text.startsWith('🔥') ? '#ffd700' : '#60a5fa',
               textShadow: '0 2px 8px rgba(0,0,0,0.9)',
@@ -2979,20 +3002,30 @@ export default function KnowledgeChallenger() {
         /* Top banner slide-in for effect/bench telop */
         @keyframes kcTopBannerSlide {
           0%   { opacity: 0; transform: translateY(-100%); }
-          15%  { opacity: 1; transform: translateY(0); }
-          85%  { opacity: 1; transform: translateY(0); }
+          10%  { opacity: 1; transform: translateY(0); }
+          80%  { opacity: 1; transform: translateY(0); }
           100% { opacity: 0; transform: translateY(-100%); }
         }
-        .kc-top-banner-slide { animation: kcTopBannerSlide 2s ease-out forwards; }
+        .kc-top-banner-slide { animation: kcTopBannerSlide 2.5s ease-out forwards; }
+
+        /* Power bounce on update */
+        @keyframes kcPowerBounce {
+          0%   { transform: scale(1); }
+          30%  { transform: scale(1.3); }
+          60%  { transform: scale(0.95); }
+          100% { transform: scale(1); }
+        }
+        .kc-power-bounce { animation: kcPowerBounce 0.35s ease-out; }
 
         /* Character-by-character fade-in for turn transition */
         @keyframes kcCharFadeIn {
-          0%   { opacity: 0; transform: translateY(10px); }
-          30%  { opacity: 1; transform: translateY(0); }
-          80%  { opacity: 1; }
+          0%   { opacity: 0; transform: translateY(12px) scale(0.8); }
+          25%  { opacity: 1; transform: translateY(0) scale(1.05); }
+          35%  { transform: translateY(0) scale(1); }
+          75%  { opacity: 1; }
           100% { opacity: 0; }
         }
-        .kc-char-fadein { animation: kcCharFadeIn 1.5s ease-out forwards; opacity: 0; display: inline-block; }
+        .kc-char-fadein { animation: kcCharFadeIn 2s ease-out forwards; opacity: 0; display: inline-block; }
       `}</style>
     </div>
   );
@@ -3326,12 +3359,12 @@ function CardDisplay({ card, isDefense, isWinner, size, mode, onTap }: {
       >
         {card.name}
       </span>
-      {/* ⚔️ Attack badge (left-bottom) */}
+      {/* ⚔️ Attack badge (left-bottom, aligned with frame icon) */}
       <span
         className="absolute flex items-center gap-0.5 px-1.5 py-0.5 rounded-md font-black"
         style={{
-          bottom: isBig ? '5px' : '3px',
-          left: '15%',
+          bottom: isBig ? '8px' : '4px',
+          left: isBig ? '8%' : '10%',
           background: activeMode === 'attack' ? 'rgba(239,68,68,0.9)' : activeMode === 'defense' ? 'rgba(80,80,90,0.7)' : 'rgba(239,68,68,0.7)',
           color: activeMode === 'defense' ? 'rgba(255,255,255,0.45)' : '#fff',
           fontSize: fontPower,
@@ -3343,12 +3376,12 @@ function CardDisplay({ card, isDefense, isWinner, size, mode, onTap }: {
       >
         ⚔️{atk}
       </span>
-      {/* 🛡️ Defense badge (right-bottom) */}
+      {/* 🛡️ Defense badge (right-bottom, aligned with frame icon) */}
       <span
         className="absolute flex items-center gap-0.5 px-1.5 py-0.5 rounded-md font-black"
         style={{
-          bottom: isBig ? '5px' : '3px',
-          right: '15%',
+          bottom: isBig ? '8px' : '4px',
+          right: isBig ? '8%' : '10%',
           background: activeMode === 'defense' ? 'rgba(59,130,246,0.9)' : activeMode === 'attack' ? 'rgba(80,80,90,0.7)' : 'rgba(59,130,246,0.7)',
           color: activeMode === 'attack' ? 'rgba(255,255,255,0.45)' : '#fff',
           fontSize: fontPower,
