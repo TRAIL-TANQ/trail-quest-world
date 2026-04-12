@@ -9,7 +9,7 @@
  */
 import { useState, useMemo, useEffect } from 'react';
 import { COLLECTION_CARDS } from '@/lib/cardData';
-import { CARD_RARITY_COLORS, CARD_CATEGORY_INFO } from '@/lib/constants';
+import { CARD_RARITY_COLORS, CARD_CATEGORY_INFO, CARD_RARITY_IMAGES } from '@/lib/constants';
 import { useCollectionStore } from '@/lib/stores';
 import { ALL_BATTLE_CARDS } from '@/lib/knowledgeCards';
 import type { CollectionCard, CollectionRarity } from '@/lib/types';
@@ -147,13 +147,20 @@ function CardModal({ card, onClose }: { card: CollectionCard; onClose: () => voi
               </span>
             </div>
 
-            {/* カード画像 */}
+            {/* カード画像 + フレーム */}
             <div className="relative">
               <img src={card.imageUrl} alt={card.name} className="w-full aspect-[3/4] object-cover" />
+              {/* Frame overlay */}
+              <img
+                src={CARD_RARITY_IMAGES[card.rarity] || CARD_RARITY_IMAGES['N']}
+                alt=""
+                className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+                style={{ zIndex: 2 }}
+              />
               {/* SSRシマーエフェクト */}
               {isSSR && (
                 <div className="absolute inset-0 pointer-events-none"
-                  style={{ background: 'linear-gradient(135deg, rgba(168,85,247,0.15), rgba(236,72,153,0.08), rgba(139,92,246,0.15))', animation: 'shimmer 3s ease-in-out infinite' }} />
+                  style={{ background: 'linear-gradient(135deg, rgba(168,85,247,0.15), rgba(236,72,153,0.08), rgba(139,92,246,0.15))', animation: 'shimmer 3s ease-in-out infinite', zIndex: 3 }} />
               )}
               {/* SRスパークル */}
               {(card.rarity === 'SR' || isSSR) && Array.from({ length: 6 }).map((_, i) => (
@@ -162,8 +169,47 @@ function CardModal({ card, onClose }: { card: CollectionCard; onClose: () => voi
                   top: `${10 + (i * 15)}%`, left: `${5 + (i * 16)}%`,
                   animation: `sparkle ${1 + i * 0.3}s ease-in-out ${i * 0.2}s infinite`,
                   boxShadow: `0 0 4px ${rarityColor}`,
+                  zIndex: 4,
                 }} />
               ))}
+              {/* Card name on frame */}
+              <span
+                className="absolute left-0 right-0 text-center font-bold text-white truncate px-3"
+                style={{
+                  bottom: '30px',
+                  fontSize: '16px',
+                  textShadow: '0 2px 6px rgba(0,0,0,0.95), 0 0 3px rgba(0,0,0,0.8)',
+                  zIndex: 3,
+                }}
+              >
+                {card.name}
+              </span>
+              {/* ⚔️ Attack badge */}
+              {BATTLE_STATS_BY_ID[card.id] && (
+                <span
+                  className="absolute flex items-center gap-0.5 px-1.5 py-0.5 rounded-md font-black"
+                  style={{
+                    bottom: '5px', left: '15%',
+                    background: 'rgba(239,68,68,0.85)', color: '#fff',
+                    fontSize: '14px', lineHeight: 1, zIndex: 3,
+                  }}
+                >
+                  ⚔️{BATTLE_STATS_BY_ID[card.id].attack}
+                </span>
+              )}
+              {/* 🛡️ Defense badge */}
+              {BATTLE_STATS_BY_ID[card.id] && (
+                <span
+                  className="absolute flex items-center gap-0.5 px-1.5 py-0.5 rounded-md font-black"
+                  style={{
+                    bottom: '5px', right: '15%',
+                    background: 'rgba(59,130,246,0.85)', color: '#fff',
+                    fontSize: '14px', lineHeight: 1, zIndex: 3,
+                  }}
+                >
+                  🛡️{BATTLE_STATS_BY_ID[card.id].defense}
+                </span>
+              )}
             </div>
 
             {/* カード情報フッター */}
@@ -174,7 +220,6 @@ function CardModal({ card, onClose }: { card: CollectionCard; onClose: () => voi
                   <span key={i} className="text-sm" style={{ color: rarityColor }}>★</span>
                 ))}
               </div>
-              <h3 className="text-base font-bold text-amber-100 mb-2">{card.name}</h3>
               <p className="text-[11px] text-amber-200/55 mb-4 leading-relaxed">{card.description}</p>
               <button onClick={handleClose} className="rpg-btn rpg-btn-gold w-full">閉じる</button>
             </div>
@@ -381,7 +426,7 @@ export default function CollectionPage() {
                 ...(owned ? getRarityBorderStyle(card.rarity) : { border: '2px solid rgba(255,255,255,0.06)' }),
               }}
             >
-              {/* カード画像 */}
+              {/* カード画像 + フレーム */}
               <div className="aspect-[3/4] relative overflow-hidden">
                 {owned ? (
                   <img src={card.imageUrl} alt={card.name} className="w-full h-full object-cover" loading="lazy" />
@@ -392,17 +437,17 @@ export default function CollectionPage() {
                 ) : (
                   <img src={card.imageUrl} alt={card.name} className="w-full h-full object-cover" loading="lazy" style={{ filter: 'grayscale(1) brightness(0.5)' }} />
                 )}
-                {/* レア度バッジ */}
-                {owned && (
-                  <div className="absolute top-1 right-1">
-                    <span className="text-[9px] px-1.5 py-0.5 rounded font-bold" style={getRarityBadgeStyle(card.rarity)}>
-                      {card.rarity}
-                    </span>
-                  </div>
-                )}
+                {/* Frame overlay */}
+                <img
+                  src={CARD_RARITY_IMAGES[card.rarity] || CARD_RARITY_IMAGES['N']}
+                  alt=""
+                  className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+                  style={{ zIndex: 2, opacity: owned ? 1 : 0.4 }}
+                  loading="lazy"
+                />
                 {/* NEWバッジ */}
                 {owned && isNew && (
-                  <div className="absolute top-1 left-1">
+                  <div className="absolute top-1 left-1" style={{ zIndex: 3 }}>
                     <span className="text-[9px] px-1.5 py-0.5 rounded font-bold"
                       style={{
                         background: 'linear-gradient(135deg, #ef4444, #dc2626)',
@@ -417,24 +462,45 @@ export default function CollectionPage() {
                 {/* SSRシマーエフェクト */}
                 {owned && card.rarity === 'SSR' && (
                   <div className="absolute inset-0 pointer-events-none"
-                    style={{ background: 'linear-gradient(135deg, rgba(168,85,247,0.1), rgba(236,72,153,0.05), rgba(139,92,246,0.1))', animation: 'shimmer 3s ease-in-out infinite' }} />
+                    style={{ background: 'linear-gradient(135deg, rgba(168,85,247,0.1), rgba(236,72,153,0.05), rgba(139,92,246,0.1))', animation: 'shimmer 3s ease-in-out infinite', zIndex: 3 }} />
                 )}
-              </div>
-              {/* カード名 + ⚔️/🛡️ */}
-              <div className="px-1.5 py-1 text-center"
-                style={{ borderTop: `1px solid ${owned ? rarityColor + '25' : 'rgba(255,255,255,0.04)'}`, background: 'rgba(11,17,40,0.7)' }}>
-                <p className="text-[10px] font-bold text-amber-100 truncate">{owned ? card.name : '???'}</p>
+                {/* Card name on frame */}
+                <span
+                  className="absolute left-0 right-0 text-center font-bold text-white truncate px-1"
+                  style={{
+                    bottom: '16px',
+                    fontSize: '9px',
+                    textShadow: '0 1px 4px rgba(0,0,0,0.95), 0 0 2px rgba(0,0,0,0.8)',
+                    zIndex: 3,
+                  }}
+                >
+                  {owned ? card.name : '???'}
+                </span>
+                {/* ⚔️ Attack badge */}
                 {owned && BATTLE_STATS_BY_ID[card.id] && (
-                  <div className="flex items-center justify-center gap-1 mt-0.5">
-                    <span className="text-[9px] font-black px-1 py-0.5 rounded"
-                      style={{ background: 'rgba(239,68,68,0.7)', color: '#fff', lineHeight: 1 }}>
-                      ⚔️{BATTLE_STATS_BY_ID[card.id].attack}
-                    </span>
-                    <span className="text-[9px] font-black px-1 py-0.5 rounded"
-                      style={{ background: 'rgba(59,130,246,0.7)', color: '#fff', lineHeight: 1 }}>
-                      🛡️{BATTLE_STATS_BY_ID[card.id].defense}
-                    </span>
-                  </div>
+                  <span
+                    className="absolute flex items-center gap-0.5 px-1 py-0.5 rounded font-black"
+                    style={{
+                      bottom: '2px', left: '10%',
+                      background: 'rgba(239,68,68,0.8)', color: '#fff',
+                      fontSize: '8px', lineHeight: 1, zIndex: 3,
+                    }}
+                  >
+                    ⚔️{BATTLE_STATS_BY_ID[card.id].attack}
+                  </span>
+                )}
+                {/* 🛡️ Defense badge */}
+                {owned && BATTLE_STATS_BY_ID[card.id] && (
+                  <span
+                    className="absolute flex items-center gap-0.5 px-1 py-0.5 rounded font-black"
+                    style={{
+                      bottom: '2px', right: '10%',
+                      background: 'rgba(59,130,246,0.8)', color: '#fff',
+                      fontSize: '8px', lineHeight: 1, zIndex: 3,
+                    }}
+                  >
+                    🛡️{BATTLE_STATS_BY_ID[card.id].defense}
+                  </span>
                 )}
               </div>
             </button>

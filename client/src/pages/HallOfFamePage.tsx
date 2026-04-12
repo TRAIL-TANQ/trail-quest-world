@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react';
 import { useUserStore } from '@/lib/stores';
 import { fetchHallOfFame, type HallOfFameEntry } from '@/lib/hallOfFameService';
 import { getStage } from '@/lib/stages';
-import { IMAGES } from '@/lib/constants';
+import { IMAGES, CARD_RARITY_IMAGES } from '@/lib/constants';
 import type { BattleCard } from '@/lib/knowledgeCards';
 
 const rarityColor: Record<string, string> = {
@@ -124,7 +124,6 @@ export default function HallOfFamePage() {
                           return (
                             <div key={i} className="relative rounded-md overflow-hidden"
                               style={{
-                                border: `1px solid ${rc}`,
                                 aspectRatio: '3/4',
                               }}>
                               {card.imageUrl ? (
@@ -133,10 +132,14 @@ export default function HallOfFamePage() {
                                 <div className="w-full h-full flex items-center justify-center text-xs text-amber-200/40"
                                   style={{ background: 'rgba(0,0,0,0.4)' }}>?</div>
                               )}
-                              <div className="absolute top-0 left-0 text-[7px] font-bold px-1 py-0.5 rounded-br"
-                                style={{ background: `${rc}cc`, color: '#fff' }}>
-                                {card.rarity}
-                              </div>
+                              {/* Frame overlay */}
+                              <img src={CARD_RARITY_IMAGES[card.rarity] || CARD_RARITY_IMAGES['N']} alt="" className="absolute inset-0 w-full h-full object-cover pointer-events-none" style={{ zIndex: 2 }} />
+                              <span
+                                className="absolute left-0 right-0 text-center font-bold text-white truncate px-0.5"
+                                style={{ bottom: '6px', fontSize: '6px', textShadow: '0 1px 2px rgba(0,0,0,0.95)', zIndex: 3 }}
+                              >
+                                {card.name}
+                              </span>
                             </div>
                           );
                         })}

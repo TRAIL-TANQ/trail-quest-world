@@ -28,6 +28,7 @@ import {
   MAX_SAME_NAME,
   ALL_BATTLE_CARDS,
 } from '@/lib/knowledgeCards';
+import { CARD_RARITY_IMAGES } from '@/lib/constants';
 import {
   type GameState,
   BENCH_MAX_SLOTS,
@@ -62,7 +63,9 @@ type ScreenPhase = 'title' | 'playing' | 'result';
 const TURN_BANNER_MS      = 1000;  // "あなたの攻撃！" / "あなたが防御中！"
 const DEFENDER_SHOW_MS    = 800;   // defender's card with power label
 const ATTACK_CARD_REVEAL_MS = 800; // each attacker card back → flip → power label
-const RESOLVE_BANNER_MS   = 2000;  // "🏆 フラッグ奪取！" outcome banner
+const RESOLVE_BANNER_MS   = 2200;  // "🏆 フラッグ奪取！" outcome banner (派手演出)
+const TURN_TRANSITION_MS  = 1500;  // "🔄 相手のターン！" big banner between sub-battles
+const FINAL_REVEAL_MS     = 1800;  // hold the final game_over overlay before going to result
 
 export default function KnowledgeChallenger() {
   const [, navigate] = useLocation();
@@ -101,6 +104,7 @@ export default function KnowledgeChallenger() {
     | 'defender_show'
     | 'attack_reveal'
     | 'resolve'
+    | 'turn_transition'
     | 'game_over';
   const [cineStep, setCineStep] = useState<CinematicStep>('idle');
   // Skip / manual advance via a latch: the battle loop creates an
@@ -250,6 +254,15 @@ export default function KnowledgeChallenger() {
     }, 1500);
     return () => clearTimeout(id);
   }, [gameState?.effectTelop?.key]);
+
+  // ===== Bench glow auto-clear (1.5s) =====
+  useEffect(() => {
+    if (!gameState?.benchGlow) return;
+    const id = window.setTimeout(() => {
+      setGameState((prev) => (prev && prev.benchGlow ? { ...prev, benchGlow: null } : prev));
+    }, 1500);
+    return () => clearTimeout(id);
+  }, [gameState?.benchGlow?.key]);
 
   // ===== Bug 2 safety: clear activeQuiz when phase leaves deck_phase =====
   useEffect(() => {
@@ -451,49 +464,30 @@ export default function KnowledgeChallenger() {
             console.log('[KC] → resolve banner');
             setCineStep('resolve');
             const rzs = resolved as GameState;
+            // 5-sub-battle cap → game_over (fan-based winner) handled here too.
             if (rzs.phase === 'game_over') {
-              await waitStep(RESOLVE_BANNER_MS);
+              await waitStep(FINAL_REVEAL_MS);
               if (!unmountedRef.current) setCineStep('game_over');
-              if (!unmountedRef.current) window.setTimeout(() => setScreen('result'), 600);
+              if (!unmountedRef.current) window.setTimeout(() => setScreen('result'), 900);
               return;
             }
             await waitStep(RESOLVE_BANNER_MS);
             if (unmountedRef.current) return;
 
-            // 攻守交代テロップ: 旧フルスクリーンサマリーを廃止し、中央に
-            // 一瞬だけ「攻守交代！～」とテロップを流す。
+            // Short pause after the resolve banner before kicking off the next sub-battle.
+            await waitMs(300);
+            if (unmountedRef.current) return;
+
             console.log('[KC] → continueAfterResolve (next sub-battle)');
-            const continued: GameState | null = (() => {
-              let captured: GameState | null = null;
-              setGameState((prev) => {
-                if (!prev) return prev;
-                const c = continueAfterResolve(prev);
-                captured = c;
-                return c;
-              });
-              return captured;
-            })();
+            setGameState((prev) => (prev ? continueAfterResolve(prev) : prev));
             await waitMs(16);
             if (unmountedRef.current) return;
-            if (continued) {
-              const c = continued as GameState;
-              const nextAttackerIsPlayer = c.flagHolder === 'ai';
-              const telopText = nextAttackerIsPlayer
-                ? '⚔️ 攻守交代！あなたの攻撃！'
-                : '🛡️ 攻守交代！あなたが防御！';
-              setGameState((prev) =>
-                prev
-                  ? {
-                      ...prev,
-                      effectTelop: {
-                        text: telopText,
-                        color: nextAttackerIsPlayer ? '#ff6b6b' : '#60a5fa',
-                        key: Date.now() + Math.floor(Math.random() * 1000),
-                      },
-                    }
-                  : prev,
-              );
-            }
+
+            // Turn transition banner — "🔄 相手のターン！" / "🔄 あなたのターン！"
+            setCineStep('turn_transition');
+            await waitStep(TURN_TRANSITION_MS);
+            if (unmountedRef.current) return;
+
             setCineStep('idle');
             return;
           }
@@ -920,53 +914,86 @@ export default function KnowledgeChallenger() {
   // =============================================================
   if (screen === 'result' && gameState) {
     const won = gameState.winner === 'player';
+    const rewardAlt = won ? 30 : 5;
     return (
       <div
         className="min-h-screen flex flex-col items-center justify-center px-6 relative"
-        style={{ background: 'linear-gradient(180deg, #0b1128 0%, #151d3b 100%)' }}
+        style={{ background: won
+          ? 'radial-gradient(ellipse at center, rgba(255,215,0,0.12), #0b1128 60%, #151d3b)'
+          : 'linear-gradient(180deg, #05060e 0%, #0b1128 100%)' }}
       >
+        {/* Victory confetti on result page */}
+        {won && (
+          <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
+            {Array.from({ length: 36 }).map((_, i) => (
+              <span
+                key={`res-confetti-${i}`}
+                className="kc-confetti-piece kc-confetti-slow"
+                style={{
+                  left: `${(i * 2.9 + 2) % 100}%`,
+                  background: ['#ffd700', '#ff6b6b', '#4ade80', '#60a5fa', '#f5d76e', '#ffffff'][i % 6],
+                  animationDelay: `${(i % 10) * 0.12}s`,
+                }}
+              />
+            ))}
+          </div>
+        )}
         <div
           className="rounded-2xl p-6 w-full max-w-sm text-center relative overflow-hidden z-10"
           style={{
             background: 'linear-gradient(135deg, rgba(21,29,59,0.95), rgba(14,20,45,0.95))',
-            border: `2px solid ${won ? 'rgba(255,215,0,0.5)' : 'rgba(239,68,68,0.3)'}`,
-            boxShadow: `inset 0 0 30px ${won ? 'rgba(255,215,0,0.08)' : 'rgba(239,68,68,0.05)'}, 0 8px 32px rgba(0,0,0,0.5)`,
+            border: `2px solid ${won ? 'rgba(255,215,0,0.65)' : 'rgba(239,68,68,0.35)'}`,
+            boxShadow: `inset 0 0 30px ${won ? 'rgba(255,215,0,0.12)' : 'rgba(239,68,68,0.05)'}, 0 8px 32px rgba(0,0,0,0.5)`,
           }}
         >
           <div className="kc-result-icon mb-2">
-            <span className="text-5xl block">{won ? '🏆' : '💀'}</span>
+            <span className="text-6xl block">{won ? '🎉' : '💀'}</span>
           </div>
           <h2
-            className="text-3xl font-bold mb-1"
+            className="font-black mb-2"
             style={{
-              color: won ? '#ffd700' : '#ef4444',
-              textShadow: `0 0 20px ${won ? 'rgba(255,215,0,0.4)' : 'rgba(239,68,68,0.4)'}`,
+              fontSize: won ? '52px' : '42px',
+              color: won ? '#ffd700' : '#9ca3af',
+              textShadow: won
+                ? '0 0 28px rgba(255,215,0,0.8), 0 0 56px rgba(255,215,0,0.4)'
+                : '0 0 20px rgba(156,163,175,0.5)',
+              lineHeight: 1.0,
             }}
           >
             {won ? '勝利！' : '敗北...'}
           </h2>
+
+          {/* Fan totals */}
+          <div className="flex items-center justify-center gap-3 mb-4">
+            <div className="text-center px-4 py-2 rounded-lg" style={{ background: 'rgba(34,197,94,0.18)', border: '2px solid rgba(34,197,94,0.45)' }}>
+              <p className="text-[9px] text-green-200/70 mb-0.5">あなた</p>
+              <span className="text-3xl font-black text-green-300" style={{ textShadow: '0 0 12px rgba(34,197,94,0.6)' }}>🎐 {gameState.playerFans}</span>
+            </div>
+            <span className="text-lg font-black text-amber-200/50">VS</span>
+            <div className="text-center px-4 py-2 rounded-lg" style={{ background: 'rgba(239,68,68,0.15)', border: '2px solid rgba(239,68,68,0.4)' }}>
+              <p className="text-[9px] text-red-200/70 mb-0.5">相手</p>
+              <span className="text-3xl font-black text-red-300" style={{ textShadow: '0 0 12px rgba(239,68,68,0.6)' }}>🎐 {gameState.aiFans}</span>
+            </div>
+          </div>
           <div
-            className="rounded-lg px-4 py-2 mb-4 mx-auto"
+            className="rounded-lg px-3 py-1.5 mb-3 mx-auto"
             style={{
-              background: won ? 'rgba(255,215,0,0.08)' : 'rgba(239,68,68,0.1)',
-              border: `1px solid ${won ? 'rgba(255,215,0,0.2)' : 'rgba(239,68,68,0.2)'}`,
+              background: won ? 'rgba(255,215,0,0.1)' : 'rgba(239,68,68,0.1)',
+              border: `1px solid ${won ? 'rgba(255,215,0,0.25)' : 'rgba(239,68,68,0.25)'}`,
             }}
           >
-            <p className="text-sm font-bold" style={{ color: won ? '#ffd700' : '#fca5a5' }}>
+            <p className="text-xs font-bold" style={{ color: won ? '#ffd700' : '#fca5a5' }}>
               {gameState.message}
             </p>
           </div>
-
-          <div className="flex items-center justify-center gap-4 mb-4">
-            <div className="text-center px-3 py-2 rounded-lg" style={{ background: 'rgba(34,197,94,0.12)' }}>
-              <p className="text-[9px] text-green-200/60 mb-0.5">奪取した数</p>
-              <span className="text-2xl font-black text-green-300">{gameState.history.filter(h => h.winner === 'player').length}</span>
-            </div>
-            <span className="text-xl font-black text-amber-200/50">VS</span>
-            <div className="text-center px-3 py-2 rounded-lg" style={{ background: 'rgba(239,68,68,0.12)' }}>
-              <p className="text-[9px] text-red-200/60 mb-0.5">奪われた数</p>
-              <span className="text-2xl font-black text-red-300">{gameState.history.filter(h => h.winner === 'ai').length}</span>
-            </div>
+          <div
+            className="rounded-lg px-3 py-2 mb-4 mx-auto kc-reward-pop"
+            style={{ background: 'rgba(255,215,0,0.1)', border: '1px solid rgba(255,215,0,0.3)' }}
+          >
+            <p className="text-[10px] text-amber-200/70">獲得ALT</p>
+            <p className="text-2xl font-black" style={{ color: '#ffd700', textShadow: '0 0 10px rgba(255,215,0,0.6)' }}>
+              +{rewardAlt}
+            </p>
           </div>
 
           {/* Sub-battle history */}
@@ -986,16 +1013,25 @@ export default function KnowledgeChallenger() {
             ))}
           </div>
 
-          <div className="flex gap-3">
-            <button
-              onClick={() => { setScreen('title'); setGameState(null); }}
-              className="rpg-btn rpg-btn-blue flex-1 py-3"
-            >
-              再挑戦
+          <div className="flex flex-col gap-2">
+            <button onClick={handleFinish} className="rpg-btn rpg-btn-gold w-full py-3 text-base">
+              {won ? '🎯 次のステージへ' : '📋 ステージ選択に戻る'}
             </button>
-            <button onClick={handleFinish} className="rpg-btn rpg-btn-gold flex-1 py-3">
-              リザルトへ
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setScreen('title'); setGameState(null); }}
+                className="rpg-btn rpg-btn-blue flex-1 py-2.5 text-sm"
+              >
+                🔄 リトライ
+              </button>
+              <button
+                onClick={() => navigate('/games')}
+                className="flex-1 py-2.5 text-sm rounded-lg font-bold"
+                style={{ background: 'rgba(255,255,255,0.1)', border: '2px solid rgba(255,255,255,0.25)', color: 'rgba(255,255,255,0.85)' }}
+              >
+                ← ゲーム一覧
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1036,17 +1072,31 @@ export default function KnowledgeChallenger() {
             {fastMode ? '⏩ 早送りON' : '⏩ 早送りOFF'}
           </button>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <div className="text-center">
-            <p className="text-[10px] font-bold text-amber-200/50">SB</p>
-            <p className="text-xl font-black" style={{ color: '#ffd700', textShadow: '0 0 8px rgba(255,215,0,0.5)' }}>
-              {gameState.history.length + (gameState.phase === 'game_over' ? 0 : 1)}
+            <p className="text-[9px] font-bold text-amber-200/50">R</p>
+            <p className="text-base font-black" style={{ color: '#ffd700', textShadow: '0 0 8px rgba(255,215,0,0.5)' }}>
+              {Math.min(gameState.history.length + (gameState.phase === 'game_over' ? 0 : 1), 5)}/5
+            </p>
+          </div>
+          {/* Fan totals — primary win condition display */}
+          <div className="text-center px-2 py-1 rounded-lg" style={{ background: 'rgba(34,197,94,0.14)', border: '1.5px solid rgba(34,197,94,0.5)' }}>
+            <p className="text-[9px] font-bold text-green-200/80">あなた</p>
+            <p className="text-base font-black" style={{ color: '#4ade80', textShadow: '0 0 8px rgba(34,197,94,0.6)' }}>
+              🎐 {gameState.playerFans}
+            </p>
+          </div>
+          <span className="text-[10px] font-black text-amber-200/60">vs</span>
+          <div className="text-center px-2 py-1 rounded-lg" style={{ background: 'rgba(239,68,68,0.14)', border: '1.5px solid rgba(239,68,68,0.5)' }}>
+            <p className="text-[9px] font-bold text-red-200/80">相手</p>
+            <p className="text-base font-black" style={{ color: '#fca5a5', textShadow: '0 0 8px rgba(239,68,68,0.6)' }}>
+              🎐 {gameState.aiFans}
             </p>
           </div>
           <div className="text-center px-2 py-1 rounded-lg" style={{ background: 'rgba(255,215,0,0.12)', border: '1.5px solid rgba(255,215,0,0.4)' }}>
-            <p className="text-[9px] font-bold text-amber-200/70">フラッグ</p>
-            <p className="text-sm font-black" style={{ color: gameState.flagHolder === 'player' ? '#22c55e' : '#ef4444' }}>
-              🏆 {gameState.flagHolder === 'player' ? 'あなた' : '相手'}
+            <p className="text-[9px] font-bold text-amber-200/70">🏆</p>
+            <p className="text-xs font-black" style={{ color: gameState.flagHolder === 'player' ? '#22c55e' : '#ef4444' }}>
+              {gameState.flagHolder === 'player' ? 'あなた' : '相手'}
             </p>
           </div>
         </div>
@@ -1083,7 +1133,14 @@ export default function KnowledgeChallenger() {
       </div>
 
       {/* AI Bench */}
-      <BenchDisplay side="ai" bench={gameState.ai.bench} deckCount={gameState.ai.deck.length} quarantineCount={gameState.quarantine.ai.length} animKey={gameState.history.length} />
+      <BenchDisplay
+        side="ai"
+        bench={gameState.ai.bench}
+        deckCount={gameState.ai.deck.length}
+        quarantineCount={gameState.quarantine.ai.length}
+        animKey={gameState.history.length}
+        glowNames={gameState.benchGlow?.side === 'ai' ? gameState.benchGlow.names : undefined}
+      />
 
       {/* ===== Battle Field =====
           Layout:
@@ -1193,7 +1250,23 @@ export default function KnowledgeChallenger() {
           <div className="absolute inset-0 pointer-events-none z-30 kc-red-flash" />
         )}
         {cineStep === 'resolve' && gameState.lastSubBattle?.winner === 'player' && (
-          <div className="absolute inset-0 pointer-events-none z-30 kc-green-flash" />
+          <>
+            <div className="absolute inset-0 pointer-events-none z-30 kc-gold-flash" />
+            {/* Confetti particles */}
+            <div className="absolute inset-0 pointer-events-none z-[35] overflow-hidden">
+              {Array.from({ length: 24 }).map((_, i) => (
+                <span
+                  key={`confetti-${gameState.lastSubBattle?.idx}-${i}`}
+                  className="kc-confetti-piece"
+                  style={{
+                    left: `${(i * 4.2 + 5) % 100}%`,
+                    background: ['#ffd700', '#ff6b6b', '#4ade80', '#60a5fa', '#f5d76e'][i % 5],
+                    animationDelay: `${(i % 6) * 0.08}s`,
+                  }}
+                />
+              ))}
+            </div>
+          </>
         )}
 
         {/* Skip button */}
@@ -1314,59 +1387,179 @@ export default function KnowledgeChallenger() {
           </div>
         )}
 
-        {/* ====== Resolve Banner ====== */}
-        {cineStep === 'resolve' && gameState.lastSubBattle && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-40">
-            <div className="kc-outcome-banner" style={{
-              padding: '18px 36px',
-              borderRadius: '16px',
-              textAlign: 'center',
-              background: gameState.lastSubBattle.winner === 'player'
-                ? 'linear-gradient(135deg, rgba(34,197,94,0.45), rgba(22,163,74,0.15))'
-                : 'linear-gradient(135deg, rgba(239,68,68,0.45), rgba(185,28,28,0.15))',
-              border: `4px solid ${gameState.lastSubBattle.winner === 'player' ? '#22c55e' : '#ef4444'}`,
-              boxShadow: `0 0 60px ${gameState.lastSubBattle.winner === 'player' ? 'rgba(34,197,94,0.8)' : 'rgba(239,68,68,0.8)'}`,
-            }}>
-              <p style={{
-                fontSize: '2rem',
-                fontWeight: 900,
-                color: gameState.lastSubBattle.winner === 'player' ? '#4ade80' : '#fca5a5',
-                textShadow: `0 0 24px ${gameState.lastSubBattle.winner === 'player' ? 'rgba(34,197,94,0.95)' : 'rgba(239,68,68,0.95)'}, 0 2px 6px rgba(0,0,0,0.85)`,
-                margin: 0,
-              }}>
-                {gameState.lastSubBattle.winner === 'player'
-                  ? '🏆 フラッグ奪取！'
-                  : '💥 フラッグを奪われた！'}
-              </p>
-              <p className="text-xs text-amber-200/70 mt-1">
-                攻撃 {gameState.lastSubBattle.attackPower} vs 防御 {getBaseDefense(gameState.lastSubBattle.defenderCard)}
-              </p>
+        {/* ====== Resolve Banner (flag capture) ====== */}
+        {cineStep === 'resolve' && gameState.lastSubBattle && (() => {
+          const playerWon = gameState.lastSubBattle.winner === 'player';
+          const trophy = gameState.trophyFans[Math.min(gameState.round - 1, gameState.trophyFans.length - 1)] ?? 0;
+          const playerLead = gameState.playerFans - gameState.aiFans;
+          return (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-40">
+              <div
+                className="kc-outcome-banner"
+                style={{
+                  padding: '28px 44px',
+                  borderRadius: '20px',
+                  textAlign: 'center',
+                  background: playerWon
+                    ? 'radial-gradient(circle, rgba(255,215,0,0.55), rgba(245,151,0,0.18))'
+                    : 'linear-gradient(135deg, rgba(239,68,68,0.55), rgba(185,28,28,0.18))',
+                  border: `4px solid ${playerWon ? '#ffd700' : '#ef4444'}`,
+                  boxShadow: `0 0 80px ${playerWon ? 'rgba(255,215,0,0.95)' : 'rgba(239,68,68,0.85)'}`,
+                }}
+              >
+                <p
+                  style={{
+                    fontSize: '48px',
+                    fontWeight: 900,
+                    color: playerWon ? '#ffd700' : '#fca5a5',
+                    textShadow: `0 0 30px ${playerWon ? 'rgba(255,215,0,1)' : 'rgba(239,68,68,0.95)'}, 0 4px 10px rgba(0,0,0,0.9)`,
+                    margin: 0,
+                    lineHeight: 1.0,
+                  }}
+                >
+                  {playerWon ? '🏆 フラッグ奪取！' : '💥 フラッグを奪われた！'}
+                </p>
+                <p
+                  className="mt-2 kc-fan-count"
+                  style={{
+                    fontSize: '28px',
+                    fontWeight: 900,
+                    color: playerWon ? '#fde047' : '#fecaca',
+                    textShadow: '0 2px 8px rgba(0,0,0,0.85)',
+                  }}
+                >
+                  🎐 +{trophy} ファン！
+                </p>
+                <p className="text-xs text-amber-200/70 mt-2">
+                  攻撃 {gameState.lastSubBattle.attackPower} vs 防御 {getBaseDefense(gameState.lastSubBattle.defenderCard)}
+                </p>
+                {Math.abs(playerLead) > 0 && (
+                  <p className="text-[13px] font-bold mt-1" style={{ color: playerLead >= 0 ? '#4ade80' : '#fca5a5' }}>
+                    {playerLead >= 0
+                      ? `あなたが ${playerLead} ファン リード！`
+                      : `相手が ${-playerLead} ファン リード...`}
+                  </p>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
-        {/* ====== game_over inline ====== */}
-        {gameState.phase === 'game_over' && (
-          <div className="absolute inset-0 flex items-center justify-center z-50 kc-card-reveal">
-            <div className="text-center">
-              <span className="text-6xl block mb-2">{gameState.winner === 'player' ? '🎉' : '💀'}</span>
-              <p style={{ fontSize: '2.5rem', fontWeight: 900, color: gameState.winner === 'player' ? '#ffd700' : '#ef4444', textShadow: `0 0 24px ${gameState.winner === 'player' ? 'rgba(255,215,0,0.8)' : 'rgba(239,68,68,0.8)'}` }}>
-                {gameState.winner === 'player' ? '勝利！' : '敗北...'}
-              </p>
-              <p className="text-sm text-amber-200/70 mt-2">
-                {gameState.player.bench.length >= BENCH_MAX_SLOTS ? 'あなたのベンチが満杯！' :
-                 gameState.ai.bench.length >= BENCH_MAX_SLOTS ? '相手のベンチが満杯！' :
-                 'デッキ切れ！'}
-              </p>
+        {/* ====== Turn Transition Banner ====== */}
+        {cineStep === 'turn_transition' && (() => {
+          const playerDefends = gameState.flagHolder === 'player';
+          return (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-40">
+              <div
+                className="kc-turn-transition"
+                style={{
+                  padding: '20px 44px',
+                  borderRadius: '18px',
+                  textAlign: 'center',
+                  background: playerDefends
+                    ? 'linear-gradient(135deg, rgba(59,130,246,0.55), rgba(37,99,235,0.2))'
+                    : 'linear-gradient(135deg, rgba(239,68,68,0.55), rgba(185,28,28,0.2))',
+                  border: `4px solid ${playerDefends ? '#3b82f6' : '#ef4444'}`,
+                  boxShadow: `0 0 70px ${playerDefends ? 'rgba(59,130,246,0.85)' : 'rgba(239,68,68,0.85)'}`,
+                }}
+              >
+                <p
+                  style={{
+                    fontSize: '32px',
+                    fontWeight: 900,
+                    color: playerDefends ? '#93c5fd' : '#fca5a5',
+                    textShadow: `0 0 26px ${playerDefends ? 'rgba(59,130,246,1)' : 'rgba(239,68,68,1)'}, 0 2px 8px rgba(0,0,0,0.9)`,
+                    margin: 0,
+                    lineHeight: 1.1,
+                  }}
+                >
+                  {playerDefends
+                    ? '🛡️ 相手のターン！あなたは防御です'
+                    : '⚔️ あなたのターン！攻撃せよ！'}
+                </p>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
+
+        {/* ====== game_over inline (派手な最終演出) ====== */}
+        {gameState.phase === 'game_over' && (() => {
+          const won = gameState.winner === 'player';
+          return (
+            <>
+              {/* Full-screen brightness/darkness overlay */}
+              <div
+                className="absolute inset-0 pointer-events-none z-40 kc-final-overlay"
+                style={{
+                  background: won
+                    ? 'radial-gradient(circle, rgba(255,215,0,0.45), rgba(0,0,0,0.35))'
+                    : 'linear-gradient(180deg, rgba(0,0,0,0.75), rgba(10,5,15,0.88))',
+                }}
+              />
+              {/* Final confetti for victory */}
+              {won && (
+                <div className="absolute inset-0 pointer-events-none z-[41] overflow-hidden">
+                  {Array.from({ length: 40 }).map((_, i) => (
+                    <span
+                      key={`final-confetti-${i}`}
+                      className="kc-confetti-piece kc-confetti-slow"
+                      style={{
+                        left: `${(i * 2.6 + 3) % 100}%`,
+                        background: ['#ffd700', '#ff6b6b', '#4ade80', '#60a5fa', '#f5d76e', '#ffffff'][i % 6],
+                        animationDelay: `${(i % 10) * 0.1}s`,
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+              <div className="absolute inset-0 flex items-center justify-center z-50 kc-final-reveal">
+                <div className="text-center px-6">
+                  <span className="text-7xl block mb-3 kc-final-icon">{won ? '🎉' : '💀'}</span>
+                  <p
+                    style={{
+                      fontSize: won ? '64px' : '48px',
+                      fontWeight: 900,
+                      color: won ? '#ffd700' : '#9ca3af',
+                      textShadow: won
+                        ? '0 0 36px rgba(255,215,0,1), 0 0 72px rgba(255,215,0,0.6), 0 4px 12px rgba(0,0,0,0.9)'
+                        : '0 0 28px rgba(156,163,175,0.7), 0 4px 12px rgba(0,0,0,0.9)',
+                      margin: 0,
+                      lineHeight: 1.0,
+                    }}
+                  >
+                    {won ? '🎉 勝利！' : '敗北...'}
+                  </p>
+                  <p
+                    className="mt-3 font-black"
+                    style={{
+                      fontSize: '22px',
+                      color: won ? '#fde047' : '#d1d5db',
+                      textShadow: '0 2px 8px rgba(0,0,0,0.85)',
+                    }}
+                  >
+                    あなた 🎐 {gameState.playerFans} vs 相手 🎐 {gameState.aiFans}
+                  </p>
+                  <p className="text-[13px] font-bold text-amber-200/70 mt-2">
+                    {gameState.message}
+                  </p>
+                </div>
+              </div>
+            </>
+          );
+        })()}
       </div>
         );
       })()}
 
       {/* Player Bench */}
-      <BenchDisplay side="player" bench={gameState.player.bench} deckCount={gameState.player.deck.length} quarantineCount={gameState.quarantine.player.length} animKey={gameState.history.length} />
+      <BenchDisplay
+        side="player"
+        bench={gameState.player.bench}
+        deckCount={gameState.player.deck.length}
+        quarantineCount={gameState.quarantine.player.length}
+        animKey={gameState.history.length}
+        glowNames={gameState.benchGlow?.side === 'player' ? gameState.benchGlow.names : undefined}
+      />
 
       {/* ===== Effect Telop (card on-reveal effect) ===== */}
       {gameState.effectTelop && (
@@ -1974,6 +2167,88 @@ export default function KnowledgeChallenger() {
         .kc-bench-last-slot { background: rgba(255,200,0,0.1) !important; }
         .kc-warn-pulse { animation: kcWarnPulse 0.8s ease-in-out infinite; }
         @keyframes kcWarnPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+
+        /* ===== 2026-04 派手演出 ===== */
+        /* Gold flash on flag capture (player win) */
+        @keyframes kcGoldFlash {
+          0%   { opacity: 0; background: rgba(255,215,0,0); }
+          15%  { opacity: 1; background: rgba(255,215,0,0.65); }
+          100% { opacity: 0; background: rgba(255,215,0,0); }
+        }
+        .kc-gold-flash { animation: kcGoldFlash 0.5s ease-out forwards; }
+
+        /* Confetti particles */
+        @keyframes kcConfettiFall {
+          0%   { opacity: 1; transform: translateY(-20vh) rotate(0deg); }
+          100% { opacity: 0; transform: translateY(120vh) rotate(720deg); }
+        }
+        .kc-confetti-piece {
+          position: absolute;
+          top: 0;
+          width: 8px;
+          height: 14px;
+          opacity: 0;
+          border-radius: 2px;
+          animation: kcConfettiFall 1.1s ease-in forwards;
+        }
+        .kc-confetti-slow {
+          animation-duration: 3s;
+        }
+
+        /* "+N ファン！" count pop */
+        @keyframes kcFanCountPop {
+          0%   { opacity: 0; transform: scale(0.4) translateY(12px); }
+          35%  { opacity: 1; transform: scale(1.35) translateY(-4px); }
+          60%  { transform: scale(0.92); }
+          100% { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        .kc-fan-count { animation: kcFanCountPop 0.7s cubic-bezier(0.34, 1.56, 0.64, 1); display: inline-block; }
+
+        /* Turn transition banner pop */
+        @keyframes kcTurnTransitionPop {
+          0%   { opacity: 0; transform: translateY(-40px) scale(0.6); }
+          30%  { opacity: 1; transform: translateY(0) scale(1.12); }
+          55%  { transform: scale(0.96); }
+          80%  { opacity: 1; transform: scale(1); }
+          100% { opacity: 0; transform: scale(0.95); }
+        }
+        .kc-turn-transition { animation: kcTurnTransitionPop 1.5s ease-out forwards; }
+
+        /* Final reveal overlay + icon */
+        @keyframes kcFinalOverlayFade {
+          0%   { opacity: 0; }
+          100% { opacity: 1; }
+        }
+        .kc-final-overlay { animation: kcFinalOverlayFade 0.6s ease-out forwards; }
+        @keyframes kcFinalReveal {
+          0%   { opacity: 0; transform: scale(0.7); }
+          45%  { opacity: 1; transform: scale(1.08); }
+          100% { opacity: 1; transform: scale(1); }
+        }
+        .kc-final-reveal { animation: kcFinalReveal 0.9s ease-out forwards; }
+        @keyframes kcFinalIconBounce {
+          0%   { transform: scale(0) rotate(-20deg); }
+          50%  { transform: scale(1.4) rotate(10deg); }
+          75%  { transform: scale(0.95) rotate(-3deg); }
+          100% { transform: scale(1) rotate(0); }
+        }
+        .kc-final-icon { animation: kcFinalIconBounce 1s cubic-bezier(0.34, 1.56, 0.64, 1); display: inline-block; }
+
+        /* ALT reward pop-in on result screen */
+        @keyframes kcRewardPop {
+          0%   { opacity: 0; transform: scale(0.6); }
+          50%  { opacity: 1; transform: scale(1.15); }
+          100% { opacity: 1; transform: scale(1); }
+        }
+        .kc-reward-pop { animation: kcRewardPop 0.8s ease-out 0.3s both; }
+
+        /* Bench slot glow (when a bench effect fires) */
+        @keyframes kcBenchGlow {
+          0%   { box-shadow: 0 0 0 rgba(96,165,250,0); transform: scale(1); }
+          40%  { box-shadow: 0 0 18px rgba(96,165,250,0.95), 0 0 32px rgba(96,165,250,0.65); transform: scale(1.08); }
+          100% { box-shadow: 0 0 0 rgba(96,165,250,0); transform: scale(1); }
+        }
+        .kc-bench-glow { animation: kcBenchGlow 1.3s ease-out; border: 2px solid rgba(96,165,250,0.9) !important; }
       `}</style>
     </div>
   );
@@ -1985,9 +2260,10 @@ export default function KnowledgeChallenger() {
 
 type BenchSlotUI = { name: string; card: BattleCard; count: number };
 
-function BenchDisplay({ side, bench, deckCount, quarantineCount, animKey }: {
-  side: 'player' | 'ai'; bench: BenchSlotUI[]; deckCount: number; quarantineCount?: number; animKey?: number;
+function BenchDisplay({ side, bench, deckCount, quarantineCount, animKey, glowNames }: {
+  side: 'player' | 'ai'; bench: BenchSlotUI[]; deckCount: number; quarantineCount?: number; animKey?: number; glowNames?: string[];
 }) {
+  const glowSet = glowNames ? new Set(glowNames) : null;
   // Track which slot names existed last render → newly added (or count-bumped)
   // slots get the kc-bench-pop animation. Reset whenever animKey changes
   // (i.e. on each new sub-battle resolve).
@@ -2061,12 +2337,13 @@ function BenchDisplay({ side, bench, deckCount, quarantineCount, animKey }: {
             const isCountBumped = prevCount > 0 && prevCount < slot.count;
             // Re-mounting via key forces the slot animation to replay each time
             // animKey changes (i.e. each new sub-battle resolution).
-            const slotKey = `${slot.name}-${animKey ?? 0}`;
+            const isGlowing = glowSet?.has(slot.name) ?? false;
+            const slotKey = `${slot.name}-${animKey ?? 0}${isGlowing ? '-glow' : ''}`;
             return (
               <button
                 key={slotKey}
                 onClick={() => isPlayer && setDetailSlot(slot)}
-                className={`flex-1 rounded-lg relative overflow-hidden transition-all active:scale-95 ${isNew ? 'kc-bench-pop' : ''}`}
+                className={`flex-1 rounded-lg relative overflow-hidden transition-all active:scale-95 ${isNew ? 'kc-bench-pop' : ''} ${isGlowing ? 'kc-bench-glow' : ''}`}
                 style={{ background: `${catInfo.color}1a`, border: `2px solid ${catInfo.color}77`, minHeight: '54px', cursor: isPlayer ? 'pointer' : 'default' }}
               >
                 {slot.card.imageUrl ? (
@@ -2074,8 +2351,14 @@ function BenchDisplay({ side, bench, deckCount, quarantineCount, animKey }: {
                 ) : (
                   <div className="absolute inset-0 flex items-center justify-center text-2xl opacity-50">{catInfo.emoji}</div>
                 )}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent" />
-                <div className="relative z-10 flex flex-col justify-end h-full p-1">
+                {/* Frame overlay for bench cards */}
+                <img
+                  src={CARD_RARITY_IMAGES[slot.card.rarity] || CARD_RARITY_IMAGES['N']}
+                  alt=""
+                  className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+                  style={{ zIndex: 1 }}
+                />
+                <div className="relative flex flex-col justify-end h-full p-1" style={{ zIndex: 2 }}>
                   <p className="text-[9px] font-black text-white leading-tight truncate" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.95)' }}>{slot.name}</p>
                 </div>
                 {slot.count > 1 && (
@@ -2139,36 +2422,34 @@ function CardDisplay({ card, isDefense, isWinner, size, mode }: {
   mode?: 'attack' | 'defense' | 'neutral';
 }) {
   const catInfo = CATEGORY_INFO[card.category];
-  const rarInfo = RARITY_INFO[card.rarity];
   const [imgLoaded, setImgLoaded] = useState(false);
-  // 2026-04 バトル用に "battle" サイズを追加: 防御/攻撃スロットで使用。
-  // sm は overlay (deck phase, モーダル) 用。
   const w = size === 'sm' ? 120 : size === 'battle' ? 180 : 200;
   const h = size === 'sm' ? 150 : size === 'battle' ? 250 : 260;
   const activeMode = mode ?? 'neutral';
   const atk = card.attackPower ?? card.power;
   const def = card.defensePower ?? card.power;
-  const fontAtk = size === 'sm' ? '14px' : size === 'battle' ? '26px' : '24px';
-  const fontDef = size === 'sm' ? '14px' : size === 'battle' ? '26px' : '24px';
   const isBig = size !== 'sm';
+  const fontPower = size === 'sm' ? '12px' : size === 'battle' ? '20px' : '18px';
+  const frameImg = CARD_RARITY_IMAGES[card.rarity] || CARD_RARITY_IMAGES['N'];
 
   return (
     <div
       className={`inline-block rounded-xl p-0 relative overflow-hidden ${isWinner ? 'kc-win-glow' : ''}`}
       style={{
-        background: 'linear-gradient(135deg, rgba(21,29,59,0.95), rgba(14,20,45,0.95))',
-        border: `3px solid ${isWinner ? 'rgba(255,215,0,0.8)' : isDefense ? 'rgba(100,180,255,0.5)' : `${catInfo.color}55`}`,
+        background: '#0b1128',
         boxShadow: isWinner
           ? '0 0 24px rgba(255,215,0,0.55), 0 0 48px rgba(255,215,0,0.25), 0 6px 20px rgba(0,0,0,0.5)'
           : '0 6px 20px rgba(0,0,0,0.5)',
         width: `${w}px`, height: `${h}px`,
       }}
     >
+      {/* Loading placeholder */}
       {!imgLoaded && (
         <div className="absolute inset-0 flex items-center justify-center animate-pulse" style={{ background: `linear-gradient(135deg, ${catInfo.color}15, rgba(14,20,45,0.95))` }}>
           <span className={`${isBig ? 'text-6xl' : 'text-4xl'} opacity-40`}>{catInfo.emoji}</span>
         </div>
       )}
+      {/* Card illustration (bottom layer) */}
       {card.imageUrl && (
         <img
           src={card.imageUrl}
@@ -2180,65 +2461,61 @@ function CardDisplay({ card, isDefense, isWinner, size, mode }: {
           onError={() => setImgLoaded(true)}
         />
       )}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent flex flex-col justify-between p-2">
-        <div className="flex items-start justify-between">
-          <div className={isBig ? 'text-3xl' : 'text-xl'}>{catInfo.emoji}</div>
-          <div className={`px-${isBig ? '2' : '1.5'} py-0.5 rounded font-black`} style={{ background: rarInfo.bgColor, color: rarInfo.color, fontSize: isBig ? '13px' : '10px' }}>
-            {rarInfo.label}
-          </div>
-        </div>
-        <div>
-          <p
-            className="font-black text-white drop-shadow-lg leading-tight mb-1"
-            style={{ fontSize: isBig ? '20px' : '14px', textShadow: '0 2px 6px rgba(0,0,0,0.95)' }}
-          >
-            {card.name}
-          </p>
-          {/* Attack / Defense power badges — always visible */}
-          <div className="flex items-end justify-between gap-1">
-            {/* ⚔️ Attack badge (left-bottom) */}
-            <div
-              className="flex items-center gap-1 px-1.5 py-0.5 rounded-md font-black"
-              style={{
-                background: activeMode === 'attack'
-                  ? 'rgba(239,68,68,0.85)'
-                  : activeMode === 'defense'
-                    ? 'rgba(80,80,90,0.6)'
-                    : 'rgba(239,68,68,0.55)',
-                border: `1.5px solid ${activeMode === 'attack' ? '#ff6b6b' : activeMode === 'defense' ? 'rgba(120,120,130,0.6)' : 'rgba(239,68,68,0.7)'}`,
-                color: activeMode === 'defense' ? 'rgba(255,255,255,0.45)' : '#fff',
-                fontSize: fontAtk,
-                textShadow: activeMode === 'attack' ? '0 0 10px rgba(255,107,107,0.95), 0 1px 2px rgba(0,0,0,0.9)' : '0 1px 2px rgba(0,0,0,0.9)',
-                boxShadow: activeMode === 'attack' ? '0 0 14px rgba(239,68,68,0.7)' : 'none',
-                lineHeight: 1,
-              }}
-            >
-              ⚔️<span>{atk}</span>
-            </div>
-            {/* 🛡️ Defense badge (right-bottom) */}
-            <div
-              className="flex items-center gap-1 px-1.5 py-0.5 rounded-md font-black"
-              style={{
-                background: activeMode === 'defense'
-                  ? 'rgba(59,130,246,0.85)'
-                  : activeMode === 'attack'
-                    ? 'rgba(80,80,90,0.6)'
-                    : 'rgba(59,130,246,0.55)',
-                border: `1.5px solid ${activeMode === 'defense' ? '#60a5fa' : activeMode === 'attack' ? 'rgba(120,120,130,0.6)' : 'rgba(59,130,246,0.7)'}`,
-                color: activeMode === 'attack' ? 'rgba(255,255,255,0.45)' : '#fff',
-                fontSize: fontDef,
-                textShadow: activeMode === 'defense' ? '0 0 10px rgba(96,165,250,0.95), 0 1px 2px rgba(0,0,0,0.9)' : '0 1px 2px rgba(0,0,0,0.9)',
-                boxShadow: activeMode === 'defense' ? '0 0 14px rgba(59,130,246,0.7)' : 'none',
-                lineHeight: 1,
-              }}
-            >
-              🛡️<span>{def}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-      {isDefense && <div className="absolute top-1.5 left-1.5"><span className={isBig ? 'text-xl' : 'text-base'}>🛡️</span></div>}
-      {isWinner && <div className="absolute top-1.5 right-1.5 kc-win-badge"><span className={`${isBig ? 'text-2xl' : 'text-lg'} drop-shadow-lg`}>👑</span></div>}
+      {/* Frame overlay (top layer) */}
+      <img
+        src={frameImg}
+        alt=""
+        className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+        style={{ zIndex: 2 }}
+      />
+      {/* Card name (on top of frame) */}
+      <span
+        className="absolute left-0 right-0 text-center font-bold text-white truncate px-2"
+        style={{
+          bottom: isBig ? '30px' : '22px',
+          fontSize: isBig ? '16px' : '11px',
+          textShadow: '0 2px 6px rgba(0,0,0,0.95), 0 0 3px rgba(0,0,0,0.8)',
+          zIndex: 3,
+        }}
+      >
+        {card.name}
+      </span>
+      {/* ⚔️ Attack badge (left-bottom) */}
+      <span
+        className="absolute flex items-center gap-0.5 px-1.5 py-0.5 rounded-md font-black"
+        style={{
+          bottom: isBig ? '5px' : '3px',
+          left: '15%',
+          background: activeMode === 'attack' ? 'rgba(239,68,68,0.9)' : activeMode === 'defense' ? 'rgba(80,80,90,0.7)' : 'rgba(239,68,68,0.7)',
+          color: activeMode === 'defense' ? 'rgba(255,255,255,0.45)' : '#fff',
+          fontSize: fontPower,
+          textShadow: activeMode === 'attack' ? '0 0 10px rgba(255,107,107,0.95)' : '0 1px 2px rgba(0,0,0,0.9)',
+          boxShadow: activeMode === 'attack' ? '0 0 12px rgba(239,68,68,0.7)' : 'none',
+          lineHeight: 1,
+          zIndex: 3,
+        }}
+      >
+        ⚔️{atk}
+      </span>
+      {/* 🛡️ Defense badge (right-bottom) */}
+      <span
+        className="absolute flex items-center gap-0.5 px-1.5 py-0.5 rounded-md font-black"
+        style={{
+          bottom: isBig ? '5px' : '3px',
+          right: '15%',
+          background: activeMode === 'defense' ? 'rgba(59,130,246,0.9)' : activeMode === 'attack' ? 'rgba(80,80,90,0.7)' : 'rgba(59,130,246,0.7)',
+          color: activeMode === 'attack' ? 'rgba(255,255,255,0.45)' : '#fff',
+          fontSize: fontPower,
+          textShadow: activeMode === 'defense' ? '0 0 10px rgba(96,165,250,0.95)' : '0 1px 2px rgba(0,0,0,0.9)',
+          boxShadow: activeMode === 'defense' ? '0 0 12px rgba(59,130,246,0.7)' : 'none',
+          lineHeight: 1,
+          zIndex: 3,
+        }}
+      >
+        🛡️{def}
+      </span>
+      {isDefense && <div className="absolute top-1.5 left-1.5" style={{ zIndex: 3 }}><span className={isBig ? 'text-xl' : 'text-base'}>🛡️</span></div>}
+      {isWinner && <div className="absolute top-1.5 right-1.5 kc-win-badge" style={{ zIndex: 3 }}><span className={`${isBig ? 'text-2xl' : 'text-lg'} drop-shadow-lg`}>👑</span></div>}
     </div>
   );
 }

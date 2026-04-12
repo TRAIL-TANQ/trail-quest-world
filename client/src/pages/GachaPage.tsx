@@ -6,7 +6,7 @@
  * Gold ornate styling + full animation system
  */
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { GACHA_COSTS, RARITY_LABELS, RARITY_COLORS, RARITY_STARS, IMAGES } from '@/lib/constants';
+import { GACHA_COSTS, RARITY_LABELS, RARITY_COLORS, RARITY_STARS, IMAGES, CARD_RARITY_IMAGES } from '@/lib/constants';
 import { COLLECTION_CARDS, GACHA_RARITY_RATES } from '@/lib/cardData';
 import { useUserStore, useGachaStore, useCollectionStore, useMissionStore } from '@/lib/stores';
 import type { GachaHistoryEntry } from '@/lib/stores';
@@ -357,7 +357,10 @@ export default function GachaPage() {
               <div className="max-h-48 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
                 {history.slice(0, 20).map((entry) => (
                   <div key={entry.id} className="flex items-center gap-2 px-3 py-1.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                    <img src={entry.card.imageUrl} alt={entry.card.name} className="w-7 h-9 object-cover rounded" style={{ border: `1px solid ${RARITY_COLOR_MAP[entry.card.rarity]}55` }} />
+                    <div className="relative w-7 h-9 rounded overflow-hidden flex-shrink-0">
+                      <img src={entry.card.imageUrl} alt={entry.card.name} className="w-full h-full object-cover" />
+                      <img src={CARD_RARITY_IMAGES[entry.card.rarity] || CARD_RARITY_IMAGES['N']} alt="" className="absolute inset-0 w-full h-full object-cover pointer-events-none" />
+                    </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-[10px] font-bold text-amber-100 truncate">{entry.card.name}</p>
                       <p className="text-[9px] text-amber-200/30">{entry.gachaType === 'premium' ? 'プレミアム' : 'ノーマル'}</p>
@@ -426,14 +429,14 @@ export default function GachaPage() {
             {/* FLIP PHASE */}
             {phase === 'flip' && pulledCard && (
               <div className="relative" style={{ perspective: '600px' }}>
-                <div className="w-48 h-64 rounded-2xl flex items-center justify-center overflow-hidden"
+                <div className="w-48 h-64 rounded-2xl flex items-center justify-center overflow-hidden relative"
                   style={{
-                    border: isSSR ? '2px solid transparent' : `2px solid ${rarityColor}`,
                     boxShadow: `0 0 24px ${rarityColor}44`,
                     animation: isSSR ? 'card-flip 0.6s ease-out, rainbow-border 2s linear infinite' : 'card-flip 0.6s ease-out',
                     backfaceVisibility: 'hidden',
                   }}>
                   <img src={pulledCard.imageUrl} alt={pulledCard.name} className="w-full h-full object-cover" />
+                  <img src={CARD_RARITY_IMAGES[pulledCard.rarity] || CARD_RARITY_IMAGES['N']} alt="" className="absolute inset-0 w-full h-full object-cover pointer-events-none" style={{ zIndex: 2 }} />
                 </div>
               </div>
             )}
@@ -454,25 +457,35 @@ export default function GachaPage() {
                 </div>
                 <div className="w-52 mx-auto rounded-xl overflow-hidden relative"
                   style={{
-                    border: isSSR ? '2px solid transparent' : `2px solid ${rarityColor}`,
                     boxShadow: `0 0 32px ${rarityColor}33, 0 8px 24px rgba(0,0,0,0.5)`,
                     animation: isSSR ? 'rainbow-border 2s linear infinite' : `glow-pulse 2s ease-in-out infinite`,
                     '--glow-color': rarityColor,
                   } as React.CSSProperties}>
-                  <div className="absolute top-1 left-1 w-2.5 h-2.5 border-t-2 border-l-2 rounded-tl-sm z-10" style={{ borderColor: `${rarityColor}88` }} />
-                  <div className="absolute top-1 right-1 w-2.5 h-2.5 border-t-2 border-r-2 rounded-tr-sm z-10" style={{ borderColor: `${rarityColor}88` }} />
-                  <div className="absolute bottom-1 left-1 w-2.5 h-2.5 border-b-2 border-l-2 rounded-bl-sm z-10" style={{ borderColor: `${rarityColor}88` }} />
-                  <div className="absolute bottom-1 right-1 w-2.5 h-2.5 border-b-2 border-r-2 rounded-br-sm z-10" style={{ borderColor: `${rarityColor}88` }} />
                   <div className="relative" style={{ aspectRatio: '3/4' }}>
                     <img src={pulledCard.imageUrl} alt={pulledCard.name} className="w-full h-full object-cover" />
+                    {/* Frame overlay */}
+                    <img src={CARD_RARITY_IMAGES[pulledCard.rarity] || CARD_RARITY_IMAGES['N']} alt="" className="absolute inset-0 w-full h-full object-cover pointer-events-none" style={{ zIndex: 2 }} />
                     {isHighRarity && Array.from({ length: 8 }).map((_, i) => (
                       <div key={i} className="absolute w-1 h-1 rounded-full" style={{
                         background: rarityColor,
                         top: `${15 + Math.random() * 70}%`, left: `${10 + Math.random() * 80}%`,
                         animation: `sparkle ${0.8 + Math.random() * 1.2}s ease-in-out ${Math.random() * 0.5}s infinite`,
                         boxShadow: `0 0 4px ${rarityColor}`,
+                        zIndex: 3,
                       }} />
                     ))}
+                    {/* Card name on frame */}
+                    <span
+                      className="absolute left-0 right-0 text-center font-bold text-white truncate px-3"
+                      style={{
+                        bottom: '30px',
+                        fontSize: '16px',
+                        textShadow: '0 2px 6px rgba(0,0,0,0.95), 0 0 3px rgba(0,0,0,0.8)',
+                        zIndex: 3,
+                      }}
+                    >
+                      {pulledCard.name}
+                    </span>
                   </div>
                   <div className="px-3 py-2 text-center" style={{ background: `linear-gradient(to top, rgba(11,17,40,0.95), rgba(11,17,40,0.7))`, borderTop: `1px solid ${rarityColor}33` }}>
                     <div className="flex justify-center gap-0.5 mb-1">
@@ -480,7 +493,6 @@ export default function GachaPage() {
                         <span key={i} className="text-sm" style={{ color: rarityColor }}>★</span>
                       ))}
                     </div>
-                    <h3 className="text-sm font-bold text-amber-100">{pulledCard.name}</h3>
                     <p className="text-[10px] text-amber-200/50 mt-0.5">{categoryEmoji[pulledCard.category]} {pulledCard.description.slice(0, 30)}…</p>
                   </div>
                 </div>
@@ -516,23 +528,25 @@ export default function GachaPage() {
                 return (
                   <div key={i} className="relative rounded-lg overflow-hidden"
                     style={{
-                      border: `2px solid ${rc}`,
                       boxShadow: card.rarity === 'SSR' ? `0 0 10px ${rc}66` : card.rarity === 'SR' ? `0 0 6px ${rc}44` : 'none',
                       animation: `scale-in 0.3s ease-out ${i * 0.05}s both`,
                     }}>
-                    <div style={{ aspectRatio: '3/4' }}>
+                    <div className="relative" style={{ aspectRatio: '3/4' }}>
                       <img src={card.imageUrl} alt={card.name} className="w-full h-full object-cover" />
-                    </div>
-                    <div className="absolute top-0.5 left-0.5">
-                      <span className="text-[7px] font-bold px-1 py-0.5 rounded" style={{ background: `${rc}cc`, color: '#fff' }}>{card.rarity}</span>
-                    </div>
-                    {isNew && (
-                      <div className="absolute top-0.5 right-0.5">
-                        <span className="text-[7px] font-bold px-1 py-0.5 rounded" style={{ background: 'rgba(34,197,94,0.9)', color: '#fff' }}>NEW</span>
-                      </div>
-                    )}
-                    <div className="px-0.5 py-0.5 text-center" style={{ background: 'rgba(11,17,40,0.85)', borderTop: `1px solid ${rc}33` }}>
-                      <p className="text-[7px] font-bold text-amber-100 truncate">{card.name}</p>
+                      {/* Frame overlay */}
+                      <img src={CARD_RARITY_IMAGES[card.rarity] || CARD_RARITY_IMAGES['N']} alt="" className="absolute inset-0 w-full h-full object-cover pointer-events-none" style={{ zIndex: 2 }} />
+                      {isNew && (
+                        <div className="absolute top-0.5 right-0.5" style={{ zIndex: 3 }}>
+                          <span className="text-[7px] font-bold px-1 py-0.5 rounded" style={{ background: 'rgba(34,197,94,0.9)', color: '#fff' }}>NEW</span>
+                        </div>
+                      )}
+                      {/* Card name on frame */}
+                      <span
+                        className="absolute left-0 right-0 text-center font-bold text-white truncate px-0.5"
+                        style={{ bottom: '8px', fontSize: '7px', textShadow: '0 1px 3px rgba(0,0,0,0.95)', zIndex: 3 }}
+                      >
+                        {card.name}
+                      </span>
                     </div>
                   </div>
                 );
