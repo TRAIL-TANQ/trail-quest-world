@@ -148,13 +148,13 @@ export interface StarterDeck {
 
 export const STARTER_DECKS: StarterDeck[] = [
   {
-    id: 'starter-hero',
-    name: '偉人デッキ',
+    id: 'starter-napoleon',
+    name: 'ナポレオンデッキ',
     icon: '⚔️',
     trumpCard: 'ナポレオン',
-    themeCards: ['モーツァルト', 'ガリレオ'],
+    themeCards: ['火薬', '大砲'],
     noiseCards: ['紙', '電話', '光合成', '車輪', '知床', '厳島神社', 'ハチドリ'],
-    description: '大砲やナポレオン法典を集めてナポレオンを覚醒させろ',
+    description: '大砲とナポレオン法典を集めてナポレオンを覚醒させろ。ジャンヌやマリーを仲間にすればフランス最強デッキに',
   },
   {
     id: 'starter-creature',
