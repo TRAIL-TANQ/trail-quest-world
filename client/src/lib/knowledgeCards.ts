@@ -97,7 +97,7 @@ export const EFFECT_DEFS: Record<string, CardEffect> = {
   terracotta:      { id: 'terracotta',      name: '不滅の軍勢',       description: 'From the bench: 始皇帝がベンチに送られる時、代わりに隔離する。', category: 'special' },
   qinshi:          { id: 'qinshi',          name: '天下統一',         description: 'ベンチの世界遺産1枚につき攻撃+2、防御+1。', category: 'special' },
   amazon_river:    { id: 'amazon_river',    name: '密林の大河',       description: 'From the bench: 味方の生き物カードの攻撃+1。', category: 'atk' },
-  anaconda:        { id: 'anaconda',        name: '締めつけ',         description: '公開時、相手防御カードの防御-2。', category: 'debuff' },
+  anaconda:        { id: 'anaconda',        name: '締めつけ',         description: '公開時、相手防御-2。ベンチにアマゾン川+毒矢カエル+ピラニアの3枚で大蛇に進化。', category: 'debuff' },
   poison_frog:     { id: 'poison_frog',     name: '猛毒',             description: '公開時、相手デッキ上1枚を隔離。アマゾン川があれば2枚。', category: 'bench' },
   apple:           { id: 'apple',           name: '落ちるリンゴ',     description: '公開時、デッキ内のニュートンをデッキ一番上に移動。', category: 'bench' },
   prism:           { id: 'prism',           name: '光の分解',         description: 'From the bench: ニュートンの攻撃+2、公開時相手防御効果無効。', category: 'atk' },
@@ -156,6 +156,7 @@ export const EFFECT_DEFS: Record<string, CardEffect> = {
   lion:             { id: 'lion',             name: '百獣の王',         description: '攻撃時、自分ベンチの生き物カード1枚につき攻撃+1。', category: 'atk' },
   book_burning:     { id: 'book_burning',     name: '思想統制',         description: '公開時、相手デッキ上3枚を隔離。ベンチに始皇帝がいればさらに+2枚（計5枚）。', category: 'debuff' },
   elixir:           { id: 'elixir',           name: '永遠の命',         description: 'From the bench: 始皇帝がベンチに送られる時、代わりにデッキの一番下に戻す。', category: 'special' },
+  giant_snake:      { id: 'giant_snake',      name: '呑み込む者',       description: '公開時、相手防御カードを即座にベンチ送り（1回戦1回のみ）。2回目以降は通常比較。', category: 'atk' },
 };
 
 // Card name → effect id. These are the only cards that carry on-reveal effects.
@@ -254,6 +255,7 @@ export const EFFECT_BY_CARD_NAME: Record<string, string> = {
   'ライオン':             'lion',
   '焚書坑儒':             'book_burning',
   '不老不死の薬':         'elixir',
+  '大蛇':                 'giant_snake',
 };
 
 export interface BattleCard {
@@ -401,6 +403,7 @@ export const CARD_STAT_OVERRIDES: Record<string, StatProfile> = {
   'モアイ像':             { attackPower: 1, defensePower: 2 },
   '焚書坑儒':             { attackPower: 1, defensePower: 1 },
   '不老不死の薬':         { attackPower: 1, defensePower: 1 },
+  '大蛇':                 { attackPower: 5, defensePower: 4 },
 };
 
 // Combo card IDs for detection
@@ -1286,6 +1289,11 @@ const QUIZ_DATA: Record<string, Quiz[]> = {
     { question: '徐福が不老不死の薬を求めて向かった方角は？', choices: ['西方', '北方', '東方', '南方'], correctIndex: 2 },
     { question: '始皇帝が不老不死を求めた理由は？', choices: ['永遠に国を治めるため', '病気を治すため', '若返るため', '神になるため'], correctIndex: 0 },
   ],
+  'card-165': [
+    { question: '世界最大のヘビは？', choices: ['アナコンダ', 'キングコブラ', 'ニシキヘビ', 'ブラックマンバ'], correctIndex: 0 },
+    { question: 'アナコンダが主に住んでいるのは？', choices: ['アフリカ', '南米', 'アジア', 'オーストラリア'], correctIndex: 1 },
+    { question: 'アナコンダの狩りの方法は？', choices: ['毒で麻痺させる', '体で締めつける', '噛みつく', '追いかける'], correctIndex: 1 },
+  ],
 };
 
 // Effect descriptions by category
@@ -1738,7 +1746,8 @@ export const SYNERGY_MAP: Record<string, string[]> = {
   '焚書坑儒': ['始皇帝', '兵馬俑', '万里の長城'],
   '不老不死の薬': ['始皇帝', '兵馬俑', '万里の長城'],
   'アマゾン川': ['アナコンダ', '毒矢カエル'],
-  'アナコンダ': ['アマゾン川', '毒矢カエル'],
+  'アナコンダ': ['アマゾン川', '毒矢カエル', 'ピラニア', 'ダーウィン', '大蛇'],
+  '大蛇': ['アマゾン川', 'アナコンダ', '毒矢カエル'],
   '毒矢カエル': ['アマゾン川', 'アナコンダ'],
   'ニュートン': ['リンゴ', 'プリズム', '万有引力'],
   'リンゴ': ['ニュートン', 'プリズム', '万有引力'],

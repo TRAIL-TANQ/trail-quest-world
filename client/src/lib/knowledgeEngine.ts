@@ -31,7 +31,7 @@
  * resolveBattleStep() when the attacker has accumulated enough power.
  */
 import type { BattleCard } from './knowledgeCards';
-import { EFFECT_COLORS } from './knowledgeCards';
+import { EFFECT_COLORS, ALL_BATTLE_CARDS } from './knowledgeCards';
 import type { StageRules } from './stages';
 
 export const BENCH_MAX_SLOTS = 6;
@@ -128,6 +128,8 @@ export interface GameState {
   benchGlow: { side: Side; names: string[]; key: number } | null;
   // Bench boost details: which bench cards contributed what bonuses (for power-up animation).
   benchBoostDetails: BenchBoostDetail[] | null;
+  // ===== Evolution / once-per-round tracking =====
+  usedGiantSnake: { player: boolean; ai: boolean }; // 大蛇の呑み込み効果（1回戦1回）
   // ===== Stage rules =====
   stageRules: StageRules | null;      // null = free battle (no stage rules)
   // ===== Round result =====
@@ -210,6 +212,7 @@ export function initGameState(playerDeck: BattleCard[], aiDeck: BattleCard[], st
     effectTelop: null,
     benchGlow: null,
     benchBoostDetails: null,
+    usedGiantSnake: { player: false, ai: false },
     stageRules: stageRules ?? null,
     roundWinner: null,
     history: [],
@@ -785,7 +788,51 @@ export function applyRevealEffect(
     case 'anaconda': {
       if (role === 'attacker') {
         next = { ...next, defenderBonus: next.defenderBonus - 2 };
-        telop = { text: '🐍アナコンダ締めつけ！敵防御-2', color };
+        // Check evolution: アマゾン川 + 毒矢カエル + ピラニア all on bench
+        const my = side === 'player' ? next.player : next.ai;
+        const sealed = next.sealedBenchNames[side];
+        const benchNames = new Set(my.bench.filter((b) => !sealed.includes(b.name)).map((b) => b.name));
+        if (benchNames.has('アマゾン川') && benchNames.has('毒矢カエル') && benchNames.has('ピラニア')) {
+          // Evolve: replace アナコンダ in attackRevealed with 大蛇
+          const giantSnakeTemplate = ALL_BATTLE_CARDS.find((c) => c.name === '大蛇');
+          if (giantSnakeTemplate) {
+            const evolved: BattleCard = { ...giantSnakeTemplate, id: `evolved-giant-snake-${Date.now()}` };
+            const newRevealed = next.attackRevealed.map((c) => c.id === card.id ? evolved : c);
+            // Recalculate power: remove anaconda's attack, add giant snake's attack
+            const oldAtk = getBaseAttack(card);
+            const newAtk = getBaseAttack(evolved);
+            next = {
+              ...next,
+              attackRevealed: newRevealed,
+              attackCurrentPower: next.attackCurrentPower - oldAtk + newAtk,
+            };
+            // Glow the 3 bench cards
+            next = withBenchGlow(next, side, ['アマゾン川', '毒矢カエル', 'ピラニア']);
+            telop = { text: '🐍 進化！アナコンダ → 大蛇！', color: '#ffd700' };
+            console.log('[Engine] アナコンダ → 大蛇に進化！');
+          } else {
+            telop = { text: '🐍アナコンダ締めつけ！敵防御-2', color };
+          }
+        } else {
+          telop = { text: '🐍アナコンダ締めつけ！敵防御-2', color };
+        }
+      }
+      break;
+    }
+    case 'giant_snake': {
+      // 大蛇「呑み込む者」: 攻撃時、相手防御カードを即座にベンチ送り（1回戦1回のみ）
+      if (role === 'attacker' && !next.usedGiantSnake[side]) {
+        if (next.defenseCard) {
+          // Mark as used for this round
+          next = { ...next, usedGiantSnake: { ...next.usedGiantSnake, [side]: true } };
+          // Force attack power to exceed defense (instant win)
+          const effectiveDef = Math.max(0, getBaseDefense(next.defenseCard!) + next.defenderBonus);
+          const needed = effectiveDef - next.attackCurrentPower + getBaseAttack(card);
+          if (needed > 0) {
+            bonusAttack += needed;
+          }
+          telop = { text: '🐍 呑み込む者！防御カードを丸呑み！', color: '#ffd700' };
+        }
       }
       break;
     }
@@ -1846,6 +1893,7 @@ export function advanceToNextRound(state: GameState): GameState {
     effectTelop: null,
     benchGlow: null,
     benchBoostDetails: null,
+    usedGiantSnake: { player: false, ai: false },
     message: `第${nextRound}回戦 デッキフェイズ：カードを選ぼう`,
   };
 }
