@@ -1754,10 +1754,11 @@ export const SYNERGY_MAP: Record<string, string[]> = {
   '兵馬俑': ['始皇帝', '万里の長城', '焚書坑儒', '不老不死の薬'],
   '焚書坑儒': ['始皇帝', '兵馬俑', '万里の長城'],
   '不老不死の薬': ['始皇帝', '兵馬俑', '万里の長城'],
-  'アマゾン川': ['アナコンダ', '毒矢カエル'],
+  'アマゾン川': ['アナコンダ', '毒矢カエル', 'ピラニア', '光合成'],
+  'ピラニア': ['アマゾン川', 'アナコンダ', '毒矢カエル', '光合成', 'ダーウィン'],
   'アナコンダ': ['アマゾン川', '毒矢カエル', 'ピラニア', 'ダーウィン', '大蛇'],
   '大蛇': ['アマゾン川', 'アナコンダ', '毒矢カエル'],
-  '毒矢カエル': ['アマゾン川', 'アナコンダ'],
+  '毒矢カエル': ['アマゾン川', 'アナコンダ', 'ピラニア', '光合成'],
   'ニュートン': ['リンゴ', 'プリズム', '万有引力'],
   'リンゴ': ['ニュートン', 'プリズム', '万有引力'],
   'プリズム': ['ニュートン', 'リンゴ', '万有引力'],
@@ -1776,9 +1777,10 @@ export const SYNERGY_MAP: Record<string, string[]> = {
   'マリー・アントワネット': ['ヴェルサイユ宮殿', 'ケーキ'],
   'ヴェルサイユ宮殿': ['マリー・アントワネット', 'ケーキ'],
   'ケーキ': ['マリー・アントワネット', 'ヴェルサイユ宮殿'],
-  'ガリレオ': ['地動説', '望遠鏡'],
-  '地動説': ['ガリレオ', '望遠鏡'],
-  '望遠鏡': ['ガリレオ', '地動説'],
+  'ガリレオ': ['地動説', '望遠鏡', '天動説'],
+  '地動説': ['ガリレオ', '望遠鏡', '天動説'],
+  '天動説': ['ガリレオ', '地動説', '望遠鏡'],
+  '望遠鏡': ['ガリレオ', '地動説', '天動説'],
   '顕微鏡': ['野口英世', '黄熱病', '北里柴三郎', 'ペスト菌'],
   '野口英世': ['顕微鏡', '黄熱病'],
   '黄熱病': ['野口英世', '顕微鏡'],
@@ -1806,7 +1808,7 @@ const ROUND_OFFER_SPEC: Record<number, { synergy: number; random: number; tempt:
   2: { synergy: 3, random: 1, tempt: 1, ssrGuarantee: false },
   3: { synergy: 3, random: 1, tempt: 1, ssrGuarantee: false },
   4: { synergy: 3, random: 2, tempt: 0, ssrGuarantee: false },
-  5: { synergy: 2, random: 2, tempt: 0, ssrGuarantee: true },
+  5: { synergy: 2, random: 2, tempt: 1, ssrGuarantee: true },
 };
 
 export function sampleCardsWithSynergy(
@@ -1835,9 +1837,12 @@ export function sampleCardsWithSynergy(
     if (targets) targets.forEach((t) => { if (!deckNames.has(t)) synergyTargetNames.add(t); });
   });
 
+  // Allowed rarities for this round
+  const allowedRarities = new Set(availableRarities(round).map(([r]) => r));
+
   // 1. Synergy cards — weighted by combo concentration + rarity in deck
   const RARITY_WEIGHT: Record<CardRarity, number> = { N: 1, R: 3, SR: 5, SSR: 8 };
-  const synergyPool = DRAFTABLE_BATTLE_CARDS.filter((c) => synergyTargetNames.has(c.name));
+  const synergyPool = DRAFTABLE_BATTLE_CARDS.filter((c) => synergyTargetNames.has(c.name) && allowedRarities.has(c.rarity));
   const weightedSynergy = synergyPool.map((card) => {
     // Sum rarity-weighted score of related cards in deck
     const cardSynergies = SYNERGY_MAP[card.name] ?? [];
@@ -1870,8 +1875,13 @@ export function sampleCardsWithSynergy(
 
   // 3. Temptation cards (not synergy with current deck)
   if (spec.tempt > 0) {
-    const temptPool = DRAFTABLE_BATTLE_CARDS.filter((c) => !synergyTargetNames.has(c.name) && !deckNames.has(c.name) && !usedIds.has(c.id));
-    const shuffledTempt = [...temptPool].sort(() => Math.random() - 0.5);
+    const temptPool = DRAFTABLE_BATTLE_CARDS.filter((c) => !synergyTargetNames.has(c.name) && !deckNames.has(c.name) && !usedIds.has(c.id) && allowedRarities.has(c.rarity));
+    // Prioritize high-power temptation cards (sort by power desc with jitter)
+    const shuffledTempt = [...temptPool].sort((a, b) => {
+      const pa = (a.attackPower ?? a.power) + (a.defensePower ?? a.power);
+      const pb = (b.attackPower ?? b.power) + (b.defensePower ?? b.power);
+      return (pb - pa) + (Math.random() - 0.5) * 2;
+    });
     for (let i = 0; i < spec.tempt && shuffledTempt.length > 0; i++) {
       const card = shuffledTempt.shift();
       if (card) addCard(card);
