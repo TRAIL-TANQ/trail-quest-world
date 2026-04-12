@@ -35,12 +35,9 @@ import { EFFECT_COLORS } from './knowledgeCards';
 
 export const BENCH_MAX_SLOTS = 6;
 
-// 2026-04 rework: 5 sub-battles decide the match via fan totals.
-// Whoever has more fans after 5 sub-battles wins. Ties go to the player.
-export const MAX_SUB_BATTLES = 5;
-
-// Legacy exports kept for compatibility with ratingService, stages, etc.
-// TOTAL_ROUNDS now aligns with MAX_SUB_BATTLES.
+// 2026-04 rework: 5 rounds (回戦), each containing a full battle phase.
+// Each round ends when one side deck-outs or bench-overflows.
+// After 5 rounds, fan totals decide the overall winner.
 export const TOTAL_ROUNDS = 5;
 export const TROPHY_FAN_RANGES: Array<[number, number]> = [
   [2, 3], [3, 5], [5, 7], [7, 9], [9, 11],
@@ -69,10 +66,11 @@ export interface PlayerState {
 }
 
 export type GamePhase =
-  | 'deck_phase'      // player picks cards via quiz (one-time at game start)
+  | 'deck_phase'      // player picks cards via quiz (at the start of each round)
   | 'battle_intro'    // turn banner "あなたの攻撃！" / "あなたが防御中！"
   | 'battle'          // attacker reveal loop, UI drives per-card reveals
   | 'battle_resolve'  // sub-battle ended: benches updated, about to swap roles
+  | 'round_end'       // one side lost this round (deck-out or bench-overflow)
   | 'game_over';
 
 export interface SubBattleResult {
@@ -121,6 +119,8 @@ export interface GameState {
   effectTelop: EffectTelop | null;                            // UI consumes & clears after 1.5s
   // Bench glow hint: set by bench-scanning effects. UI glows matching slots for ~1.5s then clears.
   benchGlow: { side: Side; names: string[]; key: number } | null;
+  // ===== Round result =====
+  roundWinner: Side | null;           // winner of the current round (set at round_end)
   // ===== Result =====
   history: SubBattleResult[];
   winner: Side | null;
@@ -191,6 +191,7 @@ export function initGameState(playerDeck: BattleCard[], aiDeck: BattleCard[]): G
     altBonus: 0,
     effectTelop: null,
     benchGlow: null,
+    roundWinner: null,
     history: [],
     winner: null,
     message: 'デッキフェイズ：カードを選ぼう',
@@ -1404,11 +1405,13 @@ export function startBattle(state: GameState): GameState {
   if (state.phase !== 'deck_phase') return state;
   const holder = state.flagHolder === 'player' ? state.player : state.ai;
   if (holder.deck.length === 0) {
+    // Flag holder's deck is empty at battle start → other side wins this round
+    const roundWinnerSide = otherSide(state.flagHolder);
     return {
       ...state,
-      phase: 'game_over',
-      winner: otherSide(state.flagHolder),
-      message: `${state.flagHolder === 'player' ? 'あなた' : '相手'}のデッキが空！敗北`,
+      phase: 'round_end',
+      roundWinner: roundWinnerSide,
+      message: `第${state.round}回戦: ${roundWinnerSide === 'player' ? 'あなた' : '相手'}の勝利！(デッキ切れ)`,
     };
   }
   const [defender, ...rest] = holder.deck;
@@ -1455,13 +1458,14 @@ export function revealNextAttackCard(state: GameState): GameState {
   const attacker = attackerSide === 'player' ? state.player : state.ai;
 
   if (attacker.deck.length === 0) {
-    // Attacker ran out of cards. They lose the match.
-    console.log(`[Engine] デッキ切れ: ${attackerSide} のデッキが0枚 → ${attackerSide} 敗北`);
+    // Attacker ran out of cards → defender wins THIS ROUND.
+    const roundWinnerSide = state.flagHolder; // defender wins
+    console.log(`[Engine] デッキ切れ: ${attackerSide} のデッキが0枚 → ${roundWinnerSide} が第${state.round}回戦勝利`);
     return {
       ...state,
-      phase: 'game_over',
-      winner: state.flagHolder,
-      message: `${attackerSide === 'player' ? 'あなた' : '相手'}のデッキ切れ！敗北`,
+      phase: 'round_end',
+      roundWinner: roundWinnerSide,
+      message: `第${state.round}回戦: ${roundWinnerSide === 'player' ? 'あなた' : '相手'}の勝利！(デッキ切れ)`,
     };
   }
 
@@ -1589,9 +1593,9 @@ export function resolveSubBattleWin(state: GameState): GameState {
     const overflowCard = unflushed[0]?.name ?? '?';
     return {
       ...state,
-      phase: 'game_over',
-      winner: attackerSide,
-      message: `${defenderSide === 'player' ? 'あなた' : '相手'}のベンチが満杯(${newDefenderBench.length}/6)！「${overflowCard}」が入りきらず敗北`,
+      phase: 'round_end',
+      roundWinner: attackerSide,  // attacker wins when defender's bench overflows
+      message: `第${state.round}回戦: ${attackerSide === 'player' ? 'あなた' : '相手'}の勝利！(ベンチ満杯「${overflowCard}」)`,
       player: defenderSide === 'player' ? updatedDefender : state.player,
       ai: defenderSide === 'ai' ? updatedDefender : state.ai,
       quarantine: {
@@ -1636,23 +1640,10 @@ export function resolveSubBattleWin(state: GameState): GameState {
     winner: attackerSide,
   };
 
-  // Fans for this sub-battle (trophyFans schedule, 2-3 / 3-5 / 5-7 / 7-9 / 9-11)
-  const trophy = state.trophyFans[Math.min(state.round - 1, state.trophyFans.length - 1)] ?? 0;
-  const newPlayerFans = attackerSide === 'player' ? state.playerFans + trophy : state.playerFans;
-  const newAiFans = attackerSide === 'ai' ? state.aiFans + trophy : state.aiFans;
-
-  // ===== 5-sub-battle cap: after MAX_SUB_BATTLES completed, fan totals decide the winner =====
-  const completedCount = state.history.length + 1;
-  const finalByFans = completedCount >= MAX_SUB_BATTLES;
-  const fanWinner: Side = finalByFans ? (newPlayerFans >= newAiFans ? 'player' : 'ai') : 'player';
-
   return {
     ...state,
-    phase: finalByFans ? 'game_over' : 'battle_resolve',
-    winner: finalByFans ? fanWinner : state.winner,
-    message: finalByFans
-      ? `最終結果: あなた ${newPlayerFans} ファン vs 相手 ${newAiFans} ファン`
-      : `${attackerSide === 'player' ? 'あなた' : '相手'}がフラッグ奪取！`,
+    phase: 'battle_resolve',
+    message: `${attackerSide === 'player' ? 'あなた' : '相手'}がフラッグ奪取！`,
     // Attacker's bench is untouched; only the defender's bench grows.
     player: {
       ...state.player,
@@ -1676,9 +1667,61 @@ export function resolveSubBattleWin(state: GameState): GameState {
     pendingAttackBonus: { player: 0, ai: 0 },
     lastSubBattle: result,
     history: [...state.history, result],
-    round: state.round + 1,
+  };
+}
+
+/**
+ * Advance to the next round after a round_end. Awards fans for the round,
+ * resets bench/quarantine, and transitions to the next deck_phase or game_over.
+ */
+export function advanceToNextRound(state: GameState): GameState {
+  if (state.phase !== 'round_end' || !state.roundWinner) return state;
+
+  // Award fans for this round
+  const trophy = state.trophyFans[state.round - 1] ?? 0;
+  const newPlayerFans = state.roundWinner === 'player' ? state.playerFans + trophy : state.playerFans;
+  const newAiFans = state.roundWinner === 'ai' ? state.aiFans + trophy : state.aiFans;
+
+  const nextRound = state.round + 1;
+
+  // After round 5 → game_over with fan totals
+  if (nextRound > TOTAL_ROUNDS) {
+    const fanWinner: Side = newPlayerFans >= newAiFans ? 'player' : 'ai';
+    return {
+      ...state,
+      phase: 'game_over',
+      round: state.round,
+      winner: fanWinner,
+      playerFans: newPlayerFans,
+      aiFans: newAiFans,
+      message: `最終結果: あなた ${newPlayerFans} ファン vs 相手 ${newAiFans} ファン`,
+    };
+  }
+
+  // Advance to next round: reset bench/quarantine, keep decks, new deck_phase
+  return {
+    ...state,
+    phase: 'deck_phase',
+    round: nextRound,
     playerFans: newPlayerFans,
     aiFans: newAiFans,
+    roundWinner: null,
+    // Reset battle state for new round
+    player: { ...state.player, bench: [] },
+    ai: { ...state.ai, bench: [] },
+    quarantine: { player: [], ai: [] },
+    sealedBenchNames: { player: [], ai: [] },
+    flagHolder: state.roundWinner, // winner of last round holds flag
+    defenseCard: null,
+    attackRevealed: [],
+    attackCurrentPower: 0,
+    lastSubBattle: null,
+    defenderBonus: 0,
+    roundAttackBonus: { player: 0, ai: 0 },
+    pendingAttackBonus: { player: 0, ai: 0 },
+    effectTelop: null,
+    benchGlow: null,
+    message: `第${nextRound}回戦 デッキフェイズ：カードを選ぼう`,
   };
 }
 

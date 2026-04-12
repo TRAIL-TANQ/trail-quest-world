@@ -32,6 +32,8 @@ import {
 import { CARD_RARITY_IMAGES } from '@/lib/constants';
 import {
   type GameState,
+  type GamePhase,
+  type Side,
   BENCH_MAX_SLOTS,
   TOTAL_ROUNDS,
   initGameState,
@@ -41,6 +43,7 @@ import {
   hasAttackSucceeded,
   resolveSubBattleWin,
   continueAfterResolve,
+  advanceToNextRound,
   getBaseAttack,
   getBaseDefense,
   addCardToDeck,
@@ -106,6 +109,7 @@ export default function KnowledgeChallenger() {
     | 'attack_reveal'
     | 'resolve'
     | 'turn_transition'
+    | 'round_end'
     | 'game_over';
   const [cineStep, setCineStep] = useState<CinematicStep>('idle');
   // Skip / manual advance via a latch: the battle loop creates an
@@ -277,8 +281,8 @@ export default function KnowledgeChallenger() {
     }
   }, [gameState?.phase]);
 
-  // ===== Deck phase setup (ONE-TIME at round 1) =====
-  // 新しいバトルモデル: デッキフェイズは開始時の1回のみ。5枚提示→2枚取得でバトルへ。
+  // ===== Deck phase setup (fires at the start of each round) =====
+  // 各ラウンド開始時にデッキフェイズ: 5枚提示→最大2枚取得でバトルへ。
   useEffect(() => {
     if (!gameState || gameState.phase !== 'deck_phase' || deckOffer) return;
     const offered = sampleCardsWithSynergy(5, 'offer', gameState.round, gameState.player.deck);
@@ -433,11 +437,36 @@ export default function KnowledgeChallenger() {
           if (unmountedRef.current || !resultState) return;
 
           const rs = resultState as GameState;
-          if (rs.phase === 'game_over') {
-            console.log('[KC] → game_over during reveal');
-            setCineStep('game_over');
-            await waitStep(RESOLVE_BANNER_MS);
-            if (!unmountedRef.current) window.setTimeout(() => setScreen('result'), 600);
+          if (rs.phase === 'round_end') {
+            // Deck-out → defender wins this round
+            console.log('[KC] → round_end during reveal (deck-out): round', rs.round, 'winner:', rs.roundWinner);
+            setCineStep('round_end');
+            await waitStep(2000);
+            if (unmountedRef.current) return;
+
+            // Advance to next round (awards fans, resets bench, or game_over)
+            setDeckOffer(null);
+            let advanced: GameState | null = null;
+            setGameState((prev) => {
+              if (!prev) return prev;
+              const next = advanceToNextRound(prev);
+              advanced = next;
+              return next;
+            });
+            await waitMs(16);
+            if (unmountedRef.current || !advanced) return;
+
+            const advs = advanced as GameState;
+            if (advs.phase === 'game_over') {
+              setCineStep('game_over');
+              await waitStep(FINAL_REVEAL_MS);
+              if (!unmountedRef.current) window.setTimeout(() => setScreen('result'), 900);
+              return;
+            }
+
+            // Next round starts with deck_phase
+            setCineStep('idle');
+            battleRunningRef.current = false;
             return;
           }
 
@@ -480,8 +509,42 @@ export default function KnowledgeChallenger() {
             console.log('[KC] → resolve banner');
             setCineStep('resolve');
             const rzs = resolved as GameState;
-            // 5-sub-battle cap → game_over (fan-based winner) handled here too.
+
+            if (rzs.phase === 'round_end') {
+              // Bench overflow → attacker wins this round
+              console.log('[KC] → round_end after resolve: round', rzs.round, 'winner:', rzs.roundWinner);
+              setCineStep('round_end');
+              await waitStep(2000);
+              if (unmountedRef.current) return;
+
+              // Advance to next round
+              setDeckOffer(null);
+              let advanced: GameState | null = null;
+              setGameState((prev) => {
+                if (!prev) return prev;
+                const next = advanceToNextRound(prev);
+                advanced = next;
+                return next;
+              });
+              await waitMs(16);
+              if (unmountedRef.current || !advanced) return;
+
+              const advs = advanced as GameState;
+              if (advs.phase === 'game_over') {
+                setCineStep('game_over');
+                await waitStep(FINAL_REVEAL_MS);
+                if (!unmountedRef.current) window.setTimeout(() => setScreen('result'), 900);
+                return;
+              }
+
+              // Next round starts with deck_phase
+              setCineStep('idle');
+              battleRunningRef.current = false;
+              return;
+            }
+
             if (rzs.phase === 'game_over') {
+              // Safety fallback (shouldn't happen from resolveSubBattleWin anymore)
               await waitStep(FINAL_REVEAL_MS);
               if (!unmountedRef.current) setCineStep('game_over');
               if (!unmountedRef.current) window.setTimeout(() => setScreen('result'), 900);
@@ -543,7 +606,7 @@ export default function KnowledgeChallenger() {
     console.log('[KC] forfeit attack');
     setGameState((prev) =>
       prev
-        ? { ...prev, phase: 'game_over', winner: 'ai', message: '攻撃を諦めた' }
+        ? { ...prev, phase: 'round_end' as GamePhase, roundWinner: 'ai' as Side, message: `第${prev.round}回戦: 攻撃を諦めた` }
         : prev,
     );
     playerActionLatchRef.current?.();
@@ -721,7 +784,21 @@ export default function KnowledgeChallenger() {
     const next = startBattle(gameState);
     console.log('[KC] handleStartBattle: phase =', next.phase, 'defenseCard =', next.defenseCard?.name);
     setGameState(next);
-    setCineStep('idle');
+
+    if (next.phase === 'round_end') {
+      // Deck was empty at battle start → handle round_end immediately
+      setCineStep('round_end');
+      window.setTimeout(() => {
+        setDeckOffer(null);
+        setGameState((prev) => {
+          if (!prev) return prev;
+          return advanceToNextRound(prev);
+        });
+        setCineStep('idle');
+      }, 2000);
+    } else {
+      setCineStep('idle');
+    }
     advanceLatchRef.current = null;
   }, [gameState]);
 
@@ -1150,7 +1227,7 @@ export default function KnowledgeChallenger() {
           <div className="text-center">
             <p className="text-[9px] font-bold text-amber-200/50">R</p>
             <p className="text-base font-black" style={{ color: '#ffd700', textShadow: '0 0 8px rgba(255,215,0,0.5)' }}>
-              {Math.min(gameState.history.length + (gameState.phase === 'game_over' ? 0 : 1), 5)}/5
+              {gameState.round}/{TOTAL_ROUNDS}
             </p>
           </div>
           {/* Fan totals — primary win condition display */}
@@ -1550,6 +1627,41 @@ export default function KnowledgeChallenger() {
                   {playerDefends
                     ? '🛡️ 相手のターン！あなたは防御です'
                     : '⚔️ あなたのターン！攻撃せよ！'}
+                </p>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* ====== Round End Banner ====== */}
+        {cineStep === 'round_end' && gameState.phase === 'round_end' && (() => {
+          const playerWonRound = gameState.roundWinner === 'player';
+          return (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-40">
+              <div
+                className="kc-turn-transition"
+                style={{
+                  padding: '24px 48px',
+                  borderRadius: '18px',
+                  textAlign: 'center',
+                  background: playerWonRound
+                    ? 'linear-gradient(135deg, rgba(34,197,94,0.6), rgba(22,163,74,0.25))'
+                    : 'linear-gradient(135deg, rgba(239,68,68,0.6), rgba(185,28,28,0.25))',
+                  border: `4px solid ${playerWonRound ? '#22c55e' : '#ef4444'}`,
+                  boxShadow: `0 0 70px ${playerWonRound ? 'rgba(34,197,94,0.85)' : 'rgba(239,68,68,0.85)'}`,
+                }}
+              >
+                <p
+                  style={{
+                    fontSize: '28px',
+                    fontWeight: 900,
+                    color: playerWonRound ? '#4ade80' : '#fca5a5',
+                    textShadow: `0 0 26px ${playerWonRound ? 'rgba(34,197,94,1)' : 'rgba(239,68,68,1)'}, 0 2px 8px rgba(0,0,0,0.9)`,
+                    margin: 0,
+                    lineHeight: 1.2,
+                  }}
+                >
+                  {gameState.message}
                 </p>
               </div>
             </div>
