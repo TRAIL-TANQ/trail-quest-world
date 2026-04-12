@@ -574,8 +574,8 @@ export function applyRevealEffect(
       break;
     }
     case 'gunpowder': {
-      // Passive bench effect — no reveal action. The bonus is read by Dynamite.
-      telop = { text: '💥火薬の爆薬の基礎！ベンチでダイナマイト強化', color };
+      // Passive bench effect — bonus read by Dynamite and Cannon.
+      telop = { text: '💥火薬！ベンチでダイナマイト・大砲を強化', color };
       break;
     }
     case 'dynamite': {
@@ -1125,7 +1125,26 @@ export function applyRevealEffect(
       telop = { text: '🏯安土桃山の道具！', color };
       break;
     }
-    case 'cannon': case 'napoleon_code': case 'waterloo': {
+    case 'cannon': {
+      // 大砲: ベンチに火薬があれば攻撃2倍
+      if (role === 'attacker') {
+        const my = side === 'player' ? next.player : next.ai;
+        const sealed = next.sealedBenchNames[side];
+        const hasGunpowder = my.bench.some((b) => b.name === '火薬' && !sealed.includes(b.name));
+        if (hasGunpowder) {
+          const baseAtk = getBaseAttack(card);
+          bonusAttack += baseAtk; // double: base already counted, add another base
+          next = withBenchGlow(next, side, ['火薬']);
+          telop = { text: `💥 火薬×大砲！攻撃2倍（${baseAtk}→${baseAtk * 2}）`, color };
+        } else {
+          telop = { text: '🏰大砲！ナポレオンの装備', color };
+        }
+      } else {
+        telop = { text: '🏰大砲！ナポレオンの装備', color };
+      }
+      break;
+    }
+    case 'napoleon_code': case 'waterloo': {
       telop = { text: '🏰ナポレオンの装備！', color };
       break;
     }

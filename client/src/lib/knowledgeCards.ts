@@ -74,7 +74,7 @@ export const EFFECT_DEFS: Record<string, CardEffect> = {
   // Telescope: search own deck for 地動説 and move it to the top.
   telescope:  { id: 'telescope',  name: '天体観測',           description: '公開時、デッキ内の「地動説」をデッキの一番上に移動する。', category: 'special' },
   // Gunpowder: passive bench effect (no reveal action) — read by Dynamite at reveal.
-  gunpowder:  { id: 'gunpowder',  name: '爆薬の基礎',         description: 'From the bench: ベンチにある間、「ダイナマイト」の攻撃パワー+2。', category: 'special' },
+  gunpowder:  { id: 'gunpowder',  name: '爆薬の基礎',         description: 'From the bench: ベンチにある間、「ダイナマイト」と「大砲」の攻撃+2。', category: 'special' },
   // Heliocentric: passive bench effect — read by Galileo at reveal.
   heliocentric: { id: 'heliocentric', name: 'コペルニクスの真理', description: 'From the bench: ベンチにある間、「ガリレオ」の攻撃+1/防御+1 (重複可)。', category: 'special' },
   // Dynamite: gains +2 attack per 火薬 on own bench.
@@ -132,7 +132,7 @@ export const EFFECT_DEFS: Record<string, CardEffect> = {
   radium:          { id: 'radium',          name: '放射能の力',       description: 'From the bench: キュリー夫人の攻撃+3。', category: 'atk' },
   research_notes:  { id: 'research_notes',  name: '献身の記録',       description: 'From the bench: キュリー夫人の防御+3。', category: 'def' },
   nobel_medal:     { id: 'nobel_medal',     name: '栄光の証',         description: 'From the bench: キュリー夫人/アインシュタイン/ダーウィンの攻防+2。', category: 'special' },
-  cannon:          { id: 'cannon',          name: '砲撃',             description: 'From the bench: ナポレオンの攻撃+4。', category: 'atk' },
+  cannon:          { id: 'cannon',          name: '砲撃',             description: 'From the bench: ナポレオンの攻撃+4。公開時、ベンチに火薬があれば攻撃2倍。', category: 'atk' },
   napoleon_code:   { id: 'napoleon_code',   name: '法の支配',         description: 'From the bench: ナポレオンの防御+3。', category: 'def' },
   waterloo:        { id: 'waterloo',        name: '最後の戦い',       description: 'From the bench: デッキ残り3枚以下でナポレオン攻防+5。', category: 'special' },
   // ===== 宝石カード + アフリカデッキ =====
@@ -1720,7 +1720,7 @@ export const SYNERGY_MAP: Record<string, string[]> = {
   'E=mc²': ['アインシュタイン', '相対性理論の論文', '光速'],
   // ナポレオンコンボ
   'ナポレオン': ['大砲', 'ナポレオン法典', 'ワーテルローの戦い'],
-  '大砲': ['ナポレオン', 'ナポレオン法典', 'ワーテルローの戦い'],
+  '大砲': ['ナポレオン', 'ナポレオン法典', 'ワーテルローの戦い', '火薬'],
   'ナポレオン法典': ['ナポレオン', '大砲', 'ワーテルローの戦い'],
   'ワーテルローの戦い': ['ナポレオン', '大砲', 'ナポレオン法典'],
   // キュリー夫人コンボ
@@ -1774,7 +1774,7 @@ export const SYNERGY_MAP: Record<string, string[]> = {
   '野口英世': ['顕微鏡', '黄熱病'],
   '黄熱病': ['野口英世', '顕微鏡'],
   'ダイナマイト': ['火薬'],
-  '火薬': ['ダイナマイト'],
+  '火薬': ['ダイナマイト', '大砲', 'ナポレオン'],
   // アフリカコンボ
   'ネルソン・マンデラ': ['アパルトヘイト', 'キリマンジャロ', 'アフリカゾウ', 'サバンナ'],
   'アパルトヘイト': ['ネルソン・マンデラ', 'キリマンジャロ', 'アフリカゾウ', 'サバンナ'],
