@@ -488,6 +488,35 @@ export function applyRevealEffect(
       }
       break;
     }
+    case 'book_burning': {
+      // 焚書坑儒: 相手デッキ上3枚を隔離。ベンチに始皇帝がいれば計5枚
+      const oppState = opp === 'player' ? next.player : next.ai;
+      const myState = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      const hasQinshi = myState.bench.some((b) => b.name === '始皇帝' && !sealed.includes(b.name));
+      const count = hasQinshi ? 5 : 3;
+      const toQuarantine = oppState.deck.slice(0, count);
+      const remaining = oppState.deck.slice(count);
+      if (toQuarantine.length > 0) {
+        next = applySide(
+          { ...next, quarantine: { ...next.quarantine, [opp]: [...next.quarantine[opp], ...toQuarantine] } },
+          opp,
+          { ...oppState, deck: remaining },
+        );
+        if (hasQinshi) {
+          next = withBenchGlow(next, side, ['始皇帝']);
+          telop = { text: `📜焚書坑儒！始皇帝の命で${toQuarantine.length}枚隔離！`, color };
+        } else {
+          telop = { text: `📜焚書坑儒！敵デッキ上${toQuarantine.length}枚を隔離`, color };
+        }
+      }
+      break;
+    }
+    case 'elixir': {
+      // 不老不死の薬: passive bench effect (no reveal action)
+      telop = { text: '💊不老不死の薬！始皇帝の復活を守る', color };
+      break;
+    }
     case 'dolphin': {
       const oppState = opp === 'player' ? next.player : next.ai;
       if (oppState.deck.length >= 2) {
@@ -1606,12 +1635,18 @@ export function resolveSubBattleWin(state: GameState): GameState {
     defenderState0.bench.filter((b) => !defSealed0.includes(b.name)).map((b) => b.name),
   );
   let reroutedDefender = false;
+  let defenderToDeckBottom = false; // 不老不死の薬: 始皇帝をデッキ底に戻す
   const leaveQuarantineDefender: BattleCard[] = [];
   if (defenderCard.name === 'ゴッホ' && dBenchNamesSet.has('糸杉')) {
     reroutedDefender = true;
     leaveQuarantineDefender.push(defenderCard);
   }
-  if (defenderCard.name === '始皇帝' && dBenchNamesSet.has('兵馬俑')) {
+  // 不老不死の薬: 始皇帝をベンチではなくデッキ底に戻す（兵馬俑より優先）
+  if (defenderCard.name === '始皇帝' && dBenchNamesSet.has('不老不死の薬')) {
+    reroutedDefender = true;
+    defenderToDeckBottom = true;
+    console.log('[Engine] 不老不死の薬発動！始皇帝をデッキ底に戻す');
+  } else if (defenderCard.name === '始皇帝' && dBenchNamesSet.has('兵馬俑')) {
     reroutedDefender = true;
     leaveQuarantineDefender.push(defenderCard);
   }
@@ -1704,6 +1739,15 @@ export function resolveSubBattleWin(state: GameState): GameState {
     winner: attackerSide,
   };
 
+  // 不老不死の薬: 始皇帝をデッキ底に戻す
+  const defenderDeckForSide = (s: Side): BattleCard[] => {
+    const baseDeck = s === attackerSide ? trimmedAttackerDeck : (s === 'player' ? state.player.deck : state.ai.deck);
+    if (defenderToDeckBottom && s === defenderSide) {
+      return [...baseDeck, defenderCard];
+    }
+    return baseDeck;
+  };
+
   return {
     ...state,
     phase: 'battle_resolve',
@@ -1712,12 +1756,12 @@ export function resolveSubBattleWin(state: GameState): GameState {
     player: {
       ...state.player,
       bench: defenderSide === 'player' ? newDefenderBench : state.player.bench,
-      deck: attackerSide === 'player' ? trimmedAttackerDeck : state.player.deck,
+      deck: defenderDeckForSide('player'),
     },
     ai: {
       ...state.ai,
       bench: defenderSide === 'ai' ? newDefenderBench : state.ai.bench,
-      deck: attackerSide === 'ai' ? trimmedAttackerDeck : state.ai.deck,
+      deck: defenderDeckForSide('ai'),
     },
     quarantine: newQuarantine,
     // Role swap: new flag holder is the old attacker. New defense card is the last attack card.

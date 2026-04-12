@@ -170,9 +170,9 @@ export const STARTER_DECKS: StarterDeck[] = [
     name: '世界遺産デッキ',
     icon: '🏛️',
     trumpCard: '始皇帝',
-    themeCards: ['万里の長城', 'コロッセオ'],
+    themeCards: ['万里の長城', '焚書坑儒'],
     noiseCards: ['紙', '電話', 'ハチドリ', '車輪', 'ピラニア', '光合成', '火薬'],
-    description: '兵馬俑や世界遺産を集めて始皇帝を覚醒させろ',
+    description: '焚書坑儒で相手を削り、不老不死の薬で始皇帝を蘇らせろ',
   },
   {
     id: 'starter-science',

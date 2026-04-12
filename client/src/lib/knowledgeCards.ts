@@ -154,6 +154,8 @@ export const EFFECT_DEFS: Record<string, CardEffect> = {
   wheel:            { id: 'wheel',            name: '回転の力',         description: 'From the bench: 蒸気機関車の攻撃+2/防御+2（重複可）。蒸気機関車攻撃成功時、相手デッキ上1枚追加隔離。', category: 'special' },
   // ===== ステージモード用追加カード =====
   lion:             { id: 'lion',             name: '百獣の王',         description: '攻撃時、自分ベンチの生き物カード1枚につき攻撃+1。', category: 'atk' },
+  book_burning:     { id: 'book_burning',     name: '思想統制',         description: '公開時、相手デッキ上3枚を隔離。ベンチに始皇帝がいればさらに+2枚（計5枚）。', category: 'debuff' },
+  elixir:           { id: 'elixir',           name: '永遠の命',         description: 'From the bench: 始皇帝がベンチに送られる時、代わりにデッキの一番下に戻す。', category: 'special' },
 };
 
 // Card name → effect id. These are the only cards that carry on-reveal effects.
@@ -250,6 +252,8 @@ export const EFFECT_BY_CARD_NAME: Record<string, string> = {
   '車輪':                 'wheel',
   // ===== ステージモード用追加カード =====
   'ライオン':             'lion',
+  '焚書坑儒':             'book_burning',
+  '不老不死の薬':         'elixir',
 };
 
 export interface BattleCard {
@@ -395,6 +399,8 @@ export const CARD_STAT_OVERRIDES: Record<string, StatProfile> = {
   'ライオン':             { attackPower: 3, defensePower: 2 },
   'ハチドリ':             { attackPower: 1, defensePower: 1 },
   'モアイ像':             { attackPower: 1, defensePower: 2 },
+  '焚書坑儒':             { attackPower: 1, defensePower: 1 },
+  '不老不死の薬':         { attackPower: 1, defensePower: 1 },
 };
 
 // Combo card IDs for detection
@@ -1270,6 +1276,16 @@ const QUIZ_DATA: Record<string, Quiz[]> = {
     { question: 'モアイ像は何でできている？', choices: ['木材', '金属', '火山岩', 'レンガ'], correctIndex: 2 },
     { question: 'モアイ像はおよそ何体ある？', choices: ['約100体', '約900体', '約5000体', '約50体'], correctIndex: 1 },
   ],
+  'card-163': [
+    { question: '焚書坑儒を行った皇帝は？', choices: ['始皇帝', '漢の武帝', '唐の太宗', '明の永楽帝'], correctIndex: 0 },
+    { question: '焚書坑儒の「焚書」とは？', choices: ['書物を焼くこと', '書物を集めること', '書物を写すこと', '書物を贈ること'], correctIndex: 0 },
+    { question: '焚書坑儒の目的は？', choices: ['教育の普及', '思想の統制', '文化の保護', '学問の奨励'], correctIndex: 1 },
+  ],
+  'card-164': [
+    { question: '始皇帝が不老不死の薬を探しに行かせた人物は？', choices: ['徐福', '張良', '韓信', '蒙恬'], correctIndex: 0 },
+    { question: '徐福が不老不死の薬を求めて向かった方角は？', choices: ['西方', '北方', '東方', '南方'], correctIndex: 2 },
+    { question: '始皇帝が不老不死を求めた理由は？', choices: ['永遠に国を治めるため', '病気を治すため', '若返るため', '神になるため'], correctIndex: 0 },
+  ],
 };
 
 // Effect descriptions by category
@@ -1717,8 +1733,10 @@ export const SYNERGY_MAP: Record<string, string[]> = {
   '北里柴三郎': ['ペスト菌', '血清'],
   'ペスト菌': ['北里柴三郎', '血清'],
   '血清': ['北里柴三郎', 'ペスト菌'],
-  '始皇帝': ['兵馬俑'],
-  '兵馬俑': ['始皇帝'],
+  '始皇帝': ['兵馬俑', '万里の長城', '焚書坑儒', '不老不死の薬'],
+  '兵馬俑': ['始皇帝', '万里の長城', '焚書坑儒', '不老不死の薬'],
+  '焚書坑儒': ['始皇帝', '兵馬俑', '万里の長城'],
+  '不老不死の薬': ['始皇帝', '兵馬俑', '万里の長城'],
   'アマゾン川': ['アナコンダ', '毒矢カエル'],
   'アナコンダ': ['アマゾン川', '毒矢カエル'],
   '毒矢カエル': ['アマゾン川', 'アナコンダ'],
