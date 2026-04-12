@@ -1,34 +1,98 @@
 /*
- * LoginPage: Fantasy RPG adventurer registration with avatar selection
- * Gold ornate styling with character art + boy/girl toggle
+ * LoginPage: Launch screen with Guest play / PIN login choice
+ * Dark navy + gold RPG theme. 4-digit PIN input with auto-advance.
  */
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { useLocation } from 'wouter';
 import { useUserStore } from '@/lib/stores';
 import { IMAGES } from '@/lib/constants';
+import { createGuestAuth, saveAuth } from '@/lib/auth';
+import { verifyPin, ensureChildStatus } from '@/lib/pinService';
 import { saveUserProfile } from '@/lib/userProfileService';
-import type { AvatarType } from '@/lib/types';
+
+type Screen = 'choice' | 'pin';
 
 export default function LoginPage() {
   const [, navigate] = useLocation();
-  const userId = useUserStore((s) => s.user.id);
-  const setNickname = useUserStore((s) => s.setNickname);
-  const setAvatarType = useUserStore((s) => s.setAvatarType);
-  const [name, setName] = useState('');
-  const [selectedAvatar, setSelectedAvatar] = useState<AvatarType>('boy');
+  const setUser = useUserStore((s) => s.setUser);
+  const user = useUserStore((s) => s.user);
 
-  const handleStart = () => {
-    const finalName = name.trim() || 'ぼうけんしゃ';
-    setNickname(finalName);
-    setAvatarType(selectedAvatar);
-    // 変更17: Supabase user_profile に永続化（失敗してもログインは続行）
-    void saveUserProfile(userId, finalName, selectedAvatar);
+  const [screen, setScreen] = useState<Screen>('choice');
+  const [digits, setDigits] = useState(['', '', '', '']);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  // Guest mode handler
+  const handleGuest = useCallback(() => {
+    const auth = createGuestAuth();
+    setUser({ ...user, id: auth.childId, nickname: auth.childName });
     navigate('/');
-  };
+  }, [user, setUser, navigate]);
+
+  // PIN digit input handler
+  const handleDigitChange = useCallback((index: number, value: string) => {
+    // Only allow single digit
+    const digit = value.replace(/\D/g, '').slice(-1);
+    setError('');
+    setDigits((prev) => {
+      const next = [...prev];
+      next[index] = digit;
+      return next;
+    });
+    // Auto-advance to next input
+    if (digit && index < 3) {
+      inputRefs.current[index + 1]?.focus();
+    }
+  }, []);
+
+  // Handle backspace to go to previous input
+  const handleKeyDown = useCallback((index: number, e: React.KeyboardEvent) => {
+    if (e.key === 'Backspace' && !digits[index] && index > 0) {
+      inputRefs.current[index - 1]?.focus();
+    }
+  }, [digits]);
+
+  // Submit PIN
+  const handlePinSubmit = useCallback(async () => {
+    const pin = digits.join('');
+    if (pin.length !== 4) {
+      setError('4桁のPINコードを入力してください');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const result = await verifyPin(pin);
+      if (!result.success || !result.childId || !result.childName) {
+        setError(result.error ?? 'PINコードが見つかりません');
+        setLoading(false);
+        return;
+      }
+      // Save auth
+      saveAuth(result.childId, result.childName);
+      // Ensure child_status row exists
+      await ensureChildStatus(result.childId);
+      // Save user profile (best effort)
+      void saveUserProfile(result.childId, result.childName, user.avatarType);
+      // Update store
+      setUser({ ...user, id: result.childId, nickname: result.childName });
+      navigate('/');
+    } catch {
+      setError('接続エラーが発生しました');
+    } finally {
+      setLoading(false);
+    }
+  }, [digits, user, setUser, navigate]);
+
+  // Auto-submit when all 4 digits are filled
+  const allFilled = digits.every((d) => d !== '');
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-6 relative overflow-hidden"
-      style={{ background: 'linear-gradient(180deg, #0b1128 0%, #151d3b 50%, #0b1128 100%)' }}>
+    <div
+      className="min-h-screen flex flex-col items-center justify-center px-6 relative overflow-hidden"
+      style={{ background: 'linear-gradient(180deg, #0b1128 0%, #151d3b 50%, #0b1128 100%)' }}
+    >
       {/* Background image */}
       <div className="absolute inset-0 z-0">
         <img src={IMAGES.HERO_BG} alt="" className="w-full h-full object-cover" style={{ filter: 'brightness(0.15) saturate(0.5)' }} />
@@ -36,109 +100,158 @@ export default function LoginPage() {
       </div>
 
       <div className="relative z-10 w-full max-w-[340px]">
-        {/* Logo area */}
-        <div className="text-center mb-5">
-          <h1 className="text-2xl font-bold mb-1" style={{ color: '#ffd700', textShadow: '0 0 20px rgba(255,215,0,0.3)', fontFamily: 'var(--font-cinzel), serif' }}>
+        {/* Logo */}
+        <div className="text-center mb-6">
+          <h1
+            className="text-2xl font-bold mb-1"
+            style={{ color: '#ffd700', textShadow: '0 0 20px rgba(255,215,0,0.3)', fontFamily: 'var(--font-cinzel), serif' }}
+          >
             TRAIL QUEST
           </h1>
-          <p className="text-sm tracking-[0.3em]" style={{ color: 'rgba(255,215,0,0.5)', fontFamily: 'var(--font-cinzel), serif' }}>WORLD</p>
+          <p className="text-sm tracking-[0.3em]" style={{ color: 'rgba(255,215,0,0.5)', fontFamily: 'var(--font-cinzel), serif' }}>
+            WORLD
+          </p>
           <p className="text-xs text-amber-200/30 mt-2">進むたびに強くなる 学びのゲームワールド</p>
         </div>
 
-        {/* Avatar Selection */}
-        <div className="mb-4">
-          <label className="text-xs font-bold block mb-3 text-amber-200/50 text-center">キャラクターを選ぼう</label>
-          <div className="flex justify-center gap-5">
-            {/* Boy */}
+        {screen === 'choice' ? (
+          /* ---------- Choice screen ---------- */
+          <div
+            className="rounded-2xl p-6 relative"
+            style={{
+              background: 'linear-gradient(135deg, rgba(21,29,59,0.95), rgba(14,20,45,0.95))',
+              border: '2px solid rgba(255,215,0,0.2)',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.4), inset 0 0 20px rgba(255,215,0,0.03)',
+            }}
+          >
+            {/* Corner decorations */}
+            <div className="absolute top-1 left-1 w-3 h-3 border-t-2 border-l-2 rounded-tl-sm" style={{ borderColor: 'rgba(255,215,0,0.3)' }} />
+            <div className="absolute top-1 right-1 w-3 h-3 border-t-2 border-r-2 rounded-tr-sm" style={{ borderColor: 'rgba(255,215,0,0.3)' }} />
+            <div className="absolute bottom-1 left-1 w-3 h-3 border-b-2 border-l-2 rounded-bl-sm" style={{ borderColor: 'rgba(255,215,0,0.3)' }} />
+            <div className="absolute bottom-1 right-1 w-3 h-3 border-b-2 border-r-2 rounded-br-sm" style={{ borderColor: 'rgba(255,215,0,0.3)' }} />
+
+            {/* Guest play button */}
             <button
-              onClick={() => setSelectedAvatar('boy')}
-              className="relative flex flex-col items-center transition-all duration-300"
-              style={{ transform: selectedAvatar === 'boy' ? 'scale(1.05)' : 'scale(0.95)', opacity: selectedAvatar === 'boy' ? 1 : 0.5 }}
+              onClick={handleGuest}
+              className="w-full py-4 rounded-xl text-base font-bold mb-4 transition-all duration-200 active:scale-95"
+              style={{
+                background: 'linear-gradient(135deg, #ffd700, #d4a500)',
+                color: '#0b1128',
+                boxShadow: '0 4px 16px rgba(255,215,0,0.3), 0 2px 4px rgba(0,0,0,0.3)',
+              }}
             >
-              <div className="w-24 h-24 rounded-full overflow-hidden relative"
-                style={{
-                  border: selectedAvatar === 'boy' ? '3px solid #ffd700' : '3px solid rgba(255,215,0,0.15)',
-                  boxShadow: selectedAvatar === 'boy' ? '0 0 20px rgba(255,215,0,0.4), 0 0 40px rgba(255,215,0,0.1)' : 'none',
-                  transition: 'all 0.3s ease',
-                }}>
-                <img src={IMAGES.CHARACTER_BOY} alt="男の子" className="w-full h-full object-cover object-top" />
-              </div>
-              {selectedAvatar === 'boy' && (
-                <div className="absolute -top-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center text-xs"
-                  style={{ background: 'linear-gradient(135deg, #ffd700, #d4a500)', color: '#0b1128', boxShadow: '0 2px 8px rgba(255,215,0,0.4)' }}>
-                  ✓
-                </div>
-              )}
-              <span className="text-xs mt-2 font-medium" style={{ color: selectedAvatar === 'boy' ? '#ffd700' : 'rgba(255,215,0,0.35)' }}>
-                男の子
-              </span>
+              <span className="mr-2">&#x1F3AE;</span>
+              ゲストで遊ぶ
             </button>
 
-            {/* Girl */}
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex-1 h-px" style={{ background: 'rgba(255,215,0,0.15)' }} />
+              <span className="text-xs text-amber-200/30">または</span>
+              <div className="flex-1 h-px" style={{ background: 'rgba(255,215,0,0.15)' }} />
+            </div>
+
+            {/* PIN login button */}
             <button
-              onClick={() => setSelectedAvatar('girl')}
-              className="relative flex flex-col items-center transition-all duration-300"
-              style={{ transform: selectedAvatar === 'girl' ? 'scale(1.05)' : 'scale(0.95)', opacity: selectedAvatar === 'girl' ? 1 : 0.5 }}
+              onClick={() => setScreen('pin')}
+              className="w-full py-3 rounded-xl text-sm font-medium transition-all duration-200 active:scale-95"
+              style={{
+                background: 'rgba(255,215,0,0.08)',
+                color: '#ffd700',
+                border: '1.5px solid rgba(255,215,0,0.25)',
+              }}
             >
-              <div className="w-24 h-24 rounded-full overflow-hidden relative"
-                style={{
-                  border: selectedAvatar === 'girl' ? '3px solid #ffd700' : '3px solid rgba(255,215,0,0.15)',
-                  boxShadow: selectedAvatar === 'girl' ? '0 0 20px rgba(255,215,0,0.4), 0 0 40px rgba(255,215,0,0.1)' : 'none',
-                  transition: 'all 0.3s ease',
-                }}>
-                <img src={IMAGES.CHARACTER_GIRL} alt="女の子" className="w-full h-full object-cover object-top" />
-              </div>
-              {selectedAvatar === 'girl' && (
-                <div className="absolute -top-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center text-xs"
-                  style={{ background: 'linear-gradient(135deg, #ffd700, #d4a500)', color: '#0b1128', boxShadow: '0 2px 8px rgba(255,215,0,0.4)' }}>
-                  ✓
-                </div>
-              )}
-              <span className="text-xs mt-2 font-medium" style={{ color: selectedAvatar === 'girl' ? '#ffd700' : 'rgba(255,215,0,0.35)' }}>
-                女の子
-              </span>
+              <span className="mr-2">&#x1F511;</span>
+              PINコードでログイン
+            </button>
+
+            <p className="text-center text-[10px] text-amber-200/20 mt-4">
+              ゲストモードではデータはこの端末にのみ保存されます
+            </p>
+          </div>
+        ) : (
+          /* ---------- PIN input screen ---------- */
+          <div
+            className="rounded-2xl p-6 relative"
+            style={{
+              background: 'linear-gradient(135deg, rgba(21,29,59,0.95), rgba(14,20,45,0.95))',
+              border: '2px solid rgba(255,215,0,0.2)',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.4), inset 0 0 20px rgba(255,215,0,0.03)',
+            }}
+          >
+            {/* Corner decorations */}
+            <div className="absolute top-1 left-1 w-3 h-3 border-t-2 border-l-2 rounded-tl-sm" style={{ borderColor: 'rgba(255,215,0,0.3)' }} />
+            <div className="absolute top-1 right-1 w-3 h-3 border-t-2 border-r-2 rounded-tr-sm" style={{ borderColor: 'rgba(255,215,0,0.3)' }} />
+            <div className="absolute bottom-1 left-1 w-3 h-3 border-b-2 border-l-2 rounded-bl-sm" style={{ borderColor: 'rgba(255,215,0,0.3)' }} />
+            <div className="absolute bottom-1 right-1 w-3 h-3 border-b-2 border-r-2 rounded-br-sm" style={{ borderColor: 'rgba(255,215,0,0.3)' }} />
+
+            <h2 className="text-center text-sm font-bold mb-5" style={{ color: '#ffd700' }}>
+              PINコードを入力
+            </h2>
+
+            {/* 4-digit PIN boxes */}
+            <div className="flex justify-center gap-3 mb-5">
+              {digits.map((digit, i) => (
+                <input
+                  key={i}
+                  ref={(el) => { inputRefs.current[i] = el; }}
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={1}
+                  value={digit}
+                  onChange={(e) => handleDigitChange(i, e.target.value)}
+                  onKeyDown={(e) => handleKeyDown(i, e)}
+                  autoFocus={i === 0}
+                  className="w-14 h-16 text-center text-2xl font-bold rounded-xl outline-none transition-all"
+                  style={{
+                    background: 'rgba(255,255,255,0.05)',
+                    color: '#ffd700',
+                    border: digit
+                      ? '2px solid rgba(255,215,0,0.5)'
+                      : '2px solid rgba(255,215,0,0.15)',
+                    boxShadow: digit ? '0 0 12px rgba(255,215,0,0.15)' : 'none',
+                    caretColor: '#ffd700',
+                  }}
+                />
+              ))}
+            </div>
+
+            {/* Error message */}
+            {error && (
+              <p className="text-center text-xs mb-4" style={{ color: '#ef4444' }}>
+                {error}
+              </p>
+            )}
+
+            {/* Submit button */}
+            <button
+              onClick={handlePinSubmit}
+              disabled={!allFilled || loading}
+              className="w-full py-3 rounded-xl text-sm font-bold mb-4 transition-all duration-200 active:scale-95 disabled:opacity-40"
+              style={{
+                background: allFilled
+                  ? 'linear-gradient(135deg, #ffd700, #d4a500)'
+                  : 'rgba(255,215,0,0.15)',
+                color: allFilled ? '#0b1128' : 'rgba(255,215,0,0.4)',
+                boxShadow: allFilled ? '0 4px 16px rgba(255,215,0,0.3)' : 'none',
+              }}
+            >
+              {loading ? 'ログイン中...' : 'ログイン'}
+            </button>
+
+            {/* Back to guest */}
+            <button
+              onClick={() => {
+                setScreen('choice');
+                setDigits(['', '', '', '']);
+                setError('');
+              }}
+              className="w-full text-center text-xs py-2 transition-colors"
+              style={{ color: 'rgba(255,215,0,0.4)' }}
+            >
+              &larr; ゲストで遊ぶ
             </button>
           </div>
-        </div>
-
-        {/* Input card */}
-        <div className="rounded-2xl p-5 relative"
-          style={{
-            background: 'linear-gradient(135deg, rgba(21,29,59,0.95), rgba(14,20,45,0.95))',
-            border: '2px solid rgba(255,215,0,0.2)',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.4), inset 0 0 20px rgba(255,215,0,0.03)',
-          }}>
-          <div className="absolute top-1 left-1 w-3 h-3 border-t-2 border-l-2 rounded-tl-sm" style={{ borderColor: 'rgba(255,215,0,0.3)' }} />
-          <div className="absolute top-1 right-1 w-3 h-3 border-t-2 border-r-2 rounded-tr-sm" style={{ borderColor: 'rgba(255,215,0,0.3)' }} />
-          <div className="absolute bottom-1 left-1 w-3 h-3 border-b-2 border-l-2 rounded-bl-sm" style={{ borderColor: 'rgba(255,215,0,0.3)' }} />
-          <div className="absolute bottom-1 right-1 w-3 h-3 border-b-2 border-r-2 rounded-br-sm" style={{ borderColor: 'rgba(255,215,0,0.3)' }} />
-
-          <label className="text-xs font-bold block mb-2 text-amber-200/50">冒険者の名前</label>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="ニックネームを入力..."
-            maxLength={12}
-            className="w-full px-4 py-3 rounded-xl text-sm font-medium outline-none transition-all mb-4"
-            style={{
-              background: 'rgba(255,255,255,0.04)',
-              color: '#fde68a',
-              border: '1px solid rgba(255,215,0,0.15)',
-            }}
-            onFocus={(e) => { e.currentTarget.style.borderColor = 'rgba(255,215,0,0.4)'; e.currentTarget.style.boxShadow = '0 0 12px rgba(255,215,0,0.1)'; }}
-            onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(255,215,0,0.15)'; e.currentTarget.style.boxShadow = 'none'; }}
-          />
-
-          <button onClick={handleStart}
-            className="rpg-btn rpg-btn-gold w-full py-3 flex items-center justify-center gap-2">
-            <span>⚔️</span> 冒険をはじめる
-          </button>
-
-          <p className="text-center text-[10px] text-amber-200/20 mt-3">
-            ニックネームとキャラクターは後から変更できます
-          </p>
-        </div>
+        )}
       </div>
     </div>
   );

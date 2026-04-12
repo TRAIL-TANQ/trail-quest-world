@@ -23,6 +23,7 @@
 import { supabase } from './supabase';
 import type { CardRarity } from './knowledgeCards';
 import { calculateLevel } from './level';
+import { isGuest } from './auth';
 
 // ---------- localStorage fallback cache ----------
 // 2026-04: Supabase が 400 / ネットワーク失敗を返してもゲームが機能し続ける
@@ -194,6 +195,7 @@ export async function fetchChildStatus(childId: string): Promise<ChildStatus | n
  * クイズ回答をquiz_attemptsテーブルに保存
  */
 export async function saveQuizAttempt(attempt: QuizAttemptRecord): Promise<boolean> {
+  if (isGuest()) return true; // skip for guests
   // Legacy non-uuid id → skip DB write, pretend it worked.
   if (!isUuid(attempt.child_id)) return true;
   try {
@@ -231,6 +233,18 @@ export async function updateChildStatus(
   altDelta: number,
   xpDelta: number,
 ): Promise<ChildStatus | null> {
+  if (isGuest()) {
+    // Guest mode: local-only update via cache
+    const current = readCachedStatus(childId) ?? initialCachedStatus(childId);
+    const optimistic: ChildStatus = {
+      child_id: childId,
+      alt_points: Math.max(0, current.alt_points + altDelta),
+      xp: Math.max(0, current.xp + xpDelta),
+      level: calculateLevel(Math.max(0, current.alt_points + altDelta)).level,
+    };
+    writeCachedStatus(optimistic);
+    return optimistic;
+  }
   const current = (await fetchChildStatus(childId)) ?? initialCachedStatus(childId);
   const newAlt = Math.max(0, current.alt_points + altDelta);
   const newXp = Math.max(0, current.xp + xpDelta);

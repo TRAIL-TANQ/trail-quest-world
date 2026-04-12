@@ -14,6 +14,7 @@
  */
 import { supabase } from './supabase';
 import { updateChildStatus } from './quizService';
+import { isGuest } from './auth';
 
 // ---------- Types ----------
 
@@ -107,6 +108,7 @@ export async function purchaseSkin(params: {
   item: ShopItem;
   currentLevel: number;
 }): Promise<PurchaseResult> {
+  if (isGuest()) return { ok: false, reason: 'db_error' }; // guests cannot purchase
   const { childId, item, currentLevel } = params;
 
   if (!item.is_active) return { ok: false, reason: 'not_active' };
@@ -151,6 +153,7 @@ export async function purchaseSkin(params: {
 
 /** 装備スキンを切り替え（null = 解除） */
 export async function setEquippedSkin(childId: string, itemId: string | null): Promise<boolean> {
+  if (isGuest()) return true; // skip for guests
   const { error } = await supabase
     .from('equipped_skin')
     .upsert({ child_id: childId, item_id: itemId }, { onConflict: 'child_id' });

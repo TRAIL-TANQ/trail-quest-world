@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { User, GameResult, AvatarType, CollectionCard } from './types';
 import { MOCK_USER, MOCK_DAILY_MISSIONS } from './mockData';
+import { getAuth } from './auth';
 
 // User Store
 interface UserState {
@@ -14,8 +15,14 @@ interface UserState {
   equipAvatar: (avatarId: string | null) => void;
 }
 
+const _auth = getAuth();
+
 export const useUserStore = create<UserState>((set, get) => ({
-  user: MOCK_USER,
+  user: {
+    ...MOCK_USER,
+    id: _auth.childId,
+    nickname: _auth.childName,
+  },
   setUser: (user) => set({ user }),
   setNickname: (nickname) =>
     set((state) => ({ user: { ...state.user, nickname } })),

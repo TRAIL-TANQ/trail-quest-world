@@ -3,13 +3,17 @@
  * Gold frame on dark navy, ornate styling with decorative elements
  * Shows equipped shop avatar icon if one is equipped, otherwise default boy/girl
  */
+import { useLocation } from 'wouter';
 import { useUserStore } from '@/lib/stores';
 import { calculateLevel } from '@/lib/level';
 import { IMAGES, AVATAR_ITEMS } from '@/lib/constants';
+import { isGuest, clearAuth } from '@/lib/auth';
 
 export default function Header() {
+  const [, navigate] = useLocation();
   const user = useUserStore((s) => s.user);
   const levelInfo = calculateLevel(user.totalAlt);
+  const guestMode = isGuest();
 
   // Determine which avatar icon to show
   const getAvatarIcon = () => {
@@ -116,6 +120,36 @@ export default function Header() {
             {user.currentAlt.toLocaleString()}
           </span>
         </div>
+
+        {/* Guest login button / Logout button */}
+        {guestMode ? (
+          <button
+            onClick={() => navigate('/login')}
+            className="flex-shrink-0 px-2 py-1 rounded-lg text-[10px] font-bold transition-all active:scale-95"
+            style={{
+              background: 'rgba(255,215,0,0.1)',
+              color: '#ffd700',
+              border: '1px solid rgba(255,215,0,0.25)',
+            }}
+          >
+            &#x1F511;ログイン
+          </button>
+        ) : (
+          <button
+            onClick={() => {
+              clearAuth();
+              window.location.href = '/login';
+            }}
+            className="flex-shrink-0 px-2 py-1 rounded-lg text-[10px] font-medium transition-all active:scale-95"
+            style={{
+              background: 'rgba(255,255,255,0.05)',
+              color: 'rgba(255,215,0,0.4)',
+              border: '1px solid rgba(255,215,0,0.1)',
+            }}
+          >
+            ログアウト
+          </button>
+        )}
       </div>
     </header>
   );

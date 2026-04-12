@@ -9,6 +9,7 @@
  */
 import { supabase } from './supabase';
 import type { BattleCard } from './knowledgeCards';
+import { isGuest } from './auth';
 
 export interface HallOfFameEntry {
   id: string;
@@ -26,6 +27,7 @@ export async function saveHallOfFame(params: {
   totalFans: number;
   stageId: number | null;
 }): Promise<boolean> {
+  if (isGuest()) return true; // skip for guests
   const { childId, deck, totalFans, stageId } = params;
   const { error } = await supabase.from('hall_of_fame').insert({
     child_id: childId,

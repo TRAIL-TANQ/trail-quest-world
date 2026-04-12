@@ -13,6 +13,7 @@
  *   Diamond 1900 -
  */
 import { supabase } from './supabase';
+import { isGuest } from './auth';
 
 export type RankTier = 'bronze' | 'silver' | 'gold' | 'platinum' | 'diamond';
 
@@ -101,6 +102,11 @@ export async function applyRatingChange(
   opponentRating: number,
   won: boolean,
 ): Promise<{ newRating: number; delta: number; wins: number; losses: number } | null> {
+  if (isGuest()) {
+    // Guest mode: return a local-only calculation
+    const delta = calculateEloDelta(1000, opponentRating, won);
+    return { newRating: Math.max(0, 1000 + delta), delta, wins: won ? 1 : 0, losses: won ? 0 : 1 };
+  }
   const current = await fetchRatingStatus(childId);
   if (!current) return null;
 

@@ -13,6 +13,7 @@
 import { supabase } from './supabase';
 import { updateChildStatus, fetchChildStatus } from './quizService';
 import type { CollectionRarity } from './types';
+import { isGuest } from './auth';
 
 // ---------- Types ----------
 export interface GachaPityRow {
@@ -40,6 +41,7 @@ export interface GachaSpendResult {
 
 /** 天井行を取得。無ければ 0,0 で新規作成。 */
 export async function fetchPity(childId: string): Promise<GachaPityRow> {
+  if (isGuest()) return { child_id: childId, normal_pity: 0, premium_pity: 0 };
   const { data, error } = await supabase
     .from('gacha_pity')
     .select('child_id, normal_pity, premium_pity')
@@ -61,6 +63,7 @@ export async function fetchPity(childId: string): Promise<GachaPityRow> {
 
 /** 天井カウンタを上書き更新。resetPity / incrementPity の結果を書き込む用途。 */
 export async function savePity(childId: string, normal: number, premium: number): Promise<boolean> {
+  if (isGuest()) return true; // skip for guests
   const { error } = await supabase
     .from('gacha_pity')
     .upsert(
@@ -90,6 +93,7 @@ export async function spendAltForGacha(childId: string, cost: number): Promise<G
 
 /** 複数引き（1連でも10連でも）の結果をまとめて gacha_pulls に保存。 */
 export async function recordPulls(records: GachaPullRecord[]): Promise<boolean> {
+  if (isGuest()) return true; // skip for guests
   if (records.length === 0) return true;
   const { error } = await supabase.from('gacha_pulls').insert(records);
   if (error) {
