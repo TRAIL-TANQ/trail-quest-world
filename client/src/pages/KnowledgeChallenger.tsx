@@ -34,6 +34,7 @@ import {
   type GameState,
   type GamePhase,
   type Side,
+  type BenchBoostDetail,
   BENCH_MAX_SLOTS,
   TOTAL_ROUNDS,
   initGameState,
@@ -127,6 +128,8 @@ export default function KnowledgeChallenger() {
   const playerActionLatchRef = useRef<(() => void) | null>(null);
   // True while the loop is waiting for the player to click "カードを出す".
   const [waitingForPlayerReveal, setWaitingForPlayerReveal] = useState(false);
+  // Bench boost animation telop (shown during card reveal when bench aura fires)
+  const [benchBoostTelop, setBenchBoostTelop] = useState<{ text: string; key: number } | null>(null);
   const [fastMode, setFastMode] = useState(false);
   const fastModeRef = useRef(false);
   useEffect(() => { fastModeRef.current = fastMode; }, [fastMode]);
@@ -402,6 +405,43 @@ export default function KnowledgeChallenger() {
         console.log('[KC] defender_show waitStep resolved (unmounted:', unmountedRef.current, ')');
         if (unmountedRef.current) { console.log('[KC] BAIL: unmounted after defender_show'); return; }
 
+        // ===== Defender bench boost animation =====
+        {
+          const gs = gameStateRef.current;
+          if (gs && gs.benchBoostDetails && gs.benchBoostDetails.length > 0) {
+            const details = gs.benchBoostDetails;
+            const defSide = gs.flagHolder;
+            const glowNames = details.map((d) => d.benchCardName.split('+')[0]);
+            setGameState((prev) => prev ? {
+              ...prev,
+              benchGlow: { side: defSide, names: glowNames, key: Date.now() },
+            } : prev);
+
+            for (let i = 0; i < details.length; i++) {
+              if (unmountedRef.current) return;
+              const d = details[i];
+              const parts: string[] = [];
+              if (d.defBonus > 0) parts.push(`🛡️+${d.defBonus}`);
+              if (d.atkBonus !== 0) parts.push(`⚔️${d.atkBonus > 0 ? '+' : ''}${d.atkBonus}`);
+              setBenchBoostTelop({ text: `📋 ${d.benchCardName} → ${parts.join(' ')}！`, key: Date.now() + i });
+              await waitStep(500);
+              if (unmountedRef.current) return;
+            }
+            if (details.length > 1) {
+              const totalDef = details.reduce((s, d) => s + d.defBonus, 0);
+              const totalAtk = details.reduce((s, d) => s + d.atkBonus, 0);
+              const comboParts: string[] = [];
+              if (totalAtk !== 0) comboParts.push(`攻撃${totalAtk > 0 ? '+' : ''}${totalAtk}`);
+              if (totalDef !== 0) comboParts.push(`防御${totalDef > 0 ? '+' : ''}${totalDef}`);
+              setBenchBoostTelop({ text: `🔥 コンボ！合計 ${comboParts.join(' ')}！`, key: Date.now() + 999 });
+              await waitStep(700);
+              if (unmountedRef.current) return;
+            }
+            setBenchBoostTelop(null);
+            setGameState((prev) => prev ? { ...prev, benchGlow: null, benchBoostDetails: null } : prev);
+          }
+        }
+
         // Step 3: attack reveal loop. Branch on who's attacking — player turns
         // wait for manual reveal clicks; AI turns auto-progress.
         // Use flagHolder from the closure (guaranteed correct) — NOT gameStateRef
@@ -439,6 +479,46 @@ export default function KnowledgeChallenger() {
           if (unmountedRef.current || !resultState) return;
 
           const rs = resultState as GameState;
+
+          // ===== Bench boost power-up animation =====
+          if (rs.benchBoostDetails && rs.benchBoostDetails.length > 0) {
+            const details = rs.benchBoostDetails;
+            const boostSide: 'player' | 'ai' = rs.flagHolder === 'player' ? 'ai' : 'player'; // attacker side
+            // Glow the bench cards that contributed
+            const glowNames = details.map((d) => d.benchCardName.split('+')[0]);
+            setGameState((prev) => prev ? {
+              ...prev,
+              benchGlow: { side: boostSide, names: glowNames, key: Date.now() },
+            } : prev);
+
+            // Show each boost telop sequentially
+            for (let i = 0; i < details.length; i++) {
+              if (unmountedRef.current) return;
+              const d = details[i];
+              const parts: string[] = [];
+              if (d.atkBonus > 0) parts.push(`⚔️+${d.atkBonus}`);
+              if (d.atkBonus < 0) parts.push(`⚔️${d.atkBonus}`);
+              if (d.defBonus > 0) parts.push(`🛡️+${d.defBonus}`);
+              setBenchBoostTelop({ text: `📋 ${d.benchCardName} → ${parts.join(' ')}！`, key: Date.now() + i });
+              await waitStep(500);
+              if (unmountedRef.current) return;
+            }
+            // Combo telop if multiple boosts
+            if (details.length > 1) {
+              const totalAtk = details.reduce((s, d) => s + d.atkBonus, 0);
+              const totalDef = details.reduce((s, d) => s + d.defBonus, 0);
+              const comboParts: string[] = [];
+              if (totalAtk !== 0) comboParts.push(`攻撃${totalAtk > 0 ? '+' : ''}${totalAtk}`);
+              if (totalDef !== 0) comboParts.push(`防御${totalDef > 0 ? '+' : ''}${totalDef}`);
+              setBenchBoostTelop({ text: `🔥 コンボ！合計 ${comboParts.join(' ')}！`, key: Date.now() + 999 });
+              await waitStep(700);
+              if (unmountedRef.current) return;
+            }
+            setBenchBoostTelop(null);
+            // Clear bench glow
+            setGameState((prev) => prev ? { ...prev, benchGlow: null, benchBoostDetails: null } : prev);
+          }
+
           if (rs.phase === 'round_end') {
             // Deck-out → defender wins this round
             console.log('[KC] → round_end during reveal (deck-out): round', rs.round, 'winner:', rs.roundWinner);
@@ -1324,7 +1404,8 @@ export default function KnowledgeChallenger() {
         const defenderCard = gameState.defenseCard;
         const defenderSide: 'player' | 'ai' = playerIsDefender ? 'player' : 'ai';
         const attackerSide: 'player' | 'ai' = playerIsDefender ? 'ai' : 'player';
-        const defenderPower = defenderCard ? getBaseDefense(defenderCard) : 0;
+        const defenderBasePower = defenderCard ? getBaseDefense(defenderCard) : 0;
+        const defenderPower = Math.max(0, defenderBasePower + gameState.defenderBonus);
         const attackCards = gameState.attackRevealed;
         const attackPower = gameState.attackCurrentPower;
 
@@ -1819,6 +1900,35 @@ export default function KnowledgeChallenger() {
               }}
             >
               {gameState.effectTelop.text}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* ===== Bench Boost Telop ===== */}
+      {benchBoostTelop && (
+        <div
+          key={benchBoostTelop.key}
+          className="fixed inset-0 z-[180] flex items-end justify-center pointer-events-none"
+          style={{ paddingBottom: '25vh' }}
+        >
+          <div className="kc-bench-boost-telop px-5 py-3 rounded-xl text-center"
+            style={{
+              background: 'linear-gradient(180deg, rgba(0,10,40,0.9), rgba(0,5,20,0.9))',
+              border: '2px solid rgba(96,165,250,0.8)',
+              boxShadow: '0 0 24px rgba(96,165,250,0.5), 0 4px 20px rgba(0,0,0,0.7)',
+              maxWidth: '90vw',
+            }}
+          >
+            <p className="font-black" style={{
+              fontSize: '24px',
+              lineHeight: 1.3,
+              color: benchBoostTelop.text.startsWith('🔥') ? '#ffd700' : '#60a5fa',
+              textShadow: benchBoostTelop.text.startsWith('🔥')
+                ? '0 0 16px rgba(255,215,0,0.8), 0 2px 8px rgba(0,0,0,0.9)'
+                : '0 0 16px rgba(96,165,250,0.8), 0 2px 8px rgba(0,0,0,0.9)',
+            }}>
+              {benchBoostTelop.text}
             </p>
           </div>
         </div>
@@ -2485,6 +2595,16 @@ export default function KnowledgeChallenger() {
           100% { box-shadow: 0 0 0 rgba(96,165,250,0); transform: scale(1); }
         }
         .kc-bench-glow { animation: kcBenchGlow 1.3s ease-out; border: 2px solid rgba(96,165,250,0.9) !important; }
+
+        /* ===== Bench boost power-up telop ===== */
+        @keyframes kcBenchBoostSlideIn {
+          0%   { opacity: 0; transform: translateY(20px) scale(0.8); }
+          30%  { opacity: 1; transform: translateY(-4px) scale(1.08); }
+          50%  { transform: translateY(0) scale(1); }
+          85%  { opacity: 1; }
+          100% { opacity: 0.85; }
+        }
+        .kc-bench-boost-telop { animation: kcBenchBoostSlideIn 0.45s ease-out forwards; }
       `}</style>
     </div>
   );

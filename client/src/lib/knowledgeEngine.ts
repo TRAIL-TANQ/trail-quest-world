@@ -83,6 +83,12 @@ export interface SubBattleResult {
   winner: Side;  // always the attacker (defender cannot win a sub-battle, they can only run out the attacker's deck → game over)
 }
 
+export interface BenchBoostDetail {
+  benchCardName: string;
+  atkBonus: number;
+  defBonus: number;
+}
+
 export interface EffectTelop {
   text: string;
   color: string;
@@ -119,6 +125,8 @@ export interface GameState {
   effectTelop: EffectTelop | null;                            // UI consumes & clears after 1.5s
   // Bench glow hint: set by bench-scanning effects. UI glows matching slots for ~1.5s then clears.
   benchGlow: { side: Side; names: string[]; key: number } | null;
+  // Bench boost details: which bench cards contributed what bonuses (for power-up animation).
+  benchBoostDetails: BenchBoostDetail[] | null;
   // ===== Round result =====
   roundWinner: Side | null;           // winner of the current round (set at round_end)
   // ===== Result =====
@@ -191,6 +199,7 @@ export function initGameState(playerDeck: BattleCard[], aiDeck: BattleCard[]): G
     altBonus: 0,
     effectTelop: null,
     benchGlow: null,
+    benchBoostDetails: null,
     roundWinner: null,
     history: [],
     winner: null,
@@ -1309,54 +1318,54 @@ function computeAttackerAura(
   attackerSide: Side,
   card: BattleCard,
   priorRevealCount: number,
-): number {
+): { bonus: number; details: BenchBoostDetail[] } {
   const { names, sunflower } = unsealedBenchNames(state, attackerSide);
   let bonus = 0;
-  if (names.has('軍旗')) bonus += 1;
-  if (names.has('アマゾン川') && card.category === 'creature') bonus += 1;
-  if (sunflower >= 2) bonus += 1;
+  const details: BenchBoostDetail[] = [];
+  if (names.has('軍旗')) { bonus += 1; details.push({ benchCardName: '軍旗', atkBonus: 1, defBonus: 0 }); }
+  if (names.has('アマゾン川') && card.category === 'creature') { bonus += 1; details.push({ benchCardName: 'アマゾン川', atkBonus: 1, defBonus: 0 }); }
+  if (sunflower >= 2) { bonus += 1; details.push({ benchCardName: 'ひまわり', atkBonus: 1, defBonus: 0 }); }
   // Opponent 万有引力: 2枚目以降の攻撃 -1
   const opp = otherSide(attackerSide);
   const oppMe = opp === 'player' ? state.player : state.ai;
   const oppSealed = state.sealedBenchNames[opp];
   const oppHasGravity = oppMe.bench.some((b) => b.name === '万有引力' && !oppSealed.includes(b.name));
-  if (oppHasGravity && priorRevealCount >= 1) bonus -= 1;
+  if (oppHasGravity && priorRevealCount >= 1) { bonus -= 1; details.push({ benchCardName: '万有引力', atkBonus: -1, defBonus: 0 }); }
   // ルビー aura: 攻撃側全攻撃+1 (2枚以上で+2)
   const atkMe = attackerSide === 'player' ? state.player : state.ai;
   const atkSealed = state.sealedBenchNames[attackerSide];
   const rubySlot = atkMe.bench.find((b) => b.name === 'ルビー' && !atkSealed.includes(b.name));
-  if (rubySlot) bonus += rubySlot.count >= 2 ? 2 : 1;
+  if (rubySlot) { const v = rubySlot.count >= 2 ? 2 : 1; bonus += v; details.push({ benchCardName: 'ルビー', atkBonus: v, defBonus: 0 }); }
   // サバンナ aura: 生き物カード攻撃+1
-  if (names.has('サバンナ') && card.category === 'creature') bonus += 1;
+  if (names.has('サバンナ') && card.category === 'creature') { bonus += 1; details.push({ benchCardName: 'サバンナ', atkBonus: 1, defBonus: 0 }); }
   // サバンナ + アマゾン川 combo: 生き物さらに攻撃+1
-  if (names.has('サバンナ') && names.has('アマゾン川') && card.category === 'creature') bonus += 1;
+  if (names.has('サバンナ') && names.has('アマゾン川') && card.category === 'creature') { bonus += 1; details.push({ benchCardName: 'サバンナ+アマゾン川', atkBonus: 1, defBonus: 0 }); }
   // 蒸気機関 aura: 科学発明カード攻撃+1 (石炭もあれば+2)
   if (names.has('蒸気機関') && card.category === 'invention') {
-    bonus += names.has('石炭') ? 2 : 1;
+    const v = names.has('石炭') ? 2 : 1;
+    bonus += v;
+    details.push({ benchCardName: names.has('石炭') ? '蒸気機関+石炭' : '蒸気機関', atkBonus: v, defBonus: 0 });
   }
-  return bonus;
+  return { bonus, details };
 }
 
-function applyDefenderAura(state: GameState, defenderSide: Side): GameState {
+function applyDefenderAura(state: GameState, defenderSide: Side): { state: GameState; details: BenchBoostDetail[] } {
   const { names } = unsealedBenchNames(state, defenderSide);
   let bonus = 0;
-  if (names.has('血清')) bonus += 1;
-  if (names.has('聖書')) bonus += names.has('活版印刷機') ? 2 : 1;
-  if (names.has('千利休')) bonus += 1;
-  // ダイヤモンド: 防御+1
-  if (names.has('ダイヤモンド')) bonus += 1;
-  // サファイア: 防御+1 (2枚以上で+2)
+  const details: BenchBoostDetail[] = [];
+  if (names.has('血清')) { bonus += 1; details.push({ benchCardName: '血清', atkBonus: 0, defBonus: 1 }); }
+  if (names.has('聖書')) { const v = names.has('活版印刷機') ? 2 : 1; bonus += v; details.push({ benchCardName: names.has('活版印刷機') ? '聖書+活版印刷機' : '聖書', atkBonus: 0, defBonus: v }); }
+  if (names.has('千利休')) { bonus += 1; details.push({ benchCardName: '千利休', atkBonus: 0, defBonus: 1 }); }
+  if (names.has('ダイヤモンド')) { bonus += 1; details.push({ benchCardName: 'ダイヤモンド', atkBonus: 0, defBonus: 1 }); }
   const defMe = defenderSide === 'player' ? state.player : state.ai;
   const defSealed = state.sealedBenchNames[defenderSide];
   const sapphireSlot = defMe.bench.find((b) => b.name === 'サファイア' && !defSealed.includes(b.name));
-  if (sapphireSlot) bonus += sapphireSlot.count >= 2 ? 2 : 1;
-  // サバンナ: 防御側の生き物カード防御+1
-  if (names.has('サバンナ') && state.defenseCard?.category === 'creature') bonus += 1;
-  // 石炭2枚以上: 科学発明カード防御+1
+  if (sapphireSlot) { const v = sapphireSlot.count >= 2 ? 2 : 1; bonus += v; details.push({ benchCardName: 'サファイア', atkBonus: 0, defBonus: v }); }
+  if (names.has('サバンナ') && state.defenseCard?.category === 'creature') { bonus += 1; details.push({ benchCardName: 'サバンナ', atkBonus: 0, defBonus: 1 }); }
   const coalSlot = defMe.bench.find((b) => b.name === '石炭' && !defSealed.includes(b.name));
-  if (coalSlot && coalSlot.count >= 2 && state.defenseCard?.category === 'invention') bonus += 1;
-  if (bonus === 0) return state;
-  return { ...state, defenderBonus: state.defenderBonus + bonus };
+  if (coalSlot && coalSlot.count >= 2 && state.defenseCard?.category === 'invention') { bonus += 1; details.push({ benchCardName: '石炭', atkBonus: 0, defBonus: 1 }); }
+  if (bonus === 0) return { state, details: [] };
+  return { state: { ...state, defenderBonus: state.defenderBonus + bonus }, details };
 }
 
 // ---------- Deck phase helpers (kept from previous version) ----------
@@ -1432,7 +1441,11 @@ export function startBattle(state: GameState): GameState {
     const eff = applyRevealEffect(next, defender, state.flagHolder, 'defender');
     next = withTelop(eff.state, eff.telop);
   }
-  next = applyDefenderAura(next, state.flagHolder);
+  const defAura = applyDefenderAura(next, state.flagHolder);
+  next = defAura.state;
+  if (defAura.details.length > 0) {
+    next = { ...next, benchBoostDetails: defAura.details };
+  }
   return next;
 }
 
@@ -1495,12 +1508,14 @@ export function revealNextAttackCard(state: GameState): GameState {
   }
 
   // Bench auras from passive cards (any-reveal buffs from own/opponent bench)
-  addedPower += computeAttackerAura(next, attackerSide, nextCard, state.attackRevealed.length);
+  const aura = computeAttackerAura(next, attackerSide, nextCard, state.attackRevealed.length);
+  addedPower += aura.bonus;
 
   const newPower = state.attackCurrentPower + addedPower;
   return {
     ...next,
     attackCurrentPower: newPower,
+    benchBoostDetails: aura.details.length > 0 ? aura.details : null,
     message: `${attackerSide === 'player' ? 'あなたの' : '相手の'}攻撃パワー ${newPower}`,
   };
 }
@@ -1739,6 +1754,7 @@ export function advanceToNextRound(state: GameState): GameState {
     pendingAttackBonus: { player: 0, ai: 0 },
     effectTelop: null,
     benchGlow: null,
+    benchBoostDetails: null,
     message: `第${nextRound}回戦 デッキフェイズ：カードを選ぼう`,
   };
 }
