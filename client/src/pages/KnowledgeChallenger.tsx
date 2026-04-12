@@ -138,6 +138,14 @@ export default function KnowledgeChallenger() {
   const [fastMode, setFastMode] = useState(false);
   const fastModeRef = useRef(false);
   useEffect(() => { fastModeRef.current = fastMode; }, [fastMode]);
+  // Manual / auto mode toggle — manual mode pauses at each step for player tap
+  const [manualMode, setManualMode] = useState(true);
+  const manualModeRef = useRef(true);
+  useEffect(() => { manualModeRef.current = manualMode; }, [manualMode]);
+  // Shown when manual mode wants player to advance (non-attacker steps)
+  const [showManualAdvance, setShowManualAdvance] = useState(false);
+  // Round victory celebration telop
+  const [roundVictoryTelop, setRoundVictoryTelop] = useState<string | null>(null);
   const stepTimeoutsRef = useRef<number[]>([]);
   const clearStepTimeouts = useCallback(() => {
     stepTimeoutsRef.current.forEach((id) => clearTimeout(id));
@@ -373,6 +381,25 @@ export default function KnowledgeChallenger() {
     });
   }, []);
 
+  // ===== Manual advance wait: shows big button, resolves on player tap =====
+  const waitManualAdvance = useCallback((): Promise<void> => {
+    if (unmountedRef.current) return Promise.resolve();
+    setShowManualAdvance(true);
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        playerActionLatchRef.current = null;
+        setShowManualAdvance(false);
+        resolve();
+      };
+      playerActionLatchRef.current = finish;
+      const safetyId = window.setTimeout(() => { if (!settled) finish(); }, 30000);
+      stepTimeoutsRef.current.push(safetyId);
+    });
+  }, []);
+
   // ===== Step wait with interruptible latch + 3s fallback =====
   // Returns a promise that resolves when EITHER:
   //   - the natural scaled delay elapses
@@ -436,14 +463,22 @@ export default function KnowledgeChallenger() {
         // Step 1: turn banner
         console.log('[KC] → turn_banner (unmounted:', unmountedRef.current, ')');
         setCineStep('turn_banner');
-        await waitStep(TURN_BANNER_MS);
+        if (manualModeRef.current) {
+          await waitManualAdvance();
+        } else {
+          await waitStep(TURN_BANNER_MS);
+        }
         console.log('[KC] turn_banner waitStep resolved (unmounted:', unmountedRef.current, ')');
         if (unmountedRef.current) { console.log('[KC] BAIL: unmounted after turn_banner'); return; }
 
         // Step 2: defender shown
         console.log('[KC] → defender_show (unmounted:', unmountedRef.current, ')');
         setCineStep('defender_show');
-        await waitStep(DEFENDER_SHOW_MS);
+        if (manualModeRef.current) {
+          await waitManualAdvance();
+        } else {
+          await waitStep(DEFENDER_SHOW_MS);
+        }
         console.log('[KC] defender_show waitStep resolved (unmounted:', unmountedRef.current, ')');
         if (unmountedRef.current) { console.log('[KC] BAIL: unmounted after defender_show'); return; }
 
@@ -504,8 +539,15 @@ export default function KnowledgeChallenger() {
             await waitForPlayerAction();
             setWaitingForPlayerReveal(false);
           } else {
-            console.log('[KC] AI auto-reveal: waiting', ATTACK_CARD_REVEAL_MS, 'ms');
-            await waitStep(ATTACK_CARD_REVEAL_MS);
+            if (manualModeRef.current) {
+              // Manual mode: wait for player tap to proceed
+              setWaitingForPlayerReveal(true);
+              await waitForPlayerAction();
+              setWaitingForPlayerReveal(false);
+            } else {
+              // Auto mode: 1.5x slower for AI turns
+              await waitStep(1200);
+            }
           }
           if (unmountedRef.current) return;
 
@@ -564,9 +606,20 @@ export default function KnowledgeChallenger() {
           if (rs.phase === 'round_end') {
             // Deck-out → defender wins this round
             console.log('[KC] → round_end during reveal (deck-out): round', rs.round, 'winner:', rs.roundWinner);
+            // Round victory celebration
             setCineStep('round_end');
-            await waitStep(2000);
+            await waitMs(300);
             if (unmountedRef.current) return;
+            setRoundVictoryTelop(rs.roundWinner === 'player' ? '🏆 撃破！！' : '💀 デッキ切れ...');
+            await waitMs(500);
+            if (unmountedRef.current) return;
+            if (manualModeRef.current) {
+              await waitManualAdvance();
+            } else {
+              await waitStep(3000);
+            }
+            if (unmountedRef.current) return;
+            setRoundVictoryTelop(null);
 
             // Advance to next round (awards fans, resets bench, or game_over)
             setDeckOffer(null);
@@ -637,9 +690,20 @@ export default function KnowledgeChallenger() {
             if (rzs.phase === 'round_end') {
               // Bench overflow → attacker wins this round
               console.log('[KC] → round_end after resolve: round', rzs.round, 'winner:', rzs.roundWinner);
+              // Round victory celebration
               setCineStep('round_end');
-              await waitStep(2000);
+              await waitMs(300);
               if (unmountedRef.current) return;
+              setRoundVictoryTelop(rzs.roundWinner === 'player' ? '💥 ベンチ崩壊！' : '💀 ベンチ崩壊...');
+              await waitMs(500);
+              if (unmountedRef.current) return;
+              if (manualModeRef.current) {
+                await waitManualAdvance();
+              } else {
+                await waitStep(3000);
+              }
+              if (unmountedRef.current) return;
+              setRoundVictoryTelop(null);
 
               // Advance to next round
               setDeckOffer(null);
@@ -674,7 +738,11 @@ export default function KnowledgeChallenger() {
               if (!unmountedRef.current) window.setTimeout(() => setScreen('result'), 900);
               return;
             }
-            await waitStep(RESOLVE_BANNER_MS);
+            if (manualModeRef.current) {
+              await waitManualAdvance();
+            } else {
+              await waitStep(RESOLVE_BANNER_MS);
+            }
             if (unmountedRef.current) return;
 
             // Short pause after the resolve banner before kicking off the next sub-battle.
@@ -688,7 +756,11 @@ export default function KnowledgeChallenger() {
 
             // Turn transition banner — "🔄 相手のターン！" / "🔄 あなたのターン！"
             setCineStep('turn_transition');
-            await waitStep(TURN_TRANSITION_MS);
+            if (manualModeRef.current) {
+              await waitManualAdvance();
+            } else {
+              await waitStep(TURN_TRANSITION_MS);
+            }
             if (unmountedRef.current) return;
 
             setCineStep('idle');
@@ -1719,19 +1791,32 @@ export default function KnowledgeChallenger() {
           </>
         )}
 
-        {/* Skip button */}
+        {/* Manual/Auto toggle + Skip button */}
         {gameState.phase !== 'deck_phase' && gameState.phase !== 'game_over' && (
-          <button
-            onClick={handleSkipReveal}
-            className="absolute top-1 right-2 z-50 text-[11px] font-black px-3 py-1.5 rounded-lg"
-            style={{
-              background: 'rgba(255,255,255,0.12)',
-              border: '1.5px solid rgba(255,255,255,0.3)',
-              color: 'rgba(255,255,255,0.85)',
-            }}
-          >
-            ⏭ スキップ
-          </button>
+          <div className="absolute top-1 right-2 z-50 flex gap-1.5">
+            <button
+              onClick={() => setManualMode((p) => !p)}
+              className="text-[11px] font-black px-3 py-1.5 rounded-lg"
+              style={{
+                background: manualMode ? 'rgba(34,197,94,0.2)' : 'rgba(59,130,246,0.2)',
+                border: `1.5px solid ${manualMode ? 'rgba(34,197,94,0.5)' : 'rgba(59,130,246,0.5)'}`,
+                color: manualMode ? 'rgba(34,197,94,0.9)' : 'rgba(59,130,246,0.9)',
+              }}
+            >
+              {manualMode ? '\uD83D\uDD90\uFE0F \u624B\u52D5' : '\u25B6\uFE0F \u81EA\u52D5'}
+            </button>
+            <button
+              onClick={handleSkipReveal}
+              className="text-[11px] font-black px-3 py-1.5 rounded-lg"
+              style={{
+                background: 'rgba(255,255,255,0.12)',
+                border: '1.5px solid rgba(255,255,255,0.3)',
+                color: 'rgba(255,255,255,0.85)',
+              }}
+            >
+              ⏭ スキップ
+            </button>
+          </div>
         )}
 
         {/* ====== AI AREA (top half) ======
@@ -2133,6 +2218,71 @@ export default function KnowledgeChallenger() {
                 : '0 0 16px rgba(96,165,250,0.8), 0 2px 8px rgba(0,0,0,0.9)',
             }}>
               {benchBoostTelop.text}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* ===== Manual mode: big advance button ===== */}
+      {showManualAdvance && (
+        <button
+          onClick={handleAdvance}
+          className="fixed bottom-6 left-[10%] right-[10%] z-[60] py-3.5 rounded-xl text-lg font-black text-center"
+          style={{
+            background: 'linear-gradient(135deg, #22c55e, #16a34a)',
+            color: 'white',
+            boxShadow: '0 4px 0 rgba(0,100,0,1), 0 6px 12px rgba(0,0,0,0.3)',
+            minHeight: '56px',
+          }}
+        >
+          {cineStep === 'attack_reveal' ? 'めくる \u25B6' : '次へ \u25B6'}
+        </button>
+      )}
+
+      {/* ===== Manual mode: advance button for opponent attack reveal ===== */}
+      {manualMode && waitingForPlayerReveal && !showManualAdvance && gameState.flagHolder === 'player' && cineStep === 'attack_reveal' && (
+        <button
+          onClick={handleAdvance}
+          className="fixed bottom-6 left-[10%] right-[10%] z-[60] py-3.5 rounded-xl text-lg font-black text-center"
+          style={{
+            background: 'linear-gradient(135deg, #22c55e, #16a34a)',
+            color: 'white',
+            boxShadow: '0 4px 0 rgba(0,100,0,1), 0 6px 12px rgba(0,0,0,0.3)',
+            minHeight: '56px',
+          }}
+        >
+          めくる ▶
+        </button>
+      )}
+
+      {/* ===== Round victory celebration ===== */}
+      {roundVictoryTelop && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center pointer-events-none">
+          <div className="absolute inset-0 kc-gold-flash" />
+          {/* Confetti */}
+          <div className="absolute inset-0 overflow-hidden">
+            {Array.from({ length: 30 }).map((_, i) => (
+              <span
+                key={`rv-confetti-${i}`}
+                className="kc-confetti-piece"
+                style={{
+                  left: `${(i * 3.3 + 2) % 100}%`,
+                  background: ['#ffd700', '#ff6b6b', '#4ade80', '#60a5fa', '#f5d76e'][i % 5],
+                  animationDelay: `${(i % 8) * 0.1}s`,
+                  animationDuration: '2s',
+                }}
+              />
+            ))}
+          </div>
+          {/* Big telop */}
+          <div className="kc-round-victory-telop">
+            <p style={{
+              fontSize: '64px',
+              fontWeight: 900,
+              color: '#ffd700',
+              textShadow: '0 0 30px rgba(255,215,0,0.8), 0 0 60px rgba(255,215,0,0.4), 0 4px 8px rgba(0,0,0,0.9)',
+            }}>
+              {roundVictoryTelop}
             </p>
           </div>
         </div>
@@ -2809,6 +2959,16 @@ export default function KnowledgeChallenger() {
           100% { opacity: 0.85; }
         }
         .kc-bench-boost-telop { animation: kcBenchBoostSlideIn 0.45s ease-out forwards; }
+
+        /* Round victory celebration telop */
+        @keyframes kcRoundVictoryZoom {
+          0%   { opacity: 0; transform: scale(0.3) rotate(-5deg); }
+          30%  { opacity: 1; transform: scale(1.2) rotate(3deg); }
+          50%  { transform: scale(0.95) rotate(-1deg); }
+          70%  { transform: scale(1.05) rotate(1deg); }
+          100% { opacity: 1; transform: scale(1) rotate(0); }
+        }
+        .kc-round-victory-telop { animation: kcRoundVictoryZoom 0.8s cubic-bezier(0.34, 1.56, 0.64, 1); }
       `}</style>
     </div>
   );
