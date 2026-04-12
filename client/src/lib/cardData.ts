@@ -116,9 +116,13 @@ export const COLLECTION_CARDS: CollectionCard[] = [
   { id: 'card-100', name: '光合成', category: 'discovery', rarity: 'SSR', description: '生命のエネルギー。太陽光を使って酸素と糖を生み出す植物の力。', imageUrl: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-100_b9a9e224.webp' },
 
   // ===== コンボカード: 原爆コンボ (3枚) =====
-  { id: 'card-101', name: 'マンハッタン計画', category: 'inventions', rarity: 'R', description: '第二次世界大戦中の極秘プロジェクト。世界中の科学者を集めて原子爆弾を開発した。【コンボ素材】', imageUrl: '' },
-  { id: 'card-102', name: 'トリニティ実験', category: 'inventions', rarity: 'R', description: '1945年7月、ニューメキシコ州の砂漠で行われた世界初の核実験。原子爆弾の威力が実証された瞬間。【コンボ素材】', imageUrl: '' },
+  { id: 'card-101', name: 'マンハッタン計画', category: 'inventions', rarity: 'R', description: '第二次世界大戦中の極秘プロジェクト。世界中の科学者を集めて原子爆弾を開発した。【コンボ素材】', imageUrl: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-101-manhattan-project-i8js49notWj9KFKWcZQpq4.webp' },
+  { id: 'card-102', name: 'トリニティ実験', category: 'inventions', rarity: 'R', description: '1945年7月、ニューメキシコ州の砂漠で行われた世界初の核実験。原子爆弾の威力が実証された瞬間。【コンボ素材】', imageUrl: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-102-trinity-test-v2-MDzwxyDR7JZzTV4A9Uahiu.webp' },
   { id: 'card-103', name: '原子爆弾', category: 'inventions', rarity: 'SSR', description: '人類が生み出した最悪の兵器。ベンチに「マンハッタン計画」と「トリニティ実験」が揃うと発動する究極コンボカード。', imageUrl: '' },
+
+  // ===== 追加カード (2枚) =====
+  { id: 'card-104', name: '黄熱病', category: 'discovery', rarity: 'R', description: '蛊が媒介する感染症。野口英世が研究に生涯を捧げ、多くの科学者が命を落とした恐ろしい病気。', imageUrl: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-104-yellow-fever-8sPNBXE47MDi5dwUFVSYwM.webp' },
+  { id: 'card-105', name: '天動説', category: 'discovery', rarity: 'R', description: '地球が宇宙の中心で、太陽や星が地球の周りを回るという古代の宇宙観。プトレマイオスが体系化した。', imageUrl: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-105-geocentric-model-k99sDiiVkEiQjgR9XatCxW.webp' },
 ];
 
 // ガチャ排出率

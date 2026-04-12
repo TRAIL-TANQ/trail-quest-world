@@ -754,6 +754,17 @@ const QUIZ_DATA: Record<string, Quiz[]> = {
     { question: '広島に原爆が投下された日は？', choices: ['1945年8月6日', '1945年8月9日', '1945年8月15日', '1945年7月16日'], correctIndex: 0 },
     { question: '原子爆弾のエネルギー源は？', choices: ['化学反応', '核分裂', '核融合', '電磁波'], correctIndex: 1 },
   ],
+  // ===== 追加カード =====
+  'card-104': [
+    { question: '黄熱病を媒介する生き物は？', choices: ['ハエ', '蛊', 'ノミ', 'ダニ'], correctIndex: 1 },
+    { question: '黄熱病の研究に生涯を捧げた日本人科学者は？', choices: ['北里柴三郎', '野口英世', '志賀潔', '山中伸弥'], correctIndex: 1 },
+    { question: '黄熱病の「黄」は何を指す？', choices: ['黄色い蛊', '黄疸（肌が黄色くなる）', '黄色い薬', '黄色い花'], correctIndex: 1 },
+  ],
+  'card-105': [
+    { question: '天動説を体系化した古代の学者は？', choices: ['コペルニクス', 'プトレマイオス', 'アリストテレス', 'ガリレオ'], correctIndex: 1 },
+    { question: '天動説では何が宇宙の中心？', choices: ['太陽', '地球', '月', '北極星'], correctIndex: 1 },
+    { question: '天動説を否定した地動説を唱えたのは？', choices: ['ニュートン', 'コペルニクス', 'アインシュタイン', 'ダーウィン'], correctIndex: 1 },
+  ],
 };
 
 // Effect descriptions by category
