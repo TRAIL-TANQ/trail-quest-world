@@ -98,11 +98,11 @@ export interface EffectTelop {
 
 export interface GameState {
   phase: GamePhase;
-  // Legacy: round counter, mostly for display and compatibility.
-  // Incremented once per completed sub-battle.
+  // Round counter (1..5). Only incremented in advanceToNextRound, NOT per sub-battle.
   round: number;
-  // Trophy fans kept as legacy display flavour; the real winner is whoever
-  // doesn't fail first.
+  // Sub-battle counter within the current round. Resets to 0 at each round start.
+  subBattleCount: number;
+  // Trophy fans: awarded to the round winner.
   trophyFans: number[];
   playerFans: number;
   aiFans: number;
@@ -193,6 +193,7 @@ export function initGameState(playerDeck: BattleCard[], aiDeck: BattleCard[], st
   return {
     phase: 'deck_phase',
     round: 1,
+    subBattleCount: 0,
     trophyFans,
     playerFans: 0,
     aiFans: 0,
@@ -1839,6 +1840,7 @@ export function resolveSubBattleWin(state: GameState): GameState {
     defenderBonus: 0,
     roundAttackBonus: { player: 0, ai: 0 },
     pendingAttackBonus: { player: 0, ai: 0 },
+    subBattleCount: state.subBattleCount + 1,
     lastSubBattle: result,
     history: [...state.history, result],
   };
@@ -1894,6 +1896,7 @@ export function advanceToNextRound(state: GameState): GameState {
     ...state,
     phase: 'deck_phase',
     round: nextRound,
+    subBattleCount: 0,
     playerFans: newPlayerFans,
     aiFans: newAiFans,
     roundWinner: null,

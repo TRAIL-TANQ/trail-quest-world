@@ -458,7 +458,13 @@ export default function KnowledgeChallenger() {
     battleRunningRef.current = true;
 
     const run = async () => {
-      console.log('[KC] battle loop: START (round', gameState.round, ', flagHolder', gameState.flagHolder, ', unmounted:', unmountedRef.current, ')');
+      console.log('[KC] battle loop: START (round', gameState.round, ', subBattle', gameState.subBattleCount, ', flagHolder', gameState.flagHolder, ', unmounted:', unmountedRef.current, ')');
+      // Safety: if we've had too many sub-battles in one round, bail
+      if (gameState.subBattleCount > 50) {
+        console.warn('[KC] SAFETY: too many sub-battles in round', gameState.round, '— forcing round end');
+        battleRunningRef.current = false;
+        return;
+      }
       try {
         // Step 1: turn banner
         console.log('[KC] → turn_banner (unmounted:', unmountedRef.current, ')');
@@ -1941,7 +1947,7 @@ export default function KnowledgeChallenger() {
                 {playerIsDefender ? '🛡️ あなたが防御中！' : '⚔️ あなたの攻撃！'}
               </p>
               <p style={{ fontSize: '0.9rem', fontWeight: 700, color: '#fff', marginTop: 6 }}>
-                サブバトル {gameState.round}
+                第{gameState.round}回戦 サブバトル {gameState.subBattleCount + 1}
               </p>
             </div>
           </div>
