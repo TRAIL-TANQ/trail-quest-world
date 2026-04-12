@@ -189,6 +189,12 @@ export const COLLECTION_CARDS: CollectionCard[] = [
   { id: 'card-153', name: 'キリマンジャロ', category: 'world_heritage', rarity: 'N', description: 'アフリカ大陸最高峰。標高5895メートルの雪を頂く山。', imageUrl: '' },
   { id: 'card-154', name: 'アフリカゾウ', category: 'creatures', rarity: 'R', description: 'サバンナの王者。巨大な体と長い牙で全てを薙ぎ倒す。', imageUrl: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-019_ca504899.webp' },
   { id: 'card-155', name: 'サバンナ', category: 'inventions', rarity: 'N', description: 'アフリカの広大な草原地帯。多様な野生動物の生息地。', imageUrl: '' },
+
+  // ===== 産業革命デッキ (4枚新規 + 蒸気機関は既存card-037) =====
+  { id: 'card-156', name: '石炭', category: 'inventions', rarity: 'N', description: '産業革命の燃料。黒いダイヤとも呼ばれた地下資源。', imageUrl: '' },
+  { id: 'card-157', name: '紡績機', category: 'inventions', rarity: 'N', description: '産業革命で最初に機械化された繊維産業の象徴。大量生産を可能にした。', imageUrl: '' },
+  { id: 'card-158', name: '蒸気機関車', category: 'inventions', rarity: 'R', description: '蒸気の力で走る鉄道車両。物流を革命し、世界を縮めた。', imageUrl: '' },
+  { id: 'card-159', name: 'ジェームズ・ワット', category: 'great_people', rarity: 'R', description: '蒸気機関を改良し産業革命の原動力を作った発明家。ワットの由来。', imageUrl: '' },
 ];
 
 // ガチャ排出率

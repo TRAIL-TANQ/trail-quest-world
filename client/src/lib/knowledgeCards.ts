@@ -145,6 +145,12 @@ export const EFFECT_DEFS: Record<string, CardEffect> = {
   apartheid:        { id: 'apartheid',        name: '差別との闘い',     description: 'From the bench: マンデラの防御+4。', category: 'def' },
   african_elephant: { id: 'african_elephant', name: '突進',             description: '攻撃時+2。サバンナベンチでさらに+2。', category: 'atk' },
   savanna:          { id: 'savanna',          name: '広大な大地',       description: 'From the bench: 生き物カード攻防+1。アマゾン川もあれば攻撃さらに+1。', category: 'special' },
+  // ===== 産業革命デッキ =====
+  steam_engine:     { id: 'steam_engine',     name: '動力革命',         description: 'From the bench: 全科学発明カード攻撃+1。石炭もあれば+2。', category: 'atk' },
+  coal:             { id: 'coal',             name: '黒いダイヤ',       description: 'From the bench: 蒸気機関の攻防+2。2枚以上で全科学発明防御+1。', category: 'special' },
+  spinning_machine: { id: 'spinning_machine', name: '繊維革命',         description: 'From the bench: 毎ラウンド終了時ALT+5。蒸気機関もあればALT+10。', category: 'special' },
+  steam_locomotive: { id: 'steam_locomotive', name: '鉄道の時代',       description: '蒸気機関+石炭ベンチで攻撃+4/防御+2。隔離2枚回収。', category: 'atk' },
+  watt:             { id: 'watt',             name: '改良の天才',       description: 'ベンチ科学発明の枚数で段階強化。4枚以上で攻+5/防+3/味方全攻+1。', category: 'special' },
 };
 
 // Card name → effect id. These are the only cards that carry on-reveal effects.
@@ -232,6 +238,12 @@ export const EFFECT_BY_CARD_NAME: Record<string, string> = {
   'アパルトヘイト':       'apartheid',
   'アフリカゾウ':         'african_elephant',
   'サバンナ':             'savanna',
+  // ===== 産業革命デッキ =====
+  '蒸気機関':             'steam_engine',
+  '石炭':                 'coal',
+  '紡績機':               'spinning_machine',
+  '蒸気機関車':           'steam_locomotive',
+  'ジェームズ・ワット':   'watt',
 };
 
 export interface BattleCard {
@@ -367,6 +379,12 @@ export const CARD_STAT_OVERRIDES: Record<string, StatProfile> = {
   'アパルトヘイト':       { attackPower: 1, defensePower: 1 },
   'アフリカゾウ':         { attackPower: 4, defensePower: 3 },
   'サバンナ':             { attackPower: 1, defensePower: 1 },
+  // ===== 産業革命デッキ =====
+  '蒸気機関':             { attackPower: 1, defensePower: 2 },
+  '石炭':                 { attackPower: 1, defensePower: 1 },
+  '紡績機':               { attackPower: 1, defensePower: 1 },
+  '蒸気機関車':           { attackPower: 3, defensePower: 3 },
+  'ジェームズ・ワット':   { attackPower: 3, defensePower: 2 },
 };
 
 // Combo card IDs for detection
@@ -599,7 +617,7 @@ const QUIZ_DATA: Record<string, Quiz[]> = {
     { question: '電球の中のフィラメントの材料は？', choices: ['銅', 'タングステン', '鉄', 'アルミ'], correctIndex: 1 },
   ],
   'card-037': [
-    { question: '蒸気機関を改良したのは？', choices: ['ワット', 'スティーブンソン', 'フルトン', 'ニューコメン'], correctIndex: 0 },
+    { question: '蒸気機関を改良して産業革命の原動力にした人物は？', choices: ['ワット', 'ニューコメン', 'スティーブンソン', 'フルトン'], correctIndex: 0 },
     { question: '蒸気機関が最初に使われた分野は？', choices: ['鉄道', '船', '炭鉱の排水', '工場'], correctIndex: 2 },
     { question: '産業革命が始まった国は？', choices: ['フランス', 'ドイツ', 'アメリカ', 'イギリス'], correctIndex: 3 },
   ],
@@ -1205,6 +1223,27 @@ const QUIZ_DATA: Record<string, Quiz[]> = {
     { question: 'サバンナはどの大陸に最も広く分布している？', choices: ['アフリカ', 'アジア', '南アメリカ', 'ヨーロッパ'], correctIndex: 0 },
     { question: 'サバンナの特徴的な植生は？', choices: ['草原と散在する木', '密林', '針葉樹林', '砂漠'], correctIndex: 0 },
   ],
+  // ===== 産業革命デッキ =====
+  'card-156': [
+    { question: '産業革命で最も重要なエネルギー源は？', choices: ['石炭', '石油', '天然ガス', '水力'], correctIndex: 0 },
+    { question: '石炭が大量に採掘された国は？', choices: ['イギリス', 'フランス', 'スペイン', 'イタリア'], correctIndex: 0 },
+    { question: '石炭の別名は？', choices: ['黒いダイヤ', '白い金', '赤い石', '青い宝石'], correctIndex: 0 },
+  ],
+  'card-157': [
+    { question: '産業革命で最初に機械化された産業は？', choices: ['繊維', '鉄鋼', '造船', '農業'], correctIndex: 0 },
+    { question: '紡績機が発明された国は？', choices: ['イギリス', 'フランス', 'ドイツ', 'アメリカ'], correctIndex: 0 },
+    { question: '紡績機は何を作る機械？', choices: ['糸', '布', '鉄', '紙'], correctIndex: 0 },
+  ],
+  'card-158': [
+    { question: '世界初の公共鉄道が開通した国は？', choices: ['イギリス', 'アメリカ', 'フランス', 'ドイツ'], correctIndex: 0 },
+    { question: '蒸気機関車を実用化した人物は？', choices: ['スティーブンソン', 'ワット', 'エジソン', 'ベル'], correctIndex: 0 },
+    { question: '世界初の公共鉄道の名前は？', choices: ['リバプール・マンチェスター鉄道', 'ロンドン・ブリストル鉄道', 'パリ・リヨン鉄道', 'ニューヨーク・ボストン鉄道'], correctIndex: 0 },
+  ],
+  'card-159': [
+    { question: 'ジェームズ・ワットの名前が由来になった単位は？', choices: ['ワット', 'ジュール', 'アンペア', 'ボルト'], correctIndex: 0 },
+    { question: 'ワットが改良した機械は？', choices: ['蒸気機関', '印刷機', '望遠鏡', '時計'], correctIndex: 0 },
+    { question: 'ワットの出身国は？', choices: ['スコットランド', 'イングランド', 'フランス', 'ドイツ'], correctIndex: 0 },
+  ],
 };
 
 // Effect descriptions by category
@@ -1689,6 +1728,12 @@ export const SYNERGY_MAP: Record<string, string[]> = {
   'キリマンジャロ': ['ネルソン・マンデラ', 'アパルトヘイト', 'アフリカゾウ', 'サバンナ'],
   'アフリカゾウ': ['サバンナ', 'アマゾン川', 'ネルソン・マンデラ', 'ダーウィン'],
   'サバンナ': ['アフリカゾウ', 'アマゾン川', 'ダーウィン', 'ネルソン・マンデラ'],
+  // 産業革命コンボ
+  '蒸気機関': ['石炭', '紡績機', '蒸気機関車', 'ジェームズ・ワット'],
+  '石炭': ['蒸気機関', '紡績機', '蒸気機関車', 'ジェームズ・ワット'],
+  '紡績機': ['蒸気機関', '石炭', '蒸気機関車', 'ジェームズ・ワット'],
+  '蒸気機関車': ['蒸気機関', '石炭', '紡績機', 'ジェームズ・ワット'],
+  'ジェームズ・ワット': ['蒸気機関', '石炭', '紡績機', '蒸気機関車'],
 };
 
 // ===== Round-specific offering composition for synergy draft =====

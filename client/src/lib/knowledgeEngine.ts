@@ -1164,6 +1164,95 @@ export function applyRevealEffect(
       telop = { text: '🌿サバンナ！生き物を強化', color };
       break;
     }
+    // ===== 産業革命デッキ =====
+    case 'steam_engine': {
+      telop = { text: '🔧蒸気機関！科学発明を強化', color };
+      break;
+    }
+    case 'coal': {
+      telop = { text: '⛏️石炭！燃料供給', color };
+      break;
+    }
+    case 'spinning_machine': {
+      next = { ...next, altBonus: next.altBonus + 5 };
+      const myState = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      const hasSteam = myState.bench.some((b) => b.name === '蒸気機関' && !sealed.includes(b.name));
+      if (hasSteam) {
+        next = { ...next, altBonus: next.altBonus + 5 };
+        next = withBenchGlow(next, side, ['蒸気機関']);
+        telop = { text: '🧵紡績機！ALT+10（蒸気機関込み）', color };
+      } else {
+        telop = { text: '🧵紡績機！ALT+5', color };
+      }
+      break;
+    }
+    case 'steam_locomotive': {
+      const my = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      const hasSteam = my.bench.some((b) => b.name === '蒸気機関' && !sealed.includes(b.name));
+      const hasCoal = my.bench.some((b) => b.name === '石炭' && !sealed.includes(b.name));
+      const glow: string[] = [];
+      if (hasSteam) glow.push('蒸気機関');
+      if (hasCoal) glow.push('石炭');
+      if (glow.length > 0) next = withBenchGlow(next, side, glow);
+      if (hasSteam && hasCoal) {
+        if (role === 'attacker') {
+          bonusAttack += 4;
+        } else {
+          next = { ...next, defenderBonus: next.defenderBonus + 2 };
+        }
+        const quarantined = next.quarantine[side];
+        if (quarantined.length > 0) {
+          const recoverCount = Math.min(2, quarantined.length);
+          const recovered = quarantined.slice(-recoverCount);
+          const remaining = quarantined.slice(0, quarantined.length - recoverCount);
+          next = applySide(
+            { ...next, quarantine: { ...next.quarantine, [side]: remaining } },
+            side,
+            { ...my, deck: [...my.deck, ...recovered] },
+          );
+        }
+        telop = { text: `🚂蒸気機関車！${role === 'attacker' ? '攻撃+4' : '防御+2'} 隔離回収`, color };
+      } else {
+        telop = { text: '🚂蒸気機関車！条件未達', color };
+      }
+      break;
+    }
+    case 'watt': {
+      const my = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      const inventionCount = my.bench
+        .filter((b) => !sealed.includes(b.name) && b.card.category === 'invention')
+        .reduce((s, b) => s + b.count, 0);
+      const glowNames = my.bench
+        .filter((b) => !sealed.includes(b.name) && b.card.category === 'invention')
+        .map((b) => b.name);
+      if (glowNames.length > 0) next = withBenchGlow(next, side, glowNames);
+      let atkBonus = 0;
+      let defBonus = 0;
+      if (inventionCount >= 4) {
+        atkBonus = 5; defBonus = 3;
+        next = {
+          ...next,
+          roundAttackBonus: { ...next.roundAttackBonus, [side]: next.roundAttackBonus[side] + 1 },
+        };
+      } else if (inventionCount === 3) {
+        atkBonus = 3; defBonus = 2;
+      } else if (inventionCount === 2) {
+        atkBonus = 2; defBonus = 1;
+      } else if (inventionCount === 1) {
+        atkBonus = 1;
+      }
+      if (role === 'attacker') {
+        bonusAttack += atkBonus;
+        telop = { text: `⚙️ワット改良の天才！科学発明${inventionCount}枚 攻撃+${atkBonus}`, color };
+      } else {
+        next = { ...next, defenderBonus: next.defenderBonus + defBonus };
+        telop = { text: `⚙️ワット改良の天才！科学発明${inventionCount}枚 防御+${defBonus}`, color };
+      }
+      break;
+    }
   }
 
   return { state: next, bonusAttack, telop };
@@ -1219,6 +1308,10 @@ function computeAttackerAura(
   if (names.has('サバンナ') && card.category === 'creature') bonus += 1;
   // サバンナ + アマゾン川 combo: 生き物さらに攻撃+1
   if (names.has('サバンナ') && names.has('アマゾン川') && card.category === 'creature') bonus += 1;
+  // 蒸気機関 aura: 科学発明カード攻撃+1 (石炭もあれば+2)
+  if (names.has('蒸気機関') && card.category === 'invention') {
+    bonus += names.has('石炭') ? 2 : 1;
+  }
   return bonus;
 }
 
@@ -1237,6 +1330,9 @@ function applyDefenderAura(state: GameState, defenderSide: Side): GameState {
   if (sapphireSlot) bonus += sapphireSlot.count >= 2 ? 2 : 1;
   // サバンナ: 防御側の生き物カード防御+1
   if (names.has('サバンナ') && state.defenseCard?.category === 'creature') bonus += 1;
+  // 石炭2枚以上: 科学発明カード防御+1
+  const coalSlot = defMe.bench.find((b) => b.name === '石炭' && !defSealed.includes(b.name));
+  if (coalSlot && coalSlot.count >= 2 && state.defenseCard?.category === 'invention') bonus += 1;
   if (bonus === 0) return state;
   return { ...state, defenderBonus: state.defenderBonus + bonus };
 }
