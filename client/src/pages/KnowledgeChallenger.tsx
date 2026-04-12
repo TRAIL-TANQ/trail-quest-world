@@ -28,6 +28,7 @@ import {
   MAX_SR,
   MAX_SAME_NAME,
   ALL_BATTLE_CARDS,
+  SYNERGY_MAP,
 } from '@/lib/knowledgeCards';
 import { CARD_RARITY_IMAGES } from '@/lib/constants';
 import {
@@ -146,6 +147,8 @@ export default function KnowledgeChallenger() {
   const [showManualAdvance, setShowManualAdvance] = useState(false);
   // Round victory celebration telop
   const [roundVictoryTelop, setRoundVictoryTelop] = useState<string | null>(null);
+  // Card detail popup
+  const [detailCard, setDetailCard] = useState<BattleCard | null>(null);
   const stepTimeoutsRef = useRef<number[]>([]);
   const clearStepTimeouts = useCallback(() => {
     stepTimeoutsRef.current.forEach((id) => clearTimeout(id));
@@ -1667,6 +1670,7 @@ export default function KnowledgeChallenger() {
         animKey={gameState.history.length}
         glowNames={gameState.benchGlow?.side === 'ai' ? gameState.benchGlow.names : undefined}
         maxSlots={gameState.stageRules?.npcBenchSlots ?? BENCH_MAX_SLOTS}
+        onCardTap={setDetailCard}
       />
 
       {/* ===== Battle Field =====
@@ -1723,7 +1727,7 @@ export default function KnowledgeChallenger() {
                   🛡️ 防御パワー {defenderPower}
                 </p>
               </div>
-              <CardDisplay card={defenderCard} size="battle" mode="defense" />
+              <CardDisplay card={defenderCard} size="battle" mode="defense" onTap={() => setDetailCard(defenderCard)} />
             </div>
           );
         };
@@ -1752,12 +1756,12 @@ export default function KnowledgeChallenger() {
                     zIndex: i,
                   }}
                 >
-                  <CardDisplay card={c} size="battle" mode="attack" />
+                  <CardDisplay card={c} size="battle" mode="attack" onTap={() => setDetailCard(c)} />
                 </div>
               ))}
               {/* Latest card on top with kcCardFlip animation on mount */}
               <div key={`latest-${attackCards.length}`} className={`absolute inset-0 ${enterClass}`} style={{ zIndex: 100 }}>
-                <CardDisplay card={lastCard} size="battle" mode="attack" />
+                <CardDisplay card={lastCard} size="battle" mode="attack" onTap={() => setDetailCard(lastCard)} />
               </div>
               {/* Cumulative power label below */}
               <div className="absolute left-1/2 -translate-x-1/2 -bottom-12 whitespace-nowrap z-[120] kc-attack-label">
@@ -2179,6 +2183,7 @@ export default function KnowledgeChallenger() {
         animKey={gameState.history.length}
         glowNames={gameState.benchGlow?.side === 'player' ? gameState.benchGlow.names : undefined}
         maxSlots={gameState.stageRules?.benchLimit ?? BENCH_MAX_SLOTS}
+        onCardTap={setDetailCard}
       />
 
       {/* ===== Effect Telop (card on-reveal effect) ===== */}
@@ -2271,6 +2276,9 @@ export default function KnowledgeChallenger() {
           </div>
         </div>
       )}
+
+      {/* ===== Card Detail Modal ===== */}
+      {detailCard && <CardDetailModal card={detailCard} onClose={() => setDetailCard(null)} />}
 
       {/* ===== Deck Phase Overlay (レスポンシブ: PC 2-col / モバイル 縦) ===== */}
       {gameState.phase === 'deck_phase' && deckOffer && !activeQuiz && !swapState && (() => {
@@ -2367,10 +2375,10 @@ export default function KnowledgeChallenger() {
                     transition: 'opacity 0.28s ease, transform 0.28s ease',
                   }}
                 >
-                  <CardDisplay card={c} size="sm" />
+                  <CardDisplay card={c} size="sm" onTap={() => setDetailCard(c)} />
                   {canRemove && !isFading && (
                     <button
-                      onClick={() => handleRequestRemoveCard(i)}
+                      onClick={(e) => { e.stopPropagation(); handleRequestRemoveCard(i); }}
                       aria-label="このカードを外す"
                       className="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center active:scale-90 transition-transform"
                       style={{
@@ -2954,6 +2962,14 @@ export default function KnowledgeChallenger() {
         }
         .kc-round-victory-telop { animation: kcRoundVictoryZoom 0.8s cubic-bezier(0.34, 1.56, 0.64, 1); }
 
+        /* Card detail popup */
+        @keyframes kcCardDetailPop {
+          0%   { opacity: 0; transform: scale(0.8); }
+          50%  { transform: scale(1.03); }
+          100% { opacity: 1; transform: scale(1); }
+        }
+        .kc-card-detail-pop { animation: kcCardDetailPop 0.25s ease-out; }
+
         /* Top banner slide-in for effect/bench telop */
         @keyframes kcTopBannerSlide {
           0%   { opacity: 0; transform: translateY(-100%); }
@@ -2982,8 +2998,8 @@ export default function KnowledgeChallenger() {
 
 type BenchSlotUI = { name: string; card: BattleCard; count: number };
 
-function BenchDisplay({ side, bench, deckCount, quarantineCount, animKey, glowNames, maxSlots = BENCH_MAX_SLOTS }: {
-  side: 'player' | 'ai'; bench: BenchSlotUI[]; deckCount: number; quarantineCount?: number; animKey?: number; glowNames?: string[]; maxSlots?: number;
+function BenchDisplay({ side, bench, deckCount, quarantineCount, animKey, glowNames, maxSlots = BENCH_MAX_SLOTS, onCardTap }: {
+  side: 'player' | 'ai'; bench: BenchSlotUI[]; deckCount: number; quarantineCount?: number; animKey?: number; glowNames?: string[]; maxSlots?: number; onCardTap?: (card: BattleCard) => void;
 }) {
   const glowSet = glowNames ? new Set(glowNames) : null;
   // Track which slot names existed last render → newly added (or count-bumped)
@@ -3064,7 +3080,7 @@ function BenchDisplay({ side, bench, deckCount, quarantineCount, animKey, glowNa
             return (
               <button
                 key={slotKey}
-                onClick={() => isPlayer && setDetailSlot(slot)}
+                onClick={() => onCardTap ? onCardTap(slot.card) : (isPlayer && setDetailSlot(slot))}
                 className={`flex-1 rounded-lg relative overflow-hidden transition-all active:scale-95 ${isNew ? 'kc-bench-pop' : ''} ${isGlowing ? 'kc-bench-glow' : ''}`}
                 style={{ background: `${catInfo.color}1a`, border: `2px solid ${catInfo.color}77`, minHeight: '54px', cursor: isPlayer ? 'pointer' : 'default' }}
               >
@@ -3130,18 +3146,119 @@ function BenchDisplay({ side, bench, deckCount, quarantineCount, animKey, glowNa
 }
 
 /**
+ * CardDetailModal — shows card details (image, stats, effect, synergies, quiz)
+ */
+function CardDetailModal({ card, onClose }: { card: BattleCard; onClose: () => void }) {
+  const catInfo = CATEGORY_INFO[card.category];
+  const rarityInfo = RARITY_INFO[card.rarity];
+  const atk = card.attackPower ?? card.power;
+  const def = card.defensePower ?? card.power;
+  const synergies = SYNERGY_MAP[card.name] ?? [];
+  const quiz = card.quizzes?.[0];
+  const frameImg = CARD_RARITY_IMAGES[card.rarity] || CARD_RARITY_IMAGES['N'];
+
+  return (
+    <div
+      className="fixed inset-0 z-[300] flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)' }}
+      onClick={onClose}
+    >
+      <div
+        className="rounded-2xl p-4 w-full max-w-xs overflow-y-auto max-h-[85vh] kc-card-detail-pop"
+        style={{
+          background: 'linear-gradient(135deg, rgba(21,29,59,0.98), rgba(14,20,45,0.98))',
+          border: `2px solid ${rarityInfo.color}60`,
+          boxShadow: `0 0 24px ${rarityInfo.color}33, 0 8px 32px rgba(0,0,0,0.6)`,
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Card image */}
+        <div className="mx-auto mb-3 rounded-xl overflow-hidden relative" style={{ width: 200, height: 280 }}>
+          {card.imageUrl && (
+            <img src={card.imageUrl} alt={card.name} className="w-full h-full object-cover" />
+          )}
+          <img src={frameImg} alt="" className="absolute inset-0 w-full h-full object-cover pointer-events-none" />
+        </div>
+
+        {/* Name + rarity + category */}
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-lg font-black text-amber-100">{card.name}</h3>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] font-bold px-1.5 py-0.5 rounded" style={{ background: rarityInfo.bgColor, color: rarityInfo.color, border: `1px solid ${rarityInfo.color}40` }}>
+              {rarityInfo.label}
+            </span>
+            <span className="text-[11px] font-bold px-1.5 py-0.5 rounded" style={{ background: `${catInfo.color}15`, color: catInfo.color }}>
+              {catInfo.emoji}{catInfo.label}
+            </span>
+          </div>
+        </div>
+
+        {/* Attack / Defense */}
+        <div className="flex items-center gap-4 mb-3">
+          <span className="text-base font-black" style={{ color: '#ff6b6b' }}>⚔️ 攻撃: {atk}</span>
+          <span className="text-base font-black" style={{ color: '#60a5fa' }}>🛡️ 防御: {def}</span>
+        </div>
+
+        {/* Effect */}
+        <div className="rounded-lg p-2.5 mb-3" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+          <p className="text-[10px] font-bold text-amber-200/50 mb-1">── 効果 ──</p>
+          {card.effect ? (
+            <>
+              <p className="text-sm font-bold text-amber-100 mb-0.5">「{card.effect.name}」</p>
+              <p className="text-xs text-amber-200/70 leading-relaxed">{card.effect.description}</p>
+            </>
+          ) : card.category === 'heritage' ? (
+            <p className="text-xs text-amber-200/50">効果なし（防御特化）</p>
+          ) : (
+            <p className="text-xs text-amber-200/50">{card.effectDescription}</p>
+          )}
+        </div>
+
+        {/* Synergies */}
+        {synergies.length > 0 && (
+          <div className="rounded-lg p-2.5 mb-3" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+            <p className="text-[10px] font-bold text-amber-200/50 mb-1">── コンボ ──</p>
+            {synergies.map((s) => (
+              <p key={s} className="text-xs text-amber-200/70 mb-0.5">🔗 {s}</p>
+            ))}
+          </div>
+        )}
+
+        {/* Quiz preview */}
+        {quiz && (
+          <div className="rounded-lg p-2.5 mb-3" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+            <p className="text-[10px] font-bold text-amber-200/50 mb-1">── クイズ ──</p>
+            <p className="text-xs text-amber-200/70">Q: {quiz.question}</p>
+          </div>
+        )}
+
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          className="w-full py-2.5 rounded-lg text-sm font-bold"
+          style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.7)' }}
+        >
+          ✕ 閉じる
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
  * CardDisplay
  *  - Always shows both ⚔️ attackPower (left-bottom, red) and 🛡️ defensePower (right-bottom, blue)
  *  - mode='attack'   : ⚔️ glows red, 🛡️ greyed out
  *  - mode='defense'  : 🛡️ glows blue, ⚔️ greyed out
  *  - mode='neutral'  : both at normal brightness
  */
-function CardDisplay({ card, isDefense, isWinner, size, mode }: {
+function CardDisplay({ card, isDefense, isWinner, size, mode, onTap }: {
   card: BattleCard;
   isDefense?: boolean;
   isWinner?: boolean;
   size?: 'sm' | 'md' | 'battle';
   mode?: 'attack' | 'defense' | 'neutral';
+  onTap?: () => void;
 }) {
   const catInfo = CATEGORY_INFO[card.category];
   const [imgLoaded, setImgLoaded] = useState(false);
@@ -3156,7 +3273,8 @@ function CardDisplay({ card, isDefense, isWinner, size, mode }: {
 
   return (
     <div
-      className={`inline-block rounded-xl p-0 relative overflow-hidden ${isWinner ? 'kc-win-glow' : ''}`}
+      className={`inline-block rounded-xl p-0 relative overflow-hidden ${isWinner ? 'kc-win-glow' : ''} ${onTap ? 'cursor-pointer active:scale-95 transition-transform' : ''}`}
+      onClick={onTap}
       style={{
         background: '#0b1128',
         boxShadow: isWinner
