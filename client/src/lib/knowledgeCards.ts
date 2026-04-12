@@ -1408,6 +1408,12 @@ function toBattleCard(cc: CollectionCard): BattleCard {
 // All battle cards from collection
 export const ALL_BATTLE_CARDS: BattleCard[] = COLLECTION_CARDS.map(toBattleCard);
 
+// Cards that only appear via in-battle evolution (excluded from deck phase, gacha, AI decks)
+export const EVOLUTION_ONLY_CARDS = new Set(['大蛇']);
+
+// Draftable pool: excludes evolution-only cards
+export const DRAFTABLE_BATTLE_CARDS: BattleCard[] = ALL_BATTLE_CARDS.filter((c) => !EVOLUTION_ONLY_CARDS.has(c.name));
+
 // ===== Initial Deck Cards (generic N rarity) =====
 const INITIAL_CARDS: BattleCard[] = [
   {
@@ -1602,12 +1608,12 @@ function buildValidDeck(pool: BattleCard[], prefix: string, targetSize: number):
 
 // Build a 10-card starter deck.
 export function createInitialDeck(): BattleCard[] {
-  return buildValidDeck(ALL_BATTLE_CARDS, 'player', INITIAL_DECK_SIZE);
+  return buildValidDeck(DRAFTABLE_BATTLE_CARDS, 'player', INITIAL_DECK_SIZE);
 }
 
 // AI starter deck: 10 cards (grows alongside the player between rounds).
 export function createAIDeck(): BattleCard[] {
-  return buildValidDeck(ALL_BATTLE_CARDS, 'ai', INITIAL_DECK_SIZE);
+  return buildValidDeck(DRAFTABLE_BATTLE_CARDS, 'ai', INITIAL_DECK_SIZE);
 }
 
 // ===== Round-gated rarity availability (変更8) =====
@@ -1671,16 +1677,16 @@ export function sampleCards(n: number, prefix: string, round?: number): BattleCa
   const timestamp = Date.now();
 
   if (round === undefined) {
-    const shuffled = [...ALL_BATTLE_CARDS].sort(() => Math.random() - 0.5);
+    const shuffled = [...DRAFTABLE_BATTLE_CARDS].sort(() => Math.random() - 0.5);
     return shuffled.slice(0, n).map((c, i) => ({ ...c, id: `${prefix}-${c.id}-${timestamp}-${i}` }));
   }
 
-  // レア度別にプールを事前分割
+  // レア度別にプールを事前分割（進化専用カードを除外）
   const byRarity: Record<CardRarity, BattleCard[]> = {
-    N:   ALL_BATTLE_CARDS.filter((c) => c.rarity === 'N'),
-    R:   ALL_BATTLE_CARDS.filter((c) => c.rarity === 'R'),
-    SR:  ALL_BATTLE_CARDS.filter((c) => c.rarity === 'SR'),
-    SSR: ALL_BATTLE_CARDS.filter((c) => c.rarity === 'SSR'),
+    N:   DRAFTABLE_BATTLE_CARDS.filter((c) => c.rarity === 'N'),
+    R:   DRAFTABLE_BATTLE_CARDS.filter((c) => c.rarity === 'R'),
+    SR:  DRAFTABLE_BATTLE_CARDS.filter((c) => c.rarity === 'SR'),
+    SSR: DRAFTABLE_BATTLE_CARDS.filter((c) => c.rarity === 'SSR'),
   };
 
   for (let i = 0; i < n; i++) {
@@ -1827,7 +1833,7 @@ export function sampleCardsWithSynergy(
 
   // 1. Synergy cards — weighted by combo concentration + rarity in deck
   const RARITY_WEIGHT: Record<CardRarity, number> = { N: 1, R: 3, SR: 5, SSR: 8 };
-  const synergyPool = ALL_BATTLE_CARDS.filter((c) => synergyTargetNames.has(c.name));
+  const synergyPool = DRAFTABLE_BATTLE_CARDS.filter((c) => synergyTargetNames.has(c.name));
   const weightedSynergy = synergyPool.map((card) => {
     // Sum rarity-weighted score of related cards in deck
     const cardSynergies = SYNERGY_MAP[card.name] ?? [];
@@ -1852,7 +1858,7 @@ export function sampleCardsWithSynergy(
 
   // 2. SSR guaranteed slot (R5)
   if (spec.ssrGuarantee) {
-    const ssrPool = ALL_BATTLE_CARDS.filter((c) => c.rarity === 'SSR' && !usedIds.has(c.id));
+    const ssrPool = DRAFTABLE_BATTLE_CARDS.filter((c) => c.rarity === 'SSR' && !usedIds.has(c.id));
     if (ssrPool.length > 0) {
       addCard(ssrPool[Math.floor(Math.random() * ssrPool.length)]);
     }
@@ -1860,7 +1866,7 @@ export function sampleCardsWithSynergy(
 
   // 3. Temptation cards (not synergy with current deck)
   if (spec.tempt > 0) {
-    const temptPool = ALL_BATTLE_CARDS.filter((c) => !synergyTargetNames.has(c.name) && !deckNames.has(c.name) && !usedIds.has(c.id));
+    const temptPool = DRAFTABLE_BATTLE_CARDS.filter((c) => !synergyTargetNames.has(c.name) && !deckNames.has(c.name) && !usedIds.has(c.id));
     const shuffledTempt = [...temptPool].sort(() => Math.random() - 0.5);
     for (let i = 0; i < spec.tempt && shuffledTempt.length > 0; i++) {
       const card = shuffledTempt.shift();
@@ -1871,7 +1877,7 @@ export function sampleCardsWithSynergy(
   // 4. Random cards to fill remaining slots
   const remaining = n - result.length;
   if (remaining > 0) {
-    const randomPool = ALL_BATTLE_CARDS.filter((c) => !usedIds.has(c.id));
+    const randomPool = DRAFTABLE_BATTLE_CARDS.filter((c) => !usedIds.has(c.id));
     const shuffledRandom = [...randomPool].sort(() => Math.random() - 0.5);
     for (let i = 0; i < remaining && shuffledRandom.length > 0; i++) {
       const rarity = rollRarityByRound(round);

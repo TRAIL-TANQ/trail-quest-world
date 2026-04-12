@@ -4,7 +4,7 @@
  * 全10ステージ。各ステージ5回戦制。プレイヤーもNPCも初期デッキ10枚から成長。
  * 各回戦開始時にデッキフェイズでカードを追加取得（NPC自動、プレイヤーはクイズ）。
  */
-import { ALL_BATTLE_CARDS, INITIAL_DECK_SIZE, SYNERGY_MAP } from './knowledgeCards';
+import { ALL_BATTLE_CARDS, DRAFTABLE_BATTLE_CARDS, INITIAL_DECK_SIZE, SYNERGY_MAP } from './knowledgeCards';
 import type { BattleCard, CardRarity } from './knowledgeCards';
 
 // ===== Stage Rules =====
@@ -232,7 +232,7 @@ function buildNamedDeck(
   // Fill remaining with random N cards (noise)
   if (deck.length < deckSize) {
     const nPool = shuffled(
-      ALL_BATTLE_CARDS.filter((c) => c.rarity === 'N' && !usedNames.has(c.name)),
+      DRAFTABLE_BATTLE_CARDS.filter((c) => c.rarity === 'N' && !usedNames.has(c.name)),
     );
     for (const c of nPool) {
       if (deck.length >= deckSize) break;
@@ -248,9 +248,9 @@ function buildNamedDeck(
 export function buildStarterDeck(starter: StarterDeck): BattleCard[] {
   if (starter.id === 'starter-random') {
     // Random: 1 R trump + 9 random N
-    const rPool = shuffled(ALL_BATTLE_CARDS.filter((c) => c.rarity === 'R'));
+    const rPool = shuffled(DRAFTABLE_BATTLE_CARDS.filter((c) => c.rarity === 'R'));
     const trump = rPool[0];
-    const nPool = shuffled(ALL_BATTLE_CARDS.filter((c) => c.rarity === 'N' && c.name !== trump?.name));
+    const nPool = shuffled(DRAFTABLE_BATTLE_CARDS.filter((c) => c.rarity === 'N' && c.name !== trump?.name));
     const names = [trump?.name ?? '紙', ...nPool.slice(0, 9).map((c) => c.name)];
     return buildNamedDeck('player', names);
   }
@@ -294,7 +294,7 @@ export function npcDeckPhasePick(
 
   // Build candidate pool
   const deckNames = new Set(npcDeck.map((c) => c.name));
-  const pool = ALL_BATTLE_CARDS.filter((c) => {
+  const pool = DRAFTABLE_BATTLE_CARDS.filter((c) => {
     if (!allowedRarities.has(c.rarity)) return false;
     // Respect same-name limits
     const sameCount = npcDeck.filter((d) => d.name === c.name).length;
