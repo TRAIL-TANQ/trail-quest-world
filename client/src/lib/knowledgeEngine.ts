@@ -1077,6 +1077,93 @@ export function applyRevealEffect(
       }
       break;
     }
+    // ===== 宝石カード + アフリカデッキ =====
+    case 'diamond': {
+      telop = { text: '💎ダイヤモンド不滅の輝き！防御を強化', color };
+      break;
+    }
+    case 'ruby': {
+      telop = { text: '❤️ルビー情熱の炎！攻撃を強化', color };
+      break;
+    }
+    case 'sapphire': {
+      telop = { text: '💙サファイア叡智の守り！防御を強化', color };
+      break;
+    }
+    case 'emerald': {
+      const my = side === 'player' ? next.player : next.ai;
+      if (my.bench.length > 0) {
+        const weakest = [...my.bench].sort(
+          (a, b) => getBaseAttack(a.card) - getBaseAttack(b.card),
+        )[0];
+        const newBench = removeOneFromBench(my.bench, weakest.name);
+        const newDeck = [...my.deck, weakest.card];
+        if (newDeck.length > 0) {
+          const top = newDeck[0];
+          newDeck[0] = {
+            ...top,
+            attackPower: getBaseAttack(top) + 1,
+            defensePower: getBaseDefense(top) + 1,
+          };
+        }
+        next = applySide(next, side, { ...my, bench: newBench, deck: newDeck });
+        telop = { text: `💚エメラルド再生の力！${weakest.name}をデッキへ＋上カード強化`, color };
+      } else {
+        telop = { text: '💚エメラルド再生の力！対象なし', color };
+      }
+      break;
+    }
+    case 'amethyst': {
+      telop = { text: '💜アメジスト精神の盾！弱体化を無効化', color };
+      break;
+    }
+    case 'mandela': {
+      const my = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      const hasApartheid = my.bench.some((b) => b.name === 'アパルトヘイト' && !sealed.includes(b.name));
+      const distinctBenchCount = my.bench.length;
+      const glow: string[] = [];
+      if (hasApartheid) glow.push('アパルトヘイト');
+      if (glow.length > 0) next = withBenchGlow(next, side, glow);
+      // Unseal all
+      next = {
+        ...next,
+        sealedBenchNames: { ...next.sealedBenchNames, [side]: [] },
+      };
+      if (role === 'attacker') {
+        const atkBonus = distinctBenchCount >= 4 ? 3 : 0;
+        bonusAttack += atkBonus;
+        telop = { text: `✊マンデラ不屈の精神！攻撃+${atkBonus} 封印解除`, color };
+      } else {
+        const defBonus = hasApartheid ? 4 : 0;
+        next = { ...next, defenderBonus: next.defenderBonus + defBonus };
+        telop = { text: `✊マンデラ不屈の精神！防御+${defBonus} 封印解除`, color };
+      }
+      break;
+    }
+    case 'apartheid': {
+      telop = { text: '✊アパルトヘイト！マンデラを強化', color };
+      break;
+    }
+    case 'african_elephant': {
+      if (role === 'attacker') {
+        const my = side === 'player' ? next.player : next.ai;
+        const sealed = next.sealedBenchNames[side];
+        const hasSavanna = my.bench.some((b) => b.name === 'サバンナ' && !sealed.includes(b.name));
+        let bonus = 2;
+        if (hasSavanna) {
+          bonus += 2;
+          next = withBenchGlow(next, side, ['サバンナ']);
+        }
+        bonusAttack += bonus;
+        telop = { text: `🐘アフリカゾウ突進！攻撃+${bonus}`, color };
+      }
+      break;
+    }
+    case 'savanna': {
+      telop = { text: '🌿サバンナ！生き物を強化', color };
+      break;
+    }
   }
 
   return { state: next, bonusAttack, telop };
@@ -1123,6 +1210,15 @@ function computeAttackerAura(
   const oppSealed = state.sealedBenchNames[opp];
   const oppHasGravity = oppMe.bench.some((b) => b.name === '万有引力' && !oppSealed.includes(b.name));
   if (oppHasGravity && priorRevealCount >= 1) bonus -= 1;
+  // ルビー aura: 攻撃側全攻撃+1 (2枚以上で+2)
+  const atkMe = attackerSide === 'player' ? state.player : state.ai;
+  const atkSealed = state.sealedBenchNames[attackerSide];
+  const rubySlot = atkMe.bench.find((b) => b.name === 'ルビー' && !atkSealed.includes(b.name));
+  if (rubySlot) bonus += rubySlot.count >= 2 ? 2 : 1;
+  // サバンナ aura: 生き物カード攻撃+1
+  if (names.has('サバンナ') && card.category === 'creature') bonus += 1;
+  // サバンナ + アマゾン川 combo: 生き物さらに攻撃+1
+  if (names.has('サバンナ') && names.has('アマゾン川') && card.category === 'creature') bonus += 1;
   return bonus;
 }
 
@@ -1132,6 +1228,15 @@ function applyDefenderAura(state: GameState, defenderSide: Side): GameState {
   if (names.has('血清')) bonus += 1;
   if (names.has('聖書')) bonus += names.has('活版印刷機') ? 2 : 1;
   if (names.has('千利休')) bonus += 1;
+  // ダイヤモンド: 防御+1
+  if (names.has('ダイヤモンド')) bonus += 1;
+  // サファイア: 防御+1 (2枚以上で+2)
+  const defMe = defenderSide === 'player' ? state.player : state.ai;
+  const defSealed = state.sealedBenchNames[defenderSide];
+  const sapphireSlot = defMe.bench.find((b) => b.name === 'サファイア' && !defSealed.includes(b.name));
+  if (sapphireSlot) bonus += sapphireSlot.count >= 2 ? 2 : 1;
+  // サバンナ: 防御側の生き物カード防御+1
+  if (names.has('サバンナ') && state.defenseCard?.category === 'creature') bonus += 1;
   if (bonus === 0) return state;
   return { ...state, defenderBonus: state.defenderBonus + bonus };
 }

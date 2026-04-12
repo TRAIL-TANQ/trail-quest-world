@@ -135,6 +135,16 @@ export const EFFECT_DEFS: Record<string, CardEffect> = {
   cannon:          { id: 'cannon',          name: '砲撃',             description: 'From the bench: ナポレオンの攻撃+4。', category: 'atk' },
   napoleon_code:   { id: 'napoleon_code',   name: '法の支配',         description: 'From the bench: ナポレオンの防御+3。', category: 'def' },
   waterloo:        { id: 'waterloo',        name: '最後の戦い',       description: 'From the bench: デッキ残り3枚以下でナポレオン攻防+5。', category: 'special' },
+  // ===== 宝石カード + アフリカデッキ =====
+  diamond:          { id: 'diamond',          name: '不滅の輝き',       description: 'From the bench: 味方全カード防御+1。隔離・封印対象にならない。', category: 'def' },
+  ruby:             { id: 'ruby',             name: '情熱の炎',         description: 'From the bench: 攻撃側味方全攻撃+1。2枚以上で+2。', category: 'atk' },
+  sapphire:         { id: 'sapphire',         name: '叡智の守り',       description: 'From the bench: 防御側味方全防御+1。2枚以上で+2。', category: 'def' },
+  emerald:          { id: 'emerald',          name: '再生の力',         description: '公開時、ベンチ1枚をデッキ下へ戻し、デッキ上カード攻防+1。', category: 'bench' },
+  amethyst:         { id: 'amethyst',         name: '精神の盾',         description: 'From the bench: 相手の弱体化を1回無効化後、自身は隔離。', category: 'special' },
+  mandela:          { id: 'mandela',          name: '不屈の精神',       description: 'ベンチに「アパルトヘイト」で防御+4。4種以上で攻撃+3。封印全解除。', category: 'special' },
+  apartheid:        { id: 'apartheid',        name: '差別との闘い',     description: 'From the bench: マンデラの防御+4。', category: 'def' },
+  african_elephant: { id: 'african_elephant', name: '突進',             description: '攻撃時+2。サバンナベンチでさらに+2。', category: 'atk' },
+  savanna:          { id: 'savanna',          name: '広大な大地',       description: 'From the bench: 生き物カード攻防+1。アマゾン川もあれば攻撃さらに+1。', category: 'special' },
 };
 
 // Card name → effect id. These are the only cards that carry on-reveal effects.
@@ -212,6 +222,16 @@ export const EFFECT_BY_CARD_NAME: Record<string, string> = {
   '大砲':                 'cannon',
   'ナポレオン法典':       'napoleon_code',
   'ワーテルローの戦い':   'waterloo',
+  // ===== 宝石カード + アフリカデッキ =====
+  'ダイヤモンド':         'diamond',
+  'ルビー':               'ruby',
+  'サファイア':           'sapphire',
+  'エメラルド':           'emerald',
+  'アメジスト':           'amethyst',
+  'ネルソン・マンデラ':   'mandela',
+  'アパルトヘイト':       'apartheid',
+  'アフリカゾウ':         'african_elephant',
+  'サバンナ':             'savanna',
 };
 
 export interface BattleCard {
@@ -337,6 +357,16 @@ export const CARD_STAT_OVERRIDES: Record<string, StatProfile> = {
   'ナポレオン':       { attackPower: 3, defensePower: 2 },
   '織田信長':         { attackPower: 3, defensePower: 2 },
   '豊臣秀吉':        { attackPower: 2, defensePower: 3 },
+  // ===== 宝石カード + アフリカデッキ =====
+  'ダイヤモンド':         { attackPower: 3, defensePower: 3 },
+  'ルビー':               { attackPower: 2, defensePower: 1 },
+  'サファイア':           { attackPower: 1, defensePower: 2 },
+  'エメラルド':           { attackPower: 1, defensePower: 1 },
+  'アメジスト':           { attackPower: 1, defensePower: 1 },
+  'ネルソン・マンデラ':   { attackPower: 2, defensePower: 4 },
+  'アパルトヘイト':       { attackPower: 1, defensePower: 1 },
+  'アフリカゾウ':         { attackPower: 4, defensePower: 3 },
+  'サバンナ':             { attackPower: 1, defensePower: 1 },
 };
 
 // Combo card IDs for detection
@@ -1123,6 +1153,58 @@ const QUIZ_DATA: Record<string, Quiz[]> = {
     { question: '香辛料の産地として有名な地域は？', choices: ['北欧', '東南アジア・インド', '北米', '南極'], correctIndex: 1 },
     { question: '香辛料が高価だった理由は？', choices: ['味が悪い', '遠い産地から運ぶ必要があった', '作るのが簡単だった', '誰でも手に入った'], correctIndex: 1 },
   ],
+  // ===== 宝石カード =====
+  'card-146': [
+    { question: 'ダイヤモンドの硬さは鉱物硬度計で何度？', choices: ['10', '8', '7', '5'], correctIndex: 0 },
+    { question: 'ダイヤモンドの主成分は？', choices: ['炭素', '鉄', '金', 'ケイ素'], correctIndex: 0 },
+    { question: 'ダイヤモンドが最も多く産出される大陸は？', choices: ['アフリカ', 'アジア', 'ヨーロッパ', '南アメリカ'], correctIndex: 0 },
+  ],
+  'card-147': [
+    { question: 'ルビーの赤色の原因となる元素は？', choices: ['クロム', '鉄', '銅', '金'], correctIndex: 0 },
+    { question: 'ルビーと同じ鉱物（コランダム）でできている宝石は？', choices: ['サファイア', 'エメラルド', 'ダイヤモンド', 'トパーズ'], correctIndex: 0 },
+    { question: 'ルビーの和名は？', choices: ['紅玉', '青玉', '翡翠', '琥珀'], correctIndex: 0 },
+  ],
+  'card-148': [
+    { question: 'サファイアと同じ鉱物でできている宝石は？', choices: ['ルビー', 'エメラルド', 'ダイヤモンド', 'トパーズ'], correctIndex: 0 },
+    { question: 'サファイアの代表的な色は？', choices: ['青', '赤', '緑', '黄'], correctIndex: 0 },
+    { question: 'サファイアの和名は？', choices: ['青玉', '紅玉', '翡翠', '紫水晶'], correctIndex: 0 },
+  ],
+  'card-149': [
+    { question: 'エメラルドの産地として最も有名な国は？', choices: ['コロンビア', 'ブラジル', 'インド', '南アフリカ'], correctIndex: 0 },
+    { question: 'エメラルドを愛したとされる古代の女王は？', choices: ['クレオパトラ', '卑弥呼', 'ビクトリア女王', 'マリー・アントワネット'], correctIndex: 0 },
+    { question: 'エメラルドの色は？', choices: ['緑', '青', '赤', '紫'], correctIndex: 0 },
+  ],
+  'card-150': [
+    { question: 'アメジストの和名は？', choices: ['紫水晶', '青玉', '翡翠', '琥珀'], correctIndex: 0 },
+    { question: 'アメジストの主な色は？', choices: ['紫', '青', '赤', '緑'], correctIndex: 0 },
+    { question: 'アメジストは何という鉱物の一種？', choices: ['水晶', 'コランダム', 'ベリル', 'トルマリン'], correctIndex: 0 },
+  ],
+  // ===== アフリカデッキ =====
+  'card-151': [
+    { question: 'ネルソン・マンデラが投獄されていた年数は？', choices: ['27年', '10年', '15年', '20年'], correctIndex: 0 },
+    { question: 'マンデラが闘った制度は？', choices: ['アパルトヘイト', '植民地主義', '奴隷制度', '共産主義'], correctIndex: 0 },
+    { question: 'マンデラが大統領になった国は？', choices: ['南アフリカ', 'ケニア', 'ナイジェリア', 'エジプト'], correctIndex: 0 },
+  ],
+  'card-152': [
+    { question: 'アパルトヘイトが行われた国は？', choices: ['南アフリカ', 'ケニア', 'エジプト', 'ナイジェリア'], correctIndex: 0 },
+    { question: 'アパルトヘイトが廃止された年は？', choices: ['1994年', '1980年', '2000年', '1970年'], correctIndex: 0 },
+    { question: 'アパルトヘイトとは何語で「分離」を意味する？', choices: ['アフリカーンス語', '英語', 'フランス語', 'スワヒリ語'], correctIndex: 0 },
+  ],
+  'card-153': [
+    { question: 'キリマンジャロがある国は？', choices: ['タンザニア', 'ケニア', 'エチオピア', 'ウガンダ'], correctIndex: 0 },
+    { question: 'キリマンジャロの標高は約何メートル？', choices: ['5895m', '4500m', '7000m', '8848m'], correctIndex: 0 },
+    { question: 'キリマンジャロはどの大陸の最高峰？', choices: ['アフリカ', 'アジア', '南アメリカ', 'ヨーロッパ'], correctIndex: 0 },
+  ],
+  'card-154': [
+    { question: 'アフリカゾウの特徴は？', choices: ['耳が大きい', '耳が小さい', '牙がない', '鼻が短い'], correctIndex: 0 },
+    { question: 'アフリカゾウが主に生息する環境は？', choices: ['サバンナ', '砂漠', '北極', '海'], correctIndex: 0 },
+    { question: 'アフリカゾウは陸上動物で何番目に大きい？', choices: ['1番', '2番', '3番', '4番'], correctIndex: 0 },
+  ],
+  'card-155': [
+    { question: 'サバンナに最も多く生息する大型草食動物は？', choices: ['ヌー', 'キリン', 'カバ', 'サイ'], correctIndex: 0 },
+    { question: 'サバンナはどの大陸に最も広く分布している？', choices: ['アフリカ', 'アジア', '南アメリカ', 'ヨーロッパ'], correctIndex: 0 },
+    { question: 'サバンナの特徴的な植生は？', choices: ['草原と散在する木', '密林', '針葉樹林', '砂漠'], correctIndex: 0 },
+  ],
 };
 
 // Effect descriptions by category
@@ -1601,6 +1683,12 @@ export const SYNERGY_MAP: Record<string, string[]> = {
   '黄熱病': ['野口英世', '顕微鏡'],
   'ダイナマイト': ['火薬'],
   '火薬': ['ダイナマイト'],
+  // アフリカコンボ
+  'ネルソン・マンデラ': ['アパルトヘイト', 'キリマンジャロ', 'アフリカゾウ', 'サバンナ'],
+  'アパルトヘイト': ['ネルソン・マンデラ', 'キリマンジャロ', 'アフリカゾウ', 'サバンナ'],
+  'キリマンジャロ': ['ネルソン・マンデラ', 'アパルトヘイト', 'アフリカゾウ', 'サバンナ'],
+  'アフリカゾウ': ['サバンナ', 'アマゾン川', 'ネルソン・マンデラ', 'ダーウィン'],
+  'サバンナ': ['アフリカゾウ', 'アマゾン川', 'ダーウィン', 'ネルソン・マンデラ'],
 };
 
 // ===== Round-specific offering composition for synergy draft =====
