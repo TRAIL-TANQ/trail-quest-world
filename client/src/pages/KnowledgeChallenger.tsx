@@ -721,30 +721,43 @@ export default function KnowledgeChallenger() {
   }, [activeQuiz, deckOffer, gameState, selectedAnswer, consecutiveCorrect, userId, addTotalAlt]);
 
   // ===== Redraw offer =====
-  // Allowed even after picks: rolls back any added cards from player.deck
-  // and re-samples 5 fresh offers. One redraw per deck phase.
+  // 獲得済みカードはデッキに残したまま、未選択カードだけ入れ替える。
   const handleRedraw = useCallback(() => {
     if (!deckOffer || deckOffer.redrawsLeft <= 0 || !gameState) return;
-    const idsToRemove = deckOffer.addedCardIds;
-    if (idsToRemove.length > 0) {
-      setGameState((prev) => {
-        if (!prev) return prev;
-        // Remove ONE copy per id (deck may have legitimate duplicates).
-        const remaining = [...prev.player.deck];
-        for (const id of idsToRemove) {
-          const idx = remaining.findIndex((c) => c.id === id);
-          if (idx >= 0) remaining.splice(idx, 1);
-        }
-        return { ...prev, player: { ...prev.player, deck: remaining } };
-      });
+    const maxPicks = maxPicksForRound(gameState.round);
+    if (deckOffer.acquired.size >= maxPicks) return; // もう選べないなら引き直し不要
+
+    // 未選択カードの数だけ新しく引く
+    const remainingPicks = maxPicks - deckOffer.acquired.size;
+    const newCount = 5 - deckOffer.acquired.size;
+    const newCards = sampleCardsWithSynergy(newCount, 'offer', gameState.round, gameState.player.deck);
+
+    // 獲得済みカードを保持し、未選択分だけ差し替え
+    const updatedCards: BattleCard[] = [];
+    const updatedAcquired = new Set<number>();
+    const updatedBlocked = new Set<number>();
+
+    // 獲得済みカードを先頭に配置
+    let newIdx = 0;
+    for (const oldIdx of Array.from(deckOffer.acquired)) {
+      updatedCards.push(deckOffer.cards[oldIdx]);
+      updatedAcquired.add(newIdx);
+      newIdx++;
     }
-    const offered = sampleCardsWithSynergy(5, 'offer', gameState.round, gameState.player.deck);
+    // 新しいカードを追加
+    for (const card of newCards) {
+      updatedCards.push(card);
+      newIdx++;
+    }
+
+    toast.info(`獲得済み${deckOffer.acquired.size}枚を保持して残り${newCount}枚を引き直し`);
+
     setDeckOffer({
-      cards: offered,
-      blocked: new Set(),
-      acquired: new Set(),
+      cards: updatedCards,
+      blocked: updatedBlocked,
+      acquired: updatedAcquired,
       redrawsLeft: deckOffer.redrawsLeft - 1,
-      addedCardIds: [],
+      addedCardIds: deckOffer.addedCardIds, // 獲得済みカードのIDは保持
     });
   }, [deckOffer, gameState]);
 
@@ -1970,19 +1983,22 @@ export default function KnowledgeChallenger() {
               // 0-pick start uses a grey button (subtle), 1+ pick uses green
               const isPositive = startEnabled && !isZeroPicks;
               const redrawDisabled = deckOffer.redrawsLeft <= 0;
+              const redrawHidden = isFullPicks; // 全枚数獲得済みなら引き直し非表示
               return (
                 <div
                   className="p-4 pt-3 shrink-0"
                   style={{ borderTop: '1px solid rgba(255,215,0,0.2)', background: 'rgba(10,14,30,0.6)' }}
                 >
-                  <button
-                    onClick={handleRedraw}
-                    disabled={redrawDisabled}
-                    className="rpg-btn rpg-btn-blue w-full py-2 text-xs mb-2"
-                    style={{ opacity: redrawDisabled ? 0.5 : 1 }}
-                  >
-                    {redrawDisabled ? '🔄 引き直し済み' : `🔄 引き直す（残り${deckOffer.redrawsLeft}回）`}
-                  </button>
+                  {!redrawHidden && (
+                    <button
+                      onClick={handleRedraw}
+                      disabled={redrawDisabled}
+                      className="rpg-btn rpg-btn-blue w-full py-2 text-xs mb-2"
+                      style={{ opacity: redrawDisabled ? 0.5 : 1 }}
+                    >
+                      {redrawDisabled ? '🔄 引き直し済み' : `🔄 引き直す（残り${deckOffer.redrawsLeft}回）`}
+                    </button>
+                  )}
                   <button
                     onClick={handleStartBattle}
                     disabled={!startEnabled}
