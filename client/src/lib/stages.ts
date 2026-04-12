@@ -1,68 +1,202 @@
 /**
- * Solo Stage Mode - ステージ定義 + AI デッキビルダー (変更9)
+ * Solo Stage Mode - ステージ定義 + AI デッキビルダー + NPCデッキフェイズ + スターターデッキ
  *
- * ステージ1〜10。各ステージでNPC難易度が上昇し、特定ステージは
- * 特殊なテーマデッキを持つ:
- *   ステージ3: 世界遺産多め (防御型)
- *   ステージ7: SSRカード持ち
- *   ステージ10: 原子爆弾コンボ (MANHATTAN+TRINITY+NUKE)
- *
- * クリア報酬: ALT + 時々レアカード
- * ステージ5クリア時に「中級者」、ステージ10クリア時に「マスター」称号付与
+ * 全10ステージ。各ステージ5回戦制。プレイヤーもNPCも初期デッキ10枚から成長。
+ * 各回戦開始時にデッキフェイズでカードを追加取得（NPC自動、プレイヤーはクイズ）。
  */
-import { ALL_BATTLE_CARDS, INITIAL_DECK_SIZE, MAX_SSR, MAX_SR, maxSameNameFor, COMBO_CARD_IDS } from './knowledgeCards';
+import { ALL_BATTLE_CARDS, INITIAL_DECK_SIZE, SYNERGY_MAP } from './knowledgeCards';
 import type { BattleCard, CardRarity } from './knowledgeCards';
 
-export type StageTheme = 'balanced' | 'heritage_heavy' | 'ssr_powered' | 'nuke_combo';
+// ===== Stage Rules =====
+export interface StageRules {
+  benchLimit?: number;            // player bench max (default 6)
+  deckPhaseCards?: number;        // cards offered per deck phase (default 5)
+  npcEffectMultiplier?: number;   // multiply NPC effect bonuses (default 1.0)
+  npcAttackBonus?: number;        // flat attack bonus for NPC cards matching condition
+  npcAttackBonusFilter?: string;  // category filter for npcAttackBonus (e.g. 'creature')
+  npcDefenseBonus?: number;       // flat defense bonus for NPC cards matching condition
+  npcDefenseBonusFilter?: string; // category filter for npcDefenseBonus
+  skipDeckPhase?: boolean;        // player skips deck phase (default false)
+  npcDeckSize?: number;           // NPC initial deck size (default 10)
+  npcBenchSlots?: number;         // NPC bench max (default 6)
+  npcDeckPhasePickCount?: number; // cards NPC picks per deck phase (default 2)
+  npcSynergyRate?: number;        // 0..1 chance NPC picks synergy card (default 0)
+  npcDoubleBenchEffect?: boolean; // NPC bench effects fire twice (default false)
+}
 
 export interface StageTitle {
   id: string;
   name: string;
 }
 
-export interface StageConfig {
-  id: number;             // 1..10
+export interface SpecialCardReward {
+  id: string;
   name: string;
-  description: string;
-  theme: StageTheme;
-  aiRating: number;       // 仮想Eloレーティング (変更10で使用)
-  altReward: number;      // クリア時の ALT 報酬
-  cardRewardId?: string;  // クリア時に追加獲得できる COLLECTION_CARDS id
-  title?: StageTitle;     // クリア時に付与される称号
+  imageUrl: string;
 }
 
+export interface StageConfig {
+  id: number;
+  name: string;
+  description: string;
+  aiRating: number;
+  altReward: number;
+  cardRewardId?: string;          // existing collection card reward
+  specialCard?: SpecialCardReward; // stage-specific special card
+  title?: StageTitle;
+  rules: StageRules;
+  npcThemeIcon: string;           // emoji for stage select UI
+  npcDeckSeeds: string[];         // card names to seed NPC initial deck
+  isBoss?: boolean;
+}
+
+// ===== 10 Stages =====
 export const STAGES: StageConfig[] = [
-  { id: 1,  name: 'ステージ 1',  description: '見習い冒険者の挑戦',      theme: 'balanced',       aiRating: 950,  altReward: 30 },
-  { id: 2,  name: 'ステージ 2',  description: '森の賢者との対決',        theme: 'balanced',       aiRating: 1050, altReward: 40 },
-  { id: 3,  name: 'ステージ 3',  description: '世界遺産の守護者',        theme: 'heritage_heavy', aiRating: 1150, altReward: 50,  cardRewardId: 'card-011' },
-  { id: 4,  name: 'ステージ 4',  description: '古代の戦士',              theme: 'balanced',       aiRating: 1250, altReward: 60 },
-  { id: 5,  name: 'ステージ 5',  description: '熟練者への第一歩',        theme: 'balanced',       aiRating: 1350, altReward: 80,  cardRewardId: 'card-016',
-    title: { id: 'title-intermediate', name: '中級者' } },
-  { id: 6,  name: 'ステージ 6',  description: '歴史の英雄',              theme: 'balanced',       aiRating: 1450, altReward: 100 },
-  { id: 7,  name: 'ステージ 7',  description: '伝説の使い手',            theme: 'ssr_powered',    aiRating: 1600, altReward: 130, cardRewardId: 'card-001' },
-  { id: 8,  name: 'ステージ 8',  description: '創造の天才',              theme: 'balanced',       aiRating: 1750, altReward: 170 },
-  { id: 9,  name: 'ステージ 9',  description: '次元を超えた戦い',        theme: 'ssr_powered',    aiRating: 1900, altReward: 220 },
-  { id: 10, name: 'ステージ 10', description: '原子の破壊者',            theme: 'nuke_combo',     aiRating: 2100, altReward: 300, cardRewardId: 'card-103',
-    title: { id: 'title-master', name: 'マスター' } },
+  {
+    id: 1, name: 'はじめての対戦', description: '初心者NPCとの練習バトル',
+    aiRating: 950, altReward: 50,
+    specialCard: { id: 'special-stage-1', name: '冒険の始まり', imageUrl: '/images/cards/special-stage1.png' },
+    rules: { npcSynergyRate: 0 },
+    npcThemeIcon: '🎮', npcDeckSeeds: [], // pure noise
+  },
+  {
+    id: 2, name: 'アマゾンの脅威', description: 'NPCの生き物カード攻撃+1',
+    aiRating: 1050, altReward: 80,
+    specialCard: { id: 'special-stage-2', name: 'ジャングルの覇者', imageUrl: '/images/cards/special-stage2.png' },
+    rules: { npcSynergyRate: 0, npcAttackBonus: 1, npcAttackBonusFilter: 'creature' },
+    npcThemeIcon: '🐟', npcDeckSeeds: ['ピラニア', 'ピラニア', 'アマゾン川'],
+  },
+  {
+    id: 3, name: '鉄壁の古代帝国', description: 'NPCの世界遺産カード防御+3',
+    aiRating: 1150, altReward: 100,
+    specialCard: { id: 'special-stage-3', name: '古代の守護者', imageUrl: '/images/cards/special-stage3.png' },
+    rules: { npcSynergyRate: 0, npcDefenseBonus: 3, npcDefenseBonusFilter: 'heritage' },
+    npcThemeIcon: '🏛️', npcDeckSeeds: ['兵馬俑', '万里の長城', 'ピラミッド'],
+  },
+  {
+    id: 4, name: '発明家の挑戦', description: 'デッキフェイズの提示が4枚に制限',
+    aiRating: 1250, altReward: 120,
+    specialCard: { id: 'special-stage-4', name: '発明の鍵', imageUrl: '/images/cards/special-stage4.png' },
+    rules: { npcSynergyRate: 0.5, deckPhaseCards: 4 },
+    npcThemeIcon: '⚙️', npcDeckSeeds: ['電球', '蓄音機', '火薬'],
+  },
+  {
+    id: 5, name: '医学の闇', description: 'プレイヤーのベンチ5スロット制限',
+    aiRating: 1350, altReward: 200, isBoss: true,
+    specialCard: { id: 'special-stage-5', name: '中級者の証', imageUrl: '/images/cards/special-stage5.png' },
+    title: { id: 'title-intermediate', name: '中級者' },
+    rules: { npcSynergyRate: 0.5, benchLimit: 5 },
+    npcThemeIcon: '🔬', npcDeckSeeds: ['顕微鏡', '黄熱病', 'ペスト菌'],
+  },
+  {
+    id: 6, name: '大航海時代', description: 'NPCがデッキフェイズで3枚獲得',
+    aiRating: 1450, altReward: 150,
+    specialCard: { id: 'special-stage-6', name: '大海原の勲章', imageUrl: '/images/cards/special-stage6.png' },
+    rules: { npcSynergyRate: 0.5, npcDeckPhasePickCount: 3 },
+    npcThemeIcon: '⛵', npcDeckSeeds: ['羅針盤', 'キャラベル船', '香辛料'],
+  },
+  {
+    id: 7, name: '科学革命', description: 'NPCの全カード効果1.5倍',
+    aiRating: 1600, altReward: 200,
+    specialCard: { id: 'special-stage-7', name: '真理の探究者', imageUrl: '/images/cards/special-stage7.png' },
+    rules: { npcSynergyRate: 0.8, npcEffectMultiplier: 1.5 },
+    npcThemeIcon: '🌌', npcDeckSeeds: ['望遠鏡', '地動説', '天動説'],
+  },
+  {
+    id: 8, name: '皇帝の進軍', description: 'プレイヤーのデッキフェイズなし',
+    aiRating: 1750, altReward: 250,
+    specialCard: { id: 'special-stage-8', name: '征服者の紋章', imageUrl: '/images/cards/special-stage8.png' },
+    rules: { npcSynergyRate: 0.8, skipDeckPhase: true },
+    npcThemeIcon: '⚔️', npcDeckSeeds: ['鉄砲', '大砲', '楽市楽座'],
+  },
+  {
+    id: 9, name: '芸術と自由', description: 'NPCのベンチ効果が2回発動',
+    aiRating: 1900, altReward: 300,
+    specialCard: { id: 'special-stage-9', name: '芸術の魂', imageUrl: '/images/cards/special-stage9.png' },
+    rules: { npcSynergyRate: 0.8, npcDoubleBenchEffect: true },
+    npcThemeIcon: '🎨', npcDeckSeeds: ['ひまわり', '星月夜', '聖剣'],
+  },
+  {
+    id: 10, name: '核の脅威', description: 'NPC初期デッキ15枚+ベンチ7スロット',
+    aiRating: 2100, altReward: 500, isBoss: true,
+    specialCard: { id: 'special-stage-10', name: 'マスターの証', imageUrl: '/images/cards/special-stage10.png' },
+    title: { id: 'title-master', name: 'マスター' },
+    rules: { npcSynergyRate: 1.0, npcDeckSize: 15, npcBenchSlots: 7 },
+    npcThemeIcon: '☢️', npcDeckSeeds: ['マンハッタン計画', 'トリニティ実験', '相対性理論の論文'],
+  },
 ];
 
 export function getStage(id: number): StageConfig | null {
   return STAGES.find((s) => s.id === id) ?? null;
 }
 
-// ===== AI Deck Builder =====
+// ===== Special Card Data =====
+export const SPECIAL_CARDS: SpecialCardReward[] = STAGES
+  .filter((s) => s.specialCard)
+  .map((s) => s.specialCard!);
 
-/** rarity で分割したプール。SSR/SR/R/N 各レア度の BattleCard 配列。 */
-function poolByRarity(): Record<CardRarity, BattleCard[]> {
-  return {
-    N:   ALL_BATTLE_CARDS.filter((c) => c.rarity === 'N'),
-    R:   ALL_BATTLE_CARDS.filter((c) => c.rarity === 'R'),
-    SR:  ALL_BATTLE_CARDS.filter((c) => c.rarity === 'SR'),
-    SSR: ALL_BATTLE_CARDS.filter((c) => c.rarity === 'SSR'),
-  };
+// ===== Starter Decks (Player) =====
+export interface StarterDeck {
+  id: string;
+  name: string;
+  icon: string;
+  trumpCard: string;   // card name (big display)
+  themeCards: string[]; // card names (theme seeds)
+  noiseCards: string[]; // card names (noise filler)
+  description: string;
 }
 
-/** 配列を Fisher-Yates でシャッフル（純粋関数） */
+export const STARTER_DECKS: StarterDeck[] = [
+  {
+    id: 'starter-hero',
+    name: '偉人デッキ',
+    icon: '⚔️',
+    trumpCard: 'ナポレオン',
+    themeCards: ['モーツァルト', 'ガリレオ'],
+    noiseCards: ['紙', '電話', '光合成', '車輪', '知床', '厳島神社', 'ハチドリ'],
+    description: '大砲やナポレオン法典を集めてナポレオンを覚醒させろ',
+  },
+  {
+    id: 'starter-creature',
+    name: '生き物デッキ',
+    icon: '🐟',
+    trumpCard: 'ライオン',
+    themeCards: ['ピラニア', 'ピラニア'],
+    noiseCards: ['紙', '電話', '光合成', '車輪', 'コロッセオ', '地動説', '火薬'],
+    description: 'アマゾン川やダーウィンを集めて群れを完成させろ',
+  },
+  {
+    id: 'starter-heritage',
+    name: '世界遺産デッキ',
+    icon: '🏛️',
+    trumpCard: '始皇帝',
+    themeCards: ['万里の長城', 'コロッセオ'],
+    noiseCards: ['紙', '電話', 'ハチドリ', '車輪', 'ピラニア', '光合成', '火薬'],
+    description: '兵馬俑や世界遺産を集めて始皇帝を覚醒させろ',
+  },
+  {
+    id: 'starter-science',
+    name: '科学発明デッキ',
+    icon: '🔬',
+    trumpCard: 'エジソン',
+    themeCards: ['望遠鏡', '蒸気機関'],
+    noiseCards: ['紙', 'ハチドリ', '車輪', 'ピラニア', 'コロッセオ', 'モアイ像', '光合成'],
+    description: '電球や蓄音機を集めてエジソンを覚醒させろ',
+  },
+  {
+    id: 'starter-random',
+    name: 'ランダムデッキ',
+    icon: '🎲',
+    trumpCard: '',   // random R card
+    themeCards: [],
+    noiseCards: [],   // all random
+    description: '運命に身を任せろ。何が来るかはお楽しみ',
+  },
+];
+
+// ===== Deck Builders =====
+
+/** Fisher-Yates shuffle */
 function shuffled<T>(arr: T[]): T[] {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -72,115 +206,149 @@ function shuffled<T>(arr: T[]): T[] {
   return a;
 }
 
-interface DeckRule {
-  ssrMax: number;
-  srMax: number;
+function findCardByName(name: string): BattleCard | undefined {
+  return ALL_BATTLE_CARDS.find((c) => c.name === name);
 }
 
-/**
- * 共通のデッキビルド処理。seedCards を先に詰め、残りをレア度制約を守りつつ埋める。
- * rarityBias により各レア度の選好度を変えられる（heritage_heavy で heritage カテゴリを
- * 優先するため、レア度抽選後のカード選択は caller がフィルタできる）。
- */
-function buildDeck(
+/** Build a deck from named cards, filling noise with random N cards */
+function buildNamedDeck(
   prefix: string,
-  seedCards: BattleCard[],
-  rule: DeckRule,
-  rarityOrder: CardRarity[],
-  filter?: (c: BattleCard) => boolean,
+  cardNames: string[],
+  deckSize: number = INITIAL_DECK_SIZE,
 ): BattleCard[] {
-  const deck: BattleCard[] = [];
   const stamp = Date.now();
-  const tryAdd = (card: BattleCard): boolean => {
-    if (deck.length >= INITIAL_DECK_SIZE) return false;
-    const sameName = deck.filter((c) => c.name === card.name).length;
-    if (sameName >= maxSameNameFor(card.rarity)) return false;
-    if (card.rarity === 'SSR' && deck.filter((c) => c.rarity === 'SSR').length >= rule.ssrMax) return false;
-    if (card.rarity === 'SR' && deck.filter((c) => c.rarity === 'SR').length >= rule.srMax) return false;
-    deck.push({ ...card, id: `${prefix}-${card.id}-${deck.length}-${stamp}` });
-    return true;
-  };
+  const deck: BattleCard[] = [];
+  const usedNames = new Set<string>();
 
-  for (const s of seedCards) tryAdd(s);
-
-  const pools = poolByRarity();
-  for (const rarity of rarityOrder) {
-    const pool = shuffled(filter ? pools[rarity].filter(filter) : pools[rarity]);
-    for (const c of pool) {
-      if (deck.length >= INITIAL_DECK_SIZE) break;
-      tryAdd(c);
+  // Add named cards
+  for (const name of cardNames) {
+    const card = findCardByName(name);
+    if (card) {
+      deck.push({ ...card, id: `${prefix}-${card.id}-${deck.length}-${stamp}` });
+      usedNames.add(name);
     }
   }
-  // フォールバック: 何かしら足りなければ全プールから埋める
-  if (deck.length < INITIAL_DECK_SIZE) {
-    const all = shuffled(ALL_BATTLE_CARDS);
-    for (const c of all) {
-      if (deck.length >= INITIAL_DECK_SIZE) break;
-      tryAdd(c);
+
+  // Fill remaining with random N cards (noise)
+  if (deck.length < deckSize) {
+    const nPool = shuffled(
+      ALL_BATTLE_CARDS.filter((c) => c.rarity === 'N' && !usedNames.has(c.name)),
+    );
+    for (const c of nPool) {
+      if (deck.length >= deckSize) break;
+      if (deck.filter((d) => d.name === c.name).length >= 2) continue; // max 2 same name for N
+      deck.push({ ...c, id: `${prefix}-${c.id}-${deck.length}-${stamp}` });
     }
   }
-  return deck;
+
+  return shuffled(deck);
 }
 
-/** ステージ構成に応じた AI デッキを生成。INITIAL_DECK_SIZE (10) 枚。 */
+/** Build a player starter deck from a StarterDeck definition */
+export function buildStarterDeck(starter: StarterDeck): BattleCard[] {
+  if (starter.id === 'starter-random') {
+    // Random: 1 R trump + 9 random N
+    const rPool = shuffled(ALL_BATTLE_CARDS.filter((c) => c.rarity === 'R'));
+    const trump = rPool[0];
+    const nPool = shuffled(ALL_BATTLE_CARDS.filter((c) => c.rarity === 'N' && c.name !== trump?.name));
+    const names = [trump?.name ?? '紙', ...nPool.slice(0, 9).map((c) => c.name)];
+    return buildNamedDeck('player', names);
+  }
+
+  const allNames = [starter.trumpCard, ...starter.themeCards, ...starter.noiseCards];
+  return buildNamedDeck('player', allNames);
+}
+
+/** Create NPC initial deck from stage config */
 export function createStageAIDeck(stageId: number): BattleCard[] {
   const stage = getStage(stageId);
-  if (!stage) return buildDeck('ai', [], { ssrMax: MAX_SSR, srMax: MAX_SR }, ['SSR', 'SR', 'R', 'N']);
+  if (!stage) return buildNamedDeck('ai', [], INITIAL_DECK_SIZE);
 
-  // stage レーティングに応じて全体的にレア度上限を変える
-  const rule: DeckRule = { ssrMax: MAX_SSR, srMax: MAX_SR };
+  const deckSize = stage.rules.npcDeckSize ?? INITIAL_DECK_SIZE;
+  const seedNames = [...stage.npcDeckSeeds];
 
-  switch (stage.theme) {
-    case 'heritage_heavy': {
-      // 世界遺産多めの防御特化デッキ
-      const heritagePool = ALL_BATTLE_CARDS.filter((c) => c.category === 'heritage');
-      const seeds = shuffled(heritagePool).slice(0, 5);
-      return buildDeck('ai-stage' + stageId, seeds, rule, ['SR', 'R', 'N'], (c) => c.category !== 'heritage' || true);
-    }
-    case 'ssr_powered': {
-      // 最低 1 SSR + 複数 SR
-      const ssrPool = ALL_BATTLE_CARDS.filter((c) => c.rarity === 'SSR');
-      const srPool  = ALL_BATTLE_CARDS.filter((c) => c.rarity === 'SR');
-      const seeds = [
-        ...shuffled(ssrPool).slice(0, 1),
-        ...shuffled(srPool).slice(0, 2),
-      ];
-      return buildDeck('ai-stage' + stageId, seeds, rule, ['SR', 'R', 'N']);
-    }
-    case 'nuke_combo': {
-      // MANHATTAN + TRINITY + NUKE + SSR + SR 追加
-      const comboIds: string[] = [COMBO_CARD_IDS.MANHATTAN, COMBO_CARD_IDS.TRINITY, COMBO_CARD_IDS.NUKE];
-      const comboCards = ALL_BATTLE_CARDS.filter((c) => comboIds.includes(c.id));
-      const ssrPool = ALL_BATTLE_CARDS.filter((c) => c.rarity === 'SSR' && !comboIds.includes(c.id));
-      // NUKE が SSR の場合は SSR 上限を一時的に解除するため rule を手動調整
-      const nukeRule: DeckRule = { ssrMax: 3, srMax: MAX_SR + 1 };
-      const seeds = [
-        ...comboCards,
-        ...shuffled(ssrPool).slice(0, 1),
-      ];
-      return buildDeck('ai-stage' + stageId, seeds, nukeRule, ['SR', 'R']);
-    }
-    case 'balanced':
-    default: {
-      // ステージ1: 初心者向けにプレイヤー初期デッキより少し弱く。
-      //   8N (1/1 ×6 + 2/2 ×2) + 2R (2/2 ×2)、SR/SSR なし。
-      if (stage.id === 1) {
-        const sig = (c: BattleCard) => `${c.attackPower ?? c.power}/${c.defensePower ?? c.power}`;
-        const n11 = shuffled(ALL_BATTLE_CARDS.filter((c) => c.rarity === 'N' && sig(c) === '1/1' && c.category !== 'heritage'));
-        const n22 = shuffled(ALL_BATTLE_CARDS.filter((c) => c.rarity === 'N' && sig(c) === '2/2'));
-        const r22 = shuffled(ALL_BATTLE_CARDS.filter((c) => c.rarity === 'R' && sig(c) === '2/2'));
-        const seeds = [
-          ...n11.slice(0, 6),
-          ...n22.slice(0, 2),
-          ...r22.slice(0, 2),
-        ];
-        return buildDeck('ai-stage1', seeds, { ssrMax: 0, srMax: 0 }, ['N', 'R']);
+  return buildNamedDeck(`ai-stage${stageId}`, seedNames, deckSize);
+}
+
+// ===== NPC Deck Phase AI =====
+
+/**
+ * NPC auto-picks cards during deck phase.
+ * Returns the cards to add to the NPC deck.
+ */
+export function npcDeckPhasePick(
+  npcDeck: BattleCard[],
+  round: number,
+  stageRules: StageRules,
+): BattleCard[] {
+  const pickCount = stageRules.npcDeckPhasePickCount ?? 2;
+  const synergyRate = stageRules.npcSynergyRate ?? 0;
+
+  // Determine allowed rarities by round (same as player)
+  const allowedRarities: Set<CardRarity> = new Set();
+  if (round <= 1) { allowedRarities.add('N'); }
+  else if (round <= 2) { allowedRarities.add('N'); allowedRarities.add('R'); }
+  else if (round <= 3) { allowedRarities.add('R'); allowedRarities.add('SR'); }
+  else if (round <= 4) { allowedRarities.add('SR'); }
+  else { allowedRarities.add('SR'); allowedRarities.add('SSR'); }
+
+  // Build candidate pool
+  const deckNames = new Set(npcDeck.map((c) => c.name));
+  const pool = ALL_BATTLE_CARDS.filter((c) => {
+    if (!allowedRarities.has(c.rarity)) return false;
+    // Respect same-name limits
+    const sameCount = npcDeck.filter((d) => d.name === c.name).length;
+    if (c.rarity === 'N' && sameCount >= 2) return false;
+    if (c.rarity !== 'N' && sameCount >= 1) return false;
+    return true;
+  });
+
+  // Score cards by synergy with existing deck
+  const scoredPool = pool.map((card) => {
+    let synergyScore = 0;
+    const synergies = SYNERGY_MAP[card.name];
+    if (synergies) {
+      for (const s of synergies) {
+        if (deckNames.has(s)) synergyScore++;
       }
-      // 難易度に応じてレア度のブーストを変える
-      const srBoost = Math.min(3, Math.floor(stage.id / 3));  // 後半ステージで SR を多めに
-      const srPool  = ALL_BATTLE_CARDS.filter((c) => c.rarity === 'SR');
-      const seeds = shuffled(srPool).slice(0, srBoost);
-      return buildDeck('ai-stage' + stageId, seeds, rule, ['R', 'SR', 'N']);
+    }
+    return { card, synergyScore };
+  });
+
+  // Sort: synergy cards first, then shuffle within tiers
+  scoredPool.sort((a, b) => b.synergyScore - a.synergyScore);
+
+  const picked: BattleCard[] = [];
+  const stamp = Date.now();
+  const usedNames = new Set<string>();
+
+  for (let i = 0; i < pickCount && scoredPool.length > 0; i++) {
+    const useSynergy = Math.random() < synergyRate;
+    let choice: BattleCard | null = null;
+
+    if (useSynergy) {
+      // Pick best synergy card
+      const synergyCards = scoredPool.filter((s) => s.synergyScore > 0 && !usedNames.has(s.card.name));
+      if (synergyCards.length > 0) {
+        const idx = Math.floor(Math.random() * Math.min(3, synergyCards.length));
+        choice = synergyCards[idx].card;
+      }
+    }
+
+    if (!choice) {
+      // Random pick
+      const available = scoredPool.filter((s) => !usedNames.has(s.card.name));
+      if (available.length > 0) {
+        const idx = Math.floor(Math.random() * available.length);
+        choice = available[idx].card;
+      }
+    }
+
+    if (choice) {
+      picked.push({ ...choice, id: `ai-pick-${choice.id}-r${round}-${i}-${stamp}` });
+      usedNames.add(choice.name);
     }
   }
+
+  return picked;
 }

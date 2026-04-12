@@ -56,13 +56,18 @@ import {
   processQuizResult,
   fetchChildStatus,
 } from '@/lib/quizService';
-import { getStage, createStageAIDeck } from '@/lib/stages';
+import { getStage, createStageAIDeck, STARTER_DECKS, buildStarterDeck, npcDeckPhasePick } from '@/lib/stages';
+import type { StarterDeck, StageRules } from '@/lib/stages';
 import { useStageProgressStore } from '@/lib/stageProgressStore';
 import { applyRatingChange } from '@/lib/ratingService';
 import { saveHallOfFame } from '@/lib/hallOfFameService';
 import { toast } from 'sonner';
 
-type ScreenPhase = 'title' | 'playing' | 'result';
+type ScreenPhase = 'title' | 'deck_select' | 'playing' | 'result';
+
+function findCardByName(name: string): BattleCard | undefined {
+  return ALL_BATTLE_CARDS.find((c) => c.name === name);
+}
 
 // Timing constants (ms) for the battle cinematic. fast mode scales by 0.3.
 const TURN_BANNER_MS      = 1000;  // "あなたの攻撃！" / "あなたが防御中！"
@@ -226,14 +231,26 @@ export default function KnowledgeChallenger() {
     });
   }, []);
 
+  // ===== Starter deck selection (stage mode) =====
+  const [selectedStarter, setSelectedStarter] = useState<StarterDeck | null>(null);
+  const [expandedStarterId, setExpandedStarterId] = useState<string | null>(null);
+
   // ===== Start game =====
-  const startGame = useCallback(() => {
+  const startGame = useCallback((starterOverride?: StarterDeck) => {
     clearStepTimeouts();
-    const playerDeck = previewDeck && validateDeck(previewDeck).valid ? previewDeck : createInitialDeck();
-    // 変更9: ステージ指定があればそのテーマに沿った AI デッキを使う
+    let playerDeck: BattleCard[];
+    if (starterOverride) {
+      playerDeck = buildStarterDeck(starterOverride);
+    } else if (previewDeck && validateDeck(previewDeck).valid) {
+      playerDeck = previewDeck;
+    } else {
+      playerDeck = createInitialDeck();
+    }
+    const stage = stageId !== null ? getStage(stageId) : null;
     const aiDeckCards = stageId !== null ? createStageAIDeck(stageId) : createAIDeck();
-    const state = initGameState(playerDeck, aiDeckCards);
-    console.log('[KC] startGame: initial phase =', state.phase, 'round =', state.round);
+    const rules = stage?.rules ?? undefined;
+    const state = initGameState(playerDeck, aiDeckCards, rules);
+    console.log('[KC] startGame: initial phase =', state.phase, 'round =', state.round, 'stageRules =', rules);
     setGameState(state);
     setScreen('playing');
     setCineStep('idle');
@@ -286,9 +303,34 @@ export default function KnowledgeChallenger() {
 
   // ===== Deck phase setup (fires at the start of each round) =====
   // 各ラウンド開始時にデッキフェイズ: 5枚提示→最大2枚取得でバトルへ。
+  // NPC also auto-picks cards during this phase.
   useEffect(() => {
     if (!gameState || gameState.phase !== 'deck_phase' || deckOffer) return;
-    const offered = sampleCardsWithSynergy(5, 'offer', gameState.round, gameState.player.deck);
+
+    // NPC auto-pick cards
+    const rules = gameState.stageRules;
+    if (rules) {
+      const npcPicks = npcDeckPhasePick(gameState.ai.deck, gameState.round, rules);
+      if (npcPicks.length > 0) {
+        setGameState((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            ai: { ...prev.ai, deck: [...prev.ai.deck, ...npcPicks] },
+          };
+        });
+        console.log(`[KC] NPC auto-picked ${npcPicks.length} cards:`, npcPicks.map((c) => c.name));
+      }
+    }
+
+    // Skip player deck phase if stage rules say so
+    if (rules?.skipDeckPhase) {
+      setGameState((prev) => prev ? startBattle(prev) : prev);
+      return;
+    }
+
+    const cardCount = rules?.deckPhaseCards ?? 5;
+    const offered = sampleCardsWithSynergy(cardCount, 'offer', gameState.round, gameState.player.deck);
     setDeckOffer({
       cards: offered,
       blocked: new Set(),
@@ -912,7 +954,7 @@ export default function KnowledgeChallenger() {
     // 基本報酬: フリープレイなら won?30:5
     let altReward = won ? 30 : 5;
 
-    // 変更9: ステージクリア報酬を加算 & 状態更新
+    // ステージクリア報酬を加算 & 状態更新
     if (won && currentStage) {
       markStageCleared(currentStage.id);
       if (!isStageRewarded(currentStage.id)) {
@@ -920,6 +962,9 @@ export default function KnowledgeChallenger() {
         if (currentStage.cardRewardId) {
           addCollectionCard(currentStage.cardRewardId);
           toast.success(`カード「${currentStage.cardRewardId}」を獲得！`);
+        }
+        if (currentStage.specialCard) {
+          addCollectionCard(currentStage.specialCard.id);
         }
         if (currentStage.title) {
           userStoreSet.setState((s) => ({ user: { ...s.user, titleId: currentStage.title!.id } }));
@@ -1075,22 +1120,152 @@ export default function KnowledgeChallenger() {
             </div>
           )}
           <button
-            onClick={startGame}
-            disabled={!imagesPreloaded || !(previewValidation?.valid)}
+            onClick={() => {
+              if (stageId !== null) {
+                // Stage mode: go to deck selection
+                setScreen('deck_select');
+              } else {
+                startGame();
+              }
+            }}
+            disabled={!imagesPreloaded || (stageId === null && !(previewValidation?.valid))}
             className="rpg-btn rpg-btn-green w-full text-lg py-3.5 mb-2"
-            style={{ opacity: (!imagesPreloaded || !(previewValidation?.valid)) ? 0.5 : 1 }}
+            style={{ opacity: (!imagesPreloaded || (stageId === null && !(previewValidation?.valid))) ? 0.5 : 1 }}
           >
             {!imagesPreloaded
               ? `⏳ 読み込み中... ${preloadProgress}%`
-              : !previewValidation?.valid
-                ? '❌ デッキ条件未達'
-                : '⚔️ バトル開始！'}
+              : stageId !== null
+                ? '⚔️ デッキ選択へ'
+                : !previewValidation?.valid
+                  ? '❌ デッキ条件未達'
+                  : '⚔️ バトル開始！'}
           </button>
           <button
             onClick={() => navigate('/games')}
             className="text-amber-200/35 text-xs hover:text-amber-200/60 transition-colors py-2"
           >
             ← ゲーム一覧に戻る
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // =============================================================
+  // =================== DECK SELECT SCREEN =====================
+  // =============================================================
+  if (screen === 'deck_select') {
+    return (
+      <div className="min-h-screen px-4 py-6" style={{ background: 'linear-gradient(180deg, #0b1128 0%, #151d3b 50%, #0e1430 100%)' }}>
+        <h1 className="text-xl font-bold text-center mb-1" style={{ color: '#ffd700', textShadow: '0 0 15px rgba(255,215,0,0.3)' }}>
+          デッキ選択
+        </h1>
+        <p className="text-center text-amber-200/50 text-xs mb-5">初期デッキを選んでバトルに挑め！</p>
+
+        <div className="space-y-3 max-w-md mx-auto">
+          {STARTER_DECKS.map((deck) => {
+            const isSelected = selectedStarter?.id === deck.id;
+            const isExpanded = expandedStarterId === deck.id;
+            const trumpCard = deck.trumpCard ? findCardByName(deck.trumpCard) : null;
+            // Build preview for stats
+            const previewCards = deck.id === 'starter-random' ? null : (() => {
+              const allNames = [deck.trumpCard, ...deck.themeCards, ...deck.noiseCards];
+              return allNames.map((n) => findCardByName(n)).filter(Boolean) as BattleCard[];
+            })();
+            const avgAtk = previewCards
+              ? (previewCards.reduce((s, c) => s + (c.attackPower ?? c.power), 0) / previewCards.length).toFixed(1)
+              : '?';
+            const avgDef = previewCards
+              ? (previewCards.reduce((s, c) => s + (c.defensePower ?? c.power), 0) / previewCards.length).toFixed(1)
+              : '?';
+
+            return (
+              <div
+                key={deck.id}
+                className="rounded-xl overflow-hidden transition-all"
+                style={{
+                  background: isSelected
+                    ? 'linear-gradient(135deg, rgba(255,215,0,0.12), rgba(255,215,0,0.03))'
+                    : 'linear-gradient(135deg, rgba(21,29,59,0.95), rgba(14,20,45,0.95))',
+                  border: isSelected ? '2px solid rgba(255,215,0,0.6)' : '1.5px solid rgba(255,215,0,0.15)',
+                  boxShadow: isSelected ? '0 0 16px rgba(255,215,0,0.15)' : '0 2px 12px rgba(0,0,0,0.3)',
+                }}
+              >
+                <div
+                  className="p-3 cursor-pointer active:scale-[0.99] transition-transform"
+                  onClick={() => {
+                    setSelectedStarter(deck);
+                    setExpandedStarterId(isExpanded ? null : deck.id);
+                  }}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">{deck.icon}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-amber-100">{deck.name}</p>
+                      <p className="text-[10px] text-amber-200/50">{deck.description}</p>
+                    </div>
+                    {trumpCard && (
+                      <div className="w-12 h-16 rounded-lg overflow-hidden flex-shrink-0" style={{ border: '1.5px solid rgba(255,215,0,0.4)' }}>
+                        <img src={trumpCard.imageUrl} alt={trumpCard.name} className="w-full h-full object-cover" />
+                      </div>
+                    )}
+                    {!trumpCard && deck.id === 'starter-random' && (
+                      <div className="w-12 h-16 rounded-lg flex items-center justify-center flex-shrink-0 text-2xl"
+                        style={{ background: 'rgba(255,215,0,0.1)', border: '1.5px solid rgba(255,215,0,0.3)' }}>?</div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 mt-2">
+                    <span className="text-[10px] text-amber-200/60">平均 ⚔️{avgAtk} / 🛡️{avgDef}</span>
+                    <span className="text-[10px] text-amber-200/40 ml-auto">{isExpanded ? '▲ 閉じる' : '▼ カード一覧'}</span>
+                  </div>
+                </div>
+
+                {/* Expanded card list */}
+                {isExpanded && previewCards && (
+                  <div className="px-3 pb-3 border-t border-amber-200/10">
+                    <div className="grid grid-cols-5 gap-1.5 mt-2">
+                      {previewCards.map((c, ci) => {
+                        const isTrump = ci === 0 && deck.trumpCard;
+                        return (
+                          <div key={ci} className="text-center">
+                            <div
+                              className="rounded-lg overflow-hidden mb-0.5"
+                              style={{
+                                border: isTrump ? '2px solid #ffd700' : '1px solid rgba(255,255,255,0.1)',
+                                boxShadow: isTrump ? '0 0 8px rgba(255,215,0,0.3)' : 'none',
+                              }}
+                            >
+                              <img src={c.imageUrl} alt={c.name} className="w-full aspect-[3/4] object-cover" />
+                            </div>
+                            <p className="text-[8px] text-amber-200/60 leading-tight truncate">{c.name}</p>
+                            <p className="text-[7px]" style={{ color: RARITY_INFO[c.rarity].color }}>{c.rarity}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="max-w-md mx-auto mt-5 space-y-2">
+          <button
+            onClick={() => {
+              if (selectedStarter) startGame(selectedStarter);
+            }}
+            disabled={!selectedStarter}
+            className="rpg-btn rpg-btn-green w-full text-lg py-3.5"
+            style={{ opacity: selectedStarter ? 1 : 0.5 }}
+          >
+            {selectedStarter ? `⚔️ このデッキで出撃！` : 'デッキを選択してください'}
+          </button>
+          <button
+            onClick={() => setScreen('title')}
+            className="text-amber-200/35 text-xs hover:text-amber-200/60 transition-colors py-2 w-full text-center"
+          >
+            ← 戻る
           </button>
         </div>
       </div>
@@ -1184,6 +1359,33 @@ export default function KnowledgeChallenger() {
             </p>
           </div>
 
+          {/* Stage clear reward */}
+          {won && currentStage && (
+            <div className="mb-4">
+              <p className="text-2xl font-black mb-2 kc-result-icon" style={{ color: '#ffd700', textShadow: '0 0 20px rgba(255,215,0,0.6)' }}>
+                {currentStage.isBoss ? '🎉 ボスステージクリア！' : '🎉 ステージクリア！'}
+              </p>
+              {currentStage.specialCard && (
+                <div className="kc-reward-pop">
+                  <div className="w-24 h-32 mx-auto rounded-xl overflow-hidden mb-2"
+                    style={{ border: '3px solid #ffd700', boxShadow: '0 0 24px rgba(255,215,0,0.4)' }}>
+                    <img src={currentStage.specialCard.imageUrl} alt={currentStage.specialCard.name}
+                      className="w-full h-full object-cover"
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    />
+                  </div>
+                  <p className="text-sm font-bold text-amber-100">🃏 {currentStage.specialCard.name} を獲得！</p>
+                </div>
+              )}
+              {currentStage.title && (
+                <p className="text-sm font-bold text-amber-200 mt-1 kc-reward-pop">🏆 称号「{currentStage.title.name}」獲得！</p>
+              )}
+              <p className="text-lg font-black mt-2 kc-fan-count" style={{ color: '#ffd700' }}>
+                +{currentStage.altReward} ALT
+              </p>
+            </div>
+          )}
+
           {/* Sub-battle history */}
           <div className="rounded-lg p-2 mb-4 text-left max-h-40 overflow-y-auto" style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.05)' }}>
             {gameState.history.length === 0 ? (
@@ -1203,13 +1405,13 @@ export default function KnowledgeChallenger() {
 
           {/* ===== ベンチ & 隔離スペース表示 ===== */}
           {([
-            { label: 'あなたのベンチ', bench: gameState.player.bench, color: '#22c55e', quarantine: gameState.quarantine.player },
-            { label: '相手のベンチ', bench: gameState.ai.bench, color: '#ef4444', quarantine: gameState.quarantine.ai },
-          ] as const).map(({ label, bench, color, quarantine }) => (
+            { label: 'あなたのベンチ', bench: gameState.player.bench, color: '#22c55e', quarantine: gameState.quarantine.player, maxSlots: gameState.stageRules?.benchLimit ?? BENCH_MAX_SLOTS },
+            { label: '相手のベンチ', bench: gameState.ai.bench, color: '#ef4444', quarantine: gameState.quarantine.ai, maxSlots: gameState.stageRules?.npcBenchSlots ?? BENCH_MAX_SLOTS },
+          ] as const).map(({ label, bench, color, quarantine, maxSlots }) => (
             <div key={label} className="rounded-lg p-2 mb-3 text-left" style={{ background: 'rgba(0,0,0,0.25)', border: `1px solid ${color}22` }}>
               <div className="flex items-center justify-between mb-1.5">
                 <p className="text-[10px] font-bold" style={{ color }}>{label}</p>
-                <p className="text-[9px] text-amber-200/50">{bench.length}/6 スロット</p>
+                <p className="text-[9px] text-amber-200/50">{bench.length}/{maxSlots} スロット</p>
               </div>
               {bench.length === 0 ? (
                 <p className="text-[10px] text-amber-200/30 text-center py-1">（なし）</p>
@@ -1386,6 +1588,7 @@ export default function KnowledgeChallenger() {
         quarantineCount={gameState.quarantine.ai.length}
         animKey={gameState.history.length}
         glowNames={gameState.benchGlow?.side === 'ai' ? gameState.benchGlow.names : undefined}
+        maxSlots={gameState.stageRules?.npcBenchSlots ?? BENCH_MAX_SLOTS}
       />
 
       {/* ===== Battle Field =====
@@ -1873,6 +2076,7 @@ export default function KnowledgeChallenger() {
         quarantineCount={gameState.quarantine.player.length}
         animKey={gameState.history.length}
         glowNames={gameState.benchGlow?.side === 'player' ? gameState.benchGlow.names : undefined}
+        maxSlots={gameState.stageRules?.benchLimit ?? BENCH_MAX_SLOTS}
       />
 
       {/* ===== Effect Telop (card on-reveal effect) ===== */}
@@ -2616,8 +2820,8 @@ export default function KnowledgeChallenger() {
 
 type BenchSlotUI = { name: string; card: BattleCard; count: number };
 
-function BenchDisplay({ side, bench, deckCount, quarantineCount, animKey, glowNames }: {
-  side: 'player' | 'ai'; bench: BenchSlotUI[]; deckCount: number; quarantineCount?: number; animKey?: number; glowNames?: string[];
+function BenchDisplay({ side, bench, deckCount, quarantineCount, animKey, glowNames, maxSlots = BENCH_MAX_SLOTS }: {
+  side: 'player' | 'ai'; bench: BenchSlotUI[]; deckCount: number; quarantineCount?: number; animKey?: number; glowNames?: string[]; maxSlots?: number;
 }) {
   const glowSet = glowNames ? new Set(glowNames) : null;
   // Track which slot names existed last render → newly added (or count-bumped)
@@ -2632,8 +2836,8 @@ function BenchDisplay({ side, bench, deckCount, quarantineCount, animKey, glowNa
   const isPlayer = side === 'player';
   const label = isPlayer ? 'あなた' : 'AI';
   const labelColor = isPlayer ? '#22c55e' : '#ef4444';
-  const emptySlots = BENCH_MAX_SLOTS - bench.length;
-  const isFull = bench.length >= BENCH_MAX_SLOTS;
+  const emptySlots = maxSlots - bench.length;
+  const isFull = bench.length >= maxSlots;
   const isLastSlot = emptySlots === 1;
   const isWarning = emptySlots <= 2 && emptySlots > 0;
   const [detailSlot, setDetailSlot] = useState<BenchSlotUI | null>(null);
@@ -2660,7 +2864,7 @@ function BenchDisplay({ side, bench, deckCount, quarantineCount, animKey, glowNa
           </div>
           <div className="flex items-center gap-2">
             <span className={`text-sm font-black ${isWarning || isFull ? 'text-red-400' : 'text-amber-100'}`}>
-              ベンチ {bench.length}/{BENCH_MAX_SLOTS}
+              ベンチ {bench.length}/{maxSlots}
             </span>
             {isFull ? (
               <span className="text-xs font-black px-2 py-0.5 rounded kc-warn-pulse" style={{ background: 'rgba(239,68,68,0.5)', color: '#fff', border: '2px solid rgba(239,68,68,0.9)' }}>
@@ -2678,7 +2882,7 @@ function BenchDisplay({ side, bench, deckCount, quarantineCount, animKey, glowNa
           </div>
         </div>
         <div className="flex gap-1.5">
-          {Array.from({ length: BENCH_MAX_SLOTS }).map((_, i) => {
+          {Array.from({ length: maxSlots }).map((_, i) => {
             const slot = bench[i];
             if (!slot) {
               return (

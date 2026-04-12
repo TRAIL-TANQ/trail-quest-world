@@ -32,6 +32,7 @@
  */
 import type { BattleCard } from './knowledgeCards';
 import { EFFECT_COLORS } from './knowledgeCards';
+import type { StageRules } from './stages';
 
 export const BENCH_MAX_SLOTS = 6;
 
@@ -127,6 +128,8 @@ export interface GameState {
   benchGlow: { side: Side; names: string[]; key: number } | null;
   // Bench boost details: which bench cards contributed what bonuses (for power-up animation).
   benchBoostDetails: BenchBoostDetail[] | null;
+  // ===== Stage rules =====
+  stageRules: StageRules | null;      // null = free battle (no stage rules)
   // ===== Round result =====
   roundWinner: Side | null;           // winner of the current round (set at round_end)
   // ===== Result =====
@@ -157,9 +160,16 @@ function distinctCount(bench: BenchSlot[]): number {
   return bench.length;
 }
 
-function canAddToBench(bench: BenchSlot[], card: BattleCard): boolean {
+/** Get the bench max slots for a specific side, considering stage rules */
+function getBenchMax(state: GameState, side: Side): number {
+  if (!state.stageRules) return BENCH_MAX_SLOTS;
+  if (side === 'player') return state.stageRules.benchLimit ?? BENCH_MAX_SLOTS;
+  return state.stageRules.npcBenchSlots ?? BENCH_MAX_SLOTS;
+}
+
+function canAddToBench(bench: BenchSlot[], card: BattleCard, maxSlots: number = BENCH_MAX_SLOTS): boolean {
   if (bench.some((s) => s.name === card.name)) return true; // stack same-name
-  return distinctCount(bench) < BENCH_MAX_SLOTS;
+  return distinctCount(bench) < maxSlots;
 }
 
 function addToBench(bench: BenchSlot[], card: BattleCard): BenchSlot[] {
@@ -176,7 +186,7 @@ function otherSide(side: Side): Side {
 
 // ---------- Initial state ----------
 
-export function initGameState(playerDeck: BattleCard[], aiDeck: BattleCard[]): GameState {
+export function initGameState(playerDeck: BattleCard[], aiDeck: BattleCard[], stageRules?: StageRules): GameState {
   const trophyFans = Array.from({ length: TOTAL_ROUNDS }, (_, i) => rollTrophyFans(i + 1));
   return {
     phase: 'deck_phase',
@@ -200,6 +210,7 @@ export function initGameState(playerDeck: BattleCard[], aiDeck: BattleCard[]): G
     effectTelop: null,
     benchGlow: null,
     benchBoostDetails: null,
+    stageRules: stageRules ?? null,
     roundWinner: null,
     history: [],
     winner: null,
@@ -461,6 +472,18 @@ export function applyRevealEffect(
         if (copies > 0) {
           bonusAttack += copies;
           telop = { text: `🐟ピラニアの群れの猛攻！攻撃+${copies}`, color };
+        }
+      }
+      break;
+    }
+    case 'lion': {
+      if (role === 'attacker') {
+        const myState = side === 'player' ? next.player : next.ai;
+        const sealed = next.sealedBenchNames[side];
+        const creatureCount = myState.bench.filter((b) => b.card.category === 'creature' && !sealed.includes(b.name)).length;
+        if (creatureCount > 0) {
+          bonusAttack += creatureCount;
+          telop = { text: `🦁百獣の王！生き物ベンチ${creatureCount}枚で攻撃+${creatureCount}`, color };
         }
       }
       break;
@@ -1446,6 +1469,19 @@ export function startBattle(state: GameState): GameState {
   if (defAura.details.length > 0) {
     next = { ...next, benchBoostDetails: defAura.details };
   }
+
+  // NPC stage bonus (defense)
+  if (state.flagHolder === 'ai' && state.stageRules) {
+    const r = state.stageRules;
+    if (r.npcDefenseBonus && r.npcDefenseBonusFilter) {
+      if (defender.category === r.npcDefenseBonusFilter) {
+        next = { ...next, defenderBonus: next.defenderBonus + r.npcDefenseBonus };
+      }
+    } else if (r.npcDefenseBonus) {
+      next = { ...next, defenderBonus: next.defenderBonus + r.npcDefenseBonus };
+    }
+  }
+
   return next;
 }
 
@@ -1499,6 +1535,16 @@ export function revealNextAttackCard(state: GameState): GameState {
   };
 
   let addedPower = getBaseAttack(nextCard) + roundBonus + pendingBonus;
+
+  // NPC stage bonus (attack)
+  if (attackerSide === 'ai' && state.stageRules) {
+    const r = state.stageRules;
+    if (r.npcAttackBonus && r.npcAttackBonusFilter) {
+      if (nextCard.category === r.npcAttackBonusFilter) addedPower += r.npcAttackBonus;
+    } else if (r.npcAttackBonus) {
+      addedPower += r.npcAttackBonus;
+    }
+  }
 
   // Card-specific on-reveal effect
   if (nextCard.effect) {
@@ -1591,10 +1637,11 @@ export function resolveSubBattleWin(state: GameState): GameState {
     const c = flushedCards[fi];
     const alreadyOnBench = newDefenderBench.some((s) => s.name === c.name);
     const slotsUsed = newDefenderBench.length;
-    if (!canAddToBench(newDefenderBench, c)) {
+    const defBenchMax = getBenchMax(state, defenderSide);
+    if (!canAddToBench(newDefenderBench, c, defBenchMax)) {
       unflushed.push(...flushedCards.slice(fi));
       benchOverflow = true;
-      console.log(`[Engine] ベンチ満杯！ ${defenderSide} bench=${slotsUsed}/6 slots, card="${c.name}" alreadyOnBench=${alreadyOnBench} → game_over`);
+      console.log(`[Engine] ベンチ満杯！ ${defenderSide} bench=${slotsUsed}/${defBenchMax} slots, card="${c.name}" alreadyOnBench=${alreadyOnBench} → game_over`);
       console.log(`[Engine]   bench slots:`, newDefenderBench.map(s => `${s.name}×${s.count}`).join(', '));
       console.log(`[Engine]   flushed ${fi}/${flushedCards.length} cards, ${unflushed.length} stuck`);
       break;

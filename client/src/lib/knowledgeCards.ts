@@ -152,6 +152,8 @@ export const EFFECT_DEFS: Record<string, CardEffect> = {
   steam_locomotive: { id: 'steam_locomotive', name: '鉄道の時代',       description: '蒸気機関+石炭ベンチで攻撃+4/防御+2。隔離2枚回収。', category: 'atk' },
   watt:             { id: 'watt',             name: '改良の天才',       description: 'ベンチ科学発明の枚数で段階強化。4枚以上で攻+5/防+3/味方全攻+1。', category: 'special' },
   wheel:            { id: 'wheel',            name: '回転の力',         description: 'From the bench: 蒸気機関車の攻撃+2/防御+2（重複可）。蒸気機関車攻撃成功時、相手デッキ上1枚追加隔離。', category: 'special' },
+  // ===== ステージモード用追加カード =====
+  lion:             { id: 'lion',             name: '百獣の王',         description: '攻撃時、自分ベンチの生き物カード1枚につき攻撃+1。', category: 'atk' },
 };
 
 // Card name → effect id. These are the only cards that carry on-reveal effects.
@@ -246,6 +248,8 @@ export const EFFECT_BY_CARD_NAME: Record<string, string> = {
   '蒸気機関車':           'steam_locomotive',
   'ジェームズ・ワット':   'watt',
   '車輪':                 'wheel',
+  // ===== ステージモード用追加カード =====
+  'ライオン':             'lion',
 };
 
 export interface BattleCard {
@@ -387,6 +391,10 @@ export const CARD_STAT_OVERRIDES: Record<string, StatProfile> = {
   '紡績機':               { attackPower: 1, defensePower: 1 },
   '蒸気機関車':           { attackPower: 3, defensePower: 3 },
   'ジェームズ・ワット':   { attackPower: 3, defensePower: 2 },
+  // ===== ステージモード用追加カード =====
+  'ライオン':             { attackPower: 3, defensePower: 2 },
+  'ハチドリ':             { attackPower: 1, defensePower: 1 },
+  'モアイ像':             { attackPower: 1, defensePower: 2 },
 };
 
 // Combo card IDs for detection
@@ -1245,6 +1253,22 @@ const QUIZ_DATA: Record<string, Quiz[]> = {
     { question: 'ジェームズ・ワットの名前が由来になった単位は？', choices: ['ワット', 'ジュール', 'アンペア', 'ボルト'], correctIndex: 0 },
     { question: 'ワットが改良した機械は？', choices: ['蒸気機関', '印刷機', '望遠鏡', '時計'], correctIndex: 0 },
     { question: 'ワットの出身国は？', choices: ['スコットランド', 'イングランド', 'フランス', 'ドイツ'], correctIndex: 0 },
+  ],
+  // ===== ステージモード用追加カード =====
+  'card-160': [
+    { question: 'ライオンのオスの特徴は？', choices: ['たてがみ', '角', '縞模様', '長い首'], correctIndex: 0 },
+    { question: 'ライオンが主に住んでいるのは？', choices: ['北極', 'アフリカのサバンナ', '南米の森', 'オーストラリア'], correctIndex: 1 },
+    { question: 'ライオンの群れの名前は？', choices: ['プライド', 'パック', 'ハード', 'フロック'], correctIndex: 0 },
+  ],
+  'card-161': [
+    { question: 'ハチドリの特技は？', choices: ['空中に静止できる', '水中を泳ぐ', '地面を掘る', '夜に光る'], correctIndex: 0 },
+    { question: 'ハチドリの主な食べ物は？', choices: ['虫だけ', '花の蜜', '魚', '果物'], correctIndex: 1 },
+    { question: 'ハチドリが主に住んでいるのは？', choices: ['アフリカ', 'アジア', '南北アメリカ', 'ヨーロッパ'], correctIndex: 2 },
+  ],
+  'card-162': [
+    { question: 'モアイ像がある島は？', choices: ['ハワイ島', 'イースター島', 'マダガスカル島', 'バリ島'], correctIndex: 1 },
+    { question: 'モアイ像は何でできている？', choices: ['木材', '金属', '火山岩', 'レンガ'], correctIndex: 2 },
+    { question: 'モアイ像はおよそ何体ある？', choices: ['約100体', '約900体', '約5000体', '約50体'], correctIndex: 1 },
   ],
 };
 

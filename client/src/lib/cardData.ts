@@ -195,6 +195,11 @@ export const COLLECTION_CARDS: CollectionCard[] = [
   { id: 'card-157', name: '紡績機', category: 'inventions', rarity: 'N', description: '産業革命で最初に機械化された繊維産業の象徴。大量生産を可能にした。', imageUrl: '/images/cards/spinning-machine.png' },
   { id: 'card-158', name: '蒸気機関車', category: 'inventions', rarity: 'R', description: '蒸気の力で走る鉄道車両。物流を革命し、世界を縮めた。', imageUrl: '/images/cards/james-watt.png' },
   { id: 'card-159', name: 'ジェームズ・ワット', category: 'great_people', rarity: 'R', description: '蒸気機関を改良し産業革命の原動力を作った発明家。ワットの由来。', imageUrl: '/images/cards/james-watt.png' },
+
+  // ===== ステージモード用追加カード =====
+  { id: 'card-160', name: 'ライオン', category: 'creatures', rarity: 'R', description: '百獣の王。サバンナの頂点に立つ大型肉食獣。群れで狩りを行う。', imageUrl: '/images/cards/lion.png' },
+  { id: 'card-161', name: 'ハチドリ', category: 'creatures', rarity: 'N', description: '世界最小の鳥。1秒に80回も羽ばたき、空中に静止できる。', imageUrl: '/images/cards/hummingbird.png' },
+  { id: 'card-162', name: 'モアイ像', category: 'world_heritage', rarity: 'N', description: 'イースター島の巨大石像。約900体が海を見つめるように立つ謎の遺跡。', imageUrl: '/images/cards/moai.png' },
 ];
 
 // ガチャ排出率

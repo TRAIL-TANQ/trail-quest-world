@@ -1,26 +1,18 @@
 /*
- * StageSelectPage (変更9): ソロモード ステージ選択画面
+ * StageSelectPage: ソロモード ステージ選択画面
  *
- * 10ステージのグリッド表示。クリア済み/解放中/ロック状態を区別し、
- * 報酬と AI レーティングを表示する。一番左上にフリープレイ枠を置く。
+ * 10ステージ。クリア済み/挑戦可能/ロック状態を区別。
+ * ★ボスステージ（5,10）は背景を赤く。各ステージにNPCテーマアイコン表示。
  */
 import { Link } from 'wouter';
 import { STAGES } from '@/lib/stages';
 import { useStageProgressStore } from '@/lib/stageProgressStore';
 import { IMAGES } from '@/lib/constants';
 
-const themeBadge: Record<string, { label: string; color: string }> = {
-  balanced:       { label: 'バランス',     color: '#94a3b8' },
-  heritage_heavy: { label: '🏛️ 遺産型',     color: '#22c55e' },
-  ssr_powered:    { label: '💎 SSR',        color: '#a855f7' },
-  nuke_combo:     { label: '☢️ 原爆コンボ', color: '#ef4444' },
-};
-
 export default function StageSelectPage() {
   const cleared = useStageProgressStore((s) => s.clearedIds);
   const highest = useStageProgressStore((s) => s.highestClearedStage());
 
-  // ステージ解放: clearedの最大値+1 まで解放
   const isUnlocked = (stageId: number) => stageId <= highest + 1;
 
   return (
@@ -63,22 +55,33 @@ export default function StageSelectPage() {
           {STAGES.map((stage, i) => {
             const isCleared = cleared.has(stage.id);
             const unlocked = isUnlocked(stage.id);
-            const theme = themeBadge[stage.theme];
+            const isBoss = stage.isBoss;
+
+            // Determine special rule display text
+            const ruleText = unlocked ? stage.description : '???';
 
             const card = (
               <div className="rounded-xl overflow-hidden p-3 relative h-full"
                 style={{
                   background: isCleared
                     ? 'linear-gradient(135deg, rgba(255,215,0,0.12), rgba(255,215,0,0.03))'
-                    : unlocked
-                      ? 'linear-gradient(135deg, rgba(21,29,59,0.95), rgba(14,20,45,0.95))'
-                      : 'rgba(11,17,40,0.6)',
+                    : isBoss && unlocked
+                      ? 'linear-gradient(135deg, rgba(239,68,68,0.18), rgba(139,0,0,0.12))'
+                      : unlocked
+                        ? 'linear-gradient(135deg, rgba(21,29,59,0.95), rgba(14,20,45,0.95))'
+                        : 'rgba(11,17,40,0.6)',
                   border: isCleared
                     ? '1.5px solid rgba(255,215,0,0.5)'
-                    : unlocked
-                      ? '1.5px solid rgba(255,215,0,0.2)'
-                      : '1.5px solid rgba(120,120,140,0.15)',
-                  boxShadow: isCleared ? '0 0 12px rgba(255,215,0,0.15)' : '0 2px 12px rgba(0,0,0,0.3)',
+                    : isBoss && unlocked
+                      ? '2px solid rgba(239,68,68,0.6)'
+                      : unlocked
+                        ? '1.5px solid rgba(255,215,0,0.2)'
+                        : '1.5px solid rgba(120,120,140,0.15)',
+                  boxShadow: isCleared
+                    ? '0 0 12px rgba(255,215,0,0.15)'
+                    : isBoss && unlocked
+                      ? '0 0 16px rgba(239,68,68,0.2)'
+                      : '0 2px 12px rgba(0,0,0,0.3)',
                   animationDelay: `${i * 50}ms`,
                   opacity: unlocked ? 1 : 0.55,
                 }}>
@@ -95,23 +98,33 @@ export default function StageSelectPage() {
                   <span className="text-xl font-black" style={{ color: unlocked ? '#ffd700' : 'rgba(255,215,0,0.3)' }}>
                     {stage.id}
                   </span>
-                  <div className="text-[9px] font-bold px-1.5 py-0.5 rounded"
-                    style={{ background: `${theme.color}20`, color: theme.color, border: `1px solid ${theme.color}40` }}>
-                    {theme.label}
-                  </div>
+                  <span className="text-lg">{stage.npcThemeIcon}</span>
+                  {isBoss && unlocked && (
+                    <span className="text-[8px] font-bold px-1 py-0.5 rounded" style={{ background: 'rgba(239,68,68,0.3)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.5)' }}>
+                      ★BOSS
+                    </span>
+                  )}
                 </div>
-                <p className="text-[11px] font-bold text-amber-100 leading-snug mb-1">{stage.description}</p>
-                <div className="flex items-center justify-between mt-2">
+                <p className="text-[12px] font-bold text-amber-100 leading-snug mb-0.5">{stage.name}</p>
+                <p className="text-[10px] text-amber-200/60 leading-snug mb-1.5">{ruleText}</p>
+                <div className="flex items-center justify-between mt-auto">
                   <div className="flex items-center gap-0.5">
                     <div className="w-3 h-3 rounded-full flex items-center justify-center text-[6px] font-bold"
                       style={{ background: 'linear-gradient(135deg, #ffd700, #f0a500)', color: '#0b1128' }}>A</div>
-                    <span className="text-[10px] font-bold" style={{ color: '#ffd700' }}>+{stage.altReward}</span>
+                    <span className="text-[10px] font-bold" style={{ color: '#ffd700' }}>
+                      {unlocked ? `+${stage.altReward}` : '???'}
+                    </span>
                   </div>
-                  {stage.title && (
+                  {stage.title && unlocked && (
                     <span className="text-[8px] text-amber-200/60">🏆 {stage.title.name}</span>
                   )}
+                  {!unlocked && stage.specialCard && (
+                    <span className="text-[8px] text-amber-200/30">🃏 ???</span>
+                  )}
+                  {unlocked && stage.specialCard && (
+                    <span className="text-[8px] text-amber-200/50">🃏 {stage.specialCard.name}</span>
+                  )}
                 </div>
-                <div className="text-[8px] text-amber-200/30 mt-1">NPC Lv {Math.round(stage.aiRating / 100) * 10}</div>
               </div>
             );
 
