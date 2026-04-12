@@ -4,7 +4,7 @@
  * 全10ステージ。各ステージ5回戦制。プレイヤーもNPCも初期デッキ10枚から成長。
  * 各回戦開始時にデッキフェイズでカードを追加取得（NPC自動、プレイヤーはクイズ）。
  */
-import { ALL_BATTLE_CARDS, DRAFTABLE_BATTLE_CARDS, INITIAL_DECK_SIZE, SYNERGY_MAP } from './knowledgeCards';
+import { ALL_BATTLE_CARDS, DRAFTABLE_BATTLE_CARDS, INITIAL_DECK_SIZE, SYNERGY_MAP, maxSameNameFor } from './knowledgeCards';
 import type { BattleCard, CardRarity } from './knowledgeCards';
 
 // ===== Stage Rules =====
@@ -236,7 +236,7 @@ function buildNamedDeck(
     );
     for (const c of nPool) {
       if (deck.length >= deckSize) break;
-      if (deck.filter((d) => d.name === c.name).length >= 2) continue; // max 2 same name for N
+      if (deck.filter((d) => d.name === c.name).length >= maxSameNameFor(c.rarity, c.name)) continue;
       deck.push({ ...c, id: `${prefix}-${c.id}-${deck.length}-${stamp}` });
     }
   }
@@ -298,8 +298,7 @@ export function npcDeckPhasePick(
     if (!allowedRarities.has(c.rarity)) return false;
     // Respect same-name limits
     const sameCount = npcDeck.filter((d) => d.name === c.name).length;
-    if (c.rarity === 'N' && sameCount >= 2) return false;
-    if (c.rarity !== 'N' && sameCount >= 1) return false;
+    if (sameCount >= maxSameNameFor(c.rarity, c.name)) return false;
     return true;
   });
 

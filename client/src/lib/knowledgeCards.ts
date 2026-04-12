@@ -1463,28 +1463,29 @@ export const INITIAL_DECK_SIZE = 10;
 export const MAX_DECK_SIZE = 15;
 export const MIN_DECK_SIZE = 6;  // デッキフェイズで削除できる下限
 
-// 同名カード制限（rarity 別）
-//   N, R : 5 枚まで
-//   SR   : 3 枚まで
-//   SSR  : 1 枚まで
+// 同名カード制限: 全レアリティ共通3枚。個別例外あり。
+export const MAX_SAME_NAME_DEFAULT = 3;
 export const MAX_SAME_NAME_BY_RARITY: Record<CardRarity, number> = {
-  N: 5,
-  R: 5,
+  N: 3,
+  R: 3,
   SR: 3,
-  SSR: 1,
+  SSR: 3,
 };
-export function maxSameNameFor(rarity: CardRarity): number {
+// 個別カード名の上限オーバーライド
+const MAX_SAME_NAME_OVERRIDE: Record<string, number> = {
+  '始皇帝': 1,
+};
+export function maxSameNameFor(rarity: CardRarity, cardName?: string): number {
+  if (cardName && MAX_SAME_NAME_OVERRIDE[cardName] !== undefined) return MAX_SAME_NAME_OVERRIDE[cardName];
   return MAX_SAME_NAME_BY_RARITY[rarity];
 }
 
 // 合計 per-rarity 上限 (デッキ全体でのレア度別枚数)
-// SR 上限を同名上限と整合させて 3 に設定（旧 2 からの変更）
-export const MAX_SSR = 1;
+export const MAX_SSR = 3;
 export const MAX_SR = 3;
 
-// Legacy: 旧固定値 3。残存する古い参照がある場合の後方互換。
-// 新規コードは maxSameNameFor(rarity) を使うこと。
-export const MAX_SAME_NAME = 5;
+// Legacy compat
+export const MAX_SAME_NAME = 3;
 
 // Back-compat: some call sites still reference DECK_SIZE.
 export const DECK_SIZE = INITIAL_DECK_SIZE;
@@ -1514,7 +1515,7 @@ export function validateDeck(deck: BattleCard[]): DeckValidation {
   for (const c of deck) nameRarity.set(c.name, c.rarity);
   nameCount.forEach((count, name) => {
     const rarity = nameRarity.get(name)!;
-    if (count > maxSameNameFor(rarity)) nameOverflow.push(name);
+    if (count > maxSameNameFor(rarity, name)) nameOverflow.push(name);
   });
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -1527,7 +1528,7 @@ export function validateDeck(deck: BattleCard[]): DeckValidation {
   if (srCount > MAX_SR) errors.push(`SRは${MAX_SR}枚までです（現在${srCount}枚）`);
   for (const name of nameOverflow) {
     const rarity = nameRarity.get(name)!;
-    errors.push(`「${name}」は${maxSameNameFor(rarity)}枚までです（現在${nameCount.get(name)}枚）`);
+    errors.push(`「${name}」は${maxSameNameFor(rarity, name)}枚までです（現在${nameCount.get(name)}枚）`);
   }
   return {
     valid: errors.length === 0,
@@ -1544,7 +1545,7 @@ export function validateDeck(deck: BattleCard[]): DeckValidation {
 export function canAddCardToDeck(deck: BattleCard[], card: BattleCard): { ok: boolean; reason?: string } {
   if (deck.length >= MAX_DECK_SIZE) return { ok: false, reason: `デッキは${MAX_DECK_SIZE}枚までです` };
   const sameNameCount = deck.filter(c => c.name === card.name).length;
-  const sameNameCap = maxSameNameFor(card.rarity);
+  const sameNameCap = maxSameNameFor(card.rarity, card.name);
   if (sameNameCount >= sameNameCap) return { ok: false, reason: `「${card.name}」は${sameNameCap}枚までです` };
   return { ok: true };
 }
@@ -1566,7 +1567,7 @@ function buildValidDeck(pool: BattleCard[], prefix: string, targetSize: number):
 
   const tryAdd = (card: BattleCard): boolean => {
     const nameCount = seenNames.get(card.name) ?? 0;
-    if (nameCount >= maxSameNameFor(card.rarity)) return false;
+    if (nameCount >= maxSameNameFor(card.rarity, card.name)) return false;
     deck.push({ ...card, id: `${prefix}-${card.id}-${deck.length}` });
     seenNames.set(card.name, nameCount + 1);
     return true;
@@ -1829,12 +1830,20 @@ export function sampleCardsWithSynergy(
     return true;
   };
 
-  // Collect synergy targets from current deck
-  const deckNames = new Set(playerDeck.map((c) => c.name));
+  // Collect synergy targets from current deck (exclude cards already at same-name limit)
+  const deckNameCounts = new Map<string, number>();
+  playerDeck.forEach((c) => deckNameCounts.set(c.name, (deckNameCounts.get(c.name) ?? 0) + 1));
+  const isAtLimit = (name: string, rarity: CardRarity) => {
+    const count = deckNameCounts.get(name) ?? 0;
+    return count >= maxSameNameFor(rarity, name);
+  };
   const synergyTargetNames = new Set<string>();
   playerDeck.forEach((c) => {
     const targets = SYNERGY_MAP[c.name];
-    if (targets) targets.forEach((t) => { if (!deckNames.has(t)) synergyTargetNames.add(t); });
+    if (targets) targets.forEach((t) => {
+      const tCard = DRAFTABLE_BATTLE_CARDS.find((bc) => bc.name === t);
+      if (tCard && !isAtLimit(t, tCard.rarity)) synergyTargetNames.add(t);
+    });
   });
 
   // Allowed rarities for this round
@@ -1875,7 +1884,7 @@ export function sampleCardsWithSynergy(
 
   // 3. Temptation cards (not synergy with current deck)
   if (spec.tempt > 0) {
-    const temptPool = DRAFTABLE_BATTLE_CARDS.filter((c) => !synergyTargetNames.has(c.name) && !deckNames.has(c.name) && !usedIds.has(c.id) && allowedRarities.has(c.rarity));
+    const temptPool = DRAFTABLE_BATTLE_CARDS.filter((c) => !synergyTargetNames.has(c.name) && !deckNameCounts.has(c.name) && !usedIds.has(c.id) && allowedRarities.has(c.rarity));
     // Prioritize high-power temptation cards (sort by power desc with jitter)
     const shuffledTempt = [...temptPool].sort((a, b) => {
       const pa = (a.attackPower ?? a.power) + (a.defensePower ?? a.power);
