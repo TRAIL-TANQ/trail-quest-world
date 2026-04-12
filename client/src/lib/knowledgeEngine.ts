@@ -1435,6 +1435,7 @@ export function revealNextAttackCard(state: GameState): GameState {
 
   if (attacker.deck.length === 0) {
     // Attacker ran out of cards. They lose the match.
+    console.log(`[Engine] デッキ切れ: ${attackerSide} のデッキが0枚 → ${attackerSide} 敗北`);
     return {
       ...state,
       phase: 'game_over',
@@ -1542,23 +1543,46 @@ export function resolveSubBattleWin(state: GameState): GameState {
     ? [...state.quarantine[defenderSide]]
     : [defenderCard, ...state.quarantine[defenderSide]];
   let newDefenderBench = defenderState.bench;
-  for (const c of flushedCards) {
+  const unflushed: BattleCard[] = [];
+  let benchOverflow = false;
+  for (let fi = 0; fi < flushedCards.length; fi++) {
+    const c = flushedCards[fi];
     if (!canAddToBench(newDefenderBench, c)) {
-      return {
-        ...state,
-        phase: 'game_over',
-        winner: attackerSide,
-        message: `${defenderSide === 'player' ? 'あなた' : '相手'}のベンチが満杯！隔離スペースの一斉流入で敗北`,
-      };
+      // Cards that couldn't fit remain visible as unflushed
+      unflushed.push(...flushedCards.slice(fi));
+      benchOverflow = true;
+      console.log(`[Engine] ベンチ満杯！ ${defenderSide} bench=${newDefenderBench.length}/6 distinct, card="${c.name}" is 7th unique → game_over`);
+      console.log(`[Engine]   flushed ${fi}/${flushedCards.length} cards, ${unflushed.length} stuck`);
+      break;
     }
     newDefenderBench = addToBench(newDefenderBench, c);
   }
+  if (benchOverflow) {
+    // Update state with the partial flush so result screen shows accurate bench
+    const updatedDefender = { ...defenderState, bench: newDefenderBench };
+    return {
+      ...state,
+      phase: 'game_over',
+      winner: attackerSide,
+      message: `${defenderSide === 'player' ? 'あなた' : '相手'}のベンチが満杯！隔離スペースの一斉流入で敗北`,
+      player: defenderSide === 'player' ? updatedDefender : state.player,
+      ai: defenderSide === 'ai' ? updatedDefender : state.ai,
+      quarantine: {
+        ...state.quarantine,
+        [defenderSide]: unflushed,
+      },
+    };
+  }
+
+  console.log(`[Engine] resolveSubBattleWin: ${defenderSide} defended with "${defenderCard.name}", flushed ${flushedCards.length} cards to bench (bench now ${newDefenderBench.length}/6)`);
+  console.log(`[Engine]   quarantine[${defenderSide}] was ${state.quarantine[defenderSide].length} → flushed to bench, clearing`);
 
   // Split attack cards: all except last → attacker's quarantine; last becomes new defender.
   const attackCards = state.attackRevealed;
   const lastAttackCard = attackCards[attackCards.length - 1];
   const otherAttackCards = attackCards.slice(0, -1);
   const newAttackerQuarantine = [...state.quarantine[attackerSide], ...otherAttackCards];
+  console.log(`[Engine]   quarantine[${attackerSide}]: ${state.quarantine[attackerSide].length} + ${otherAttackCards.length} non-last attack cards = ${newAttackerQuarantine.length}`);
 
   // Apply leave-trigger quarantine additions (糸杉/兵馬俑 reroute defender, ケーキ quarantines opp deck top).
   const defenderLeaveQuarantine = [...leaveQuarantineDefender];
