@@ -1698,7 +1698,24 @@ export function advanceToNextRound(state: GameState): GameState {
     };
   }
 
-  // Advance to next round: reset bench/quarantine, keep decks, new deck_phase
+  // Advance to next round: collect ALL cards back to deck, reset bench/quarantine.
+  // ベンチ + 隔離 + 防御カード + 攻撃中カード → 全てデッキに回収してシャッフル
+  const collectCards = (ps: PlayerState, side: Side): BattleCard[] => {
+    const cards: BattleCard[] = [...ps.deck];
+    for (const slot of ps.bench) {
+      for (let i = 0; i < slot.count; i++) cards.push(slot.card);
+    }
+    cards.push(...state.quarantine[side]);
+    if (state.defenseCard && state.flagHolder === side) cards.push(state.defenseCard);
+    if (otherSide(state.flagHolder) === side) cards.push(...state.attackRevealed);
+    return cards;
+  };
+
+  const playerDeck = shuffleDeck(collectCards(state.player, 'player'));
+  const aiDeck = shuffleDeck(collectCards(state.ai, 'ai'));
+
+  console.log(`[Engine] advanceToNextRound: player deck ${state.player.deck.length} → ${playerDeck.length}, ai deck ${state.ai.deck.length} → ${aiDeck.length}`);
+
   return {
     ...state,
     phase: 'deck_phase',
@@ -1706,12 +1723,11 @@ export function advanceToNextRound(state: GameState): GameState {
     playerFans: newPlayerFans,
     aiFans: newAiFans,
     roundWinner: null,
-    // Reset battle state for new round
-    player: { ...state.player, bench: [] },
-    ai: { ...state.ai, bench: [] },
+    player: { ...state.player, deck: playerDeck, bench: [] },
+    ai: { ...state.ai, deck: aiDeck, bench: [] },
     quarantine: { player: [], ai: [] },
     sealedBenchNames: { player: [], ai: [] },
-    flagHolder: state.roundWinner, // winner of last round holds flag
+    flagHolder: state.roundWinner,
     defenseCard: null,
     attackRevealed: [],
     attackCurrentPower: 0,
