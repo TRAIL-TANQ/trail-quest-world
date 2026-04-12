@@ -128,6 +128,8 @@ export interface GameState {
   benchGlow: { side: Side; names: string[]; key: number } | null;
   // Bench boost details: which bench cards contributed what bonuses (for power-up animation).
   benchBoostDetails: BenchBoostDetail[] | null;
+  // How much power the last revealed attack card added (base + effects + auras, for UI display)
+  lastRevealPowerAdded: number;
   // ===== Evolution / once-per-round tracking =====
   usedGiantSnake: { player: boolean; ai: boolean }; // 大蛇の呑み込み効果（1回戦1回）
   // ===== Stage rules =====
@@ -213,6 +215,7 @@ export function initGameState(playerDeck: BattleCard[], aiDeck: BattleCard[], st
     effectTelop: null,
     benchGlow: null,
     benchBoostDetails: null,
+    lastRevealPowerAdded: 0,
     usedGiantSnake: { player: false, ai: false },
     stageRules: stageRules ?? null,
     roundWinner: null,
@@ -1679,9 +1682,11 @@ export function revealNextAttackCard(state: GameState): GameState {
   if (aura.bonus !== 0) console.log(`[Engine]   bench aura → bonus=${aura.bonus}, details=[${aura.details.map(d => `${d.benchCardName}:atk${d.atkBonus}`).join(', ')}]`);
 
   const newPower = state.attackCurrentPower + addedPower;
+  console.log(`[Engine]   total addedPower=${addedPower} (base=${getBaseAttack(nextCard)}) → cumulative=${newPower}`);
   return {
     ...next,
     attackCurrentPower: newPower,
+    lastRevealPowerAdded: addedPower,
     benchBoostDetails: aura.details.length > 0 ? aura.details : null,
     message: `${attackerSide === 'player' ? 'あなたの' : '相手の'}攻撃パワー ${newPower}`,
   };
@@ -1940,6 +1945,7 @@ export function advanceToNextRound(state: GameState): GameState {
     effectTelop: null,
     benchGlow: null,
     benchBoostDetails: null,
+    lastRevealPowerAdded: 0,
     usedGiantSnake: { player: false, ai: false },
     message: `第${nextRound}回戦 デッキフェイズ：カードを選ぼう`,
   };

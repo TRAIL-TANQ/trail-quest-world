@@ -286,12 +286,12 @@ export default function KnowledgeChallenger() {
     }
   }, [gameState?.phase, gameState?.round, cineStep]);
 
-  // ===== Effect telop auto-clear (1.5s) =====
+  // ===== Effect telop auto-clear (match animation duration) =====
   useEffect(() => {
     if (!gameState?.effectTelop) return;
     const id = window.setTimeout(() => {
       setGameState((prev) => (prev && prev.effectTelop ? { ...prev, effectTelop: null } : prev));
-    }, 1500);
+    }, 2800); // slightly longer than kc-top-banner-slide (2.5s)
     return () => clearTimeout(id);
   }, [gameState?.effectTelop?.key]);
 
@@ -1776,6 +1776,22 @@ export default function KnowledgeChallenger() {
               {/* Latest card on top with kcCardFlip animation on mount */}
               <div key={`latest-${attackCards.length}`} className={`absolute inset-0 ${enterClass}`} style={{ zIndex: 100 }}>
                 <CardDisplay card={lastCard} size="battle" mode="attack" onTap={() => setDetailCard(lastCard)} />
+                {/* Bonus badge: shows when effects/auras added extra power beyond base */}
+                {(() => {
+                  const baseAtk = lastCard.attackPower ?? lastCard.power;
+                  const bonus = gameState.lastRevealPowerAdded - baseAtk;
+                  if (bonus > 0) {
+                    return (
+                      <div key={`bonus-${attackCards.length}`} className="absolute -top-3 -right-3 z-[110] kc-power-bounce">
+                        <span className="px-2 py-0.5 rounded-full text-sm font-black"
+                          style={{ background: 'rgba(34,197,94,0.9)', color: '#fff', boxShadow: '0 0 8px rgba(34,197,94,0.6)', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>
+                          +{bonus}
+                        </span>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
               {/* Cumulative power label below */}
               {(() => {
