@@ -149,6 +149,32 @@ export const COLLECTION_CARDS: CollectionCard[] = [
   { id: 'card-127', name: '聖剣', category: 'inventions', rarity: 'N', description: 'ジャンヌ・ダルクが神の啓示で見つけたとされる剣。フランス救国の象徴。', imageUrl: '/images/cards/holy-sword.png' },
   { id: 'card-128', name: '軍旗', category: 'inventions', rarity: 'N', description: 'ジャンヌ・ダルクが先頭で掲げた白い旗。兵士の士気を奮い立たせた。', imageUrl: '/images/cards/war-banner.png' },
   { id: 'card-129', name: 'ケーキ', category: 'inventions', rarity: 'N', description: '「パンがなければお菓子を食べればいい」と言ったとされるマリーの象徴。', imageUrl: '/images/cards/cake.png' },
+
+  // ===== コンボカード: ナポレオン (3枚) =====
+  { id: 'card-130', name: '大砲', category: 'inventions', rarity: 'N', description: 'ナポレオンが戦場で多用した火力兵器。砲兵隊を率いて数々の勝利を収めた。', imageUrl: '/images/cards/cannon.png' },
+  { id: 'card-131', name: 'ナポレオン法典', category: 'inventions', rarity: 'N', description: 'ナポレオンが制定した民法典。近代法の基礎となり、世界中に影響を与えた。', imageUrl: '/images/cards/napoleon-code.png' },
+  { id: 'card-132', name: 'ワーテルローの戦い', category: 'discovery', rarity: 'N', description: '1815年、ナポレオンが最後に敗れた戦い。ヨーロッパの運命を決めた一戦。', imageUrl: '/images/cards/waterloo.png' },
+
+  // ===== コンボカード: アインシュタイン (3枚) =====
+  { id: 'card-133', name: 'E=mc²', category: 'discovery', rarity: 'N', description: 'エネルギーと質量の等価性を示すアインシュタインの有名な式。', imageUrl: '/images/cards/emc2.png' },
+  { id: 'card-134', name: '相対性理論の論文', category: 'discovery', rarity: 'N', description: '1905年にアインシュタインが発表した革命的論文。時間と空間の概念を覆した。', imageUrl: '/images/cards/relativity.png' },
+  { id: 'card-135', name: '光速', category: 'discovery', rarity: 'N', description: '秒速約30万キロメートル。宇宙で最も速く、相対性理論の鍵となる定数。', imageUrl: '/images/cards/lightspeed.png' },
+
+  // ===== コンボカード: キュリー夫人 (3枚) =====
+  { id: 'card-136', name: 'ラジウム', category: 'discovery', rarity: 'N', description: 'キュリー夫人が発見した放射性元素。暗闇で青白く光る不思議な物質。', imageUrl: '/images/cards/radium.png' },
+  { id: 'card-137', name: '研究ノート', category: 'inventions', rarity: 'N', description: 'キュリー夫人の研究ノート。今でも放射線を発しており、鉛の箱に保管されている。', imageUrl: '/images/cards/research-notes.png' },
+  { id: 'card-138', name: 'ノーベル賞メダル', category: 'inventions', rarity: 'N', description: 'ノーベル賞受賞者に贈られる金メダル。キュリー夫人は2度手にした。', imageUrl: '/images/cards/nobel-medal.png' },
+
+  // ===== コンボカード: 織田信長 (3枚) =====
+  { id: 'card-139', name: '鉄砲', category: 'inventions', rarity: 'N', description: '戦国時代に伝来した新兵器。信長は長篠の戦いで大量の鉄砲を使い勝利した。', imageUrl: '/images/cards/gun.png' },
+  { id: 'card-140', name: '楽市楽座', category: 'inventions', rarity: 'N', description: '信長が推進した自由市場政策。座の特権を廃止し、商業を活性化させた。', imageUrl: '/images/cards/rakuichi.png' },
+  { id: 'card-141', name: '千利休', category: 'great_people', rarity: 'N', description: '茶道を大成した茶聖。信長・秀吉に仕え、わび茶の美を極めた。', imageUrl: '/images/cards/rikyu.png' },
+
+  // ===== コンボカード: 大航海時代 (4枚) =====
+  { id: 'card-142', name: 'コロンブス', category: 'great_people', rarity: 'R', description: '大西洋を横断しアメリカ大陸に到達した航海者。大航海時代の先駆者。', imageUrl: '/images/cards/columbus.png' },
+  { id: 'card-143', name: 'マゼラン', category: 'great_people', rarity: 'R', description: '世界一周航海を率いた探検家。地球が丸いことを航海で証明した。', imageUrl: '/images/cards/magellan.png' },
+  { id: 'card-144', name: 'キャラベル船', category: 'inventions', rarity: 'N', description: '大航海時代を支えた帆船。小型ながら外洋航海に優れた性能を持つ。', imageUrl: '/images/cards/caravel.png' },
+  { id: 'card-145', name: '香辛料', category: 'inventions', rarity: 'N', description: 'コショウやシナモンなど東方の貴重な調味料。大航海時代の原動力となった。', imageUrl: '/images/cards/spice.png' },
 ];
 
 // ガチャ排出率

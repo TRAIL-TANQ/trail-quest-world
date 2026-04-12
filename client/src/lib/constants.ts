@@ -268,10 +268,10 @@ export const CARD_RARITY_COLORS: Record<string, string> = {
 
 // Card rarity representative images (used for all cards of same rarity)
 export const CARD_RARITY_IMAGES: Record<string, string> = {
-  N: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-v2-n-kPu7ZFuWT2GeTf2MLdEJCw.webp',
-  R: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-v2-r-mZgBL7gwn7vCxTHa746Sig.webp',
-  SR: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-v2-sr-XySLx9ch4Rk6tDm6eDiAdS.webp',
-  SSR: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663286960690/CC7Nszgn2u4nYzHuXnVPTK/card-v2-ssr-na7Dp8Tm8JQba5nGvv2f3V.webp',
+  N: '/images/frames/frame-n.png',
+  R: '/images/frames/frame-r.png',
+  SR: '/images/frames/frame-sr.png',
+  SSR: '/images/frames/frame-ssr.png',
 };
 
 // Card category display info (representative images per category - deprecated, use CARD_RARITY_IMAGES instead)

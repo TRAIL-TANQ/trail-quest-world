@@ -979,6 +979,91 @@ const QUIZ_DATA: Record<string, Quiz[]> = {
     { question: 'マリー・アントワネットの国は？', choices: ['イギリス', 'フランス', 'ドイツ', 'スペイン'], correctIndex: 1 },
     { question: 'ケーキの発祥地として有名な国は？', choices: ['日本', 'フランス', 'アメリカ', 'インド'], correctIndex: 1 },
   ],
+  // ===== コンボカード: ナポレオン =====
+  'card-130': [
+    { question: '大砲が戦場で広く使われるようになった時代は？', choices: ['古代', '中世後期〜近世', '現代', '縄文時代'], correctIndex: 1 },
+    { question: 'ナポレオンは元々何の兵科の出身？', choices: ['歩兵', '騎兵', '砲兵', '海軍'], correctIndex: 2 },
+    { question: '大砲の弾を飛ばす力は？', choices: ['バネ', '火薬の爆発', '蒸気', '電気'], correctIndex: 1 },
+  ],
+  'card-131': [
+    { question: 'ナポレオン法典は何を定めた法律？', choices: ['刑法', '民法', '憲法', '軍法'], correctIndex: 1 },
+    { question: 'ナポレオン法典が制定された年は？', choices: ['1789年', '1804年', '1815年', '1848年'], correctIndex: 1 },
+    { question: 'ナポレオン法典が影響を与えた国は？', choices: ['日本だけ', 'フランスだけ', '世界中の多くの国', 'イギリスだけ'], correctIndex: 2 },
+  ],
+  'card-132': [
+    { question: 'ワーテルローの戦いは何年に起きた？', choices: ['1789年', '1804年', '1815年', '1848年'], correctIndex: 2 },
+    { question: 'ワーテルローの戦いでナポレオンを破ったのは？', choices: ['ネルソン', 'ウェリントン', 'ビスマルク', 'チャーチル'], correctIndex: 1 },
+    { question: 'ワーテルローはどの国にある？', choices: ['フランス', 'ドイツ', 'ベルギー', 'オランダ'], correctIndex: 2 },
+  ],
+  // ===== コンボカード: アインシュタイン =====
+  'card-133': [
+    { question: 'E=mc²の「E」は何を表す？', choices: ['エネルギー', '電子', '地球', '元素'], correctIndex: 0 },
+    { question: 'E=mc²の「m」は何を表す？', choices: ['速度', '質量', '磁力', 'モル'], correctIndex: 1 },
+    { question: 'E=mc²はどの理論に関係する？', choices: ['進化論', '相対性理論', '量子力学', '万有引力'], correctIndex: 1 },
+  ],
+  'card-134': [
+    { question: 'アインシュタインの相対性理論が発表された年は？', choices: ['1895年', '1905年', '1915年', '1925年'], correctIndex: 1 },
+    { question: '相対性理論は何の関係を説明する？', choices: ['力と運動', '時間と空間', '生物と環境', '音と光'], correctIndex: 1 },
+    { question: '一般相対性理論が予言したのは？', choices: ['進化', 'ブラックホール', '地震', '台風'], correctIndex: 1 },
+  ],
+  'card-135': [
+    { question: '光速はおよそ秒速何キロメートル？', choices: ['3万km', '30万km', '300万km', '3000万km'], correctIndex: 1 },
+    { question: '光が地球から月まで届く時間は約？', choices: ['1秒', '1.3秒', '10秒', '1分'], correctIndex: 1 },
+    { question: '光より速いものは存在する？', choices: ['音', '電波', '何もない', 'ロケット'], correctIndex: 2 },
+  ],
+  // ===== コンボカード: キュリー夫人 =====
+  'card-136': [
+    { question: 'ラジウムを発見したのは？', choices: ['アインシュタイン', 'キュリー夫妻', 'ニュートン', 'ファラデー'], correctIndex: 1 },
+    { question: 'ラジウムの特徴は？', choices: ['磁力を持つ', '暗闇で光る', '水に沈む', '非常に軽い'], correctIndex: 1 },
+    { question: 'ラジウムは何という性質を持つ元素？', choices: ['放射性', '伝導性', '弾力性', '透明性'], correctIndex: 0 },
+  ],
+  'card-137': [
+    { question: 'キュリー夫人の研究ノートが今でも危険な理由は？', choices: ['呪われている', '放射線を発している', '毒が塗られている', '壊れやすい'], correctIndex: 1 },
+    { question: 'キュリー夫人の研究ノートはどこに保管されている？', choices: ['鉛の箱', 'ガラスケース', '金庫', '図書館'], correctIndex: 0 },
+    { question: 'キュリー夫人が研究していた分野は？', choices: ['天文学', '放射線', '生物学', '地質学'], correctIndex: 1 },
+  ],
+  'card-138': [
+    { question: 'ノーベル賞を創設したのは？', choices: ['エジソン', 'アルフレッド・ノーベル', 'アインシュタイン', 'ダーウィン'], correctIndex: 1 },
+    { question: 'キュリー夫人がノーベル賞を受賞した回数は？', choices: ['1回', '2回', '3回', '4回'], correctIndex: 1 },
+    { question: 'ノーベル賞メダルは何で作られている？', choices: ['銀', '金', 'プラチナ', '銅'], correctIndex: 1 },
+  ],
+  // ===== コンボカード: 織田信長 =====
+  'card-139': [
+    { question: '鉄砲が日本に伝来した年は？', choices: ['1453年', '1543年', '1603年', '1639年'], correctIndex: 1 },
+    { question: '鉄砲が伝来した場所は？', choices: ['長崎', '種子島', '堺', '京都'], correctIndex: 1 },
+    { question: '信長が大量の鉄砲を使った有名な戦いは？', choices: ['桶狭間の戦い', '長篠の戦い', '関ヶ原の戦い', '大坂の陣'], correctIndex: 1 },
+  ],
+  'card-140': [
+    { question: '楽市楽座の「楽」の意味は？', choices: ['楽しい', '自由な', '大きい', '新しい'], correctIndex: 1 },
+    { question: '楽市楽座で廃止されたのは？', choices: ['武士の特権', '座の特権', '寺の特権', '天皇の特権'], correctIndex: 1 },
+    { question: '楽市楽座を推進した武将は？', choices: ['豊臣秀吉', '徳川家康', '織田信長', '武田信玄'], correctIndex: 2 },
+  ],
+  'card-141': [
+    { question: '千利休が大成した文化は？', choices: ['華道', '茶道', '書道', '剣道'], correctIndex: 1 },
+    { question: '千利休が仕えた武将は？', choices: ['信長と秀吉', '家康と秀忠', '信玄と謙信', '義経と頼朝'], correctIndex: 0 },
+    { question: '千利休の茶の流派は？', choices: ['表千家', '裏千家', 'わび茶', '抹茶道'], correctIndex: 2 },
+  ],
+  // ===== コンボカード: 大航海時代 =====
+  'card-142': [
+    { question: 'コロンブスが到達した大陸は？', choices: ['アフリカ', 'アジア', 'アメリカ', 'オーストラリア'], correctIndex: 2 },
+    { question: 'コロンブスの航海を支援した国は？', choices: ['ポルトガル', 'スペイン', 'イタリア', 'フランス'], correctIndex: 1 },
+    { question: 'コロンブスがアメリカに到達した年は？', choices: ['1453年', '1492年', '1519年', '1543年'], correctIndex: 1 },
+  ],
+  'card-143': [
+    { question: 'マゼランの船隊が達成したことは？', choices: ['北極到達', '南極到達', '世界一周', '大西洋横断'], correctIndex: 2 },
+    { question: 'マゼランの出身国は？', choices: ['スペイン', 'ポルトガル', 'イタリア', 'フランス'], correctIndex: 1 },
+    { question: 'マゼランが命名した海峡は？', choices: ['ジブラルタル海峡', 'マゼラン海峡', 'マラッカ海峡', 'ドーバー海峡'], correctIndex: 1 },
+  ],
+  'card-144': [
+    { question: 'キャラベル船が活躍した時代は？', choices: ['古代ギリシャ', '大航海時代', '産業革命', '現代'], correctIndex: 1 },
+    { question: 'キャラベル船の特徴は？', choices: ['蒸気で動く', '小型で外洋航海に優れる', '巨大な戦艦', '潜水できる'], correctIndex: 1 },
+    { question: 'キャラベル船を多く使った国は？', choices: ['日本', 'ポルトガル・スペイン', 'イギリス', 'ロシア'], correctIndex: 1 },
+  ],
+  'card-145': [
+    { question: '大航海時代に求められた香辛料は？', choices: ['砂糖', 'コショウ', 'バター', '醤油'], correctIndex: 1 },
+    { question: '香辛料の産地として有名な地域は？', choices: ['北欧', '東南アジア・インド', '北米', '南極'], correctIndex: 1 },
+    { question: '香辛料が高価だった理由は？', choices: ['味が悪い', '遠い産地から運ぶ必要があった', '作るのが簡単だった', '誰でも手に入った'], correctIndex: 1 },
+  ],
 };
 
 // Effect descriptions by category
