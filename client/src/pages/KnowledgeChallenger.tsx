@@ -139,8 +139,8 @@ export default function KnowledgeChallenger() {
   const fastModeRef = useRef(false);
   useEffect(() => { fastModeRef.current = fastMode; }, [fastMode]);
   // Manual / auto mode toggle — manual mode pauses at each step for player tap
-  const [manualMode, setManualMode] = useState(true);
-  const manualModeRef = useRef(true);
+  const [manualMode, setManualMode] = useState(false);
+  const manualModeRef = useRef(false);
   useEffect(() => { manualModeRef.current = manualMode; }, [manualMode]);
   // Shown when manual mode wants player to advance (non-attacker steps)
   const [showManualAdvance, setShowManualAdvance] = useState(false);
@@ -1823,14 +1823,31 @@ export default function KnowledgeChallenger() {
              Layout: [AI card center] [AI deck stack right] */}
         <div className="flex-1 flex items-center justify-center gap-4 relative px-4">
           {playerIsDefender ? renderAttackerSlot() : renderDefenderSlot()}
-          <MiniDeckStack count={gameState.ai.deck.length} color="#ef4444" />
+          {(() => {
+            const aiDeckTappable = manualMode && waitingForPlayerReveal && playerIsDefender && cineStep === 'attack_reveal';
+            return (
+              <div className="flex flex-col items-center gap-1">
+                {aiDeckTappable && (
+                  <p className="text-[9px] font-bold text-red-300/80 animate-pulse">タップでめくる</p>
+                )}
+                <MiniDeckStack
+                  count={gameState.ai.deck.length}
+                  color="#ef4444"
+                  interactive={aiDeckTappable}
+                  glow={aiDeckTappable}
+                  onTap={handleAdvance}
+                />
+              </div>
+            );
+          })()}
         </div>
 
         {/* ====== CENTER BAND (flag) ====== */}
         <div className="flex items-center justify-center gap-3 py-2 relative min-h-[90px]">
           <div className="h-0.5 flex-1" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,215,0,0.5))' }} />
           <div
-            className={`kc-flag ${cineStep === 'resolve' ? 'kc-flag-pulse' : ''}`}
+            className={`kc-flag ${cineStep === 'resolve' ? 'kc-flag-pulse' : ''} ${showManualAdvance ? 'kc-deck-stack cursor-pointer' : ''}`}
+            onClick={showManualAdvance ? handleAdvance : undefined}
             style={{
               background: gameState.flagHolder === 'player'
                 ? 'radial-gradient(circle, rgba(34,197,94,0.55), rgba(34,197,94,0.1))'
@@ -1847,6 +1864,11 @@ export default function KnowledgeChallenger() {
             </p>
           </div>
           <div className="h-0.5 flex-1" style={{ background: 'linear-gradient(90deg, rgba(255,215,0,0.5), transparent)' }} />
+          {showManualAdvance && (
+            <p className="absolute -bottom-5 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] font-bold text-amber-200/70 animate-pulse z-50">
+              タップで続ける
+            </p>
+          )}
         </div>
 
         {/* ====== PLAYER AREA (bottom half) ======
@@ -1874,6 +1896,9 @@ export default function KnowledgeChallenger() {
                   glow={tappable}
                   onTap={handleAdvance}
                 />
+                {tappable && (
+                  <p className="text-[9px] font-bold text-green-300/70 animate-pulse">タップしてカードを出す</p>
+                )}
                 {tappable && (
                   <button
                     onClick={handleForfeitAttack}
@@ -1981,41 +2006,27 @@ export default function KnowledgeChallenger() {
         })()}
 
         {/* ====== Turn Transition Banner ====== */}
-        {cineStep === 'turn_transition' && (() => {
-          const playerDefends = gameState.flagHolder === 'player';
-          return (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-40">
-              <div
-                className="kc-turn-transition"
-                style={{
-                  padding: '20px 44px',
-                  borderRadius: '18px',
-                  textAlign: 'center',
-                  background: playerDefends
-                    ? 'linear-gradient(135deg, rgba(59,130,246,0.55), rgba(37,99,235,0.2))'
-                    : 'linear-gradient(135deg, rgba(239,68,68,0.55), rgba(185,28,28,0.2))',
-                  border: `4px solid ${playerDefends ? '#3b82f6' : '#ef4444'}`,
-                  boxShadow: `0 0 70px ${playerDefends ? 'rgba(59,130,246,0.85)' : 'rgba(239,68,68,0.85)'}`,
-                }}
-              >
-                <p
+        {cineStep === 'turn_transition' && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-40">
+            <div className="flex gap-1">
+              {(playerIsDefender ? '相手のターン！' : 'あなたのターン！').split('').map((char, i) => (
+                <span
+                  key={`tt-${i}`}
+                  className="kc-char-fadein"
                   style={{
-                    fontSize: '32px',
+                    fontSize: '36px',
                     fontWeight: 900,
-                    color: playerDefends ? '#93c5fd' : '#fca5a5',
-                    textShadow: `0 0 26px ${playerDefends ? 'rgba(59,130,246,1)' : 'rgba(239,68,68,1)'}, 0 2px 8px rgba(0,0,0,0.9)`,
-                    margin: 0,
-                    lineHeight: 1.1,
+                    color: playerIsDefender ? '#ef4444' : '#22c55e',
+                    textShadow: `0 0 20px ${playerIsDefender ? 'rgba(239,68,68,0.6)' : 'rgba(34,197,94,0.6)'}, 0 2px 8px rgba(0,0,0,0.9)`,
+                    animationDelay: `${i * 0.08}s`,
                   }}
                 >
-                  {playerDefends
-                    ? '🛡️ 相手のターン！あなたは防御です'
-                    : '⚔️ あなたのターン！攻撃せよ！'}
-                </p>
-              </div>
+                  {char}
+                </span>
+              ))}
             </div>
-          );
-        })()}
+          </div>
+        )}
 
         {/* ====== Round End Banner ====== */}
         {cineStep === 'round_end' && gameState.phase === 'round_end' && (() => {
@@ -2168,26 +2179,19 @@ export default function KnowledgeChallenger() {
       {gameState.effectTelop && (
         <div
           key={gameState.effectTelop.key}
-          className="fixed inset-0 z-[175] flex items-center justify-center pointer-events-none"
+          className="fixed top-0 left-0 right-0 z-[175] pointer-events-none kc-top-banner-slide"
         >
-          <div
-            className="kc-effect-telop px-6 py-4 rounded-2xl text-center"
-            style={{
-              background: 'linear-gradient(180deg, rgba(0,0,0,0.85), rgba(10,10,25,0.85))',
-              border: `3px solid ${gameState.effectTelop.color}`,
-              boxShadow: `0 0 32px ${gameState.effectTelop.color}aa, 0 8px 32px rgba(0,0,0,0.7)`,
-              maxWidth: '90vw',
-            }}
-          >
-            <p
-              className="font-black"
-              style={{
-                fontSize: '30px',
-                lineHeight: 1.25,
-                color: gameState.effectTelop.color,
-                textShadow: '0 2px 10px rgba(0,0,0,0.9), 0 0 20px rgba(0,0,0,0.6)',
-              }}
-            >
+          <div className="px-4 py-2 text-center" style={{
+            background: `linear-gradient(180deg, rgba(0,0,0,0.85), rgba(0,0,0,0.6))`,
+            borderBottom: `2px solid ${gameState.effectTelop.color}`,
+            boxShadow: `0 4px 16px ${gameState.effectTelop.color}44`,
+          }}>
+            <p className="font-black" style={{
+              fontSize: '18px',
+              lineHeight: 1.3,
+              color: gameState.effectTelop.color,
+              textShadow: '0 2px 8px rgba(0,0,0,0.9)',
+            }}>
               {gameState.effectTelop.text}
             </p>
           </div>
@@ -2198,24 +2202,18 @@ export default function KnowledgeChallenger() {
       {benchBoostTelop && (
         <div
           key={benchBoostTelop.key}
-          className="fixed inset-0 z-[180] flex items-end justify-center pointer-events-none"
-          style={{ paddingBottom: '25vh' }}
+          className="fixed top-0 left-0 right-0 z-[180] pointer-events-none kc-top-banner-slide"
         >
-          <div className="kc-bench-boost-telop px-5 py-3 rounded-xl text-center"
-            style={{
-              background: 'linear-gradient(180deg, rgba(0,10,40,0.9), rgba(0,5,20,0.9))',
-              border: '2px solid rgba(96,165,250,0.8)',
-              boxShadow: '0 0 24px rgba(96,165,250,0.5), 0 4px 20px rgba(0,0,0,0.7)',
-              maxWidth: '90vw',
-            }}
-          >
+          <div className="px-4 py-2 text-center" style={{
+            background: 'linear-gradient(180deg, rgba(0,10,40,0.9), rgba(0,5,20,0.7))',
+            borderBottom: '2px solid rgba(96,165,250,0.8)',
+            boxShadow: '0 4px 16px rgba(96,165,250,0.3)',
+          }}>
             <p className="font-black" style={{
-              fontSize: '24px',
+              fontSize: '18px',
               lineHeight: 1.3,
               color: benchBoostTelop.text.startsWith('🔥') ? '#ffd700' : '#60a5fa',
-              textShadow: benchBoostTelop.text.startsWith('🔥')
-                ? '0 0 16px rgba(255,215,0,0.8), 0 2px 8px rgba(0,0,0,0.9)'
-                : '0 0 16px rgba(96,165,250,0.8), 0 2px 8px rgba(0,0,0,0.9)',
+              textShadow: '0 2px 8px rgba(0,0,0,0.9)',
             }}>
               {benchBoostTelop.text}
             </p>
@@ -2223,36 +2221,16 @@ export default function KnowledgeChallenger() {
         </div>
       )}
 
-      {/* ===== Manual mode: big advance button ===== */}
-      {showManualAdvance && (
-        <button
+      {/* Full-screen tap overlay for manual advance (turn_banner, turn_transition, etc.) */}
+      {showManualAdvance && (cineStep === 'turn_banner' || cineStep === 'turn_transition' || cineStep === 'resolve' || cineStep === 'defender_show') && (
+        <div
+          className="fixed inset-0 z-[55] cursor-pointer"
           onClick={handleAdvance}
-          className="fixed bottom-6 left-[10%] right-[10%] z-[60] py-3.5 rounded-xl text-lg font-black text-center"
-          style={{
-            background: 'linear-gradient(135deg, #22c55e, #16a34a)',
-            color: 'white',
-            boxShadow: '0 4px 0 rgba(0,100,0,1), 0 6px 12px rgba(0,0,0,0.3)',
-            minHeight: '56px',
-          }}
         >
-          {cineStep === 'attack_reveal' ? 'めくる \u25B6' : '次へ \u25B6'}
-        </button>
-      )}
-
-      {/* ===== Manual mode: advance button for opponent attack reveal ===== */}
-      {manualMode && waitingForPlayerReveal && !showManualAdvance && gameState.flagHolder === 'player' && cineStep === 'attack_reveal' && (
-        <button
-          onClick={handleAdvance}
-          className="fixed bottom-6 left-[10%] right-[10%] z-[60] py-3.5 rounded-xl text-lg font-black text-center"
-          style={{
-            background: 'linear-gradient(135deg, #22c55e, #16a34a)',
-            color: 'white',
-            boxShadow: '0 4px 0 rgba(0,100,0,1), 0 6px 12px rgba(0,0,0,0.3)',
-            minHeight: '56px',
-          }}
-        >
-          めくる ▶
-        </button>
+          <p className="absolute bottom-8 left-0 right-0 text-center text-sm font-bold text-amber-200/50 animate-pulse">
+            タップで続ける
+          </p>
+        </div>
       )}
 
       {/* ===== Round victory celebration ===== */}
@@ -2969,6 +2947,24 @@ export default function KnowledgeChallenger() {
           100% { opacity: 1; transform: scale(1) rotate(0); }
         }
         .kc-round-victory-telop { animation: kcRoundVictoryZoom 0.8s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+        /* Top banner slide-in for effect/bench telop */
+        @keyframes kcTopBannerSlide {
+          0%   { opacity: 0; transform: translateY(-100%); }
+          15%  { opacity: 1; transform: translateY(0); }
+          85%  { opacity: 1; transform: translateY(0); }
+          100% { opacity: 0; transform: translateY(-100%); }
+        }
+        .kc-top-banner-slide { animation: kcTopBannerSlide 2s ease-out forwards; }
+
+        /* Character-by-character fade-in for turn transition */
+        @keyframes kcCharFadeIn {
+          0%   { opacity: 0; transform: translateY(10px); }
+          30%  { opacity: 1; transform: translateY(0); }
+          80%  { opacity: 1; }
+          100% { opacity: 0; }
+        }
+        .kc-char-fadein { animation: kcCharFadeIn 1.5s ease-out forwards; opacity: 0; display: inline-block; }
       `}</style>
     </div>
   );
