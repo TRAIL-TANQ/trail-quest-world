@@ -818,11 +818,11 @@ export function applyRevealEffect(
     case 'anaconda': {
       if (role === 'attacker') {
         next = { ...next, defenderBonus: next.defenderBonus - 2 };
-        // Check evolution: アマゾン川 + 毒矢カエル + ピラニア all on bench
+        // Check evolution: ベンチに毒矢カエル+ピラニアの両方がいれば大蛇に進化
         const my = side === 'player' ? next.player : next.ai;
         const sealed = next.sealedBenchNames[side];
         const benchNames = new Set(my.bench.filter((b) => !sealed.includes(b.name)).map((b) => b.name));
-        if (benchNames.has('アマゾン川') && benchNames.has('毒矢カエル') && benchNames.has('ピラニア')) {
+        if (benchNames.has('毒矢カエル') && benchNames.has('ピラニア')) {
           // Evolve: replace アナコンダ in attackRevealed with 大蛇
           const giantSnakeTemplate = ALL_BATTLE_CARDS.find((c) => c.name === '大蛇');
           if (giantSnakeTemplate) {
@@ -836,8 +836,8 @@ export function applyRevealEffect(
               attackRevealed: newRevealed,
               attackCurrentPower: next.attackCurrentPower - oldAtk + newAtk,
             };
-            // Glow the 3 bench cards
-            next = withBenchGlow(next, side, ['アマゾン川', '毒矢カエル', 'ピラニア']);
+            // Glow the bench cards that triggered evolution
+            next = withBenchGlow(next, side, ['毒矢カエル', 'ピラニア']);
             telop = { text: '🐍 進化！アナコンダ → 大蛇！', color: '#ffd700' };
             console.log('[Engine] アナコンダ → 大蛇に進化！');
           } else {
@@ -872,28 +872,18 @@ export function applyRevealEffect(
       break;
     }
     case 'anaconda_hunter': {
-      // 蛇狩りの達人: ベンチにアナコンダで攻撃+3、アマゾン川もあれば防御+2
-      if (role === 'attacker') {
-        const my = side === 'player' ? next.player : next.ai;
-        const sealed = next.sealedBenchNames[side];
-        const hasAnaconda = my.bench.some((b) => b.name === 'アナコンダ' && !sealed.includes(b.name));
-        const hasAmazon = my.bench.some((b) => b.name === 'アマゾン川' && !sealed.includes(b.name));
-        const glow: string[] = [];
-        if (hasAnaconda) { bonusAttack += 3; glow.push('アナコンダ'); }
-        if (hasAmazon) { glow.push('アマゾン川'); }
-        if (glow.length > 0) next = withBenchGlow(next, side, glow);
-        telop = { text: `🏹 蛇狩りの達人！${hasAnaconda ? '攻撃+3' : ''}${hasAnaconda && hasAmazon ? ' ' : ''}${hasAmazon ? '防御+2' : ''}${!hasAnaconda && !hasAmazon ? '対象なし' : ''}`, color };
+      // 蛇使い: ベンチのアナコンダ1枚をデッキの一番上に戻す
+      const my = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      const anacondaSlot = my.bench.find((b) => b.name === 'アナコンダ' && !sealed.includes(b.name));
+      if (anacondaSlot) {
+        const newBench = removeOneFromBench(my.bench, 'アナコンダ');
+        const newDeck = [anacondaSlot.card, ...my.deck];
+        next = applySide(next, side, { ...my, bench: newBench, deck: newDeck });
+        next = withBenchGlow(next, side, ['アナコンダ']);
+        telop = { text: '🐍 蛇使い！アナコンダをデッキトップへ！', color: '#ffd700' };
       } else {
-        const my = side === 'player' ? next.player : next.ai;
-        const sealed = next.sealedBenchNames[side];
-        const hasAmazon = my.bench.some((b) => b.name === 'アマゾン川' && !sealed.includes(b.name));
-        if (hasAmazon) {
-          next = { ...next, defenderBonus: next.defenderBonus + 2 };
-          next = withBenchGlow(next, side, ['アマゾン川']);
-          telop = { text: '🏹 蛇狩りの達人！防御+2', color };
-        } else {
-          telop = { text: '🏹 蛇狩りの達人！', color };
-        }
+        telop = { text: '🐍 蛇使い（ベンチにアナコンダがいません）', color };
       }
       break;
     }

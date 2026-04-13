@@ -97,7 +97,7 @@ export const EFFECT_DEFS: Record<string, CardEffect> = {
   terracotta:      { id: 'terracotta',      name: '不滅の軍勢',       description: 'From the bench: 始皇帝がベンチに送られる時、代わりに隔離する。', category: 'special' },
   qinshi:          { id: 'qinshi',          name: '天下統一',         description: 'ベンチの世界遺産1枚につき攻撃+2、防御+1。', category: 'special' },
   amazon_river:    { id: 'amazon_river',    name: '密林の大河',       description: '公開時、デッキ内のピラニア・アナコンダ・毒矢カエルのいずれか1枚をデッキの一番上に置ける。', category: 'special' },
-  anaconda:        { id: 'anaconda',        name: '締めつけ',         description: '公開時、相手防御-2。ベンチにアマゾン川+毒矢カエル+ピラニアの3枚で大蛇に進化。', category: 'debuff' },
+  anaconda:        { id: 'anaconda',        name: '締めつけ',         description: '公開時、相手防御-2。ベンチに毒矢カエル+ピラニアの2種がいれば大蛇に進化。', category: 'debuff' },
   poison_frog:     { id: 'poison_frog',     name: '猛毒',             description: '公開時、相手デッキ上1枚を隔離。アマゾン川があれば2枚。', category: 'bench' },
   apple:           { id: 'apple',           name: '落ちるリンゴ',     description: '公開時、デッキ内のニュートンをデッキ一番上に移動。', category: 'bench' },
   prism:           { id: 'prism',           name: '光の分解',         description: 'From the bench: ニュートンの攻撃+2、公開時相手防御効果無効。', category: 'atk' },
@@ -158,7 +158,7 @@ export const EFFECT_DEFS: Record<string, CardEffect> = {
   elixir:           { id: 'elixir',           name: '永遠の命',         description: 'From the bench: 始皇帝がベンチに送られる時、代わりにデッキの一番下に戻す。', category: 'special' },
   giant_snake:      { id: 'giant_snake',      name: '呑み込む者',       description: 'ベンチにある攻撃力2のカード1枚につき攻撃+1/防御+1。', category: 'special' },
   photosynthesis:   { id: 'photosynthesis',   name: '密林の再生',       description: '公開時、ベンチのアマゾン種族（ピラニア・アナコンダ・毒矢カエル・大蛇）を1枚デッキの一番上に戻す。', category: 'bench' },
-  anaconda_hunter:  { id: 'anaconda_hunter',  name: '蛇狩りの達人',     description: '公開時、ベンチにアナコンダがいれば攻撃+3。さらにアマゾン川もあれば防御+2。', category: 'atk' },
+  anaconda_hunter:  { id: 'anaconda_hunter',  name: '蛇使い',           description: '公開時、ベンチのアナコンダ1枚をデッキの一番上に戻す。', category: 'bench' },
 };
 
 // Card name → effect id. These are the only cards that carry on-reveal effects.
