@@ -153,6 +153,10 @@ export default function KnowledgeChallenger() {
   const [detailCard, setDetailCard] = useState<BattleCard | null>(null);
   // Exile zone overlay
   const [showExile, setShowExile] = useState(false);
+  // Sound effect hook (future SE implementation)
+  const playSound = useCallback((soundId: string) => {
+    console.log('[SFX]', soundId);
+  }, []);
   // Effect cutin overlay (SR+ cards show cinematic cutin)
   const [cutinCard, setCutinCard] = useState<BattleCard | null>(null);
   // Evolution overlay
@@ -582,6 +586,7 @@ export default function KnowledgeChallenger() {
 
           // Reveal one card atomically
           let resultState: GameState | null = null;
+          playSound('card-flip');
           setGameState((prev) => {
             if (!prev) return prev;
             const next = revealNextAttackCard(prev);
@@ -616,6 +621,7 @@ export default function KnowledgeChallenger() {
             if (lastRevealed?.name === '大蛇' && lastRevealed.id.startsWith('evolved-')) {
               const anacondaTemplate = ALL_BATTLE_CARDS.find((c) => c.name === 'アナコンダ');
               if (anacondaTemplate) {
+                playSound('evolve');
                 setEvolutionOverlay({ from: anacondaTemplate, to: lastRevealed });
                 await waitMs(3000);
                 if (unmountedRef.current) return;
@@ -650,6 +656,7 @@ export default function KnowledgeChallenger() {
               if (combos) {
                 for (const combo of combos) {
                   if (combo.needs.every((n) => myBenchNames.has(n))) {
+                    playSound('combo');
                     setComboName(combo.name);
                     await waitMs(1500);
                     if (unmountedRef.current) return;
@@ -704,6 +711,7 @@ export default function KnowledgeChallenger() {
             // Deck-out → defender wins this round
             console.log('[KC] → round_end during reveal (deck-out): round', rs.round, 'winner:', rs.roundWinner);
             const isPlayerRoundWin = rs.roundWinner === 'player';
+            playSound(isPlayerRoundWin ? 'round-clear' : 'round-lost');
             const trophy = rs.trophyFans[rs.round - 1] ?? 0;
 
             // Phase 1: Victory/defeat banner with fan info (3s)
@@ -763,6 +771,7 @@ export default function KnowledgeChallenger() {
           }
 
           if (hasAttackSucceeded(rs)) {
+            playSound('break');
             console.log('[KC] → attack succeeded, resolving');
             await waitStep(POWER_COMPARE_MS);
             if (unmountedRef.current) return;
@@ -3557,6 +3566,43 @@ export default function KnowledgeChallenger() {
           50%      { box-shadow: 0 0 12px rgba(239,68,68,0.5); }
         }
         .kc-danger-pulse { animation: kcDangerPulse 1s ease-in-out infinite; }
+
+        /* ===== Phase 4: Card Shine ===== */
+        @keyframes kcCardShine {
+          0%, 100% { transform: translateX(-150%); }
+          50%      { transform: translateX(150%); }
+        }
+        .kc-card-shine {
+          overflow: hidden;
+        }
+        .kc-card-shine::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(105deg, transparent 35%, rgba(255,255,255,0.12) 42%, rgba(255,255,255,0.06) 48%, transparent 55%);
+          animation: kcCardShine 5s ease-in-out infinite;
+          pointer-events: none;
+        }
+        .kc-card-shine-ssr {
+          overflow: hidden;
+        }
+        .kc-card-shine-ssr::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(105deg, transparent 30%, rgba(255,50,50,0.1) 36%, rgba(255,200,50,0.15) 42%, rgba(50,255,50,0.1) 48%, rgba(50,50,255,0.1) 54%, transparent 60%);
+          animation: kcCardShine 4s ease-in-out infinite;
+          pointer-events: none;
+        }
+
+        /* ===== Reduced Motion ===== */
+        @media (prefers-reduced-motion: reduce) {
+          *, *::before, *::after {
+            animation-duration: 0.01s !important;
+            transition-duration: 0.01s !important;
+          }
+          .kc-bg-particle, .kc-confetti-piece { display: none !important; }
+        }
       `}</style>
     </div>
   );
@@ -3851,6 +3897,8 @@ function CardDisplay({ card, isDefense, isWinner, size, mode, onTap, atkBonus = 
         background: '#0b1128',
         boxShadow: isWinner
           ? '0 0 24px rgba(255,215,0,0.55), 0 0 48px rgba(255,215,0,0.25), 0 6px 20px rgba(0,0,0,0.5)'
+          : card.rarity === 'SSR' ? '0 0 12px rgba(255,215,0,0.5), 0 0 24px rgba(255,215,0,0.2), 0 6px 20px rgba(0,0,0,0.5)'
+          : card.rarity === 'SR' ? '0 0 8px rgba(255,215,0,0.3), 0 6px 20px rgba(0,0,0,0.5)'
           : '0 6px 20px rgba(0,0,0,0.5)',
         width: `${w}px`, height: `${h}px`,
       }}
@@ -3880,6 +3928,10 @@ function CardDisplay({ card, isDefense, isWinner, size, mode, onTap, atkBonus = 
         className="absolute inset-0 w-full h-full object-cover pointer-events-none"
         style={{ zIndex: 2 }}
       />
+      {/* Card shine effect (R and above) */}
+      {card.rarity !== 'N' && (
+        <div className={`absolute inset-0 pointer-events-none ${card.rarity === 'SSR' ? 'kc-card-shine-ssr' : 'kc-card-shine'}`} style={{ zIndex: 2 }} />
+      )}
       {/* Card name (on top of frame) */}
       <span
         className="absolute left-0 right-0 text-center font-bold text-white truncate px-2"
