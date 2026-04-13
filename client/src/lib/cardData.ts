@@ -134,7 +134,7 @@ export const COLLECTION_CARDS: CollectionCard[] = [
   { id: 'card-112', name: 'ペスト菌', category: 'inventions', rarity: 'N', description: '黒死病と呼ばれた恐るべき感染症の原因菌。北里柴三郎が発見した。', imageUrl: '/images/cards/plague.png' },
   { id: 'card-113', name: '血清', category: 'inventions', rarity: 'N', description: '抗体を含む治療液。北里柴三郎が破傷風の血清療法を確立した。', imageUrl: '/images/cards/serum.png' },
   { id: 'card-114', name: '始皇帝', category: 'great_people', rarity: 'SR', description: '中国を初めて統一した秦の皇帝。万里の長城や兵馬俑を築いた絶対君主。', imageUrl: '/images/cards/emperor-qin.png' },
-  { id: 'card-115', name: 'アマゾン川', category: 'world_heritage', rarity: 'N', description: '南米を貫く世界最大の川。無数の生き物が生息する密林の命の源。', imageUrl: '/images/cards/amazon-river.png' },
+  { id: 'card-115', name: 'アマゾン川', category: 'world_heritage', rarity: 'SR', description: 'アマゾン流域の生命の源。密林の仲間を呼び寄せる大河。', imageUrl: '/images/cards/amazon-river.png' },
   { id: 'card-116', name: 'アナコンダ', category: 'creatures', rarity: 'N', description: 'アマゾンに棲む世界最大級のヘビ。獲物を締め上げて捕食する。', imageUrl: '/images/cards/anaconda.png' },
   { id: 'card-117', name: '毒矢カエル', category: 'creatures', rarity: 'N', description: '鮮やかな色をしたアマゾンのカエル。先住民が矢毒に使う猛毒を持つ。', imageUrl: '/images/cards/poison-frog.png' },
   { id: 'card-118', name: 'リンゴ', category: 'inventions', rarity: 'N', description: 'ニュートンが万有引力を思いつくきっかけになったとされる果実。', imageUrl: '/images/cards/apple.png' },

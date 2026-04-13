@@ -799,7 +799,20 @@ export function applyRevealEffect(
       break;
     }
     case 'amazon_river': {
-      telop = { text: '🌊アマゾン川！生き物を鼓舞', color };
+      // 密林の大河: デッキ内のピラニア・アナコンダ・毒矢カエルを1枚デッキトップに置く
+      const amazonTargets = new Set(['ピラニア', 'アナコンダ', '毒矢カエル']);
+      const myState = side === 'player' ? next.player : next.ai;
+      const targetIdx = myState.deck.findIndex((c) => amazonTargets.has(c.name));
+      if (targetIdx >= 0) {
+        const target = myState.deck[targetIdx];
+        const newDeck = [...myState.deck];
+        newDeck.splice(targetIdx, 1);
+        newDeck.unshift(target); // place on top
+        next = applySide(next, side, { ...myState, deck: newDeck });
+        telop = { text: `🏞️ 密林の大河！${target.name}をデッキトップへ！`, color: '#ffd700' };
+      } else {
+        telop = { text: '🏞️ 密林の大河（対象カードがありません）', color };
+      }
       break;
     }
     case 'anaconda': {
@@ -1484,7 +1497,7 @@ function computeAttackerAura(
   let bonus = 0;
   const details: BenchBoostDetail[] = [];
   if (names.has('軍旗')) { bonus += 1; details.push({ benchCardName: '軍旗', atkBonus: 1, defBonus: 0 }); }
-  if (names.has('アマゾン川') && card.category === 'creature') { bonus += 1; details.push({ benchCardName: 'アマゾン川', atkBonus: 1, defBonus: 0 }); }
+  // アマゾン川: no longer a bench aura (changed to on-reveal deck search)
   if (sunflower >= 2) { bonus += 1; details.push({ benchCardName: 'ひまわり', atkBonus: 1, defBonus: 0 }); }
   // Opponent 万有引力: 2枚目以降の攻撃 -1
   const opp = otherSide(attackerSide);
@@ -1499,8 +1512,7 @@ function computeAttackerAura(
   if (rubySlot) { const v = rubySlot.count >= 2 ? 2 : 1; bonus += v; details.push({ benchCardName: 'ルビー', atkBonus: v, defBonus: 0 }); }
   // サバンナ aura: 生き物カード攻撃+1
   if (names.has('サバンナ') && card.category === 'creature') { bonus += 1; details.push({ benchCardName: 'サバンナ', atkBonus: 1, defBonus: 0 }); }
-  // サバンナ + アマゾン川 combo: 生き物さらに攻撃+1
-  if (names.has('サバンナ') && names.has('アマゾン川') && card.category === 'creature') { bonus += 1; details.push({ benchCardName: 'サバンナ+アマゾン川', atkBonus: 1, defBonus: 0 }); }
+  // サバンナ combo (アマゾン川 removed from bench auras)
   // 蒸気機関 aura: 科学発明カード攻撃+1 (石炭もあれば+2)
   if (names.has('蒸気機関') && card.category === 'invention') {
     const v = names.has('石炭') ? 2 : 1;

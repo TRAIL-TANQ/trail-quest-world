@@ -96,7 +96,7 @@ export const EFFECT_DEFS: Record<string, CardEffect> = {
   kitasato:        { id: 'kitasato',        name: '近代医学の父',     description: 'ベンチにペスト菌＋血清がいれば防御+5、封印全解除。', category: 'def' },
   terracotta:      { id: 'terracotta',      name: '不滅の軍勢',       description: 'From the bench: 始皇帝がベンチに送られる時、代わりに隔離する。', category: 'special' },
   qinshi:          { id: 'qinshi',          name: '天下統一',         description: 'ベンチの世界遺産1枚につき攻撃+2、防御+1。', category: 'special' },
-  amazon_river:    { id: 'amazon_river',    name: '密林の大河',       description: 'From the bench: 味方の生き物カードの攻撃+1。', category: 'atk' },
+  amazon_river:    { id: 'amazon_river',    name: '密林の大河',       description: '公開時、デッキ内のピラニア・アナコンダ・毒矢カエルのいずれか1枚をデッキの一番上に置ける。', category: 'special' },
   anaconda:        { id: 'anaconda',        name: '締めつけ',         description: '公開時、相手防御-2。ベンチにアマゾン川+毒矢カエル+ピラニアの3枚で大蛇に進化。', category: 'debuff' },
   poison_frog:     { id: 'poison_frog',     name: '猛毒',             description: '公開時、相手デッキ上1枚を隔離。アマゾン川があれば2枚。', category: 'bench' },
   apple:           { id: 'apple',           name: '落ちるリンゴ',     description: '公開時、デッキ内のニュートンをデッキ一番上に移動。', category: 'bench' },
@@ -345,7 +345,7 @@ export const CARD_STAT_OVERRIDES: Record<string, StatProfile> = {
   'ペスト菌':         { attackPower: 1, defensePower: 1 },
   '血清':             { attackPower: 1, defensePower: 1 },
   '始皇帝':           { attackPower: 4, defensePower: 4 },
-  'アマゾン川':       { attackPower: 1, defensePower: 4 },
+  'アマゾン川':       { attackPower: 1, defensePower: 3 },
   'アナコンダ':       { attackPower: 2, defensePower: 2 },
   '毒矢カエル':       { attackPower: 1, defensePower: 1 },
   'リンゴ':           { attackPower: 1, defensePower: 1 },
@@ -1406,6 +1406,12 @@ function toBattleCard(cc: CollectionCard): BattleCard {
     fromTheBench,
     effect,
   };
+}
+
+// Unique card instance ID counter (prevents React key collisions)
+let _cardUid = 0;
+export function uniqueCardId(prefix: string, baseId: string): string {
+  return `${prefix}-${baseId}-${++_cardUid}`;
 }
 
 // All battle cards from collection
