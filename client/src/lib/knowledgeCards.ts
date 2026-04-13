@@ -61,7 +61,7 @@ export const EFFECT_DEFS: Record<string, CardEffect> = {
   davinci:    { id: 'davinci',    name: '万能の天才',         description: '公開時、攻撃時は攻撃+3、防御時は防御+3。', category: 'special' },
   einstein:   { id: 'einstein',   name: '天才の頭脳',         description: 'ベンチに「相対性理論の論文」で攻撃+4。「光速」で防御+3。両方あれば相手全攻撃カードパワー-1。', category: 'special' },
   curie:      { id: 'curie',      name: '二度のノーベル賞',   description: 'ベンチに「ラジウム」で攻撃+3。「研究ノート」で防御+3。両方あれば全味方カード効果2回発動。', category: 'special' },
-  napoleon:   { id: 'napoleon',   name: '皇帝の号令',         description: 'ベンチに「大砲」で攻撃+4。「ナポレオン法典」で防御+3。両方あれば味方全カード攻撃+1。', category: 'special' },
+  napoleon:   { id: 'napoleon',   name: '皇帝の号令',         description: 'ベンチの大砲1枚につき攻撃+1、法典1枚につき防御+1（重複可能）。', category: 'special' },
   cleopatra:  { id: 'cleopatra',  name: '魅了',               description: '公開時、相手のデッキ一番上を隔離する。', category: 'bench' },
   nobunaga:   { id: 'nobunaga',   name: '天下布武',           description: 'ベンチに「鉄砲」で攻撃+3。「楽市楽座」で防御+2。両方あれば相手ベンチ1枚封印。', category: 'special' },
   mozart:     { id: 'mozart',     name: '天才の旋律',         description: '公開時、次に公開する味方カードの攻撃+2。', category: 'atk' },
@@ -74,7 +74,7 @@ export const EFFECT_DEFS: Record<string, CardEffect> = {
   // Telescope: search own deck for 地動説 and move it to the top.
   telescope:  { id: 'telescope',  name: '天体観測',           description: '公開時、デッキ内の「地動説」をデッキの一番上に移動する。', category: 'special' },
   // Gunpowder: passive bench effect (no reveal action) — read by Dynamite at reveal.
-  gunpowder:  { id: 'gunpowder',  name: '爆薬の基礎',         description: 'From the bench: ベンチにある間、「ダイナマイト」と「大砲」の攻撃+2。', category: 'special' },
+  gunpowder:  { id: 'gunpowder',  name: '爆薬の基礎',         description: 'From the bench: ダイナマイトと大砲の攻撃+1（重複可能）。', category: 'special' },
   // Heliocentric: passive bench effect — read by Galileo at reveal.
   heliocentric: { id: 'heliocentric', name: 'コペルニクスの真理', description: 'From the bench: ベンチにある間、「ガリレオ」の攻撃+1/防御+1 (重複可)。', category: 'special' },
   // Dynamite: gains +2 attack per 火薬 on own bench.
@@ -133,8 +133,8 @@ export const EFFECT_DEFS: Record<string, CardEffect> = {
   research_notes:  { id: 'research_notes',  name: '献身の記録',       description: 'From the bench: キュリー夫人の防御+3。', category: 'def' },
   nobel_medal:     { id: 'nobel_medal',     name: '栄光の証',         description: 'From the bench: キュリー夫人/アインシュタイン/ダーウィンの攻防+2。', category: 'special' },
   cannon:          { id: 'cannon',          name: '砲撃',             description: 'From the bench: ナポレオンの攻撃+4。公開時、ベンチに火薬があれば攻撃2倍。', category: 'atk' },
-  napoleon_code:   { id: 'napoleon_code',   name: '法の支配',         description: 'From the bench: ナポレオンの防御+3。', category: 'def' },
-  waterloo:        { id: 'waterloo',        name: '最後の戦い',       description: 'From the bench: デッキ残り3枚以下でナポレオン攻防+5。', category: 'special' },
+  napoleon_code:   { id: 'napoleon_code',   name: '法の支配',         description: 'From the bench: ナポレオンの防御+1（重複可能）。', category: 'def' },
+  waterloo:        { id: 'waterloo',        name: '最後の戦い',       description: 'From the bench: デッキ残り3枚以下の時、ベンチのナポレオンをデッキの一番下に戻す。', category: 'special' },
   // ===== 宝石カード + アフリカデッキ =====
   diamond:          { id: 'diamond',          name: '不滅の輝き',       description: 'From the bench: 味方全カード防御+1。隔離・封印対象にならない。', category: 'def' },
   ruby:             { id: 'ruby',             name: '情熱の炎',         description: 'From the bench: 攻撃側味方全攻撃+1。2枚以上で+2。', category: 'atk' },

@@ -339,34 +339,23 @@ export function applyRevealEffect(
       break;
     }
     case 'napoleon': {
+      // ベンチの大砲1枚につき攻撃+1、法典1枚につき防御+1（重複可能）
       const my = side === 'player' ? next.player : next.ai;
       const sealed = next.sealedBenchNames[side];
-      const hasCannon = my.bench.some((b) => b.name === '大砲' && !sealed.includes(b.name));
-      const hasCode = my.bench.some((b) => b.name === 'ナポレオン法典' && !sealed.includes(b.name));
+      const cannonSlot = my.bench.find((b) => b.name === '大砲' && !sealed.includes(b.name));
+      const codeSlot = my.bench.find((b) => b.name === 'ナポレオン法典' && !sealed.includes(b.name));
+      const cannonCount = cannonSlot?.count ?? 0;
+      const codeCount = codeSlot?.count ?? 0;
       const napoleonGlow: string[] = [];
-      if (hasCannon) napoleonGlow.push('大砲');
-      if (hasCode) napoleonGlow.push('ナポレオン法典');
+      if (cannonCount > 0) napoleonGlow.push('大砲');
+      if (codeCount > 0) napoleonGlow.push('ナポレオン法典');
       if (napoleonGlow.length > 0) next = withBenchGlow(next, side, napoleonGlow);
       if (role === 'attacker') {
-        const atkBonus = hasCannon ? 4 : 0;
-        bonusAttack += atkBonus;
-        if (hasCannon && hasCode) {
-          next = {
-            ...next,
-            roundAttackBonus: { ...next.roundAttackBonus, [side]: next.roundAttackBonus[side] + 1 },
-          };
-        }
-        telop = { text: `⚡ナポレオン皇帝の号令！攻撃+${atkBonus}${hasCannon && hasCode ? ' 味方全攻+1' : ''}`, color };
+        bonusAttack += cannonCount;
+        telop = { text: `⚡皇帝の号令！大砲${cannonCount}枚→攻撃+${cannonCount}`, color };
       } else {
-        const defBonus = hasCode ? 3 : 0;
-        next = { ...next, defenderBonus: next.defenderBonus + defBonus };
-        if (hasCannon && hasCode) {
-          next = {
-            ...next,
-            roundAttackBonus: { ...next.roundAttackBonus, [side]: next.roundAttackBonus[side] + 1 },
-          };
-        }
-        telop = { text: `⚡ナポレオン皇帝の号令！防御+${defBonus}`, color };
+        if (codeCount > 0) next = { ...next, defenderBonus: next.defenderBonus + codeCount };
+        telop = { text: `⚡皇帝の号令！法典${codeCount}枚→防御+${codeCount}`, color };
       }
       break;
     }
@@ -602,8 +591,8 @@ export function applyRevealEffect(
       break;
     }
     case 'gunpowder': {
-      // Passive bench effect — bonus read by Dynamite and Cannon.
-      telop = { text: '💥火薬！ベンチでダイナマイト・大砲を強化', color };
+      // Passive bench effect — bonus read by Dynamite and Cannon (+1 per copy, stackable)
+      telop = { text: '💥火薬！ベンチでダイナマイト・大砲を強化（重複可能）', color };
       break;
     }
     case 'dynamite': {
@@ -613,9 +602,9 @@ export function applyRevealEffect(
         const gunpowderSlot = myState.bench.find((b) => b.name === '火薬');
         const copies = gunpowderSlot?.count ?? 0;
         if (copies > 0) {
-          bonusAttack += copies * 2;
+          bonusAttack += copies;
           next = withBenchGlow(next, side, ['火薬']);
-          telop = { text: `📋 火薬のベンチ効果！ダイナマイト 攻撃+${copies * 2}`, color };
+          telop = { text: `📋 火薬${copies}枚→ダイナマイト攻撃+${copies}`, color };
         } else {
           telop = { text: '💣ダイナマイトの大爆発！火薬なし...', color };
         }
@@ -1159,16 +1148,16 @@ export function applyRevealEffect(
       break;
     }
     case 'cannon': {
-      // 大砲: ベンチに火薬があれば攻撃2倍
+      // 大砲: ベンチの火薬1枚につき攻撃+1（重複可能）
       if (role === 'attacker') {
         const my = side === 'player' ? next.player : next.ai;
         const sealed = next.sealedBenchNames[side];
-        const hasGunpowder = my.bench.some((b) => b.name === '火薬' && !sealed.includes(b.name));
-        if (hasGunpowder) {
-          const baseAtk = getBaseAttack(card);
-          bonusAttack += baseAtk; // double: base already counted, add another base
+        const gunpowderSlot = my.bench.find((b) => b.name === '火薬' && !sealed.includes(b.name));
+        const gpCount = gunpowderSlot?.count ?? 0;
+        if (gpCount > 0) {
+          bonusAttack += gpCount;
           next = withBenchGlow(next, side, ['火薬']);
-          telop = { text: `💥 火薬×大砲！攻撃2倍（${baseAtk}→${baseAtk * 2}）`, color };
+          telop = { text: `💥 火薬${gpCount}枚→大砲攻撃+${gpCount}`, color };
         } else {
           telop = { text: '🏰大砲！ナポレオンの装備', color };
         }
@@ -1177,8 +1166,29 @@ export function applyRevealEffect(
       }
       break;
     }
-    case 'napoleon_code': case 'waterloo': {
-      telop = { text: '🏰ナポレオンの装備！', color };
+    case 'napoleon_code': {
+      // ナポレオン法典: passive bench effect (read by Napoleon on reveal)
+      telop = { text: '📜ナポレオン法典！ベンチでナポレオン防御強化（重複可能）', color };
+      break;
+    }
+    case 'waterloo': {
+      // ワーテルロー: デッキ残り3枚以下でベンチのナポレオンをデッキ底に戻す
+      const my = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      if (my.deck.length <= 3) {
+        const napoleonSlot = my.bench.find((b) => b.name === 'ナポレオン' && !sealed.includes(b.name));
+        if (napoleonSlot) {
+          const newBench = removeOneFromBench(my.bench, 'ナポレオン');
+          const newDeck = [...my.deck, napoleonSlot.card];
+          next = applySide(next, side, { ...my, bench: newBench, deck: newDeck });
+          next = withBenchGlow(next, side, ['ワーテルローの戦い']);
+          telop = { text: '⚔️ ワーテルロー！ナポレオンがデッキに帰還！', color: '#ffd700' };
+        } else {
+          telop = { text: '⚔️ ワーテルロー（ナポレオン不在）', color };
+        }
+      } else {
+        telop = { text: '⚔️ ワーテルローの戦い（デッキ3枚超、効果なし）', color };
+      }
       break;
     }
     case 'radium': case 'research_notes': case 'nobel_medal': {
