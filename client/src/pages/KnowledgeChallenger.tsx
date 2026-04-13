@@ -1548,12 +1548,12 @@ export default function KnowledgeChallenger() {
 
           {/* Fan totals */}
           <div className="flex items-center justify-center gap-3 mb-4">
-            <div className="text-center px-4 py-2 rounded-lg" style={{ background: 'rgba(34,197,94,0.18)', border: '2px solid rgba(34,197,94,0.45)' }}>
+            <div className="text-center px-4 py-2 rounded-lg" style={{ background: 'rgba(34,197,94,0.18)', border: '2px solid rgba(34,197,94,0.45)', boxShadow: gameState.playerFans > gameState.aiFans ? '0 0 12px rgba(255,215,0,0.3)' : 'none' }}>
               <p className="text-[9px] text-green-200/70 mb-0.5">あなた</p>
               <span key={`pfan-${gameState.playerFans}`} className="text-3xl font-black kc-power-bounce" style={{ color: gameState.playerFans >= gameState.aiFans ? '#ffd700' : '#22c55e', textShadow: `0 0 12px ${gameState.playerFans >= gameState.aiFans ? 'rgba(255,215,0,0.6)' : 'rgba(34,197,94,0.6)'}` }}>🎐 {gameState.playerFans}</span>
             </div>
             <span className="text-lg font-black text-amber-200/50">VS</span>
-            <div className="text-center px-4 py-2 rounded-lg" style={{ background: 'rgba(239,68,68,0.15)', border: '2px solid rgba(239,68,68,0.4)' }}>
+            <div className="text-center px-4 py-2 rounded-lg" style={{ background: 'rgba(239,68,68,0.15)', border: '2px solid rgba(239,68,68,0.4)', boxShadow: gameState.aiFans > gameState.playerFans ? '0 0 12px rgba(255,215,0,0.3)' : 'none' }}>
               <p className="text-[9px] text-red-200/70 mb-0.5">相手</p>
               <span key={`afan-${gameState.aiFans}`} className="text-3xl font-black kc-power-bounce" style={{ color: gameState.aiFans > gameState.playerFans ? '#ffd700' : '#ef4444', textShadow: `0 0 12px ${gameState.aiFans > gameState.playerFans ? 'rgba(255,215,0,0.6)' : 'rgba(239,68,68,0.6)'}` }}>🎐 {gameState.aiFans}</span>
             </div>
@@ -1748,14 +1748,14 @@ export default function KnowledgeChallenger() {
             </p>
           </div>
           {/* Fan totals — primary win condition display */}
-          <div className="text-center px-2 py-1 rounded-lg" style={{ background: 'rgba(34,197,94,0.14)', border: '1.5px solid rgba(34,197,94,0.5)' }}>
+          <div className="text-center px-2 py-1 rounded-lg" style={{ background: 'rgba(34,197,94,0.14)', border: '1.5px solid rgba(34,197,94,0.5)', boxShadow: gameState.playerFans > gameState.aiFans ? '0 0 12px rgba(255,215,0,0.3)' : 'none' }}>
             <p className="text-[9px] font-bold text-green-200/80">あなた</p>
             <p key={`pfan-${gameState.playerFans}`} className="text-base font-black kc-power-bounce" style={{ color: gameState.playerFans >= gameState.aiFans ? '#ffd700' : '#4ade80', textShadow: `0 0 8px ${gameState.playerFans >= gameState.aiFans ? 'rgba(255,215,0,0.6)' : 'rgba(34,197,94,0.6)'}` }}>
               🎐 {gameState.playerFans}
             </p>
           </div>
           <span className="text-[10px] font-black text-amber-200/60">vs</span>
-          <div className="text-center px-2 py-1 rounded-lg" style={{ background: 'rgba(239,68,68,0.14)', border: '1.5px solid rgba(239,68,68,0.5)' }}>
+          <div className="text-center px-2 py-1 rounded-lg" style={{ background: 'rgba(239,68,68,0.14)', border: '1.5px solid rgba(239,68,68,0.5)', boxShadow: gameState.aiFans > gameState.playerFans ? '0 0 12px rgba(255,215,0,0.3)' : 'none' }}>
             <p className="text-[9px] font-bold text-red-200/80">相手</p>
             <p key={`afan-${gameState.aiFans}`} className="text-base font-black kc-power-bounce" style={{ color: gameState.aiFans > gameState.playerFans ? '#ffd700' : '#fca5a5', textShadow: `0 0 8px ${gameState.aiFans > gameState.playerFans ? 'rgba(255,215,0,0.6)' : 'rgba(239,68,68,0.6)'}` }}>
               🎐 {gameState.aiFans}
@@ -1973,7 +1973,41 @@ export default function KnowledgeChallenger() {
         return (
       <div
         className={`flex-1 flex flex-col px-2 py-2 relative min-h-0 overflow-hidden ${cineStep === 'resolve' ? 'kc-screen-shake' : ''}`}
+        data-stage={stageId ?? 0}
+        style={{
+          background: (() => {
+            switch (stageId) {
+              case 2: return 'linear-gradient(180deg, #0a1a0a 0%, #1a3a1a 100%)';
+              case 3: return 'linear-gradient(180deg, #1a1510 0%, #2a2520 100%)';
+              case 4: return 'linear-gradient(180deg, #0a0a1e 0%, #1a1a3e 100%)';
+              case 5: return 'linear-gradient(180deg, #0a0a0a 0%, #1a0a1a 100%)';
+              case 6: return 'linear-gradient(180deg, #0a1520 0%, #103050 100%)';
+              case 7: return 'linear-gradient(180deg, #10081a 0%, #201030 100%)';
+              case 8: return 'linear-gradient(180deg, #1a0a0a 0%, #3a1010 100%)';
+              case 9: return 'linear-gradient(180deg, #1a1028 0%, #281840 100%)';
+              case 10: return 'linear-gradient(180deg, #0a0a0a 0%, #1a1a00 100%)';
+              default: return 'linear-gradient(180deg, #0a1628 0%, #162a4a 100%)';
+            }
+          })(),
+        }}
       >
+        {/* Stage background particles */}
+        <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
+          {Array.from({ length: 10 }).map((_, i) => (
+            <div key={`bg-p-${i}`} className="kc-bg-particle absolute rounded-full"
+              style={{
+                width: `${3 + (i % 3)}px`,
+                height: `${3 + (i % 3)}px`,
+                left: `${(i * 10.3 + 5) % 100}%`,
+                top: `${(i * 13.7 + 10) % 100}%`,
+                opacity: 0.3 + (i % 5) * 0.1,
+                background: stageId === 10 ? '#ff4444' : stageId === 2 ? '#22c55e' : stageId === 8 ? '#ef4444' : stageId === 9 ? `hsl(${i * 36}, 80%, 60%)` : '#ffffff',
+                animationDelay: `${i * 0.7}s`,
+                animationDuration: `${4 + (i % 3) * 2}s`,
+              }}
+            />
+          ))}
+        </div>
         {/* Flash overlays on resolve */}
         {cineStep === 'resolve' && gameState.lastSubBattle?.winner === 'ai' && (
           <div className="absolute inset-0 pointer-events-none z-30 kc-red-flash" />
@@ -2537,11 +2571,12 @@ export default function KnowledgeChallenger() {
           </div>
           {/* Big telop */}
           <div className="kc-round-victory-telop">
-            <p style={{
-              fontSize: '64px',
+            <p className="kc-stamp-in" style={{
+              fontSize: '48px',
               fontWeight: 900,
               color: '#ffd700',
               textShadow: '0 0 30px rgba(255,215,0,0.8), 0 0 60px rgba(255,215,0,0.4), 0 4px 8px rgba(0,0,0,0.9)',
+              letterSpacing: '4px',
             }}>
               {roundVictoryTelop}
             </p>
@@ -3507,6 +3542,21 @@ export default function KnowledgeChallenger() {
           100% { opacity: 0; }
         }
         .kc-char-fadein { animation: kcCharFadeIn 2s ease-out forwards; opacity: 0; display: inline-block; }
+
+        /* Phase 3: Background particles */
+        @keyframes kcBgParticle {
+          0%   { transform: translateY(0) translateX(0); opacity: 0.3; }
+          50%  { transform: translateY(-30px) translateX(10px); opacity: 0.6; }
+          100% { transform: translateY(-60px) translateX(-5px); opacity: 0; }
+        }
+        .kc-bg-particle { animation: kcBgParticle 5s ease-in-out infinite; }
+
+        /* Phase 3: Deck danger pulse */
+        @keyframes kcDangerPulse {
+          0%, 100% { box-shadow: 0 0 0 rgba(239,68,68,0); }
+          50%      { box-shadow: 0 0 12px rgba(239,68,68,0.5); }
+        }
+        .kc-danger-pulse { animation: kcDangerPulse 1s ease-in-out infinite; }
       `}</style>
     </div>
   );
@@ -3915,6 +3965,8 @@ function MiniDeckStack({
 }) {
   const W = 70;
   const H = 100;
+  const thickness = count >= 10 ? 3 : count >= 5 ? 2 : count >= 2 ? 1 : 0;
+  const isDanger = count > 0 && count <= 3;
   return (
     <button
       onClick={interactive && count > 0 ? onTap : undefined}
@@ -3931,7 +3983,11 @@ function MiniDeckStack({
       }}
       aria-label={interactive ? 'デッキをタップしてカードを出す' : 'デッキ'}
     >
-      {[2, 1, 0].map((layer) => (
+      {isDanger && count > 0 && (
+        <div className="absolute inset-0 rounded-md kc-danger-pulse z-10 pointer-events-none"
+          style={{ border: '2px solid rgba(239,68,68,0.6)' }} />
+      )}
+      {[2, 1, 0].filter(l => l <= thickness).map((layer) => (
         <div
           key={layer}
           className="absolute rounded-md overflow-hidden"
@@ -3967,6 +4023,11 @@ function MiniDeckStack({
       >
         {count}
       </div>
+      {isDanger && count > 0 && (
+        <p className="absolute -bottom-4 left-0 right-0 text-center text-[9px] font-black text-red-400 animate-pulse">
+          残り{count}枚！
+        </p>
+      )}
     </button>
   );
 }
