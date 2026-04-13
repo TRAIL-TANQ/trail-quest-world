@@ -135,7 +135,7 @@ export const COLLECTION_CARDS: CollectionCard[] = [
   { id: 'card-113', name: '血清', category: 'inventions', rarity: 'N', description: '抗体を含む治療液。北里柴三郎が破傷風の血清療法を確立した。', imageUrl: '/images/cards/serum.png' },
   { id: 'card-114', name: '始皇帝', category: 'great_people', rarity: 'SR', description: '中国を初めて統一した秦の皇帝。万里の長城や兵馬俑を築いた絶対君主。', imageUrl: '/images/cards/emperor-qin.png' },
   { id: 'card-115', name: 'アマゾン川', category: 'world_heritage', rarity: 'SR', description: 'アマゾン流域の生命の源。密林の仲間を呼び寄せる大河。', imageUrl: '/images/cards/amazon-river.png' },
-  { id: 'card-116', name: 'アナコンダ', category: 'creatures', rarity: 'N', description: 'アマゾンに棲む世界最大級のヘビ。獲物を締め上げて捕食する。', imageUrl: '/images/cards/anaconda.png' },
+  { id: 'card-116', name: 'アナコンダ', category: 'creatures', rarity: 'R', description: 'アマゾンに棲む世界最大級のヘビ。獲物を締め上げて捕食する。', imageUrl: '/images/cards/anaconda.png' },
   { id: 'card-117', name: '毒矢カエル', category: 'creatures', rarity: 'N', description: '鮮やかな色をしたアマゾンのカエル。先住民が矢毒に使う猛毒を持つ。', imageUrl: '/images/cards/poison-frog.png' },
   { id: 'card-118', name: 'リンゴ', category: 'inventions', rarity: 'N', description: 'ニュートンが万有引力を思いつくきっかけになったとされる果実。', imageUrl: '/images/cards/apple.png' },
   { id: 'card-119', name: 'プリズム', category: 'inventions', rarity: 'N', description: '光を虹色に分ける三角柱。ニュートンが光の性質を解き明かした。', imageUrl: '/images/cards/prism.png' },
@@ -202,8 +202,8 @@ export const COLLECTION_CARDS: CollectionCard[] = [
   { id: 'card-162', name: 'モアイ像', category: 'world_heritage', rarity: 'N', description: 'イースター島の巨大石像。約900体が海を見つめるように立つ謎の遺跡。', imageUrl: '/images/cards/moai.png' },
   { id: 'card-163', name: '焚書坑儒', category: 'inventions', rarity: 'N', description: '始皇帝が行った思想統制。書物を焼き、儒者を生き埋めにした。', imageUrl: '/images/cards/book-burning.png' },
   { id: 'card-164', name: '不老不死の薬', category: 'inventions', rarity: 'N', description: '始皇帝が求め続けた永遠の命。徐福を東方に派遣して探させた。', imageUrl: '/images/cards/elixir.png' },
-  { id: 'card-165', name: '大蛇', category: 'creatures', rarity: 'SR', description: 'アマゾンの密林に潜む伝説の巨大蛇。全てを呑み込む恐怖の存在。', imageUrl: '/images/cards/giant-serpent.png' },
-  { id: 'card-166', name: 'アナコンダハンター', category: 'great_people', rarity: 'SSR', description: 'アマゾンの密林で大蛇を追うハンター。アナコンダの弱点を知り尽くしている。', imageUrl: '/images/cards/anaconda-hunter.png' },
+  { id: 'card-165', name: '大蛇', category: 'creatures', rarity: 'SSR', description: 'アマゾンの密林に潜む伝説の巨大蛇。全てを呑み込む恐怖の存在。', imageUrl: '/images/cards/giant-serpent.png' },
+  { id: 'card-166', name: 'アナコンダハンター', category: 'great_people', rarity: 'SR', description: 'アマゾンの密林で大蛇を追うハンター。アナコンダの弱点を知り尽くしている。', imageUrl: '/images/cards/anaconda-hunter.png' },
   { id: 'card-167', name: '凱旋門', category: 'world_heritage', rarity: 'R', description: 'パリのシャンゼリゼ通りに建つ勝利の門。ナポレオンが建設を命じた。', imageUrl: '/images/cards/arc-de-triomphe.png' },
 ];
 
