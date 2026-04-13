@@ -2006,7 +2006,7 @@ export default function KnowledgeChallenger() {
           const priorCount = attackCards.length - 1;
           const enterClass = attackerSide === 'ai' ? 'kc-ai-card-enter' : 'kc-player-card-enter';
           return (
-            <div className="relative" style={{ width: 180, height: 250 }}>
+            <div className="relative" style={{ width: 'clamp(110px, 30vw, 180px)', height: 'clamp(154px, 42vw, 250px)' }}>
               {/* Earlier attack cards stacked behind (offset by a bit).
                   On sub-battle resolve they fade out toward the off-screen
                   quarantine area via kc-card-exile. */}
@@ -2767,8 +2767,8 @@ export default function KnowledgeChallenger() {
               ))}
             </div>
             <button onClick={() => cardSelectOverlay.onSelect(null)}
-              className="w-full py-2 rounded-lg text-sm font-bold"
-              style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.6)' }}>
+              className="w-full py-3 rounded-lg text-sm font-bold"
+              style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.6)', minHeight: '48px' }}>
               使わない
             </button>
           </div>
@@ -3748,6 +3748,36 @@ export default function KnowledgeChallenger() {
           }
           .kc-bg-particle, .kc-confetti-piece { display: none !important; }
         }
+
+        /* ===== Mobile Responsive ===== */
+        @media (max-width: 768px) {
+          /* Touch highlights */
+          * { -webkit-tap-highlight-color: transparent; }
+
+          /* Confetti & particles reduced */
+          .kc-confetti-piece:nth-child(n+16) { display: none; }
+          .kc-bg-particle:nth-child(n+6) { display: none; }
+
+          /* Effect cutin: smaller letterbox */
+          .kc-letterbox-in { height: 8vh !important; }
+
+          /* Stamp text smaller */
+          .kc-stamp-in { font-size: 80% !important; }
+
+          /* Combo text smaller */
+          .kc-combo-appear { font-size: 80% !important; }
+        }
+
+        @media (max-width: 480px) {
+          /* Very small screens: further reduce */
+          .kc-letterbox-in { height: 6vh !important; }
+          .kc-confetti-piece:nth-child(n+10) { display: none; }
+        }
+
+        /* Hover effects only for mouse devices */
+        @media (hover: none) {
+          .active\:scale-95:active { transform: scale(0.95); }
+        }
       `}</style>
     </div>
   );
@@ -4025,13 +4055,15 @@ function CardDisplay({ card, isDefense, isWinner, size, mode, onTap, atkBonus = 
 }) {
   const catInfo = CATEGORY_INFO[card.category];
   const [imgLoaded, setImgLoaded] = useState(false);
-  const w = size === 'sm' ? 120 : size === 'battle' ? 180 : 200;
-  const h = size === 'sm' ? 150 : size === 'battle' ? 250 : 260;
+  // Mobile-responsive card sizes
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 480;
+  const w = size === 'sm' ? (isMobile ? 80 : 120) : size === 'battle' ? (isMobile ? 110 : 180) : 200;
+  const h = size === 'sm' ? (isMobile ? 112 : 150) : size === 'battle' ? (isMobile ? 154 : 250) : 260;
   const activeMode = mode ?? 'neutral';
   const atk = (card.attackPower ?? card.power) + atkBonus;
   const def = (card.defensePower ?? card.power) + defBonus;
   const isBig = size !== 'sm';
-  const fontPower = size === 'sm' ? '12px' : size === 'battle' ? '20px' : '18px';
+  const fontPower = size === 'sm' ? (isMobile ? '10px' : '12px') : size === 'battle' ? (isMobile ? '14px' : '20px') : '18px';
   const frameImg = CARD_RARITY_IMAGES[card.rarity] || CARD_RARITY_IMAGES['N'];
 
   return (
@@ -4160,8 +4192,9 @@ function MiniDeckStack({
   glow?: boolean;
   onTap?: () => void;
 }) {
-  const W = 70;
-  const H = 100;
+  const isMobileDeck = typeof window !== 'undefined' && window.innerWidth < 480;
+  const W = isMobileDeck ? 50 : 70;
+  const H = isMobileDeck ? 70 : 100;
   const thickness = count >= 10 ? 3 : count >= 5 ? 2 : count >= 2 ? 1 : 0;
   const isDanger = count > 0 && count <= 3;
   return (
