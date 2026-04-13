@@ -153,6 +153,12 @@ export default function KnowledgeChallenger() {
   const [detailCard, setDetailCard] = useState<BattleCard | null>(null);
   // Exile zone overlay
   const [showExile, setShowExile] = useState(false);
+  // Effect cutin overlay (SR+ cards show cinematic cutin)
+  const [cutinCard, setCutinCard] = useState<BattleCard | null>(null);
+  // Evolution overlay
+  const [evolutionOverlay, setEvolutionOverlay] = useState<{ from: BattleCard; to: BattleCard } | null>(null);
+  // Combo name display
+  const [comboName, setComboName] = useState<string | null>(null);
   const stepTimeoutsRef = useRef<number[]>([]);
   const clearStepTimeouts = useCallback(() => {
     stepTimeoutsRef.current.forEach((id) => clearTimeout(id));
@@ -590,6 +596,70 @@ export default function KnowledgeChallenger() {
           if (unmountedRef.current) return;
 
           const rs = resultState as GameState;
+
+          // ===== Effect cutin for SR+ cards =====
+          {
+            const lastRevealed = rs.attackRevealed[rs.attackRevealed.length - 1];
+            if (lastRevealed?.effect && (lastRevealed.rarity === 'SR' || lastRevealed.rarity === 'SSR')) {
+              setCutinCard(lastRevealed);
+              await waitMs(1200);
+              if (unmountedRef.current) return;
+              setCutinCard(null);
+            } else if (lastRevealed?.effect && lastRevealed.rarity === 'R') {
+              // R cards: brief glow (handled by effectTelop, no extra cutin)
+            }
+          }
+
+          // ===== Check for evolution (anaconda → giant snake) =====
+          {
+            const lastRevealed = rs.attackRevealed[rs.attackRevealed.length - 1];
+            if (lastRevealed?.name === '大蛇' && lastRevealed.id.startsWith('evolved-')) {
+              const anacondaTemplate = ALL_BATTLE_CARDS.find((c) => c.name === 'アナコンダ');
+              if (anacondaTemplate) {
+                setEvolutionOverlay({ from: anacondaTemplate, to: lastRevealed });
+                await waitMs(3000);
+                if (unmountedRef.current) return;
+                setEvolutionOverlay(null);
+              }
+            }
+          }
+
+          // ===== Check for combo names =====
+          {
+            const lastRevealed = rs.attackRevealed[rs.attackRevealed.length - 1];
+            const attackerSideForCombo: 'player' | 'ai' = rs.flagHolder === 'player' ? 'ai' : 'player';
+            const myBenchNames = new Set((attackerSideForCombo === 'player' ? rs.player : rs.ai).bench.map((b) => b.name));
+            const comboMap: Record<string, { needs: string[]; name: string }[]> = {
+              'ナポレオン': [
+                { needs: ['大砲', 'ナポレオン法典'], name: 'ナポレオン・フルコンボ！' },
+                { needs: ['大砲'], name: '皇帝の砲撃！' },
+                { needs: ['ナポレオン法典'], name: '法の守護！' },
+              ],
+              'アナコンダ': [
+                { needs: ['毒矢カエル', 'ピラニア'], name: '密林の包囲網！' },
+              ],
+              'ガリレオ': [
+                { needs: ['望遠鏡', '地動説'], name: '科学の真理！' },
+              ],
+              '始皇帝': [
+                { needs: ['兵馬俑', '万里の長城'], name: '古代帝国の威光！' },
+              ],
+            };
+            if (lastRevealed) {
+              const combos = comboMap[lastRevealed.name];
+              if (combos) {
+                for (const combo of combos) {
+                  if (combo.needs.every((n) => myBenchNames.has(n))) {
+                    setComboName(combo.name);
+                    await waitMs(1500);
+                    if (unmountedRef.current) return;
+                    setComboName(null);
+                    break;
+                  }
+                }
+              }
+            }
+          }
 
           // ===== Bench boost power-up animation =====
           if (rs.benchBoostDetails && rs.benchBoostDetails.length > 0) {
@@ -2516,6 +2586,89 @@ export default function KnowledgeChallenger() {
         </div>
       )}
 
+      {/* ===== Effect Cutin (SR+ cards) ===== */}
+      {cutinCard && (
+        <div className="fixed inset-0 z-[1000] pointer-events-none">
+          {/* Letterbox bars */}
+          <div className="absolute top-0 left-0 right-0 kc-letterbox-in" style={{ height: '12vh', background: 'black' }} />
+          <div className="absolute bottom-0 left-0 right-0 kc-letterbox-in" style={{ height: '12vh', background: 'black' }} />
+          {/* Card illustration */}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="kc-cutin-card" style={{ opacity: 0.85 }}>
+              <img src={cutinCard.imageUrl} alt={cutinCard.name}
+                className="rounded-xl"
+                style={{ width: 200, height: 280, objectFit: 'cover', boxShadow: '0 0 40px rgba(255,215,0,0.4)' }} />
+            </div>
+          </div>
+          {/* Effect name */}
+          <div className="absolute bottom-[15vh] left-0 right-0 text-center kc-cutin-text">
+            <p className="text-2xl font-black" style={{ color: '#ffd700', textShadow: '0 0 20px rgba(255,215,0,0.8), 0 2px 8px rgba(0,0,0,0.9)' }}>
+              {cutinCard.effect?.name ?? cutinCard.name}
+            </p>
+            <p className="text-sm text-amber-200/70 mt-1">{cutinCard.effect?.description}</p>
+          </div>
+        </div>
+      )}
+
+      {/* ===== Combo Name Display ===== */}
+      {comboName && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center pointer-events-none">
+          <div className="absolute inset-0 kc-gold-flash" />
+          <div className="kc-combo-appear">
+            <p className="font-black" style={{
+              fontSize: '42px', color: '#ffd700',
+              textShadow: '0 0 30px rgba(255,215,0,0.8), 0 0 60px rgba(255,215,0,0.4), 0 4px 8px rgba(0,0,0,0.9)',
+              letterSpacing: '2px',
+            }}>
+              {comboName}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* ===== Evolution Overlay ===== */}
+      {evolutionOverlay && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.85)' }}>
+          {/* Phase 1: From card glowing */}
+          <div className="kc-evolve-sequence">
+            <div className="kc-evolve-from-card" style={{ position: 'absolute' }}>
+              <img src={evolutionOverlay.from.imageUrl} alt={evolutionOverlay.from.name}
+                className="rounded-xl"
+                style={{ width: 180, height: 250, objectFit: 'cover', boxShadow: 'inset 0 0 30px white, 0 0 40px rgba(255,255,255,0.5)' }} />
+            </div>
+            {/* Phase 2: To card appearing */}
+            <div className="kc-evolve-to-card" style={{ position: 'absolute' }}>
+              <img src={evolutionOverlay.to.imageUrl} alt={evolutionOverlay.to.name}
+                className="rounded-xl"
+                style={{ width: 200, height: 280, objectFit: 'cover', boxShadow: '0 0 40px rgba(255,215,0,0.6)' }} />
+            </div>
+          </div>
+          {/* EVOLVE text */}
+          <div className="absolute bottom-[20vh] left-0 right-0 text-center">
+            <p className="kc-evolve-text font-black" style={{
+              fontSize: '48px', color: '#ffd700',
+              textShadow: '0 0 30px rgba(255,215,0,0.8), 0 0 60px rgba(255,215,0,0.4)',
+              letterSpacing: '8px',
+            }}>
+              EVOLVE!
+            </p>
+            <p className="text-lg text-amber-200/80 mt-2">
+              {evolutionOverlay.from.name} → {evolutionOverlay.to.name}
+            </p>
+          </div>
+          {/* Particles */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            {Array.from({ length: 15 }).map((_, i) => (
+              <span key={`evo-p-${i}`} className="kc-confetti-piece"
+                style={{
+                  left: `${30 + (i * 2.8) % 40}%`, top: `${30 + (i * 3.2) % 40}%`,
+                  background: '#ffd700', animationDelay: `${i * 0.05}s`, animationDuration: '1.5s',
+                }} />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ===== Card Detail Modal ===== */}
       {detailCard && <CardDetailModal card={detailCard} onClose={() => setDetailCard(null)} />}
 
@@ -3295,6 +3448,55 @@ export default function KnowledgeChallenger() {
           50%      { filter: brightness(1.3); }
         }
         .kc-buff-pulse { animation: kcBuffPulse 1.5s ease-in-out infinite; }
+
+        /* ===== Phase 2: Effect Cutin ===== */
+        @keyframes kcLetterboxIn {
+          0%   { transform: scaleY(0); }
+          100% { transform: scaleY(1); }
+        }
+        .kc-letterbox-in { transform-origin: top; animation: kcLetterboxIn 0.2s ease-out forwards; }
+        .kc-letterbox-in:last-of-type { transform-origin: bottom; }
+        @keyframes kcCutinCard {
+          0%   { opacity: 0; transform: scale(0.5); }
+          60%  { opacity: 0.85; transform: scale(1.05); }
+          100% { opacity: 0.85; transform: scale(1); }
+        }
+        .kc-cutin-card { animation: kcCutinCard 0.4s ease-out forwards; }
+        @keyframes kcCutinText {
+          0%   { opacity: 0; transform: translateX(60px) rotate(-3deg); }
+          100% { opacity: 1; transform: translateX(0) rotate(0deg); }
+        }
+        .kc-cutin-text { animation: kcCutinText 0.3s ease-out 0.3s both; }
+
+        /* ===== Phase 2: Combo ===== */
+        @keyframes kcComboAppear {
+          0%   { transform: scale(0) rotate(-180deg); opacity: 0; }
+          60%  { transform: scale(1.2) rotate(10deg); opacity: 1; }
+          100% { transform: scale(1) rotate(0deg); }
+        }
+        .kc-combo-appear { animation: kcComboAppear 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+        /* ===== Phase 2: Evolution ===== */
+        @keyframes kcEvolveFrom {
+          0%   { opacity: 1; transform: scale(1); box-shadow: 0 0 0 transparent; }
+          50%  { opacity: 1; transform: scale(1.3); box-shadow: inset 0 0 30px white, 0 0 40px white; }
+          80%  { opacity: 0; transform: scale(1.5); }
+          100% { opacity: 0; transform: scale(2); }
+        }
+        .kc-evolve-from-card { animation: kcEvolveFrom 1.2s ease-out forwards; }
+        @keyframes kcEvolveTo {
+          0%   { opacity: 0; transform: scale(1.5); }
+          60%  { opacity: 0; transform: scale(1.5); }
+          80%  { opacity: 1; transform: scale(1.05); }
+          100% { opacity: 1; transform: scale(1); }
+        }
+        .kc-evolve-to-card { animation: kcEvolveTo 2s ease-out forwards; }
+        @keyframes kcEvolveText {
+          0%   { transform: scale(0) rotate(-20deg); opacity: 0; }
+          50%  { transform: scale(1.3) rotate(5deg); opacity: 1; text-shadow: 0 0 40px rgba(255,215,0,0.9); }
+          100% { transform: scale(1) rotate(0deg); text-shadow: 0 0 20px rgba(255,215,0,0.6); }
+        }
+        .kc-evolve-text { animation: kcEvolveText 0.8s ease-out 1.5s both; }
 
         /* Character-by-character fade-in for turn transition */
         @keyframes kcCharFadeIn {
