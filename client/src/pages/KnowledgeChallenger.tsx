@@ -151,6 +151,8 @@ export default function KnowledgeChallenger() {
   const [roundVictoryTelop, setRoundVictoryTelop] = useState<string | null>(null);
   // Card detail popup
   const [detailCard, setDetailCard] = useState<BattleCard | null>(null);
+  // Exile zone overlay
+  const [showExile, setShowExile] = useState(false);
   const stepTimeoutsRef = useRef<number[]>([]);
   const clearStepTimeouts = useCallback(() => {
     stepTimeoutsRef.current.forEach((id) => clearTimeout(id));
@@ -184,9 +186,10 @@ export default function KnowledgeChallenger() {
   const [quizTimer, setQuizTimer] = useState(10);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [swapState, setSwapState] = useState<{ incoming: BattleCard } | null>(null);
-  // デッキフェイズ中のカード削除: 確認ダイアログと削除アニメ用 state
+  // デッキフェイズ中のカード削除: アニメ用 state + 除外エリア
   const [pendingRemoveIdx, setPendingRemoveIdx] = useState<number | null>(null);
   const [fadingOutIdx, setFadingOutIdx] = useState<number | null>(null);
+  const [removedCards, setRemovedCards] = useState<BattleCard[]>([]);
   // Mobile-only collapse toggle for the "current deck" panel in the deck phase.
   // PC (md+) always shows it expanded.
   const [deckPanelCollapsed, setDeckPanelCollapsed] = useState(false);
@@ -274,6 +277,7 @@ export default function KnowledgeChallenger() {
     setDeckOffer(null);
     setActiveQuiz(null);
     setSwapState(null);
+    setRemovedCards([]);
   }, [clearStepTimeouts, previewDeck, stageId]);
 
   // ===== Phase transition tracking (debug) =====
@@ -629,11 +633,16 @@ export default function KnowledgeChallenger() {
           if (rs.phase === 'round_end') {
             // Deck-out → defender wins this round
             console.log('[KC] → round_end during reveal (deck-out): round', rs.round, 'winner:', rs.roundWinner);
-            // Round victory celebration
+            const isPlayerRoundWin = rs.roundWinner === 'player';
+            const trophy = rs.trophyFans[rs.round - 1] ?? 0;
+
+            // Phase 1: Victory/defeat banner with fan info (3s)
             setCineStep('round_end');
             await waitMs(300);
             if (unmountedRef.current) return;
-            setRoundVictoryTelop(rs.roundWinner === 'player' ? '🏆 撃破！！' : '💀 デッキ切れ...');
+            setRoundVictoryTelop(isPlayerRoundWin
+              ? `🏆 第${rs.round}回戦 勝利！ +${trophy}ファン！`
+              : `💀 第${rs.round}回戦 敗北… 相手に+${trophy}ファン`);
             await waitMs(500);
             if (unmountedRef.current) return;
             if (manualModeRef.current) {
@@ -646,6 +655,7 @@ export default function KnowledgeChallenger() {
 
             // Advance to next round (awards fans, resets bench, or game_over)
             setDeckOffer(null);
+            setRemovedCards([]);
             let advanced: GameState | null = null;
             setGameState((prev) => {
               if (!prev) return prev;
@@ -658,11 +668,23 @@ export default function KnowledgeChallenger() {
 
             const advs = advanced as GameState;
             if (advs.phase === 'game_over') {
+              // Final result: show 5-round summary
+              setRoundVictoryTelop(advs.winner === 'player'
+                ? `🎉 最終結果: 勝利！ ${advs.playerFans} vs ${advs.aiFans}`
+                : `💀 最終結果: 敗北… ${advs.playerFans} vs ${advs.aiFans}`);
               setCineStep('game_over');
-              await waitStep(FINAL_REVEAL_MS);
-              if (!unmountedRef.current) window.setTimeout(() => setScreen('result'), 900);
+              await waitStep(FINAL_REVEAL_MS + 1000);
+              if (unmountedRef.current) return;
+              setRoundVictoryTelop(null);
+              if (!unmountedRef.current) window.setTimeout(() => setScreen('result'), 500);
               return;
             }
+
+            // Phase 2: Transition banner (2s)
+            setRoundVictoryTelop(`第${rs.round}回戦 → 第${advs.round}回戦へ`);
+            await waitStep(2000);
+            if (unmountedRef.current) return;
+            setRoundVictoryTelop(null);
 
             // Next round starts with deck_phase
             setCineStep('idle');
@@ -713,11 +735,16 @@ export default function KnowledgeChallenger() {
             if (rzs.phase === 'round_end') {
               // Bench overflow → attacker wins this round
               console.log('[KC] → round_end after resolve: round', rzs.round, 'winner:', rzs.roundWinner);
-              // Round victory celebration
+              const isPlayerRoundWin2 = rzs.roundWinner === 'player';
+              const trophy2 = rzs.trophyFans[rzs.round - 1] ?? 0;
+
+              // Phase 1: Victory/defeat banner (3s)
               setCineStep('round_end');
               await waitMs(300);
               if (unmountedRef.current) return;
-              setRoundVictoryTelop(rzs.roundWinner === 'player' ? '💥 ベンチ崩壊！' : '💀 ベンチ崩壊...');
+              setRoundVictoryTelop(isPlayerRoundWin2
+                ? `💥 第${rzs.round}回戦 勝利！ベンチ崩壊！ +${trophy2}ファン！`
+                : `💀 第${rzs.round}回戦 敗北… ベンチ崩壊 相手に+${trophy2}ファン`);
               await waitMs(500);
               if (unmountedRef.current) return;
               if (manualModeRef.current) {
@@ -730,6 +757,7 @@ export default function KnowledgeChallenger() {
 
               // Advance to next round
               setDeckOffer(null);
+              setRemovedCards([]);
               let advanced: GameState | null = null;
               setGameState((prev) => {
                 if (!prev) return prev;
@@ -742,11 +770,22 @@ export default function KnowledgeChallenger() {
 
               const advs = advanced as GameState;
               if (advs.phase === 'game_over') {
+                setRoundVictoryTelop(advs.winner === 'player'
+                  ? `🎉 最終結果: 勝利！ ${advs.playerFans} vs ${advs.aiFans}`
+                  : `💀 最終結果: 敗北… ${advs.playerFans} vs ${advs.aiFans}`);
                 setCineStep('game_over');
-                await waitStep(FINAL_REVEAL_MS);
-                if (!unmountedRef.current) window.setTimeout(() => setScreen('result'), 900);
+                await waitStep(FINAL_REVEAL_MS + 1000);
+                if (unmountedRef.current) return;
+                setRoundVictoryTelop(null);
+                if (!unmountedRef.current) window.setTimeout(() => setScreen('result'), 500);
                 return;
               }
+
+              // Phase 2: Transition banner
+              setRoundVictoryTelop(`第${rzs.round}回戦 → 第${advs.round}回戦へ`);
+              await waitStep(2000);
+              if (unmountedRef.current) return;
+              setRoundVictoryTelop(null);
 
               // Next round starts with deck_phase
               setCineStep('idle');
@@ -988,20 +1027,26 @@ export default function KnowledgeChallenger() {
       toast.error(`最低${MIN_DECK_SIZE}枚必要です`);
       return;
     }
-    setPendingRemoveIdx(index);
-  }, [gameState]);
-
-  const handleConfirmRemoveCard = useCallback(() => {
-    if (pendingRemoveIdx === null || !gameState) return;
-    const idx = pendingRemoveIdx;
-    setPendingRemoveIdx(null);
-    setFadingOutIdx(idx);
+    // Instant remove (no confirmation dialog) — card goes to removed area
+    const card = gameState.player.deck[index];
+    setFadingOutIdx(index);
     window.setTimeout(() => {
-      setGameState((prev) => (prev ? removeCardFromDeck(prev, idx) : prev));
+      setGameState((prev) => (prev ? removeCardFromDeck(prev, index) : prev));
+      if (card) setRemovedCards((prev) => [...prev, card]);
       setFadingOutIdx(null);
     }, 280);
-  }, [pendingRemoveIdx, gameState]);
+  }, [gameState]);
 
+  const handleRestoreRemovedCard = useCallback((cardIndex: number) => {
+    if (!gameState) return;
+    const card = removedCards[cardIndex];
+    if (!card) return;
+    setGameState((prev) => (prev ? addCardToDeck(prev, card) : prev));
+    setRemovedCards((prev) => prev.filter((_, i) => i !== cardIndex));
+  }, [gameState, removedCards]);
+
+  // Legacy — still referenced by pendingRemoveIdx confirm dialog (now unused)
+  const handleConfirmRemoveCard = useCallback(() => {}, []);
   const handleCancelRemoveCard = useCallback(() => setPendingRemoveIdx(null), []);
 
   const handleStartBattle = useCallback(() => {
@@ -1873,6 +1918,16 @@ export default function KnowledgeChallenger() {
             >
               ⏭ スキップ
             </button>
+            {/* Exile zone indicator */}
+            {(gameState.exile.player.length + gameState.exile.ai.length > 0) && (
+              <button
+                onClick={() => setShowExile(true)}
+                className="text-[11px] font-black px-2 py-1.5 rounded-lg"
+                style={{ background: 'rgba(168,85,247,0.2)', border: '1.5px solid rgba(168,85,247,0.5)', color: 'rgba(168,85,247,0.9)' }}
+              >
+                🚫 {gameState.exile.player.length + gameState.exile.ai.length}
+              </button>
+            )}
           </div>
         )}
 
@@ -1911,8 +1966,10 @@ export default function KnowledgeChallenger() {
                 : 'radial-gradient(circle, rgba(239,68,68,0.55), rgba(239,68,68,0.1))',
               border: `4px solid ${gameState.flagHolder === 'player' ? '#22c55e' : '#ef4444'}`,
               boxShadow: gameState.flagHolder === 'player'
-                ? '0 0 24px rgba(34,197,94,0.7)'
-                : '0 0 24px rgba(239,68,68,0.7)',
+                ? '0 0 24px rgba(34,197,94,0.7), 0 0 48px rgba(34,197,94,0.3)'
+                : '0 0 24px rgba(239,68,68,0.7), 0 0 48px rgba(239,68,68,0.3)',
+              transform: gameState.flagHolder === 'player' ? 'translateY(20px)' : 'translateY(-20px)',
+              transition: 'transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.3s, border-color 0.3s, box-shadow 0.3s',
             }}
           >
             <span style={{ fontSize: '2.25rem' }}>🏆</span>
@@ -2324,6 +2381,43 @@ export default function KnowledgeChallenger() {
         </div>
       )}
 
+      {/* ===== Exile Zone Overlay ===== */}
+      {showExile && (
+        <div className="fixed inset-0 z-[250] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.8)' }} onClick={() => setShowExile(false)}>
+          <div className="rounded-2xl p-4 w-full max-w-sm max-h-[70vh] overflow-y-auto" style={{
+            background: 'linear-gradient(135deg, rgba(30,10,50,0.98), rgba(15,5,25,0.98))',
+            border: '2px solid rgba(168,85,247,0.5)',
+          }} onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-black mb-3" style={{ color: '#a855f7' }}>🚫 除外されたカード</h3>
+            {(['player', 'ai'] as const).map((side) => {
+              const cards = gameState.exile[side];
+              if (cards.length === 0) return null;
+              return (
+                <div key={side} className="mb-3">
+                  <p className="text-xs font-bold mb-1" style={{ color: side === 'player' ? '#22c55e' : '#ef4444' }}>
+                    {side === 'player' ? 'あなた' : '相手'} ({cards.length}枚)
+                  </p>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {cards.map((c, i) => (
+                      <div key={i} className="text-center" style={{ opacity: 0.5, filter: 'grayscale(0.7)' }}>
+                        <div className="rounded-md overflow-hidden" style={{ border: '1px solid rgba(168,85,247,0.3)' }}>
+                          {c.imageUrl ? <img src={c.imageUrl} alt={c.name} className="w-full aspect-[3/4] object-cover" /> : <div className="w-full aspect-[3/4] bg-purple-900/30" />}
+                        </div>
+                        <p className="text-[8px] text-purple-200/60 truncate mt-0.5">{c.name}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+            <button onClick={() => setShowExile(false)} className="w-full py-2 rounded-lg text-sm font-bold mt-2"
+              style={{ background: 'rgba(168,85,247,0.15)', border: '1px solid rgba(168,85,247,0.3)', color: 'rgba(168,85,247,0.8)' }}>
+              閉じる
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ===== Card Detail Modal ===== */}
       {detailCard && <CardDetailModal card={detailCard} onClose={() => setDetailCard(null)} />}
 
@@ -2427,14 +2521,16 @@ export default function KnowledgeChallenger() {
                     <button
                       onClick={(e) => { e.stopPropagation(); handleRequestRemoveCard(i); }}
                       aria-label="このカードを外す"
-                      className="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center active:scale-90 transition-transform"
+                      className="absolute -top-2 -right-2 w-8 h-8 rounded-full flex items-center justify-center active:scale-90 transition-transform z-10"
                       style={{
                         background: '#ef4444',
                         color: '#fff',
-                        fontSize: '11px',
+                        fontSize: '14px',
                         fontWeight: 900,
-                        boxShadow: '0 2px 6px rgba(0,0,0,0.6)',
-                        border: '1.5px solid rgba(255,255,255,0.85)',
+                        boxShadow: '0 2px 8px rgba(239,68,68,0.5)',
+                        border: '2px solid rgba(255,255,255,0.9)',
+                        minWidth: '32px',
+                        minHeight: '32px',
                       }}
                     >
                       ✕
@@ -2492,6 +2588,24 @@ export default function KnowledgeChallenger() {
                   <div className="md:flex-1 md:min-h-0 md:overflow-y-auto">
                     {DeckGrid}
                   </div>
+                  {/* Excluded cards area */}
+                  {removedCards.length > 0 && (
+                    <div className="mt-2 rounded-lg p-2" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                      <p className="text-[10px] font-bold text-red-300/70 mb-1">🚫 除外したカード（タップで戻す）</p>
+                      <div className="flex gap-1.5 flex-wrap">
+                        {removedCards.map((c, i) => (
+                          <button
+                            key={`removed-${i}`}
+                            onClick={() => handleRestoreRemovedCard(i)}
+                            className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold active:scale-95 transition-transform"
+                            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.5)' }}
+                          >
+                            ↩ {c.name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <p className="text-[10px] text-amber-200/50 mt-1.5 text-center">
                     💡 デッキ整理のコツ: 攻撃と防御のバランスを考えよう
                   </p>

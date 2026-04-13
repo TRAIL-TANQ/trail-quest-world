@@ -120,7 +120,8 @@ export interface GameState {
   roundAttackBonus: { player: number; ai: number };           // added to every reveal this sub-battle
   pendingAttackBonus: { player: number; ai: number };         // one-shot, consumed on next reveal
   // Persistent state
-  quarantine: { player: BattleCard[]; ai: BattleCard[] };     // removed-from-play cards
+  quarantine: { player: BattleCard[]; ai: BattleCard[] };     // temporarily removed cards (flush to bench on sub-battle resolve)
+  exile: { player: BattleCard[]; ai: BattleCard[] };          // permanently removed from game (persists across rounds)
   sealedBenchNames: { player: string[]; ai: string[] };       // bench names whose effects are disabled
   altBonus: number;                                           // extra ALT earned this match
   effectTelop: EffectTelop | null;                            // UI consumes & clears after 1.5s
@@ -210,6 +211,7 @@ export function initGameState(playerDeck: BattleCard[], aiDeck: BattleCard[], st
     roundAttackBonus: { player: 0, ai: 0 },
     pendingAttackBonus: { player: 0, ai: 0 },
     quarantine: { player: [], ai: [] },
+    exile: { player: [], ai: [] },
     sealedBenchNames: { player: [], ai: [] },
     altBonus: 0,
     effectTelop: null,
@@ -1933,6 +1935,7 @@ export function advanceToNextRound(state: GameState): GameState {
     player: { ...state.player, deck: playerDeck, bench: [] },
     ai: { ...state.ai, deck: aiDeck, bench: [] },
     quarantine: { player: [], ai: [] },
+    exile: state.exile, // persist across rounds
     sealedBenchNames: { player: [], ai: [] },
     flagHolder: state.roundWinner,
     defenseCard: null,
