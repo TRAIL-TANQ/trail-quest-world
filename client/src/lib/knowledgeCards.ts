@@ -380,7 +380,7 @@ export const CARD_STAT_OVERRIDES: Record<string, StatProfile> = {
   // ===== ヒーロー ステータス更新 =====
   'アインシュタイン': { attackPower: 4, defensePower: 3 },
   'キュリー夫人':     { attackPower: 4, defensePower: 3 },
-  'ナポレオン':       { attackPower: 3, defensePower: 2 },
+  'ナポレオン':       { attackPower: 3, defensePower: 3 },
   '織田信長':         { attackPower: 3, defensePower: 2 },
   '豊臣秀吉':        { attackPower: 2, defensePower: 3 },
   // ===== 宝石カード + アフリカデッキ =====

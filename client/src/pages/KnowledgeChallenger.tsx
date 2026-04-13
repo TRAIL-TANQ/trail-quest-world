@@ -1798,7 +1798,7 @@ export default function KnowledgeChallenger() {
                   {gameState.defenderBonus < 0 && <span style={{ color: '#ef4444', fontSize: '22px' }}> ↓{gameState.defenderBonus}</span>}
                 </p>
               </div>
-              <CardDisplay card={defenderCard} size="battle" mode="defense" onTap={() => setDetailCard(defenderCard)} />
+              <CardDisplay card={defenderCard} size="battle" mode="defense" onTap={() => setDetailCard(defenderCard)} defBonus={gameState.defenderBonus} />
             </div>
           );
         };
@@ -3179,6 +3179,13 @@ export default function KnowledgeChallenger() {
         }
         .kc-power-bounce { animation: kcPowerBounce 0.35s ease-out; }
 
+        /* Buff pulse on card power badge */
+        @keyframes kcBuffPulse {
+          0%, 100% { filter: brightness(1); }
+          50%      { filter: brightness(1.3); }
+        }
+        .kc-buff-pulse { animation: kcBuffPulse 1.5s ease-in-out infinite; }
+
         /* Character-by-character fade-in for turn transition */
         @keyframes kcCharFadeIn {
           0%   { opacity: 0; transform: translateY(12px) scale(0.8); }
@@ -3453,21 +3460,23 @@ function CardDetailModal({ card, onClose }: { card: BattleCard; onClose: () => v
  *  - mode='defense'  : 🛡️ glows blue, ⚔️ greyed out
  *  - mode='neutral'  : both at normal brightness
  */
-function CardDisplay({ card, isDefense, isWinner, size, mode, onTap }: {
+function CardDisplay({ card, isDefense, isWinner, size, mode, onTap, atkBonus = 0, defBonus = 0 }: {
   card: BattleCard;
   isDefense?: boolean;
   isWinner?: boolean;
   size?: 'sm' | 'md' | 'battle';
   mode?: 'attack' | 'defense' | 'neutral';
   onTap?: () => void;
+  atkBonus?: number;
+  defBonus?: number;
 }) {
   const catInfo = CATEGORY_INFO[card.category];
   const [imgLoaded, setImgLoaded] = useState(false);
   const w = size === 'sm' ? 120 : size === 'battle' ? 180 : 200;
   const h = size === 'sm' ? 150 : size === 'battle' ? 250 : 260;
   const activeMode = mode ?? 'neutral';
-  const atk = card.attackPower ?? card.power;
-  const def = card.defensePower ?? card.power;
+  const atk = (card.attackPower ?? card.power) + atkBonus;
+  const def = (card.defensePower ?? card.power) + defBonus;
   const isBig = size !== 'sm';
   const fontPower = size === 'sm' ? '12px' : size === 'battle' ? '20px' : '18px';
   const frameImg = CARD_RARITY_IMAGES[card.rarity] || CARD_RARITY_IMAGES['N'];
@@ -3522,39 +3531,53 @@ function CardDisplay({ card, isDefense, isWinner, size, mode, onTap }: {
         {card.name}
       </span>
       {/* ⚔️ Attack badge (left-bottom, aligned with frame icon) */}
-      <span
-        className="absolute flex items-center gap-0.5 px-1.5 py-0.5 rounded-md font-black"
-        style={{
-          bottom: isBig ? '8px' : '4px',
-          left: isBig ? '8%' : '10%',
-          background: activeMode === 'attack' ? 'rgba(239,68,68,0.9)' : activeMode === 'defense' ? 'rgba(80,80,90,0.7)' : 'rgba(239,68,68,0.7)',
-          color: activeMode === 'defense' ? 'rgba(255,255,255,0.45)' : '#fff',
-          fontSize: fontPower,
-          textShadow: activeMode === 'attack' ? '0 0 10px rgba(255,107,107,0.95)' : '0 1px 2px rgba(0,0,0,0.9)',
-          boxShadow: activeMode === 'attack' ? '0 0 12px rgba(239,68,68,0.7)' : 'none',
-          lineHeight: 1,
-          zIndex: 3,
-        }}
-      >
-        ⚔️{atk}
-      </span>
+      {(() => {
+        const hasBuff = atkBonus > 0;
+        const hasDebuff = atkBonus < 0;
+        const buffScale = hasBuff ? (atkBonus >= 5 ? 1.5 : atkBonus >= 3 ? 1.3 : 1.2) : hasDebuff ? 0.9 : 1;
+        const bg = hasBuff ? 'rgba(34,197,94,0.9)'
+          : hasDebuff ? 'rgba(100,30,30,0.9)'
+          : activeMode === 'attack' ? 'rgba(239,68,68,0.9)' : activeMode === 'defense' ? 'rgba(80,80,90,0.7)' : 'rgba(239,68,68,0.7)';
+        const glow = hasBuff ? '0 0 12px rgba(34,197,94,0.7)' : activeMode === 'attack' ? '0 0 12px rgba(239,68,68,0.7)' : 'none';
+        return (
+          <span
+            className={`absolute flex items-center gap-0.5 px-1.5 py-0.5 rounded-md font-black ${hasBuff ? 'kc-buff-pulse' : ''}`}
+            style={{
+              bottom: isBig ? '8px' : '4px', left: isBig ? '8%' : '10%',
+              background: bg, color: activeMode === 'defense' && !hasBuff ? 'rgba(255,255,255,0.45)' : '#fff',
+              fontSize: fontPower, lineHeight: 1, zIndex: 3,
+              textShadow: hasBuff ? '0 0 10px rgba(34,197,94,0.95)' : activeMode === 'attack' ? '0 0 10px rgba(255,107,107,0.95)' : '0 1px 2px rgba(0,0,0,0.9)',
+              boxShadow: glow, transform: `scale(${buffScale})`, transition: 'transform 0.3s, background 0.3s, box-shadow 0.3s',
+            }}
+          >
+            ⚔️{atk}{hasBuff && ` (+${atkBonus})`}{hasDebuff && ` (${atkBonus})`}
+          </span>
+        );
+      })()}
       {/* 🛡️ Defense badge (right-bottom, aligned with frame icon) */}
-      <span
-        className="absolute flex items-center gap-0.5 px-1.5 py-0.5 rounded-md font-black"
-        style={{
-          bottom: isBig ? '8px' : '4px',
-          right: isBig ? '8%' : '10%',
-          background: activeMode === 'defense' ? 'rgba(59,130,246,0.9)' : activeMode === 'attack' ? 'rgba(80,80,90,0.7)' : 'rgba(59,130,246,0.7)',
-          color: activeMode === 'attack' ? 'rgba(255,255,255,0.45)' : '#fff',
-          fontSize: fontPower,
-          textShadow: activeMode === 'defense' ? '0 0 10px rgba(96,165,250,0.95)' : '0 1px 2px rgba(0,0,0,0.9)',
-          boxShadow: activeMode === 'defense' ? '0 0 12px rgba(59,130,246,0.7)' : 'none',
-          lineHeight: 1,
-          zIndex: 3,
-        }}
-      >
-        🛡️{def}
-      </span>
+      {(() => {
+        const hasBuff = defBonus > 0;
+        const hasDebuff = defBonus < 0;
+        const buffScale = hasBuff ? (defBonus >= 5 ? 1.5 : defBonus >= 3 ? 1.3 : 1.2) : hasDebuff ? 0.9 : 1;
+        const bg = hasBuff ? 'rgba(20,184,166,0.9)'
+          : hasDebuff ? 'rgba(100,30,30,0.9)'
+          : activeMode === 'defense' ? 'rgba(59,130,246,0.9)' : activeMode === 'attack' ? 'rgba(80,80,90,0.7)' : 'rgba(59,130,246,0.7)';
+        const glow = hasBuff ? '0 0 12px rgba(20,184,166,0.7)' : activeMode === 'defense' ? '0 0 12px rgba(59,130,246,0.7)' : 'none';
+        return (
+          <span
+            className={`absolute flex items-center gap-0.5 px-1.5 py-0.5 rounded-md font-black ${hasBuff ? 'kc-buff-pulse' : ''}`}
+            style={{
+              bottom: isBig ? '8px' : '4px', right: isBig ? '8%' : '10%',
+              background: bg, color: activeMode === 'attack' && !hasBuff ? 'rgba(255,255,255,0.45)' : '#fff',
+              fontSize: fontPower, lineHeight: 1, zIndex: 3,
+              textShadow: hasBuff ? '0 0 10px rgba(20,184,166,0.95)' : activeMode === 'defense' ? '0 0 10px rgba(96,165,250,0.95)' : '0 1px 2px rgba(0,0,0,0.9)',
+              boxShadow: glow, transform: `scale(${buffScale})`, transition: 'transform 0.3s, background 0.3s, box-shadow 0.3s',
+            }}
+          >
+            🛡️{def}{hasBuff && ` (+${defBonus})`}{hasDebuff && ` (${defBonus})`}
+          </span>
+        );
+      })()}
       {isDefense && <div className="absolute top-1.5 left-1.5" style={{ zIndex: 3 }}><span className={isBig ? 'text-xl' : 'text-base'}>🛡️</span></div>}
       {isWinner && <div className="absolute top-1.5 right-1.5 kc-win-badge" style={{ zIndex: 3 }}><span className={`${isBig ? 'text-2xl' : 'text-lg'} drop-shadow-lg`}>👑</span></div>}
     </div>
