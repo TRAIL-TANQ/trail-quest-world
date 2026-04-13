@@ -1480,12 +1480,12 @@ export default function KnowledgeChallenger() {
           <div className="flex items-center justify-center gap-3 mb-4">
             <div className="text-center px-4 py-2 rounded-lg" style={{ background: 'rgba(34,197,94,0.18)', border: '2px solid rgba(34,197,94,0.45)' }}>
               <p className="text-[9px] text-green-200/70 mb-0.5">あなた</p>
-              <span className="text-3xl font-black text-green-300" style={{ textShadow: '0 0 12px rgba(34,197,94,0.6)' }}>🎐 {gameState.playerFans}</span>
+              <span key={`pfan-${gameState.playerFans}`} className="text-3xl font-black kc-power-bounce" style={{ color: gameState.playerFans >= gameState.aiFans ? '#ffd700' : '#22c55e', textShadow: `0 0 12px ${gameState.playerFans >= gameState.aiFans ? 'rgba(255,215,0,0.6)' : 'rgba(34,197,94,0.6)'}` }}>🎐 {gameState.playerFans}</span>
             </div>
             <span className="text-lg font-black text-amber-200/50">VS</span>
             <div className="text-center px-4 py-2 rounded-lg" style={{ background: 'rgba(239,68,68,0.15)', border: '2px solid rgba(239,68,68,0.4)' }}>
               <p className="text-[9px] text-red-200/70 mb-0.5">相手</p>
-              <span className="text-3xl font-black text-red-300" style={{ textShadow: '0 0 12px rgba(239,68,68,0.6)' }}>🎐 {gameState.aiFans}</span>
+              <span key={`afan-${gameState.aiFans}`} className="text-3xl font-black kc-power-bounce" style={{ color: gameState.aiFans > gameState.playerFans ? '#ffd700' : '#ef4444', textShadow: `0 0 12px ${gameState.aiFans > gameState.playerFans ? 'rgba(255,215,0,0.6)' : 'rgba(239,68,68,0.6)'}` }}>🎐 {gameState.aiFans}</span>
             </div>
           </div>
           <div
@@ -1680,14 +1680,14 @@ export default function KnowledgeChallenger() {
           {/* Fan totals — primary win condition display */}
           <div className="text-center px-2 py-1 rounded-lg" style={{ background: 'rgba(34,197,94,0.14)', border: '1.5px solid rgba(34,197,94,0.5)' }}>
             <p className="text-[9px] font-bold text-green-200/80">あなた</p>
-            <p className="text-base font-black" style={{ color: '#4ade80', textShadow: '0 0 8px rgba(34,197,94,0.6)' }}>
+            <p key={`pfan-${gameState.playerFans}`} className="text-base font-black kc-power-bounce" style={{ color: gameState.playerFans >= gameState.aiFans ? '#ffd700' : '#4ade80', textShadow: `0 0 8px ${gameState.playerFans >= gameState.aiFans ? 'rgba(255,215,0,0.6)' : 'rgba(34,197,94,0.6)'}` }}>
               🎐 {gameState.playerFans}
             </p>
           </div>
           <span className="text-[10px] font-black text-amber-200/60">vs</span>
           <div className="text-center px-2 py-1 rounded-lg" style={{ background: 'rgba(239,68,68,0.14)', border: '1.5px solid rgba(239,68,68,0.5)' }}>
             <p className="text-[9px] font-bold text-red-200/80">相手</p>
-            <p className="text-base font-black" style={{ color: '#fca5a5', textShadow: '0 0 8px rgba(239,68,68,0.6)' }}>
+            <p key={`afan-${gameState.aiFans}`} className="text-base font-black kc-power-bounce" style={{ color: gameState.aiFans > gameState.playerFans ? '#ffd700' : '#fca5a5', textShadow: `0 0 8px ${gameState.aiFans > gameState.playerFans ? 'rgba(255,215,0,0.6)' : 'rgba(239,68,68,0.6)'}` }}>
               🎐 {gameState.aiFans}
             </p>
           </div>
@@ -1831,8 +1831,13 @@ export default function KnowledgeChallenger() {
                 </div>
               ))}
               {/* Latest card on top with kcCardFlip animation on mount */}
-              <div key={`latest-${attackCards.length}`} className={`absolute inset-0 ${enterClass}`} style={{ zIndex: 100 }}>
+              <div key={`latest-${attackCards.length}`} className={`absolute inset-0 ${enterClass} kc-card-float`} style={{ zIndex: 100 }}>
                 <CardDisplay card={lastCard} size="battle" mode="attack" onTap={() => setDetailCard(lastCard)} />
+                {/* Light ripple on reveal */}
+                <div key={`ripple-${attackCards.length}`} className="absolute inset-0 pointer-events-none z-[105]">
+                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[180px] h-[180px] rounded-full"
+                    style={{ border: '2px solid rgba(255,215,0,0.5)', animation: 'kcRipple 0.6s ease-out forwards' }} />
+                </div>
                 {/* Bonus badge: shows when effects/auras added extra power beyond base */}
                 {(() => {
                   const baseAtk = lastCard.attackPower ?? lastCard.power;
@@ -1897,7 +1902,7 @@ export default function KnowledgeChallenger() {
 
         return (
       <div
-        className={`flex-1 flex flex-col px-2 py-2 relative min-h-0 overflow-hidden ${cineStep === 'resolve' && gameState.lastSubBattle?.winner === 'ai' ? 'kc-screen-shake' : ''}`}
+        className={`flex-1 flex flex-col px-2 py-2 relative min-h-0 overflow-hidden ${cineStep === 'resolve' ? 'kc-screen-shake' : ''}`}
       >
         {/* Flash overlays on resolve */}
         {cineStep === 'resolve' && gameState.lastSubBattle?.winner === 'ai' && (
@@ -1906,6 +1911,10 @@ export default function KnowledgeChallenger() {
         {cineStep === 'resolve' && gameState.lastSubBattle?.winner === 'player' && (
           <>
             <div className="absolute inset-0 pointer-events-none z-30 kc-gold-flash" />
+            {/* Shockwave */}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[32]">
+              <div className="kc-shockwave" style={{ width: 100, height: 100 }} />
+            </div>
             {/* Confetti particles */}
             <div className="absolute inset-0 pointer-events-none z-[35] overflow-hidden">
               {Array.from({ length: 24 }).map((_, i) => (
@@ -1983,6 +1992,65 @@ export default function KnowledgeChallenger() {
             );
           })()}
         </div>
+
+        {/* ====== POWER GAUGE BAR ====== */}
+        {shouldShowAttackPile && attackCards.length > 0 && defenderCard && (
+          <div className="px-4 py-1 relative">
+            <div className="relative h-6 rounded-full overflow-hidden"
+              style={{
+                background: 'rgba(10, 10, 30, 0.7)',
+                backdropFilter: 'blur(12px)',
+                border: '1px solid rgba(255,255,255,0.08)',
+              }}
+            >
+              {/* Gauge fill */}
+              <div
+                className={`absolute inset-y-0 left-0 rounded-full transition-all duration-400 ease-out ${
+                  defenderPower > 0 && attackPower / defenderPower >= 0.8 ? 'kc-gauge-shake' : ''
+                }`}
+                style={{
+                  width: `${Math.min(100, defenderPower > 0 ? (attackPower / defenderPower) * 100 : 0)}%`,
+                  background: (() => {
+                    const ratio = defenderPower > 0 ? attackPower / defenderPower : 0;
+                    if (ratio >= 1) return 'linear-gradient(90deg, #ffd700, #ffaa00)';
+                    if (ratio >= 0.8) return 'linear-gradient(90deg, #ef4444, #ff6b6b)';
+                    if (ratio >= 0.6) return 'linear-gradient(90deg, #eab308, #fbbf24)';
+                    return 'linear-gradient(90deg, #3b82f6, #60a5fa)';
+                  })(),
+                  boxShadow: (() => {
+                    const ratio = defenderPower > 0 ? attackPower / defenderPower : 0;
+                    if (ratio >= 1) return '0 0 16px rgba(255,215,0,0.6)';
+                    if (ratio >= 0.8) return '0 0 12px rgba(239,68,68,0.5)';
+                    return 'none';
+                  })(),
+                  transition: 'width 0.4s ease-out, background 0.3s',
+                }}
+              />
+              {/* Labels */}
+              <div className="absolute inset-0 flex items-center justify-between px-3 z-10">
+                <span className="text-xs font-black text-white" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.9)' }}>
+                  ⚔️ {attackPower}
+                </span>
+                <span className="text-xs font-black text-white" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.9)' }}>
+                  🛡️ {defenderPower}
+                </span>
+              </div>
+            </div>
+            {/* BREAK flash when attack exceeds defense */}
+            {attackPower >= defenderPower && attackPower > 0 && (
+              <div key={`break-${attackCards.length}`} className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
+                <span className="kc-stamp-in font-black" style={{
+                  fontSize: '28px',
+                  color: '#ffd700',
+                  textShadow: '0 0 20px rgba(255,215,0,0.8), 0 2px 4px rgba(0,0,0,0.9)',
+                  letterSpacing: '4px',
+                }}>
+                  BREAK!
+                </span>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ====== CENTER BAND (flag) ====== */}
         <div className="flex items-center justify-center gap-3 py-2 relative min-h-[90px]">
@@ -2876,21 +2944,63 @@ export default function KnowledgeChallenger() {
         }
         /* Phase 3 battle animations ------------------------------------------ */
         @keyframes kcAiCardEnter {
-          0%   { opacity: 0; transform: translateY(-60px) scale(0.7); }
-          100% { opacity: 1; transform: translateY(0) scale(1); }
+          0%   { opacity: 0; transform: translateY(-80px) scale(0.5) rotateY(180deg); }
+          40%  { opacity: 1; transform: translateY(-10px) scale(1.05) rotateY(90deg); }
+          70%  { transform: translateY(5px) scale(0.98) rotateY(0deg); }
+          100% { opacity: 1; transform: translateY(0) scale(1) rotateY(0deg); }
         }
-        .kc-ai-card-enter { animation: kcAiCardEnter 0.5s ease-out; }
+        .kc-ai-card-enter { animation: kcAiCardEnter 0.7s cubic-bezier(0.34, 1.56, 0.64, 1); }
         @keyframes kcPlayerCardEnter {
-          0%   { opacity: 0; transform: translateY(60px) scale(0.7); }
-          100% { opacity: 1; transform: translateY(0) scale(1); }
+          0%   { opacity: 0; transform: translateY(80px) scale(0.5) rotateY(180deg); }
+          40%  { opacity: 1; transform: translateY(10px) scale(1.05) rotateY(90deg); }
+          70%  { transform: translateY(-5px) scale(0.98) rotateY(0deg); }
+          100% { opacity: 1; transform: translateY(0) scale(1) rotateY(0deg); }
         }
-        .kc-player-card-enter { animation: kcPlayerCardEnter 0.5s ease-out; }
+        .kc-player-card-enter { animation: kcPlayerCardEnter 0.7s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        /* Light ripple on card reveal */
+        @keyframes kcRipple {
+          0%   { transform: scale(0); opacity: 0.6; }
+          100% { transform: scale(2.5); opacity: 0; }
+        }
+        /* Card idle floating */
+        @keyframes kcCardFloat {
+          0%, 100% { transform: translateY(0); }
+          50%      { transform: translateY(-3px); }
+        }
+        .kc-card-float { animation: kcCardFloat 2.5s ease-in-out infinite; }
+        /* Card shine sweep */
+        @keyframes kcCardShine {
+          0%   { transform: translateX(-100%); }
+          100% { transform: translateX(200%); }
+        }
         @keyframes kcCardFlip {
           0%   { transform: rotateY(180deg) scale(0.92); }
           60%  { transform: rotateY(0deg) scale(1.06); }
           100% { transform: rotateY(0deg) scale(1); }
         }
         .kc-flipping { animation: kcCardFlip 0.6s ease-out; }
+        /* Power gauge near-break shake */
+        @keyframes kcGaugeShake {
+          0%, 100% { transform: translateX(0); }
+          20% { transform: translateX(-2px); }
+          40% { transform: translateX(2px); }
+          60% { transform: translateX(-1px); }
+          80% { transform: translateX(1px); }
+        }
+        .kc-gauge-shake { animation: kcGaugeShake 0.5s ease-in-out infinite; }
+        /* BREAK stamp-in */
+        @keyframes kcStampIn {
+          0%   { transform: scale(3) rotate(-10deg); opacity: 0; }
+          50%  { transform: scale(0.9) rotate(2deg); opacity: 1; }
+          100% { transform: scale(1) rotate(0deg); opacity: 1; }
+        }
+        .kc-stamp-in { animation: kcStampIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        /* Shockwave on break */
+        @keyframes kcShockwave {
+          0%   { transform: scale(0); opacity: 0.8; border: 3px solid rgba(255,215,0,0.9); }
+          100% { transform: scale(4); opacity: 0; border: 1px solid rgba(255,215,0,0.3); }
+        }
+        .kc-shockwave { border-radius: 50%; animation: kcShockwave 0.6s ease-out forwards; }
         @keyframes kcPowerPop {
           0%   { opacity: 0; transform: scale(0.6) translateY(6px); }
           50%  { opacity: 1; transform: scale(1.2) translateY(-3px); }
