@@ -52,6 +52,7 @@ import {
   removeCardFromDeck,
   swapCardInDeck,
   aiDeckGrowth,
+  removeOneFromBench,
 } from '@/lib/knowledgeEngine';
 import {
   processQuizResult,
@@ -157,6 +158,12 @@ export default function KnowledgeChallenger() {
   const playSound = useCallback((soundId: string) => {
     console.log('[SFX]', soundId);
   }, []);
+  // Card selection overlay (used by 毒矢カエル, 光合成, 紙, アマゾン川 effects)
+  const [cardSelectOverlay, setCardSelectOverlay] = useState<{
+    title: string;
+    cards: BattleCard[];
+    onSelect: (card: BattleCard | null) => void;
+  } | null>(null);
   // Effect cutin overlay (SR+ cards show cinematic cutin)
   const [cutinCard, setCutinCard] = useState<BattleCard | null>(null);
   // Evolution overlay
@@ -407,6 +414,21 @@ export default function KnowledgeChallenger() {
   }, []);
 
   // ===== Manual advance wait: shows big button, resolves on player tap =====
+  // Show card selection overlay and wait for player choice
+  const waitCardSelect = useCallback((title: string, cards: BattleCard[]): Promise<BattleCard | null> => {
+    if (unmountedRef.current || cards.length === 0) return Promise.resolve(null);
+    return new Promise((resolve) => {
+      setCardSelectOverlay({
+        title,
+        cards,
+        onSelect: (card) => {
+          setCardSelectOverlay(null);
+          resolve(card);
+        },
+      });
+    });
+  }, []);
+
   const waitManualAdvance = useCallback((): Promise<void> => {
     if (unmountedRef.current) return Promise.resolve();
     setShowManualAdvance(true);
@@ -612,6 +634,74 @@ export default function KnowledgeChallenger() {
               setCutinCard(null);
             } else if (lastRevealed?.effect && lastRevealed.rarity === 'R') {
               // R cards: brief glow (handled by effectTelop, no extra cutin)
+            }
+          }
+
+          // ===== Interactive card effects (player only — selection UI) =====
+          if (isPlayerAttacker) {
+            const lastRevealed = rs.attackRevealed[rs.attackRevealed.length - 1];
+            const effId = lastRevealed?.effect?.id;
+
+            // 光合成: select amazon creature from bench to put on deck top
+            if (effId === 'photosynthesis') {
+              const gs = gameStateRef.current ?? rs;
+              const amazonTargets = ['ピラニア', 'アナコンダ', '毒矢カエル', '大蛇'];
+              const sealed = gs.sealedBenchNames.player;
+              const candidates = gs.player.bench
+                .filter((b) => amazonTargets.includes(b.name) && !sealed.includes(b.name))
+                .map((b) => b.card);
+              if (candidates.length > 0) {
+                const chosen = await waitCardSelect('🌿 デッキトップに戻すカードを選んでください', candidates);
+                if (chosen && !unmountedRef.current) {
+                  setGameState((prev) => {
+                    if (!prev) return prev;
+                    const newBench = removeOneFromBench(prev.player.bench, chosen.name);
+                    return { ...prev, player: { ...prev.player, bench: newBench, deck: [chosen, ...prev.player.deck] } };
+                  });
+                }
+              }
+            }
+
+            // 毒矢カエル: select opponent bench card to exile
+            if (effId === 'poison_frog') {
+              const gs = gameStateRef.current ?? rs;
+              const oppBench = gs.ai.bench.map((b) => b.card);
+              if (oppBench.length > 0) {
+                const chosen = await waitCardSelect('🐸 除外する相手のカードを選んでください', oppBench);
+                if (chosen && !unmountedRef.current) {
+                  setGameState((prev) => {
+                    if (!prev) return prev;
+                    const newBench = removeOneFromBench(prev.ai.bench, chosen.name);
+                    return {
+                      ...prev,
+                      ai: { ...prev.ai, bench: newBench },
+                      exile: { ...prev.exile, ai: [...prev.exile.ai, chosen] },
+                      effectTelop: { text: `🐸 猛毒！相手の${chosen.name}を除外！`, color: '#a855f7', key: Date.now() },
+                    };
+                  });
+                }
+              }
+            }
+
+            // 紙: select exiled card to return to deck top
+            if (effId === 'paper') {
+              const gs = gameStateRef.current ?? rs;
+              const exiledCards = gs.exile.player;
+              if (exiledCards.length > 0) {
+                const chosen = await waitCardSelect('📜 デッキトップに戻す除外カードを選んでください', exiledCards);
+                if (chosen && !unmountedRef.current) {
+                  setGameState((prev) => {
+                    if (!prev) return prev;
+                    const newExile = prev.exile.player.filter((c) => c.id !== chosen.id);
+                    return {
+                      ...prev,
+                      player: { ...prev.player, deck: [chosen, ...prev.player.deck] },
+                      exile: { ...prev.exile, player: newExile },
+                      effectTelop: { text: `📜 記録の復元！${chosen.name}をデッキトップへ！`, color: '#ffd700', key: Date.now() },
+                    };
+                  });
+                }
+              }
             }
           }
 
@@ -1861,7 +1951,7 @@ export default function KnowledgeChallenger() {
               >
                 <p
                   style={{
-                    fontSize: '30px',
+                    fontSize: '22px',
                     fontWeight: 900,
                     color: '#60a5fa',
                     textShadow: '0 0 18px rgba(96,165,250,1), 0 0 28px rgba(96,165,250,0.7), 0 2px 6px rgba(0,0,0,0.95)',
@@ -2625,6 +2715,37 @@ export default function KnowledgeChallenger() {
             <button onClick={() => setShowExile(false)} className="w-full py-2 rounded-lg text-sm font-bold mt-2"
               style={{ background: 'rgba(168,85,247,0.15)', border: '1px solid rgba(168,85,247,0.3)', color: 'rgba(168,85,247,0.8)' }}>
               閉じる
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ===== Card Select Overlay (shared by multiple effects) ===== */}
+      {cardSelectOverlay && (
+        <div className="fixed inset-0 z-[1100] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.85)' }}>
+          <div className="rounded-2xl p-4 w-full max-w-sm" style={{
+            background: 'linear-gradient(135deg, rgba(21,29,59,0.98), rgba(14,20,45,0.98))',
+            border: '2px solid rgba(255,215,0,0.4)',
+            boxShadow: '0 0 24px rgba(255,215,0,0.2)',
+          }}>
+            <h3 className="text-base font-black text-amber-100 mb-3 text-center">{cardSelectOverlay.title}</h3>
+            <div className="grid grid-cols-3 gap-2 mb-3">
+              {cardSelectOverlay.cards.map((c, i) => (
+                <button key={i} onClick={() => cardSelectOverlay.onSelect(c)}
+                  className="rounded-lg p-1 active:scale-95 transition-transform"
+                  style={{ background: 'rgba(255,255,255,0.06)', border: '1.5px solid rgba(255,215,0,0.3)' }}>
+                  <div className="rounded-md overflow-hidden mb-0.5" style={{ aspectRatio: '3/4' }}>
+                    {c.imageUrl ? <img src={c.imageUrl} alt={c.name} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-gray-800" />}
+                  </div>
+                  <p className="text-[9px] font-bold text-amber-100 truncate">{c.name}</p>
+                  <p className="text-[8px] text-amber-200/50">⚔️{c.attackPower ?? c.power} 🛡️{c.defensePower ?? c.power}</p>
+                </button>
+              ))}
+            </div>
+            <button onClick={() => cardSelectOverlay.onSelect(null)}
+              className="w-full py-2 rounded-lg text-sm font-bold"
+              style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.6)' }}>
+              使わない
             </button>
           </div>
         </div>

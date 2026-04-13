@@ -244,7 +244,7 @@ function applySide(state: GameState, side: Side, next: PlayerState): GameState {
   return side === 'player' ? { ...state, player: next } : { ...state, ai: next };
 }
 
-function removeOneFromBench(bench: BenchSlot[], name: string): BenchSlot[] {
+export function removeOneFromBench(bench: BenchSlot[], name: string): BenchSlot[] {
   return bench.flatMap((s) => {
     if (s.name !== name) return [s];
     if (s.count <= 1) return [];
@@ -643,8 +643,27 @@ export function applyRevealEffect(
       break;
     }
     case 'paper': {
-      next = { ...next, altBonus: next.altBonus + 5 };
-      telop = { text: '📜紙の記録！+5 ALT', color };
+      // 紙: 除外カード1枚をデッキトップに戻す（プレイヤーはUI選択、AIは自動）
+      const myExile = next.exile[side];
+      if (myExile.length > 0) {
+        if (side === 'ai') {
+          // AI: return strongest exiled card
+          const best = myExile.reduce((a, b) => {
+            const ap = (a.attackPower ?? a.power) + (a.defensePower ?? a.power);
+            const bp = (b.attackPower ?? b.power) + (b.defensePower ?? b.power);
+            return ap >= bp ? a : b;
+          });
+          const myState = next.ai; // side is 'ai' here
+          next = applySide(next, side, { ...myState, deck: [best, ...myState.deck] });
+          next = { ...next, exile: { ...next.exile, [side]: myExile.filter((c) => c.id !== best.id) } };
+          telop = { text: `📜 記録の復元！${best.name}をデッキトップへ！`, color: '#ffd700' };
+        } else {
+          // Player: UI selection handled in battle loop
+          telop = { text: '📜 紙の記録！除外カードを復元...', color };
+        }
+      } else {
+        telop = { text: '📜 紙の記録（除外カードがありません）', color };
+      }
       break;
     }
     // ===== 追加コンボ効果 =====
@@ -888,19 +907,26 @@ export function applyRevealEffect(
       break;
     }
     case 'poison_frog': {
-      const my = side === 'player' ? next.player : next.ai;
-      const sealed = next.sealedBenchNames[side];
-      const hasAmazon = my.bench.some((b) => b.name === 'アマゾン川' && !sealed.includes(b.name));
-      const n = hasAmazon ? 2 : 1;
+      // 毒矢カエル: 相手ベンチ1枚を除外（プレイヤー側はUI選択、AI側は自動選択）
       const oppState = opp === 'player' ? next.player : next.ai;
-      const slice = oppState.deck.slice(0, n);
-      if (slice.length > 0) {
-        next = applySide(
-          { ...next, quarantine: { ...next.quarantine, [opp]: [...next.quarantine[opp], ...slice] } },
-          opp,
-          { ...oppState, deck: oppState.deck.slice(slice.length) },
-        );
-        telop = { text: `🐸毒矢カエル！敵${slice.length}枚隔離`, color };
+      if (oppState.bench.length > 0) {
+        if (side === 'ai') {
+          // AI: auto-select weakest bench card to exile
+          const target = oppState.bench.reduce((a, b) => {
+            const aPow = (a.card.attackPower ?? a.card.power) + (a.card.defensePower ?? a.card.power);
+            const bPow = (b.card.attackPower ?? b.card.power) + (b.card.defensePower ?? b.card.power);
+            return aPow <= bPow ? a : b;
+          });
+          const newBench = removeOneFromBench(oppState.bench, target.name);
+          next = applySide(next, opp, { ...oppState, bench: newBench });
+          next = { ...next, exile: { ...next.exile, [opp]: [...next.exile[opp], target.card] } };
+          telop = { text: `🐸 猛毒！${target.name}を除外！`, color };
+        } else {
+          // Player: UI selection handled in battle loop
+          telop = { text: '🐸 毒矢カエル！相手ベンチから除外...', color };
+        }
+      } else {
+        telop = { text: '🐸 毒矢カエル（相手ベンチにカードがありません）', color };
       }
       break;
     }

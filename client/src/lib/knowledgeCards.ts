@@ -81,7 +81,7 @@ export const EFFECT_DEFS: Record<string, CardEffect> = {
   dynamite:   { id: 'dynamite',   name: '大爆発',             description: '公開時、自分ベンチの「火薬」1枚につき攻撃+2。', category: 'atk' },
   compass:    { id: 'compass',    name: '航海術',             description: '公開時、デッキ内の「コロンブス」or「マゼラン」を上3枚以内に移動。', category: 'bench' },
   penicillin: { id: 'penicillin', name: '治療',               description: '公開時、自分ベンチ最強カード1枚をデッキの下へ戻す。', category: 'bench' },
-  paper:      { id: 'paper',      name: '記録',               description: '公開時、このマッチの獲得ALT+5。', category: 'special' },
+  paper:      { id: 'paper',      name: '記録の復元',         description: '公開時、除外されたカード1枚をデッキの一番上に戻す（任意発動）。', category: 'bench' },
   // ===== コンボ系（2026-04 追加） =====
   edison:          { id: 'edison',          name: '発明王',           description: 'ベンチの電球・蓄音機1枚につき攻撃+1、両方揃えばさらに+3。', category: 'atk' },
   phonograph:      { id: 'phonograph',      name: '音の記録',         description: 'From the bench: エジソンが防御時+2。', category: 'def' },
@@ -98,7 +98,7 @@ export const EFFECT_DEFS: Record<string, CardEffect> = {
   qinshi:          { id: 'qinshi',          name: '天下統一',         description: 'ベンチの世界遺産1枚につき攻撃+2、防御+1。', category: 'special' },
   amazon_river:    { id: 'amazon_river',    name: '密林の大河',       description: '公開時、デッキ内のピラニア・アナコンダ・毒矢カエルのいずれか1枚をデッキの一番上に置ける。', category: 'special' },
   anaconda:        { id: 'anaconda',        name: '締めつけ',         description: '公開時、相手防御-2。ベンチに毒矢カエル+ピラニアの2種がいれば大蛇に進化。', category: 'debuff' },
-  poison_frog:     { id: 'poison_frog',     name: '猛毒',             description: '公開時、相手デッキ上1枚を隔離。アマゾン川があれば2枚。', category: 'bench' },
+  poison_frog:     { id: 'poison_frog',     name: '猛毒',             description: '公開時、相手ベンチのカード1枚を除外できる（任意発動）。', category: 'debuff' },
   apple:           { id: 'apple',           name: '落ちるリンゴ',     description: '公開時、デッキ内のニュートンをデッキ一番上に移動。', category: 'bench' },
   prism:           { id: 'prism',           name: '光の分解',         description: 'From the bench: ニュートンの攻撃+2、公開時相手防御効果無効。', category: 'atk' },
   gravity:         { id: 'gravity',         name: '万有引力',         description: 'From the bench: ニュートンの防御+2。相手の2枚目以降の攻撃-1。', category: 'def' },
