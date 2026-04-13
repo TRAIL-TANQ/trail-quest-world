@@ -33,34 +33,34 @@ export const COLLECTION_CARDS: CollectionCard[] = [
   { id: 'card-025', name: 'ピラニア', category: 'creatures', rarity: 'N', description: 'アマゾン川に住む肉食魚。鋭い歯を持つ。', imageUrl: '/images/cards/card-025.webp' },
 
   // ===== 世界遺産 (10枚) =====
-  { id: 'card-026', name: '万里の長城', category: 'world_heritage', rarity: 'SR', description: '中国の巨大な防壁。全長2万キロ以上。宇宙からも見える。', imageUrl: '/images/cards/card-026.webp' },
-  { id: 'card-027', name: 'ピラミッド', category: 'world_heritage', rarity: 'SR', description: 'エジプトの巨大建造物。ファラオの墓として4500年前に建てられた。', imageUrl: '/images/cards/card-027.webp' },
-  { id: 'card-028', name: 'コロッセオ', category: 'world_heritage', rarity: 'R', description: '古代ローマの円形闘技場。5万人を収容できた。', imageUrl: '/images/cards/card-028.webp' },
-  { id: 'card-029', name: 'タージ・マハル', category: 'world_heritage', rarity: 'R', description: 'インドの白い大理石の霊廟。愛の象徴として有名。', imageUrl: '/images/cards/card-029.webp' },
-  { id: 'card-030', name: 'アンコールワット', category: 'world_heritage', rarity: 'R', description: 'カンボジアの巨大寺院。世界最大の宗教建築物。', imageUrl: '/images/cards/card-030.webp' },
+  { id: 'card-026', name: '万里の長城', category: 'world_heritage', rarity: 'SR', description: '中国の巨大な防壁。全長2万キロ以上。宇宙からも見える。', imageUrl: '/images/cards/great-wall.png' },
+  { id: 'card-027', name: 'ピラミッド', category: 'world_heritage', rarity: 'SR', description: 'エジプトの巨大建造物。ファラオの墓として4500年前に建てられた。', imageUrl: '/images/cards/pyramid.png' },
+  { id: 'card-028', name: 'コロッセオ', category: 'world_heritage', rarity: 'R', description: '古代ローマの円形闘技場。5万人を収容できた。', imageUrl: '/images/cards/colosseum.png' },
+  { id: 'card-029', name: 'タージ・マハル', category: 'world_heritage', rarity: 'R', description: 'インドの白い大理石の霊廟。愛の象徴として有名。', imageUrl: '/images/cards/taj-mahal.png' },
+  { id: 'card-030', name: 'アンコールワット', category: 'world_heritage', rarity: 'R', description: 'カンボジアの巨大寺院。世界最大の宗教建築物。', imageUrl: '/images/cards/angkor-wat.png' },
   { id: 'card-031', name: '屋久島', category: 'world_heritage', rarity: 'N', description: '鹿児島県の島。樹齢7000年の縄文杉がある自然遺産。', imageUrl: '/images/cards/card-031.webp' },
   { id: 'card-032', name: '富士山', category: 'world_heritage', rarity: 'N', description: '日本一高い山。標高3776メートル。文化遺産に登録。', imageUrl: '/images/cards/card-032.webp' },
-  { id: 'card-033', name: 'マチュ・ピチュ', category: 'world_heritage', rarity: 'SR', description: 'ペルーの空中都市。インカ帝国の遺跡。標高2400メートル。', imageUrl: '/images/cards/card-033.webp' },
+  { id: 'card-033', name: 'マチュ・ピチュ', category: 'world_heritage', rarity: 'SR', description: 'ペルーの空中都市。インカ帝国の遺跡。標高2400メートル。', imageUrl: '/images/cards/machu-picchu.png' },
   { id: 'card-034', name: 'ストーンヘンジ', category: 'world_heritage', rarity: 'R', description: 'イギリスの巨石遺跡。5000年前に作られた謎の石の環。', imageUrl: '/images/cards/card-034.webp' },
   { id: 'card-035', name: '法隆寺', category: 'world_heritage', rarity: 'N', description: '奈良県の寺院。世界最古の木造建築物。聖徳太子が建立。', imageUrl: '/images/cards/card-035.webp' },
 
   // ===== 発明 (10枚) =====
-  { id: 'card-036', name: '電球', category: 'inventions', rarity: 'N', description: 'エジソンが実用化した照明器具。世界を明るくした。', imageUrl: '/images/cards/card-036.webp' },
+  { id: 'card-036', name: '電球', category: 'inventions', rarity: 'N', description: 'エジソンが実用化した照明器具。世界を明るくした。', imageUrl: '/images/cards/lightbulb.png' },
   { id: 'card-037', name: '蒸気機関', category: 'inventions', rarity: 'N', description: '産業革命を起こした動力源。工場や鉄道を動かした。', imageUrl: '/images/cards/steam-engine.png' },
   { id: 'card-038', name: '印刷機', category: 'inventions', rarity: 'R', description: 'グーテンベルクが発明した活版印刷。知識の普及に貢献。', imageUrl: '/images/cards/card-038.webp' },
   { id: 'card-039', name: '飛行機', category: 'inventions', rarity: 'SR', description: 'ライト兄弟が初飛行に成功。人類の空への夢を実現した。', imageUrl: '/images/cards/card-039.webp' },
-  { id: 'card-040', name: 'インターネット', category: 'inventions', rarity: 'SR', description: '世界中のコンピュータをつなぐ通信網。情報革命を起こした。', imageUrl: '/images/cards/card-040.webp' },
+  { id: 'card-040', name: 'インターネット', category: 'inventions', rarity: 'SR', description: '世界中のコンピュータをつなぐ通信網。情報革命を起こした。', imageUrl: '/images/cards/internet.png' },
   { id: 'card-041', name: '電話', category: 'inventions', rarity: 'N', description: 'ベルが発明した通信機器。遠くの人と話せるようになった。', imageUrl: '/images/cards/telephone.png' },
-  { id: 'card-042', name: '望遠鏡', category: 'inventions', rarity: 'N', description: '遠くのものを見る光学機器。天文学の発展に貢献した。', imageUrl: '/images/cards/card-042.webp' },
-  { id: 'card-043', name: 'ペニシリン', category: 'inventions', rarity: 'R', description: 'フレミングが発見した抗生物質。多くの命を救った。', imageUrl: '/images/cards/card-043.webp' },
-  { id: 'card-044', name: '羅針盤', category: 'inventions', rarity: 'N', description: '方角を知るための道具。大航海時代を支えた。', imageUrl: '/images/cards/card-044.webp' },
+  { id: 'card-042', name: '望遠鏡', category: 'inventions', rarity: 'N', description: '遠くのものを見る光学機器。天文学の発展に貢献した。', imageUrl: '/images/cards/telescope.png' },
+  { id: 'card-043', name: 'ペニシリン', category: 'inventions', rarity: 'R', description: 'フレミングが発見した抗生物質。多くの命を救った。', imageUrl: '/images/cards/penicillin.png' },
+  { id: 'card-044', name: '羅針盤', category: 'inventions', rarity: 'N', description: '方角を知るための道具。大航海時代を支えた。', imageUrl: '/images/cards/compass.png' },
   { id: 'card-045', name: '火薬', category: 'inventions', rarity: 'N', description: '中国で発明された爆発物。花火や採掘にも使われる。', imageUrl: '/images/cards/gunpowder.png' },
 
   // ===== 探究 (5枚) =====
   { id: 'card-046', name: '宇宙の誕生', category: 'discovery', rarity: 'SSR', description: '138億年前のビッグバン。宇宙のはじまりの瞬間。', imageUrl: '/images/cards/card-046.webp' },
   { id: 'card-047', name: 'DNAの二重らせん', category: 'discovery', rarity: 'SR', description: '生命の設計図。ワトソンとクリックが構造を解明した。', imageUrl: '/images/cards/card-047.webp' },
   { id: 'card-048', name: '元素周期表', category: 'discovery', rarity: 'R', description: 'メンデレーエフが作った元素の表。化学の基礎。', imageUrl: '/images/cards/card-048.webp' },
-  { id: 'card-049', name: '地動説', category: 'discovery', rarity: 'R', description: 'コペルニクスが唱えた説。地球が太陽の周りを回る。', imageUrl: '/images/cards/card-049.webp' },
+  { id: 'card-049', name: '地動説', category: 'discovery', rarity: 'R', description: 'コペルニクスが唱えた説。地球が太陽の周りを回る。', imageUrl: '/images/cards/heliocentric.png' },
   { id: 'card-050', name: '進化論', category: 'discovery', rarity: 'SR', description: 'ダーウィンが唱えた理論。生物は環境に適応して変化する。', imageUrl: '/images/cards/card-050.webp' },
 
   // ===== 追加50枚 (偉人15+生き物10+世界遺産10+発明10+探究5) =====
@@ -89,7 +89,7 @@ export const COLLECTION_CARDS: CollectionCard[] = [
   { id: 'card-073', name: 'ウミガメ', category: 'creatures', rarity: 'N', description: '海を何千キロも旅する爬虫類。産卵のため生まれた浜に戻る。', imageUrl: '/images/cards/card-073.webp' },
   { id: 'card-074', name: 'フクロウ', category: 'creatures', rarity: 'R', description: '夜行性の猛禽類。音を立てずに飛び、暗闇で獲物を捕らえる。', imageUrl: '/images/cards/card-074.webp' },
   { id: 'card-075', name: 'クラゲ', category: 'creatures', rarity: 'N', description: '透明な体で深海を漂う幻想的な生き物。一部は発光する。', imageUrl: '/images/cards/card-075.webp' },
-  { id: 'card-076', name: '自由の女神', category: 'world_heritage', rarity: 'SR', description: 'ニューヨークのシンボル。フランスから贈られた自由と民主主義の象徴。', imageUrl: '/images/cards/card-076.webp' },
+  { id: 'card-076', name: '自由の女神', category: 'world_heritage', rarity: 'SR', description: 'ニューヨークのシンボル。フランスから贈られた自由と民主主義の象徴。', imageUrl: '/images/cards/statue-of-liberty.png' },
   { id: 'card-077', name: 'サグラダ・ファミリア', category: 'world_heritage', rarity: 'SR', description: 'ガウディの未完の教会。1882年着工、今なお建設が続く。', imageUrl: '/images/cards/card-077.webp' },
   { id: 'card-078', name: 'モン・サン=ミシェル', category: 'world_heritage', rarity: 'SR', description: '海に浮かぶ修道院。満潮時に海に囲まれるフランスの世界遺産。', imageUrl: '/images/cards/card-078.webp' },
   { id: 'card-079', name: 'ヴェルサイユ宮殿', category: 'world_heritage', rarity: 'R', description: 'フランスの豪華な宮殿。鏡の間やフランス式庭園で知られる。', imageUrl: '/images/cards/card-079.webp' },
@@ -102,16 +102,16 @@ export const COLLECTION_CARDS: CollectionCard[] = [
   { id: 'card-086', name: 'ロケット', category: 'inventions', rarity: 'SR', description: '宇宙への扉。人類を月や宇宙ステーションへ運ぶ巨大な乗り物。', imageUrl: '/images/cards/card-086.webp' },
   { id: 'card-087', name: '自動車', category: 'inventions', rarity: 'SR', description: '移動の革命。カール・ベンツが発明した世界初の自動車。', imageUrl: '/images/cards/card-087.webp' },
   { id: 'card-088', name: 'カメラ', category: 'inventions', rarity: 'SR', description: '記録の発明。光を使って一瞬を永遠に残す装置。', imageUrl: '/images/cards/card-088.webp' },
-  { id: 'card-089', name: '顕微鏡', category: 'inventions', rarity: 'R', description: 'ミクロの世界への窓。肉眼では見えない微生物や細胞を観察する。', imageUrl: '/images/cards/card-089.webp' },
+  { id: 'card-089', name: '顕微鏡', category: 'inventions', rarity: 'R', description: 'ミクロの世界への窓。肉眼では見えない微生物や細胞を観察する。', imageUrl: '/images/cards/microscope.png' },
   { id: 'card-090', name: '温度計', category: 'inventions', rarity: 'R', description: '温度を正確に測る道具。ガリレオが原型を発明した。', imageUrl: '/images/cards/card-090.webp' },
   { id: 'card-091', name: '気球', category: 'inventions', rarity: 'R', description: '空への挑戦。モンゴルフィエ兄弟が発明した人類初の飛行装置。', imageUrl: '/images/cards/card-091.webp' },
   { id: 'card-092', name: '時計', category: 'inventions', rarity: 'R', description: '時を刻む精密機械。歯車とバネで正確な時間を知らせる。', imageUrl: '/images/cards/card-092.webp' },
-  { id: 'card-093', name: 'ダイナマイト', category: 'inventions', rarity: 'N', description: 'ノーベルが発明した爆薬。建設や採掘に革命をもたらした。', imageUrl: '/images/cards/card-093.webp' },
+  { id: 'card-093', name: 'ダイナマイト', category: 'inventions', rarity: 'N', description: 'ノーベルが発明した爆薬。建設や採掘に革命をもたらした。', imageUrl: '/images/cards/dynamite.png' },
   { id: 'card-094', name: '紙', category: 'inventions', rarity: 'N', description: '中国四大発明の一つ。知識の記録と伝達を飛躍的に進歩させた。', imageUrl: '/images/cards/paper.png' },
   { id: 'card-095', name: '車輪', category: 'inventions', rarity: 'N', description: '文明の基礎。輸送と機械の発展を支えた人類最大の発明の一つ。', imageUrl: '/images/cards/wheel.png' },
   { id: 'card-096', name: '光の波動性', category: 'discovery', rarity: 'SR', description: '光の二重性。プリズムで虹色に分かれる光の不思議な性質。', imageUrl: '/images/cards/card-096.webp' },
   { id: 'card-097', name: '量子力学', category: 'discovery', rarity: 'SR', description: 'ミクロの物理法則。原子や電子の振る舞いを記述する革命的理論。', imageUrl: '/images/cards/card-097.webp' },
-  { id: 'card-098', name: '万有引力', category: 'discovery', rarity: 'R', description: 'リンゴと月を結ぶ力。ニュートンが発見した宇宙の基本法則。', imageUrl: '/images/cards/card-098.webp' },
+  { id: 'card-098', name: '万有引力', category: 'discovery', rarity: 'R', description: 'リンゴと月を結ぶ力。ニュートンが発見した宇宙の基本法則。', imageUrl: '/images/cards/gravity.png' },
   { id: 'card-099', name: '原子核の構造', category: 'discovery', rarity: 'R', description: '物質の核心。陽子と中性子からなる原子の中心構造。', imageUrl: '/images/cards/card-099.webp' },
   { id: 'card-100', name: '光合成', category: 'creatures', rarity: 'SSR', description: '密林の生命力。太陽の光がアマゾンの仲間を蘇らせる。', imageUrl: '/images/cards/photosynthesis.png' },
 
@@ -121,8 +121,8 @@ export const COLLECTION_CARDS: CollectionCard[] = [
   { id: 'card-103', name: '原子爆弾', category: 'inventions', rarity: 'SSR', description: '人類が生み出した最悪の兵器。ベンチに「マンハッタン計画」と「トリニティ実験」が揃うと発動する究極コンボカード。', imageUrl: '' },
 
   // ===== 追加カード (2枚) =====
-  { id: 'card-104', name: '黄熱病', category: 'discovery', rarity: 'R', description: '蛊が媒介する感染症。野口英世が研究に生涯を捧げ、多くの科学者が命を落とした恐ろしい病気。', imageUrl: '/images/cards/card-104.webp' },
-  { id: 'card-105', name: '天動説', category: 'discovery', rarity: 'R', description: '地球が宇宙の中心で、太陽や星が地球の周りを回るという古代の宇宙観。プトレマイオスが体系化した。', imageUrl: '/images/cards/card-105.webp' },
+  { id: 'card-104', name: '黄熱病', category: 'discovery', rarity: 'R', description: '蛊が媒介する感染症。野口英世が研究に生涯を捧げ、多くの科学者が命を落とした恐ろしい病気。', imageUrl: '/images/cards/yellow-fever.png' },
+  { id: 'card-105', name: '天動説', category: 'discovery', rarity: 'R', description: '地球が宇宙の中心で、太陽や星が地球の周りを回るという古代の宇宙観。プトレマイオスが体系化した。', imageUrl: '/images/cards/geocentric.png' },
 
   // ===== コンボカード: エジソン/ダーウィン/ライト兄弟/北里/始皇帝/アマゾン/ニュートン/宗教改革/ゴッホ/ジャンヌ/マリー =====
   { id: 'card-106', name: '蓄音機', category: 'inventions', rarity: 'N', description: 'エジソンが発明した音を記録する装置。音楽の歴史を変えた。', imageUrl: '/images/cards/phonograph.png' },

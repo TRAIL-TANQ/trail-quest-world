@@ -728,6 +728,16 @@ export default function KnowledgeChallenger() {
               );
             }
 
+            // Card defeat fan telop
+            {
+              const defCard = rs.defenseCard;
+              if (defCard) {
+                const defFans = ({ N: 1, R: 2, SR: 3, SSR: 5 } as Record<string, number>)[defCard.rarity] ?? 1;
+                const whoDefeated = rs.flagHolder === 'player' ? '相手' : 'あなた'; // attacker = otherSide(flagHolder)
+                setBenchBoostTelop({ text: `+${defFans}ファン！（${defCard.rarity}撃破）`, key: Date.now() });
+              }
+            }
+
             console.log('[KC] → resolve banner');
             setCineStep('resolve');
             const rzs = resolved as GameState;

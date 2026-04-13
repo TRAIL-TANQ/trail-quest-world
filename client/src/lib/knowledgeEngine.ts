@@ -40,14 +40,17 @@ export const BENCH_MAX_SLOTS = 6;
 // Each round ends when one side deck-outs or bench-overflows.
 // After 5 rounds, fan totals decide the overall winner.
 export const TOTAL_ROUNDS = 5;
+// Round victory fan rewards (fixed per round)
+export const ROUND_VICTORY_FANS = [10, 12, 14, 15, 20];
+// Card defeat fan rewards by rarity
+export const CARD_DEFEAT_FANS: Record<string, number> = { N: 1, R: 2, SR: 3, SSR: 5 };
+
+// Legacy: trophy fans (now uses ROUND_VICTORY_FANS instead)
 export const TROPHY_FAN_RANGES: Array<[number, number]> = [
-  [2, 3], [3, 5], [5, 7], [7, 9], [9, 11],
+  [10, 10], [12, 12], [14, 14], [15, 15], [20, 20],
 ];
 export function rollTrophyFans(round: number): number {
-  const range = TROPHY_FAN_RANGES[round - 1];
-  if (!range) return 0;
-  const [min, max] = range;
-  return min + Math.floor(Math.random() * (max - min + 1));
+  return ROUND_VICTORY_FANS[round - 1] ?? 0;
 }
 
 // ---------- Types ----------
@@ -1847,9 +1850,17 @@ export function resolveSubBattleWin(state: GameState): GameState {
     return baseDeck;
   };
 
+  // Card defeat fans: attacker earns fans for defeating the defender card
+  const defeatFans = CARD_DEFEAT_FANS[defenderCard.rarity] ?? 1;
+  const newPlayerFans = attackerSide === 'player' ? state.playerFans + defeatFans : state.playerFans;
+  const newAiFans = attackerSide === 'ai' ? state.aiFans + defeatFans : state.aiFans;
+  console.log(`[Engine] Card defeat fans: ${attackerSide} earns +${defeatFans} for defeating ${defenderCard.rarity} "${defenderCard.name}"`);
+
   return {
     ...state,
     phase: 'battle_resolve',
+    playerFans: newPlayerFans,
+    aiFans: newAiFans,
     message: `${attackerSide === 'player' ? 'あなた' : '相手'}がフラッグ奪取！`,
     // Attacker's bench is untouched; only the defender's bench grows.
     player: {
