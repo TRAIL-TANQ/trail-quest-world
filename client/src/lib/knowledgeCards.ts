@@ -159,6 +159,7 @@ export const EFFECT_DEFS: Record<string, CardEffect> = {
   giant_snake:      { id: 'giant_snake',      name: '呑み込む者',       description: 'ベンチにある攻撃力2のカード1枚につき攻撃+1/防御+1。', category: 'special' },
   photosynthesis:   { id: 'photosynthesis',   name: '密林の再生',       description: '公開時、ベンチのアマゾン種族（ピラニア・アナコンダ・毒矢カエル・大蛇）を1枚デッキの一番上に戻す。', category: 'bench' },
   anaconda_hunter:  { id: 'anaconda_hunter',  name: '蛇使い',           description: '公開時、ベンチのアナコンダ1枚をデッキの一番上に戻す。', category: 'bench' },
+  arc_de_triomphe:  { id: 'arc_de_triomphe',  name: '凱旋の門',         description: 'From the bench: ナポレオンがカードを撃破した時、追加で+2ファン獲得。', category: 'special' },
 };
 
 // Card name → effect id. These are the only cards that carry on-reveal effects.
@@ -260,6 +261,7 @@ export const EFFECT_BY_CARD_NAME: Record<string, string> = {
   '大蛇':                 'giant_snake',
   '光合成':               'photosynthesis',
   'アナコンダハンター':   'anaconda_hunter',
+  '凱旋門':               'arc_de_triomphe',
 };
 
 export interface BattleCard {
@@ -410,6 +412,7 @@ export const CARD_STAT_OVERRIDES: Record<string, StatProfile> = {
   '大蛇':                 { attackPower: 5, defensePower: 4 },
   '光合成':               { attackPower: 1, defensePower: 1 },
   'アナコンダハンター':   { attackPower: 2, defensePower: 2 },
+  '凱旋門':               { attackPower: 1, defensePower: 3 },
 };
 
 // Combo card IDs for detection
@@ -1305,6 +1308,11 @@ const QUIZ_DATA: Record<string, Quiz[]> = {
     { question: 'アナコンダの最大体長は約何メートル？', choices: ['3m', '5m', '9m', '15m'], correctIndex: 2 },
     { question: 'アナコンダハンターが使う道具は？', choices: ['銃', '素手と罠', '剣', '弓矢'], correctIndex: 1 },
   ],
+  'card-167': [
+    { question: '凱旋門がある都市は？', choices: ['ロンドン', 'ローマ', 'パリ', 'ベルリン'], correctIndex: 2 },
+    { question: '凱旋門の建設を命じた人物は？', choices: ['ルイ14世', 'ナポレオン', 'シャルル・ド・ゴール', 'マリー・アントワネット'], correctIndex: 1 },
+    { question: '凱旋門がある通りの名前は？', choices: ['シャンゼリゼ通り', 'リヴォリ通り', 'モンマルトル通り', 'バスティーユ通り'], correctIndex: 0 },
+  ],
 };
 
 // Effect descriptions by category
@@ -1743,7 +1751,8 @@ export const SYNERGY_MAP: Record<string, string[]> = {
   '光速': ['アインシュタイン', '相対性理論の論文', 'E=mc²'],
   'E=mc²': ['アインシュタイン', '相対性理論の論文', '光速'],
   // ナポレオンコンボ
-  'ナポレオン': ['大砲', 'ナポレオン法典', 'ワーテルローの戦い'],
+  'ナポレオン': ['大砲', 'ナポレオン法典', 'ワーテルローの戦い', '凱旋門'],
+  '凱旋門': ['ナポレオン', 'ナポレオン法典', '大砲'],
   '大砲': ['ナポレオン', 'ナポレオン法典', 'ワーテルローの戦い', '火薬'],
   'ナポレオン法典': ['ナポレオン', '大砲', 'ワーテルローの戦い'],
   'ワーテルローの戦い': ['ナポレオン', '大砲', 'ナポレオン法典'],

@@ -1220,6 +1220,11 @@ export function applyRevealEffect(
       }
       break;
     }
+    case 'arc_de_triomphe': {
+      // 凱旋門: passive bench effect (bonus fans handled in resolveSubBattleWin)
+      telop = { text: '🏛️ 凱旋の門！ナポレオン撃破時に追加ファン', color };
+      break;
+    }
     case 'radium': case 'research_notes': case 'nobel_medal': {
       telop = { text: '🔬科学研究の成果！', color };
       break;
@@ -1894,7 +1899,16 @@ export function resolveSubBattleWin(state: GameState): GameState {
   };
 
   // Card defeat fans: attacker earns fans for defeating the defender card
-  const defeatFans = CARD_DEFEAT_FANS[defenderCard.rarity] ?? 1;
+  let defeatFans = CARD_DEFEAT_FANS[defenderCard.rarity] ?? 1;
+  // 凱旋門ボーナス: ベンチに凱旋門があり攻撃カードにナポレオンがいれば+2
+  const atkState = attackerSide === 'player' ? state.player : state.ai;
+  const atkSealed = state.sealedBenchNames[attackerSide];
+  const hasTriomphe = atkState.bench.some((b) => b.name === '凱旋門' && !atkSealed.includes(b.name));
+  const hasNapoleonInAttack = state.attackRevealed.some((c) => c.name === 'ナポレオン');
+  if (hasTriomphe && hasNapoleonInAttack) {
+    defeatFans += 2;
+    console.log(`[Engine] 凱旋門ボーナス: ナポレオン撃破で+2ファン追加`);
+  }
   const newPlayerFans = attackerSide === 'player' ? state.playerFans + defeatFans : state.playerFans;
   const newAiFans = attackerSide === 'ai' ? state.aiFans + defeatFans : state.aiFans;
   console.log(`[Engine] Card defeat fans: ${attackerSide} earns +${defeatFans} for defeating ${defenderCard.rarity} "${defenderCard.name}"`);
