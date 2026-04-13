@@ -363,12 +363,9 @@ export function applyRevealEffect(
       const oppState = opp === 'player' ? next.player : next.ai;
       if (oppState.deck.length > 0) {
         const [top, ...rest] = oppState.deck;
-        next = applySide(
-          { ...next, quarantine: { ...next.quarantine, [opp]: [...next.quarantine[opp], top] } },
-          opp,
-          { ...oppState, deck: rest },
-        );
-        telop = { text: '💋クレオパトラの魅了！敵デッキ上を隔離', color };
+        next = applySide(next, opp, { ...oppState, deck: rest });
+        next = { ...next, exile: { ...next.exile, [opp]: [...next.exile[opp], top] } };
+        telop = { text: '👑 魅了！相手デッキ上1枚を除外！', color };
       }
       break;
     }
@@ -491,26 +488,23 @@ export function applyRevealEffect(
       break;
     }
     case 'book_burning': {
-      // 焚書坑儒: 相手デッキ上3枚を隔離。ベンチに始皇帝がいれば計5枚
+      // 焚書坑儒: ベンチの紙の枚数分だけ相手デッキから除外
       const oppState = opp === 'player' ? next.player : next.ai;
       const myState = side === 'player' ? next.player : next.ai;
       const sealed = next.sealedBenchNames[side];
-      const hasQinshi = myState.bench.some((b) => b.name === '始皇帝' && !sealed.includes(b.name));
-      const count = hasQinshi ? 5 : 3;
-      const toQuarantine = oppState.deck.slice(0, count);
-      const remaining = oppState.deck.slice(count);
-      if (toQuarantine.length > 0) {
-        next = applySide(
-          { ...next, quarantine: { ...next.quarantine, [opp]: [...next.quarantine[opp], ...toQuarantine] } },
-          opp,
-          { ...oppState, deck: remaining },
-        );
-        if (hasQinshi) {
-          next = withBenchGlow(next, side, ['始皇帝']);
-          telop = { text: `📜焚書坑儒！始皇帝の命で${toQuarantine.length}枚隔離！`, color };
-        } else {
-          telop = { text: `📜焚書坑儒！敵デッキ上${toQuarantine.length}枚を隔離`, color };
+      const paperSlot = myState.bench.find((b) => b.name === '紙' && !sealed.includes(b.name));
+      const paperCount = paperSlot?.count ?? 0;
+      if (paperCount > 0) {
+        const toExile = oppState.deck.slice(0, paperCount);
+        const remaining = oppState.deck.slice(paperCount);
+        if (toExile.length > 0) {
+          next = applySide(next, opp, { ...oppState, deck: remaining });
+          next = { ...next, exile: { ...next.exile, [opp]: [...next.exile[opp], ...toExile] } };
+          next = withBenchGlow(next, side, ['紙']);
+          telop = { text: `📚 思想統制！紙${paperCount}枚 → 相手デッキ${toExile.length}枚を除外！`, color };
         }
+      } else {
+        telop = { text: '📚 焚書坑儒（ベンチに紙がありません）', color };
       }
       break;
     }
@@ -737,17 +731,14 @@ export function applyRevealEffect(
       break;
     }
     case 'wind_tunnel': {
-      // 公開時：相手デッキ上2枚を隔離 (攻撃成功扱いを簡略化)
+      // 公開時：相手デッキ上2枚を除外
       const oppState = opp === 'player' ? next.player : next.ai;
       const slice = oppState.deck.slice(0, 2);
       if (slice.length > 0) {
-        next = applySide(
-          { ...next, quarantine: { ...next.quarantine, [opp]: [...next.quarantine[opp], ...slice] } },
-          opp,
-          { ...oppState, deck: oppState.deck.slice(slice.length) },
-        );
+        next = applySide(next, opp, { ...oppState, deck: oppState.deck.slice(slice.length) });
+        next = { ...next, exile: { ...next.exile, [opp]: [...next.exile[opp], ...slice] } };
       }
-      telop = { text: `🌬️風洞実験！敵デッキ${slice.length}枚隔離`, color };
+      telop = { text: `💨 風洞実験！相手デッキ上${slice.length}枚を除外！`, color };
       break;
     }
     case 'wright_bros': {

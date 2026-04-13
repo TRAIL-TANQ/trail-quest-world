@@ -200,7 +200,7 @@ export const COLLECTION_CARDS: CollectionCard[] = [
   { id: 'card-160', name: 'ライオン', category: 'creatures', rarity: 'R', description: '百獣の王。サバンナの頂点に立つ大型肉食獣。群れで狩りを行う。', imageUrl: '/images/cards/lion.png' },
   { id: 'card-161', name: 'ハチドリ', category: 'creatures', rarity: 'N', description: '世界最小の鳥。1秒に80回も羽ばたき、空中に静止できる。', imageUrl: '/images/cards/hummingbird.png' },
   { id: 'card-162', name: 'モアイ像', category: 'world_heritage', rarity: 'N', description: 'イースター島の巨大石像。約900体が海を見つめるように立つ謎の遺跡。', imageUrl: '/images/cards/moai.png' },
-  { id: 'card-163', name: '焚書坑儒', category: 'inventions', rarity: 'N', description: '始皇帝が行った思想統制。書物を焼き、儒者を生き埋めにした。', imageUrl: '/images/cards/book-burning.png' },
+  { id: 'card-163', name: '焚書坑儒', category: 'inventions', rarity: 'SSR', description: '始皇帝が行った思想統制。書物を焼き、儒者を生き埋めにした。', imageUrl: '/images/cards/book-burning.png' },
   { id: 'card-164', name: '不老不死の薬', category: 'inventions', rarity: 'N', description: '始皇帝が求め続けた永遠の命。徐福を東方に派遣して探させた。', imageUrl: '/images/cards/elixir.png' },
   { id: 'card-165', name: '大蛇', category: 'creatures', rarity: 'SSR', description: 'アマゾンの密林に潜む伝説の巨大蛇。全てを呑み込む恐怖の存在。', imageUrl: '/images/cards/giant-serpent.png' },
   { id: 'card-166', name: 'アナコンダハンター', category: 'great_people', rarity: 'SR', description: 'アマゾンの密林で大蛇を追うハンター。アナコンダの弱点を知り尽くしている。', imageUrl: '/images/cards/anaconda-hunter.png' },

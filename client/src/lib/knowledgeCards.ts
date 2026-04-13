@@ -62,7 +62,7 @@ export const EFFECT_DEFS: Record<string, CardEffect> = {
   einstein:   { id: 'einstein',   name: '天才の頭脳',         description: 'ベンチに「相対性理論の論文」で攻撃+4。「光速」で防御+3。両方あれば相手全攻撃カードパワー-1。', category: 'special' },
   curie:      { id: 'curie',      name: '二度のノーベル賞',   description: 'ベンチに「ラジウム」で攻撃+3。「研究ノート」で防御+3。両方あれば全味方カード効果2回発動。', category: 'special' },
   napoleon:   { id: 'napoleon',   name: '皇帝の号令',         description: 'ベンチの大砲1枚につき攻撃+1、法典1枚につき防御+1（重複可能）。', category: 'special' },
-  cleopatra:  { id: 'cleopatra',  name: '魅了',               description: '公開時、相手のデッキ一番上を隔離する。', category: 'bench' },
+  cleopatra:  { id: 'cleopatra',  name: '魅了',               description: '公開時、相手のデッキ一番上を除外する。', category: 'debuff' },
   nobunaga:   { id: 'nobunaga',   name: '天下布武',           description: 'ベンチに「鉄砲」で攻撃+3。「楽市楽座」で防御+2。両方あれば相手ベンチ1枚封印。', category: 'special' },
   mozart:     { id: 'mozart',     name: '天才の旋律',         description: '公開時、次に公開する味方カードの攻撃+2。', category: 'atk' },
   // Galileo: keeps the bench-swap effect AND gains +1/+1 per 地動説 on bench.
@@ -89,7 +89,7 @@ export const EFFECT_DEFS: Record<string, CardEffect> = {
   tortoise:        { id: 'tortoise',        name: '長寿のゾウガメ',   description: 'From the bench: ダーウィンの防御+2。', category: 'def' },
   finch:           { id: 'finch',           name: '進化のくちばし',   description: 'From the bench: ダーウィンの攻撃+2。', category: 'atk' },
   glider:          { id: 'glider',          name: '滑空試験',         description: '公開時、デッキ内のライト兄弟を上から3枚以内に移動。', category: 'bench' },
-  wind_tunnel:     { id: 'wind_tunnel',     name: '風洞実験',         description: 'From the bench: ライト兄弟の攻撃+2。さらに公開時、相手デッキ上2枚を隔離。', category: 'atk' },
+  wind_tunnel:     { id: 'wind_tunnel',     name: '風洞実験',         description: 'From the bench: ライト兄弟の攻撃+2。さらに公開時、相手デッキ上2枚を除外。', category: 'atk' },
   wright_bros:     { id: 'wright_bros',     name: '初飛行',           description: 'ベンチにグライダーか風洞があれば攻撃+3。', category: 'atk' },
   plague:          { id: 'plague',          name: 'ペストの脅威',     description: '公開時、相手ベンチ全カードの効果を封印する。', category: 'debuff' },
   serum:           { id: 'serum',           name: '血清療法',         description: 'From the bench: 味方全カードの防御+1。', category: 'def' },
@@ -154,7 +154,7 @@ export const EFFECT_DEFS: Record<string, CardEffect> = {
   wheel:            { id: 'wheel',            name: '回転の力',         description: 'From the bench: 蒸気機関車の攻撃+2/防御+2（重複可）。蒸気機関車攻撃成功時、相手デッキ上1枚追加隔離。', category: 'special' },
   // ===== ステージモード用追加カード =====
   lion:             { id: 'lion',             name: '百獣の王',         description: '攻撃時、自分ベンチの生き物カード1枚につき攻撃+1。', category: 'atk' },
-  book_burning:     { id: 'book_burning',     name: '思想統制',         description: '公開時、相手デッキ上3枚を隔離。ベンチに始皇帝がいればさらに+2枚（計5枚）。', category: 'debuff' },
+  book_burning:     { id: 'book_burning',     name: '思想統制',         description: '公開時、ベンチの紙の枚数分だけ相手デッキから除外。', category: 'debuff' },
   elixir:           { id: 'elixir',           name: '永遠の命',         description: 'From the bench: 始皇帝がベンチに送られる時、代わりにデッキの一番下に戻す。', category: 'special' },
   giant_snake:      { id: 'giant_snake',      name: '呑み込む者',       description: 'ベンチにある攻撃力2のカード1枚につき攻撃+1/防御+1。', category: 'special' },
   photosynthesis:   { id: 'photosynthesis',   name: '密林の再生',       description: '公開時、ベンチのアマゾン種族（ピラニア・アナコンダ・毒矢カエル・大蛇）を1枚デッキの一番上に戻す。', category: 'bench' },
@@ -1776,7 +1776,7 @@ export const SYNERGY_MAP: Record<string, string[]> = {
   '血清': ['北里柴三郎', 'ペスト菌'],
   '始皇帝': ['兵馬俑', '万里の長城', '焚書坑儒', '不老不死の薬'],
   '兵馬俑': ['始皇帝', '万里の長城', '焚書坑儒', '不老不死の薬'],
-  '焚書坑儒': ['始皇帝', '兵馬俑', '万里の長城'],
+  '焚書坑儒': ['始皇帝', '兵馬俑', '万里の長城', '紙'],
   '不老不死の薬': ['始皇帝', '兵馬俑', '万里の長城'],
   'アマゾン川': ['アナコンダ', '毒矢カエル', 'ピラニア', '光合成'],
   'ピラニア': ['アマゾン川', 'アナコンダ', '毒矢カエル', '光合成', 'ダーウィン'],
@@ -1811,6 +1811,7 @@ export const SYNERGY_MAP: Record<string, string[]> = {
   '黄熱病': ['野口英世', '顕微鏡'],
   'ダイナマイト': ['火薬'],
   '光合成': ['アマゾン川', 'ピラニア', 'アナコンダ', '毒矢カエル', '大蛇'],
+  '紙': ['焚書坑儒'],
   '火薬': ['ダイナマイト', '大砲', 'ナポレオン'],
   // アフリカコンボ
   'ネルソン・マンデラ': ['アパルトヘイト', 'キリマンジャロ', 'アフリカゾウ', 'サバンナ'],
