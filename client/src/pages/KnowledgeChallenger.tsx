@@ -705,6 +705,30 @@ export default function KnowledgeChallenger() {
             }
           }
 
+          // ===== 始皇帝の勅令: player selects 紙 from deck =====
+          if (isPlayerAttacker) {
+            const lastRevealed = rs.attackRevealed[rs.attackRevealed.length - 1];
+            if (lastRevealed?.effect?.id === 'imperial_decree') {
+              const gs = gameStateRef.current ?? rs;
+              const paperCards = gs.player.deck.filter((c) => c.name === '紙');
+              if (paperCards.length > 0) {
+                const chosen = await waitCardSelect('📜 デッキトップに置く紙を選んでください', paperCards);
+                if (chosen && !unmountedRef.current) {
+                  setGameState((prev) => {
+                    if (!prev) return prev;
+                    const idx = prev.player.deck.findIndex((c) => c.id === chosen.id);
+                    if (idx < 0) return prev;
+                    const newDeck = [...prev.player.deck];
+                    newDeck.splice(idx, 1);
+                    newDeck.unshift(chosen);
+                    return { ...prev, player: { ...prev.player, deck: newDeck },
+                      effectTelop: { text: '📜 天子の命！紙をデッキトップへ！', color: '#ffd700', key: Date.now() } };
+                  });
+                }
+              }
+            }
+          }
+
           // ===== Check for evolution (anaconda → giant snake) =====
           {
             const lastRevealed = rs.attackRevealed[rs.attackRevealed.length - 1];

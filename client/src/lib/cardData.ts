@@ -205,6 +205,8 @@ export const COLLECTION_CARDS: CollectionCard[] = [
   { id: 'card-165', name: '大蛇', category: 'creatures', rarity: 'SSR', description: 'アマゾンの密林に潜む伝説の巨大蛇。全てを呑み込む恐怖の存在。', imageUrl: '/images/cards/giant-serpent.png' },
   { id: 'card-166', name: 'アナコンダハンター', category: 'great_people', rarity: 'SR', description: 'アマゾンの密林で大蛇を追うハンター。アナコンダの弱点を知り尽くしている。', imageUrl: '/images/cards/anaconda-hunter.png' },
   { id: 'card-167', name: '凱旋門', category: 'world_heritage', rarity: 'R', description: 'パリのシャンゼリゼ通りに建つ勝利の門。ナポレオンが建設を命じた。', imageUrl: '/images/cards/arc-de-triomphe.png' },
+  { id: 'card-168', name: '秦の兵士', category: 'great_people', rarity: 'N', description: '始皇帝に仕える忠実な兵士。万里の長城と共に力を発揮する。', imageUrl: '/images/cards/qin-soldier.png' },
+  { id: 'card-169', name: '始皇帝の勅令', category: 'inventions', rarity: 'N', description: '始皇帝が発した命令書。紙を集める力を持つ。', imageUrl: '/images/cards/imperial-decree.png' },
 ];
 
 // ガチャ排出率

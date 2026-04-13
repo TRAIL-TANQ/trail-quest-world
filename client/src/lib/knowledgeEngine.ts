@@ -1242,6 +1242,40 @@ export function applyRevealEffect(
       telop = { text: '🏛️ 凱旋の門！ナポレオン撃破時に追加ファン', color };
       break;
     }
+    case 'qin_soldier': {
+      // 秦の兵士: ベンチに万里の長城がある時、攻撃+2
+      if (role === 'attacker') {
+        const my = side === 'player' ? next.player : next.ai;
+        const sealed = next.sealedBenchNames[side];
+        const hasWall = my.bench.some((b) => b.name === '万里の長城' && !sealed.includes(b.name));
+        if (hasWall) {
+          bonusAttack += 2;
+          next = withBenchGlow(next, side, ['万里の長城']);
+          telop = { text: '⚔️ 皇帝の尖兵！万里の長城の守りのもと攻撃+2！', color };
+        } else {
+          telop = { text: '⚔️ 秦の兵士（万里の長城なし）', color };
+        }
+      }
+      break;
+    }
+    case 'imperial_decree': {
+      // 始皇帝の勅令: デッキ内の紙1枚をデッキトップに置く（AI自動、プレイヤーはUI）
+      const my = side === 'player' ? next.player : next.ai;
+      const paperIdx = my.deck.findIndex((c) => c.name === '紙');
+      if (paperIdx >= 0 && side === 'ai') {
+        const paper = my.deck[paperIdx];
+        const newDeck = [...my.deck];
+        newDeck.splice(paperIdx, 1);
+        newDeck.unshift(paper);
+        next = applySide(next, side, { ...my, deck: newDeck });
+        telop = { text: '📜 天子の命！紙をデッキトップへ！', color: '#ffd700' };
+      } else if (paperIdx >= 0) {
+        telop = { text: '📜 天子の命！紙をサーチ中...', color };
+      } else {
+        telop = { text: '📜 天子の命（デッキに紙がありません）', color };
+      }
+      break;
+    }
     case 'radium': case 'research_notes': case 'nobel_medal': {
       telop = { text: '🔬科学研究の成果！', color };
       break;

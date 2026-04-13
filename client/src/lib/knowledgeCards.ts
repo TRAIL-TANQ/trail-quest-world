@@ -160,6 +160,8 @@ export const EFFECT_DEFS: Record<string, CardEffect> = {
   photosynthesis:   { id: 'photosynthesis',   name: '密林の再生',       description: '公開時、ベンチのアマゾン種族（ピラニア・アナコンダ・毒矢カエル・大蛇）を1枚デッキの一番上に戻す。', category: 'bench' },
   anaconda_hunter:  { id: 'anaconda_hunter',  name: '蛇使い',           description: '公開時、ベンチのアナコンダ1枚をデッキの一番上に戻す。', category: 'bench' },
   arc_de_triomphe:  { id: 'arc_de_triomphe',  name: '凱旋の門',         description: 'From the bench: ナポレオンがカードを撃破した時、追加で+2ファン獲得。', category: 'special' },
+  qin_soldier:      { id: 'qin_soldier',      name: '皇帝の尖兵',       description: 'ベンチに万里の長城がある時、攻撃+2。', category: 'atk' },
+  imperial_decree:  { id: 'imperial_decree',  name: '天子の命',         description: '公開時、デッキ内の紙1枚をデッキトップに置ける（任意発動）。', category: 'bench' },
 };
 
 // Card name → effect id. These are the only cards that carry on-reveal effects.
@@ -262,6 +264,8 @@ export const EFFECT_BY_CARD_NAME: Record<string, string> = {
   '光合成':               'photosynthesis',
   'アナコンダハンター':   'anaconda_hunter',
   '凱旋門':               'arc_de_triomphe',
+  '秦の兵士':             'qin_soldier',
+  '始皇帝の勅令':         'imperial_decree',
 };
 
 export interface BattleCard {
@@ -413,6 +417,8 @@ export const CARD_STAT_OVERRIDES: Record<string, StatProfile> = {
   '光合成':               { attackPower: 1, defensePower: 1 },
   'アナコンダハンター':   { attackPower: 2, defensePower: 2 },
   '凱旋門':               { attackPower: 1, defensePower: 3 },
+  '秦の兵士':             { attackPower: 2, defensePower: 1 },
+  '始皇帝の勅令':         { attackPower: 1, defensePower: 2 },
 };
 
 // Combo card IDs for detection
@@ -1313,6 +1319,16 @@ const QUIZ_DATA: Record<string, Quiz[]> = {
     { question: '凱旋門の建設を命じた人物は？', choices: ['ルイ14世', 'ナポレオン', 'シャルル・ド・ゴール', 'マリー・アントワネット'], correctIndex: 1 },
     { question: '凱旋門がある通りの名前は？', choices: ['シャンゼリゼ通り', 'リヴォリ通り', 'モンマルトル通り', 'バスティーユ通り'], correctIndex: 0 },
   ],
+  'card-168': [
+    { question: '秦の始皇帝が作った軍隊で有名なものは？', choices: ['兵馬俑', '赤壁の軍', '蒙古騎兵', '新選組'], correctIndex: 0 },
+    { question: '秦の兵士が使った主な武器は？', choices: ['刀', '矛（ほこ）', '弓矢', '鉄砲'], correctIndex: 1 },
+    { question: '秦は中国を統一した最初の？', choices: ['王朝', '共和国', '都市', '宗教'], correctIndex: 0 },
+  ],
+  'card-169': [
+    { question: '始皇帝が統一した文字は？', choices: ['甲骨文字', '小篆', 'ひらがな', 'アルファベット'], correctIndex: 1 },
+    { question: '始皇帝の勅令で統一されたものは？', choices: ['度量衡（長さ・重さ）', '食べ物', '髪型', '建物の色'], correctIndex: 0 },
+    { question: '始皇帝が中国を統一した時代は？', choices: ['紀元前3世紀', '紀元後3世紀', '紀元前10世紀', '紀元後10世紀'], correctIndex: 0 },
+  ],
 };
 
 // Effect descriptions by category
@@ -1774,10 +1790,12 @@ export const SYNERGY_MAP: Record<string, string[]> = {
   '北里柴三郎': ['ペスト菌', '血清'],
   'ペスト菌': ['北里柴三郎', '血清'],
   '血清': ['北里柴三郎', 'ペスト菌'],
-  '始皇帝': ['兵馬俑', '万里の長城', '焚書坑儒', '不老不死の薬'],
+  '始皇帝': ['兵馬俑', '万里の長城', '焚書坑儒', '不老不死の薬', '秦の兵士', '始皇帝の勅令'],
   '兵馬俑': ['始皇帝', '万里の長城', '焚書坑儒', '不老不死の薬'],
   '焚書坑儒': ['始皇帝', '兵馬俑', '万里の長城', '紙'],
   '不老不死の薬': ['始皇帝', '兵馬俑', '万里の長城'],
+  '秦の兵士': ['万里の長城', '兵馬俑', '始皇帝'],
+  '始皇帝の勅令': ['紙', '焚書坑儒', '始皇帝'],
   'アマゾン川': ['アナコンダ', '毒矢カエル', 'ピラニア', '光合成'],
   'ピラニア': ['アマゾン川', 'アナコンダ', '毒矢カエル', '光合成', 'ダーウィン'],
   'アナコンダ': ['アマゾン川', '毒矢カエル', 'ピラニア', 'ダーウィン', '大蛇', 'アナコンダハンター'],
