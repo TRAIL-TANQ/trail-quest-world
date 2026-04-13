@@ -30,7 +30,7 @@ export const COLLECTION_CARDS: CollectionCard[] = [
   { id: 'card-022', name: 'ミツバチ', category: 'creatures', rarity: 'N', description: '花粉を運ぶ大切な虫。はちみつを作る働き者。', imageUrl: '/images/cards/card-022.webp' },
   { id: 'card-023', name: 'ダーウィンフィンチ', category: 'creatures', rarity: 'R', description: 'ガラパゴス諸島の鳥。進化論のヒントになった。', imageUrl: '/images/cards/card-023.webp' },
   { id: 'card-024', name: 'シーラカンス', category: 'creatures', rarity: 'SR', description: '生きた化石。4億年前から姿が変わっていない深海魚。', imageUrl: '/images/cards/card-024.webp' },
-  { id: 'card-025', name: 'ピラニア', category: 'creatures', rarity: 'N', description: 'アマゾン川に住む肉食魚。鋭い歯を持つ。', imageUrl: '/images/cards/card-025.webp' },
+  { id: 'card-025', name: 'ピラニア', category: 'creatures', rarity: 'N', description: 'アマゾン川に住む肉食魚。鋭い歯を持つ。', imageUrl: '/images/cards/piranha.png' },
 
   // ===== 世界遺産 (10枚) =====
   { id: 'card-026', name: '万里の長城', category: 'world_heritage', rarity: 'SR', description: '中国の巨大な防壁。全長2万キロ以上。宇宙からも見える。', imageUrl: '/images/cards/great-wall.png' },
