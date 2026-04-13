@@ -158,6 +158,7 @@ export const EFFECT_DEFS: Record<string, CardEffect> = {
   elixir:           { id: 'elixir',           name: '永遠の命',         description: 'From the bench: 始皇帝がベンチに送られる時、代わりにデッキの一番下に戻す。', category: 'special' },
   giant_snake:      { id: 'giant_snake',      name: '呑み込む者',       description: 'ベンチにある攻撃力2のカード1枚につき攻撃+1/防御+1。', category: 'special' },
   photosynthesis:   { id: 'photosynthesis',   name: '密林の再生',       description: '公開時、ベンチのアマゾン種族（ピラニア・アナコンダ・毒矢カエル・大蛇）を1枚デッキの一番上に戻す。', category: 'bench' },
+  anaconda_hunter:  { id: 'anaconda_hunter',  name: '蛇狩りの達人',     description: '公開時、ベンチにアナコンダがいれば攻撃+3。さらにアマゾン川もあれば防御+2。', category: 'atk' },
 };
 
 // Card name → effect id. These are the only cards that carry on-reveal effects.
@@ -258,6 +259,7 @@ export const EFFECT_BY_CARD_NAME: Record<string, string> = {
   '不老不死の薬':         'elixir',
   '大蛇':                 'giant_snake',
   '光合成':               'photosynthesis',
+  'アナコンダハンター':   'anaconda_hunter',
 };
 
 export interface BattleCard {
@@ -407,6 +409,7 @@ export const CARD_STAT_OVERRIDES: Record<string, StatProfile> = {
   '不老不死の薬':         { attackPower: 1, defensePower: 1 },
   '大蛇':                 { attackPower: 5, defensePower: 4 },
   '光合成':               { attackPower: 1, defensePower: 1 },
+  'アナコンダハンター':   { attackPower: 2, defensePower: 2 },
 };
 
 // Combo card IDs for detection
@@ -1297,6 +1300,11 @@ const QUIZ_DATA: Record<string, Quiz[]> = {
     { question: 'アナコンダが主に住んでいるのは？', choices: ['アフリカ', '南米', 'アジア', 'オーストラリア'], correctIndex: 1 },
     { question: 'アナコンダの狩りの方法は？', choices: ['毒で麻痺させる', '体で締めつける', '噛みつく', '追いかける'], correctIndex: 1 },
   ],
+  'card-166': [
+    { question: 'アナコンダが住む川は？', choices: ['ナイル川', 'アマゾン川', 'ガンジス川', 'ミシシッピ川'], correctIndex: 1 },
+    { question: 'アナコンダの最大体長は約何メートル？', choices: ['3m', '5m', '9m', '15m'], correctIndex: 2 },
+    { question: 'アナコンダハンターが使う道具は？', choices: ['銃', '素手と罠', '剣', '弓矢'], correctIndex: 1 },
+  ],
 };
 
 // Effect descriptions by category
@@ -1763,7 +1771,8 @@ export const SYNERGY_MAP: Record<string, string[]> = {
   '不老不死の薬': ['始皇帝', '兵馬俑', '万里の長城'],
   'アマゾン川': ['アナコンダ', '毒矢カエル', 'ピラニア', '光合成'],
   'ピラニア': ['アマゾン川', 'アナコンダ', '毒矢カエル', '光合成', 'ダーウィン'],
-  'アナコンダ': ['アマゾン川', '毒矢カエル', 'ピラニア', 'ダーウィン', '大蛇'],
+  'アナコンダ': ['アマゾン川', '毒矢カエル', 'ピラニア', 'ダーウィン', '大蛇', 'アナコンダハンター'],
+  'アナコンダハンター': ['アナコンダ', 'アマゾン川'],
   '大蛇': ['アマゾン川', 'アナコンダ', '毒矢カエル'],
   '毒矢カエル': ['アマゾン川', 'アナコンダ', 'ピラニア', '光合成'],
   'ニュートン': ['リンゴ', 'プリズム', '万有引力'],
@@ -1851,6 +1860,14 @@ export function sampleCardsWithSynergy(
       if (tCard && !isAtLimit(t, tCard.rarity)) synergyTargetNames.add(t);
     });
   });
+
+  // Debug: log synergy resolution
+  console.log(`[Synergy] Round ${round}: deck=[${Array.from(deckNameCounts.entries()).map(([n,c]) => `${n}×${c}`).join(', ')}]`);
+  playerDeck.forEach((c) => {
+    const targets = SYNERGY_MAP[c.name];
+    if (targets) console.log(`[Synergy]   ${c.name} → [${targets.join(', ')}]`);
+  });
+  console.log(`[Synergy] targets=[${Array.from(synergyTargetNames).join(', ')}]`);
 
   // Allowed rarities for this round
   const allowedRarities = new Set(availableRarities(round).map(([r]) => r));

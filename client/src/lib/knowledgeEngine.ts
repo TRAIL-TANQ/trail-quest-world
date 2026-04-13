@@ -871,6 +871,32 @@ export function applyRevealEffect(
       }
       break;
     }
+    case 'anaconda_hunter': {
+      // 蛇狩りの達人: ベンチにアナコンダで攻撃+3、アマゾン川もあれば防御+2
+      if (role === 'attacker') {
+        const my = side === 'player' ? next.player : next.ai;
+        const sealed = next.sealedBenchNames[side];
+        const hasAnaconda = my.bench.some((b) => b.name === 'アナコンダ' && !sealed.includes(b.name));
+        const hasAmazon = my.bench.some((b) => b.name === 'アマゾン川' && !sealed.includes(b.name));
+        const glow: string[] = [];
+        if (hasAnaconda) { bonusAttack += 3; glow.push('アナコンダ'); }
+        if (hasAmazon) { glow.push('アマゾン川'); }
+        if (glow.length > 0) next = withBenchGlow(next, side, glow);
+        telop = { text: `🏹 蛇狩りの達人！${hasAnaconda ? '攻撃+3' : ''}${hasAnaconda && hasAmazon ? ' ' : ''}${hasAmazon ? '防御+2' : ''}${!hasAnaconda && !hasAmazon ? '対象なし' : ''}`, color };
+      } else {
+        const my = side === 'player' ? next.player : next.ai;
+        const sealed = next.sealedBenchNames[side];
+        const hasAmazon = my.bench.some((b) => b.name === 'アマゾン川' && !sealed.includes(b.name));
+        if (hasAmazon) {
+          next = { ...next, defenderBonus: next.defenderBonus + 2 };
+          next = withBenchGlow(next, side, ['アマゾン川']);
+          telop = { text: '🏹 蛇狩りの達人！防御+2', color };
+        } else {
+          telop = { text: '🏹 蛇狩りの達人！', color };
+        }
+      }
+      break;
+    }
     case 'poison_frog': {
       const my = side === 'player' ? next.player : next.ai;
       const sealed = next.sealedBenchNames[side];
