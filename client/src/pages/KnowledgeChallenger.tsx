@@ -1794,6 +1794,8 @@ export default function KnowledgeChallenger() {
                   }}
                 >
                   🛡️ 防御パワー {defenderPower}
+                  {gameState.defenderBonus > 0 && <span style={{ color: '#4ade80', fontSize: '22px' }}> ↑+{gameState.defenderBonus}</span>}
+                  {gameState.defenderBonus < 0 && <span style={{ color: '#ef4444', fontSize: '22px' }}> ↓{gameState.defenderBonus}</span>}
                 </p>
               </div>
               <CardDisplay card={defenderCard} size="battle" mode="defense" onTap={() => setDetailCard(defenderCard)} />
@@ -1836,11 +1838,29 @@ export default function KnowledgeChallenger() {
                   const baseAtk = lastCard.attackPower ?? lastCard.power;
                   const bonus = gameState.lastRevealPowerAdded - baseAtk;
                   if (bonus > 0) {
+                    const scale = bonus >= 5 ? 1.5 : bonus >= 3 ? 1.3 : 1.2;
+                    const isGold = bonus >= 5;
                     return (
                       <div key={`bonus-${attackCards.length}`} className="absolute -top-3 -right-3 z-[110] kc-power-bounce">
+                        <span className="px-2 py-0.5 rounded-full font-black"
+                          style={{
+                            fontSize: `${12 + bonus}px`,
+                            background: isGold ? 'rgba(255,215,0,0.9)' : 'rgba(34,197,94,0.9)',
+                            color: '#fff',
+                            boxShadow: isGold ? '0 0 12px rgba(255,215,0,0.7)' : '0 0 8px rgba(34,197,94,0.6)',
+                            textShadow: '0 1px 2px rgba(0,0,0,0.5)',
+                            transform: `scale(${scale})`,
+                          }}>
+                          +{bonus} ↑
+                        </span>
+                      </div>
+                    );
+                  } else if (bonus < 0) {
+                    return (
+                      <div key={`debuff-${attackCards.length}`} className="absolute -top-3 -right-3 z-[110] kc-power-bounce">
                         <span className="px-2 py-0.5 rounded-full text-sm font-black"
-                          style={{ background: 'rgba(34,197,94,0.9)', color: '#fff', boxShadow: '0 0 8px rgba(34,197,94,0.6)', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>
-                          +{bonus}
+                          style={{ background: 'rgba(239,68,68,0.9)', color: '#fff', boxShadow: '0 0 8px rgba(239,68,68,0.6)' }}>
+                          {bonus} ↓
                         </span>
                       </div>
                     );

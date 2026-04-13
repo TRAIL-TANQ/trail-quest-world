@@ -156,7 +156,7 @@ export const EFFECT_DEFS: Record<string, CardEffect> = {
   lion:             { id: 'lion',             name: '百獣の王',         description: '攻撃時、自分ベンチの生き物カード1枚につき攻撃+1。', category: 'atk' },
   book_burning:     { id: 'book_burning',     name: '思想統制',         description: '公開時、相手デッキ上3枚を隔離。ベンチに始皇帝がいればさらに+2枚（計5枚）。', category: 'debuff' },
   elixir:           { id: 'elixir',           name: '永遠の命',         description: 'From the bench: 始皇帝がベンチに送られる時、代わりにデッキの一番下に戻す。', category: 'special' },
-  giant_snake:      { id: 'giant_snake',      name: '呑み込む者',       description: '公開時、相手防御カードを即座にベンチ送り（1回戦1回のみ）。2回目以降は通常比較。', category: 'atk' },
+  giant_snake:      { id: 'giant_snake',      name: '呑み込む者',       description: 'ベンチにある攻撃力2のカード1枚につき攻撃+1/防御+1。', category: 'special' },
   photosynthesis:   { id: 'photosynthesis',   name: '密林の再生',       description: '公開時、ベンチのアマゾン種族（ピラニア・アナコンダ・毒矢カエル・大蛇）を1枚デッキの一番上に戻す。', category: 'bench' },
 };
 

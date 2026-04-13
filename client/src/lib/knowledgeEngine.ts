@@ -848,19 +848,24 @@ export function applyRevealEffect(
       break;
     }
     case 'giant_snake': {
-      // 大蛇「呑み込む者」: 攻撃時、相手防御カードを即座にベンチ送り（1回戦1回のみ）
-      if (role === 'attacker' && !next.usedGiantSnake[side]) {
-        if (next.defenseCard) {
-          // Mark as used for this round
-          next = { ...next, usedGiantSnake: { ...next.usedGiantSnake, [side]: true } };
-          // Force attack power to exceed defense (instant win)
-          const effectiveDef = Math.max(0, getBaseDefense(next.defenseCard!) + next.defenderBonus);
-          const needed = effectiveDef - next.attackCurrentPower + getBaseAttack(card);
-          if (needed > 0) {
-            bonusAttack += needed;
-          }
-          telop = { text: '🐍 呑み込む者！防御カードを丸呑み！', color: '#ffd700' };
+      // 大蛇「呑み込む者」: ベンチにある攻撃力2のカード1枚につき攻撃+1/防御+1
+      const myState = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      let atk2Count = 0;
+      for (const slot of myState.bench) {
+        if (sealed.includes(slot.name)) continue;
+        const slotAtk = slot.card.attackPower ?? slot.card.power;
+        if (slotAtk === 2) atk2Count += slot.count; // count stacked copies individually
+      }
+      if (atk2Count > 0) {
+        if (role === 'attacker') {
+          bonusAttack += atk2Count;
+        } else {
+          next = { ...next, defenderBonus: next.defenderBonus + atk2Count };
         }
+        telop = { text: `🐍 呑み込む者！攻撃力2カード${atk2Count}枚 → ${role === 'attacker' ? `攻撃+${atk2Count}` : `防御+${atk2Count}`}`, color: '#ffd700' };
+      } else {
+        telop = { text: '🐍 呑み込む者（対象なし）', color };
       }
       break;
     }
