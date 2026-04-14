@@ -3003,25 +3003,25 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
               </div>
               {effectText && (
                 <div
-                  className="rounded-lg px-3 py-2 mb-4 max-w-xs text-center"
+                  className="rounded-lg px-3 py-2 md:px-5 md:py-3 mb-4 max-w-xs md:max-w-lg text-center"
                   style={{
                     background: 'rgba(255,215,0,0.1)',
                     border: '1px solid rgba(255,215,0,0.35)',
                   }}
                 >
-                  <p className="text-[10px] font-bold mb-0.5" style={{ color: '#ffd700' }}>
+                  <p className="text-[10px] md:text-sm font-bold mb-0.5 md:mb-1.5" style={{ color: '#ffd700' }}>
                     ✨ {attackPreview.optionalEffect ? '任意発動効果' : hasAutoEffect ? '自動発動効果' : '効果'}
                     {effectName ? ` — ${effectName}` : ''}
                   </p>
-                  <p className="text-xs text-amber-100/90 leading-tight">{effectText}</p>
+                  <p className="text-xs md:text-base text-amber-100/90 leading-tight md:leading-relaxed">{effectText}</p>
                 </div>
               )}
-              <div className="flex gap-2 w-full max-w-xs">
+              <div className="flex gap-2 md:gap-3 w-full max-w-xs md:max-w-md">
                 {attackPreview.optionalEffect ? (
                   <>
                     <button
                       onClick={() => handlePreviewChoice(false)}
-                      className="flex-1 py-3 rounded-xl text-sm font-black active:scale-95 transition-transform"
+                      className="flex-1 py-3 md:py-4 rounded-xl text-sm md:text-base font-black active:scale-95 transition-transform"
                       style={{
                         background: 'linear-gradient(135deg, #ffd700, #d4a500)',
                         color: '#0b1128',
@@ -3032,7 +3032,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                     </button>
                     <button
                       onClick={() => handlePreviewChoice(true)}
-                      className="flex-1 py-3 rounded-xl text-sm font-bold active:scale-95 transition-transform"
+                      className="flex-1 py-3 md:py-4 rounded-xl text-sm md:text-base font-bold active:scale-95 transition-transform"
                       style={{
                         background: 'rgba(255,255,255,0.08)',
                         border: '1.5px solid rgba(255,255,255,0.3)',
@@ -3045,7 +3045,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                 ) : (
                   <button
                     onClick={() => handlePreviewChoice(false)}
-                    className="w-full py-3 rounded-xl text-sm font-black active:scale-95 transition-transform"
+                    className="w-full py-3 md:py-4 rounded-xl text-sm md:text-base font-black active:scale-95 transition-transform"
                     style={{
                       background: 'linear-gradient(135deg, #ffd700, #d4a500)',
                       color: '#0b1128',
@@ -3507,27 +3507,27 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
       {/* ===== Card Select Overlay (shared by multiple effects) ===== */}
       {cardSelectOverlay && (
         <div className="fixed inset-0 z-[1100] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.85)' }}>
-          <div className="rounded-2xl p-4 w-full max-w-sm" style={{
+          <div className="rounded-2xl p-4 md:p-6 w-full max-w-sm md:max-w-2xl" style={{
             background: 'linear-gradient(135deg, rgba(21,29,59,0.98), rgba(14,20,45,0.98))',
             border: '2px solid rgba(255,215,0,0.4)',
             boxShadow: '0 0 24px rgba(255,215,0,0.2)',
           }}>
-            <h3 className="text-base font-black text-amber-100 mb-3 text-center">{cardSelectOverlay.title}</h3>
-            <div className="grid grid-cols-3 gap-2 mb-3">
+            <h3 className="text-base md:text-xl font-black text-amber-100 mb-3 md:mb-4 text-center">{cardSelectOverlay.title}</h3>
+            <div className="grid grid-cols-3 gap-2 md:gap-4 mb-3 md:mb-5">
               {cardSelectOverlay.cards.map((c, i) => (
                 <button key={i} onClick={() => cardSelectOverlay.onSelect(c)}
-                  className="rounded-lg p-1 active:scale-95 transition-transform"
+                  className="rounded-lg p-1 md:p-2 active:scale-95 transition-transform"
                   style={{ background: 'rgba(255,255,255,0.06)', border: '1.5px solid rgba(255,215,0,0.3)' }}>
-                  <div className="rounded-md overflow-hidden mb-0.5" style={{ aspectRatio: '3/4' }}>
+                  <div className="rounded-md overflow-hidden mb-0.5 md:mb-1.5" style={{ aspectRatio: '3/4' }}>
                     {c.imageUrl ? <img src={c.imageUrl} alt={c.name} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-gray-800" />}
                   </div>
-                  <p className="text-[9px] font-bold text-amber-100 truncate">{c.name}</p>
-                  <p className="text-[8px] text-amber-200/50">⚔️{c.attackPower ?? c.power} 🛡️{c.defensePower ?? c.power}</p>
+                  <p className="text-[9px] md:text-sm font-bold text-amber-100 truncate">{c.name}</p>
+                  <p className="text-[8px] md:text-xs text-amber-200/50">⚔️{c.attackPower ?? c.power} 🛡️{c.defensePower ?? c.power}</p>
                 </button>
               ))}
             </div>
             <button onClick={() => cardSelectOverlay.onSelect(null)}
-              className="w-full py-3 rounded-lg text-sm font-bold"
+              className="w-full py-3 md:py-4 rounded-lg text-sm md:text-base font-bold"
               style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.6)', minHeight: '48px' }}>
               使わない
             </button>
@@ -4479,6 +4479,11 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
         }
         .kc-card-detail-pop { animation: kcCardDetailPop 0.25s ease-out; }
 
+        /* Tablet (iPad mini portrait/landscape and up): enlarge card detail image */
+        @media (min-width: 768px) {
+          .card-detail-img { width: 280px !important; height: 392px !important; }
+        }
+
         /* Top banner slide-in for effect/bench telop */
         @keyframes kcTopBannerSlide {
           0%   { opacity: 0; transform: translateY(-100%); }
@@ -4847,7 +4852,7 @@ function CardDetailModal({ card, onClose }: { card: BattleCard; onClose: () => v
       onClick={onClose}
     >
       <div
-        className="rounded-2xl p-4 w-full max-w-xs overflow-y-auto max-h-[85vh] kc-card-detail-pop"
+        className="rounded-2xl p-4 md:p-6 w-full max-w-xs md:max-w-md overflow-y-auto max-h-[85vh] kc-card-detail-pop"
         style={{
           background: 'linear-gradient(135deg, rgba(21,29,59,0.98), rgba(14,20,45,0.98))',
           border: `2px solid ${rarityInfo.color}60`,
@@ -4855,8 +4860,11 @@ function CardDetailModal({ card, onClose }: { card: BattleCard; onClose: () => v
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Card image */}
-        <div className="mx-auto mb-3 rounded-xl overflow-hidden relative" style={{ width: 200, height: 280 }}>
+        {/* Card image (tablet: 280x392, phone: 200x280) */}
+        <div
+          className="mx-auto mb-3 md:mb-4 rounded-xl overflow-hidden relative card-detail-img"
+          style={{ width: 200, height: 280 }}
+        >
           {card.imageUrl && (
             <img src={card.imageUrl} alt={card.name} className="w-full h-full object-cover" />
           )}
@@ -4864,61 +4872,61 @@ function CardDetailModal({ card, onClose }: { card: BattleCard; onClose: () => v
         </div>
 
         {/* Name + rarity + category */}
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-lg font-black text-amber-100">{card.name}</h3>
+        <div className="flex items-center justify-between mb-2 md:mb-3">
+          <h3 className="text-lg md:text-2xl font-black text-amber-100">{card.name}</h3>
           <div className="flex items-center gap-1.5">
-            <span className="text-[11px] font-bold px-1.5 py-0.5 rounded" style={{ background: rarityInfo.bgColor, color: rarityInfo.color, border: `1px solid ${rarityInfo.color}40` }}>
+            <span className="text-[11px] md:text-sm font-bold px-1.5 md:px-2 py-0.5 md:py-1 rounded" style={{ background: rarityInfo.bgColor, color: rarityInfo.color, border: `1px solid ${rarityInfo.color}40` }}>
               {rarityInfo.label}
             </span>
-            <span className="text-[11px] font-bold px-1.5 py-0.5 rounded" style={{ background: `${catInfo.color}15`, color: catInfo.color }}>
+            <span className="text-[11px] md:text-sm font-bold px-1.5 md:px-2 py-0.5 md:py-1 rounded" style={{ background: `${catInfo.color}15`, color: catInfo.color }}>
               {catInfo.emoji}{catInfo.label}
             </span>
           </div>
         </div>
 
         {/* Attack / Defense */}
-        <div className="flex items-center gap-4 mb-3">
-          <span className="text-base font-black" style={{ color: '#ff6b6b' }}>⚔️ 攻撃: {atk}</span>
-          <span className="text-base font-black" style={{ color: '#60a5fa' }}>🛡️ 防御: {def}</span>
+        <div className="flex items-center gap-4 md:gap-6 mb-3 md:mb-4">
+          <span className="text-base md:text-xl font-black" style={{ color: '#ff6b6b' }}>⚔️ 攻撃: {atk}</span>
+          <span className="text-base md:text-xl font-black" style={{ color: '#60a5fa' }}>🛡️ 防御: {def}</span>
         </div>
 
         {/* Effect */}
-        <div className="rounded-lg p-2.5 mb-3" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-          <p className="text-[10px] font-bold text-amber-200/50 mb-1">── 効果 ──</p>
+        <div className="rounded-lg p-2.5 md:p-4 mb-3 md:mb-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+          <p className="text-[10px] md:text-xs font-bold text-amber-200/50 mb-1 md:mb-2">── 効果 ──</p>
           {card.effect ? (
             <>
-              <p className="text-sm font-bold text-amber-100 mb-0.5">「{card.effect.name}」</p>
-              <p className="text-xs text-amber-200/70 leading-relaxed">{card.effect.description}</p>
+              <p className="text-sm md:text-lg font-bold text-amber-100 mb-0.5 md:mb-1">「{card.effect.name}」</p>
+              <p className="text-xs md:text-base text-amber-200/70 leading-relaxed">{card.effect.description}</p>
             </>
           ) : card.category === 'heritage' ? (
-            <p className="text-xs text-amber-200/50">効果なし（防御特化）</p>
+            <p className="text-xs md:text-base text-amber-200/50">効果なし（防御特化）</p>
           ) : (
-            <p className="text-xs text-amber-200/50">{card.effectDescription}</p>
+            <p className="text-xs md:text-base text-amber-200/50">{card.effectDescription}</p>
           )}
         </div>
 
         {/* Synergies */}
         {synergies.length > 0 && (
-          <div className="rounded-lg p-2.5 mb-3" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-            <p className="text-[10px] font-bold text-amber-200/50 mb-1">── コンボ ──</p>
+          <div className="rounded-lg p-2.5 md:p-4 mb-3 md:mb-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+            <p className="text-[10px] md:text-xs font-bold text-amber-200/50 mb-1 md:mb-2">── コンボ ──</p>
             {synergies.map((s) => (
-              <p key={s} className="text-xs text-amber-200/70 mb-0.5">🔗 {s}</p>
+              <p key={s} className="text-xs md:text-base text-amber-200/70 mb-0.5">🔗 {s}</p>
             ))}
           </div>
         )}
 
         {/* Quiz preview */}
         {quiz && (
-          <div className="rounded-lg p-2.5 mb-3" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-            <p className="text-[10px] font-bold text-amber-200/50 mb-1">── クイズ ──</p>
-            <p className="text-xs text-amber-200/70">Q: {quiz.question}</p>
+          <div className="rounded-lg p-2.5 md:p-4 mb-3 md:mb-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+            <p className="text-[10px] md:text-xs font-bold text-amber-200/50 mb-1 md:mb-2">── クイズ ──</p>
+            <p className="text-xs md:text-base text-amber-200/70">Q: {quiz.question}</p>
           </div>
         )}
 
         {/* Close button */}
         <button
           onClick={onClose}
-          className="w-full py-2.5 rounded-lg text-sm font-bold"
+          className="w-full py-2.5 md:py-3.5 rounded-lg text-sm md:text-base font-bold"
           style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.7)' }}
         >
           ✕ 閉じる
@@ -4947,15 +4955,29 @@ function CardDisplay({ card, isDefense, isWinner, size, mode, onTap, atkBonus = 
 }) {
   const catInfo = CATEGORY_INFO[card.category];
   const [imgLoaded, setImgLoaded] = useState(false);
-  // Mobile-responsive card sizes
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 480;
-  const w = size === 'sm' ? (isMobile ? 80 : 120) : size === 'battle' ? (isMobile ? 110 : 180) : 200;
-  const h = size === 'sm' ? (isMobile ? 112 : 150) : size === 'battle' ? (isMobile ? 154 : 250) : 260;
+  // Viewport-aware card sizes: phone (<480) / desktop (480-767) / tablet (>=768, e.g., iPad mini)
+  const vw = typeof window !== 'undefined' ? window.innerWidth : 1024;
+  const isMobile = vw < 480;
+  const isTablet = vw >= 768;
+  const w = size === 'sm'
+    ? (isMobile ? 80 : isTablet ? 150 : 120)
+    : size === 'battle'
+      ? (isMobile ? 110 : isTablet ? 240 : 180)
+      : (isTablet ? 280 : 200);
+  const h = size === 'sm'
+    ? (isMobile ? 112 : isTablet ? 200 : 150)
+    : size === 'battle'
+      ? (isMobile ? 154 : isTablet ? 336 : 250)
+      : (isTablet ? 392 : 260);
   const activeMode = mode ?? 'neutral';
   const atk = (card.attackPower ?? card.power) + atkBonus;
   const def = (card.defensePower ?? card.power) + defBonus;
   const isBig = size !== 'sm';
-  const fontPower = size === 'sm' ? (isMobile ? '10px' : '12px') : size === 'battle' ? (isMobile ? '14px' : '20px') : '18px';
+  const fontPower = size === 'sm'
+    ? (isMobile ? '10px' : isTablet ? '14px' : '12px')
+    : size === 'battle'
+      ? (isMobile ? '14px' : isTablet ? '24px' : '20px')
+      : (isTablet ? '22px' : '18px');
   const frameImg = CARD_RARITY_IMAGES[card.rarity] || CARD_RARITY_IMAGES['N'];
 
   return (
@@ -5005,8 +5027,8 @@ function CardDisplay({ card, isDefense, isWinner, size, mode, onTap, atkBonus = 
       <span
         className="absolute left-0 right-0 text-center font-bold text-white truncate px-2"
         style={{
-          bottom: isBig ? '30px' : '22px',
-          fontSize: isBig ? '16px' : '11px',
+          bottom: isBig ? (isTablet ? '40px' : '30px') : (isTablet ? '28px' : '22px'),
+          fontSize: isBig ? (isTablet ? '20px' : '16px') : (isTablet ? '14px' : '11px'),
           textShadow: '0 2px 6px rgba(0,0,0,0.95), 0 0 3px rgba(0,0,0,0.8)',
           zIndex: 3,
         }}
