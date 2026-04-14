@@ -444,6 +444,30 @@ export const CARD_STAT_OVERRIDES: Record<string, StatProfile> = {
   '祈りの光':             { attackPower: 1, defensePower: 2 },
   '白百合の盾':           { attackPower: 1, defensePower: 3 },
   '聖女の旗印':           { attackPower: 2, defensePower: 2 },
+  // ===== 紫式部デッキ =====
+  '紫式部':               { attackPower: 2, defensePower: 3 },
+  '源氏物語':             { attackPower: 1, defensePower: 2 },
+  '筆':                   { attackPower: 1, defensePower: 1 },
+  '和歌':                 { attackPower: 1, defensePower: 2 },
+  '十二単':               { attackPower: 1, defensePower: 3 },
+  // ===== 信長拡張デッキ =====
+  '敦盛の舞':             { attackPower: 1, defensePower: 1 },
+  '足軽':                 { attackPower: 2, defensePower: 1 },
+  '馬防柵':               { attackPower: 1, defensePower: 3 },
+  '長篠の陣':             { attackPower: 1, defensePower: 1 },
+  '南蛮貿易':             { attackPower: 1, defensePower: 1 },
+  '安土城':               { attackPower: 1, defensePower: 5 },
+  '本能寺の変':           { attackPower: 2, defensePower: 1 },
+  '明智光秀':             { attackPower: 4, defensePower: 1 },
+  '愛宕百韻':             { attackPower: 1, defensePower: 2 },
+  '天王山':               { attackPower: 2, defensePower: 3 },
+  '三日天下':             { attackPower: 3, defensePower: 1 },
+  // ===== オオカミデッキ =====
+  'オオカミ':             { attackPower: 2, defensePower: 1 },
+  '遠吠え':               { attackPower: 1, defensePower: 1 },
+  '群れの掟':             { attackPower: 1, defensePower: 2 },
+  '縄張り':               { attackPower: 1, defensePower: 3 },
+  '一匹狼':               { attackPower: 4, defensePower: 1 },
 };
 
 // Combo card IDs for detection
