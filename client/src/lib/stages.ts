@@ -272,6 +272,15 @@ export const STARTER_DECKS: StarterDeck[] = [
     description: 'ロベン島と自由憲章でマンデラを守り育てろ。虹の国で除外カードを全回収',
   },
   {
+    id: 'starter-davinci',
+    name: '🎨 ダ・ヴィンチ',
+    icon: '🎨',
+    trumpCard: 'レオナルド・ダ・ヴィンチ',
+    themeCards: ['モナ・リザ', '飛行機械', '設計図'],
+    noiseCards: ['紙', '電話', '車輪', 'ハチドリ', '光合成', 'コロッセオ'],
+    description: 'モナ・リザと設計図でレオナルド・ダ・ヴィンチを覚醒。飛行機械で相手デッキを削れ',
+  },
+  {
     id: 'starter-random',
     name: 'ランダムデッキ',
     icon: '🎲',

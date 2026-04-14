@@ -327,12 +327,90 @@ export function applyRevealEffect(
 
   switch (effId) {
     case 'davinci': {
+      const my = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      const hasMona = my.bench.some((b) => b.name === 'モナ・リザ' && !sealed.includes(b.name));
+      const hasBlueprint = my.bench.some((b) => b.name === '設計図' && !sealed.includes(b.name));
+      const glowNames: string[] = [];
+      if (hasMona) glowNames.push('モナ・リザ');
+      if (hasBlueprint) glowNames.push('設計図');
+      if (glowNames.length > 0) next = withBenchGlow(next, side, glowNames);
       if (role === 'attacker') {
-        bonusAttack += 3;
-        telop = { text: '🎨ダ・ヴィンチの万能の天才！攻撃+3', color };
+        const atk = hasMona ? 3 : 0;
+        bonusAttack += atk;
+        telop = { text: `🎨ダ・ヴィンチ万能の天才！攻撃+${atk}`, color };
       } else {
-        next = { ...next, defenderBonus: next.defenderBonus + 3 };
-        telop = { text: '🎨ダ・ヴィンチの万能の天才！防御+3', color };
+        const def = hasBlueprint ? 2 : 0;
+        if (def > 0) next = { ...next, defenderBonus: next.defenderBonus + def };
+        telop = { text: `🎨ダ・ヴィンチ万能の天才！防御+${def}`, color };
+      }
+      break;
+    }
+    case 'mona_lisa': {
+      telop = { text: '🖼️ モナ・リザ！ベンチでダ・ヴィンチを強化', color };
+      break;
+    }
+    case 'flying_machine': {
+      // 攻撃・防御共通: 相手デッキトップ1枚を除外
+      const oppState = opp === 'player' ? next.player : next.ai;
+      if (oppState.deck.length > 0) {
+        const [top, ...rest] = oppState.deck;
+        const { exiled, protected: saved } = filterExileWithRobbenIsland([top], next, opp);
+        next = applySide(next, opp, { ...oppState, deck: [...saved, ...rest] });
+        if (exiled.length > 0) {
+          next = { ...next, exile: { ...next.exile, [opp]: [...next.exile[opp], ...exiled] } };
+        }
+      }
+      // 防御時は設計図ごとに+2
+      if (role === 'defender') {
+        const my = side === 'player' ? next.player : next.ai;
+        const sealed = next.sealedBenchNames[side];
+        const blueprintSlot = my.bench.find((b) => b.name === '設計図' && !sealed.includes(b.name));
+        const count = blueprintSlot?.count ?? 0;
+        if (count > 0) {
+          next = withBenchGlow({ ...next, defenderBonus: next.defenderBonus + count * 2 }, side, ['設計図']);
+          telop = { text: `✈️ 飛行機械！相手デッキ除外＋設計図${count}で防御+${count * 2}`, color };
+        } else {
+          telop = { text: '✈️ 飛行機械！相手デッキトップ1枚を除外', color };
+        }
+      } else {
+        telop = { text: '✈️ 飛行機械！相手デッキトップ1枚を除外', color };
+      }
+      break;
+    }
+    case 'blueprint': {
+      telop = { text: '📐 設計図！ベンチで飛行機械を強化（重複可能）', color };
+      break;
+    }
+    case 'last_supper': {
+      const davinciFamily = new Set(['レオナルド・ダ・ヴィンチ', 'モナ・リザ', '飛行機械', '設計図', '最後の晩餐', 'ウィトルウィウス的人体図']);
+      const my = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      const target = my.bench.find((b) => davinciFamily.has(b.name) && !sealed.includes(b.name));
+      if (target) {
+        const newBench = removeOneFromBench(my.bench, target.name);
+        const newDeck = [target.card, ...my.deck];
+        next = applySide(next, side, { ...my, bench: newBench, deck: newDeck });
+        next = withBenchGlow(next, side, [target.name]);
+        telop = { text: `🍷 最期の饗宴！${target.name}をデッキ上に回収`, color };
+      } else {
+        telop = { text: '🍷 最期の饗宴（対象なし）', color };
+      }
+      break;
+    }
+    case 'vitruvian_man': {
+      const davinciFamily = new Set(['レオナルド・ダ・ヴィンチ', 'モナ・リザ', '飛行機械', '設計図', '最後の晩餐', 'ウィトルウィウス的人体図']);
+      const my = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      const famSlots = my.bench.filter((b) => davinciFamily.has(b.name) && !sealed.includes(b.name));
+      const total = famSlots.reduce((s, b) => s + b.count, 0);
+      if (total > 0) {
+        next = withBenchGlow(next, side, famSlots.map((b) => b.name));
+        if (role === 'attacker') bonusAttack += total;
+        else next = { ...next, defenderBonus: next.defenderBonus + total };
+        telop = { text: `🧍 理想の調和！ダ・ヴィンチ系${total}枚で自身+${total}`, color };
+      } else {
+        telop = { text: '🧍 理想の調和（対象なし）', color };
       }
       break;
     }

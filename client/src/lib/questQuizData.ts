@@ -250,4 +250,38 @@ export const QUEST_QUIZ_DATA: Record<DeckKey, Record<QuestDifficulty, QuestQuiz[
       { question: 'マンデラが<ruby>釈放<rt>しゃくほう</rt></ruby>された<ruby>年<rt>とし</rt></ruby>は？', choices: ['1990<ruby>年<rt>ねん</rt></ruby>', '1994<ruby>年<rt>ねん</rt></ruby>', '1985<ruby>年<rt>ねん</rt></ruby>', '2000<ruby>年<rt>ねん</rt></ruby>'], correctIndex: 0 },
     ],
   },
+
+  // ================================================================
+  // 🎨 ダ・ヴィンチ
+  // ================================================================
+  davinci: {
+    beginner: [
+      { question: 'レオナルド・ダ・ヴィンチは<ruby>何<rt>なに</rt></ruby><ruby>人<rt>じん</rt></ruby>？', choices: ['イタリア<ruby>人<rt>じん</rt></ruby>', 'フランス<ruby>人<rt>じん</rt></ruby>', 'スペイン<ruby>人<rt>じん</rt></ruby>', 'ドイツ<ruby>人<rt>じん</rt></ruby>'], correctIndex: 0 },
+      { question: 'ダ・ヴィンチが<ruby>描<rt>か</rt></ruby>いた<ruby>有名<rt>ゆうめい</rt></ruby>な<ruby>女性<rt>じょせい</rt></ruby>の<ruby>絵<rt>え</rt></ruby>は？', choices: ['モナ・リザ', 'ひまわり', '<ruby>真珠<rt>しんじゅ</rt></ruby>の<ruby>耳飾<rt>みみかざ</rt></ruby>りの<ruby>少女<rt>しょうじょ</rt></ruby>', '<ruby>叫<rt>さけ</rt></ruby>び'], correctIndex: 0 },
+      { question: 'ダ・ヴィンチが<ruby>活躍<rt>かつやく</rt></ruby>した<ruby>時代<rt>じだい</rt></ruby>は？', choices: ['ルネサンス', '<ruby>古代<rt>こだい</rt></ruby>', '<ruby>中世<rt>ちゅうせい</rt></ruby>', '<ruby>産業革命<rt>さんぎょうかくめい</rt></ruby>'], correctIndex: 0 },
+      { question: 'モナ・リザは<ruby>現在<rt>げんざい</rt></ruby>どこに<ruby>展示<rt>てんじ</rt></ruby>されている？', choices: ['ルーヴル<ruby>美術館<rt>びじゅつかん</rt></ruby>', '<ruby>大英博物館<rt>だいえいはくぶつかん</rt></ruby>', 'メトロポリタン<ruby>美術館<rt>びじゅつかん</rt></ruby>', 'ウフィツィ<ruby>美術館<rt>びじゅつかん</rt></ruby>'], correctIndex: 0 },
+      { question: 'ダ・ヴィンチが<ruby>描<rt>か</rt></ruby>いた<ruby>宗教画<rt>しゅうきょうが</rt></ruby>で<ruby>有名<rt>ゆうめい</rt></ruby>なのは？', choices: ['<ruby>最後<rt>さいご</rt></ruby>の<ruby>晩餐<rt>ばんさん</rt></ruby>', '<ruby>天地創造<rt>てんちそうぞう</rt></ruby>', '<ruby>最後<rt>さいご</rt></ruby>の<ruby>審判<rt>しんぱん</rt></ruby>', 'ピエタ'], correctIndex: 0 },
+    ],
+    challenger: [
+      { question: 'ダ・ヴィンチが<ruby>設計<rt>せっけい</rt></ruby>した<ruby>空<rt>そら</rt></ruby>を<ruby>飛<rt>と</rt></ruby>ぶ<ruby>装置<rt>そうち</rt></ruby>は？', choices: ['<ruby>飛行機械<rt>ひこうきかい</rt></ruby>', '<ruby>気球<rt>ききゅう</rt></ruby>', 'ロケット', '<ruby>凧<rt>たこ</rt></ruby>'], correctIndex: 0 },
+      { question: 'ウィトルウィウス<ruby>的<rt>てき</rt></ruby><ruby>人体図<rt>じんたいず</rt></ruby>に<ruby>描<rt>か</rt></ruby>かれているのは？', choices: ['<ruby>円<rt>えん</rt></ruby>と<ruby>正方形<rt>せいほうけい</rt></ruby>の<ruby>中<rt>なか</rt></ruby>の<ruby>人体<rt>じんたい</rt></ruby>', '<ruby>骨格<rt>こっかく</rt></ruby>のみ', '<ruby>顔<rt>かお</rt></ruby>だけ', '<ruby>動物<rt>どうぶつ</rt></ruby>と<ruby>人間<rt>にんげん</rt></ruby>'], correctIndex: 0 },
+      { question: '<ruby>最後<rt>さいご</rt></ruby>の<ruby>晩餐<rt>ばんさん</rt></ruby>は<ruby>何人<rt>なんにん</rt></ruby>が<ruby>描<rt>か</rt></ruby>かれている？', choices: ['13<ruby>人<rt>にん</rt></ruby>', '10<ruby>人<rt>にん</rt></ruby>', '15<ruby>人<rt>にん</rt></ruby>', '12<ruby>人<rt>にん</rt></ruby>'], correctIndex: 0 },
+      { question: 'ダ・ヴィンチが<ruby>研究<rt>けんきゅう</rt></ruby>した<ruby>分野<rt>ぶんや</rt></ruby>でないものは？', choices: ['<ruby>宇宙飛行<rt>うちゅうひこう</rt></ruby>', '<ruby>解剖学<rt>かいぼうがく</rt></ruby>', '<ruby>絵画<rt>かいが</rt></ruby>', '<ruby>建築<rt>けんちく</rt></ruby>'], correctIndex: 0 },
+      { question: 'ダ・ヴィンチが<ruby>生<rt>う</rt></ruby>まれた<ruby>町<rt>まち</rt></ruby>の<ruby>名前<rt>なまえ</rt></ruby>は？', choices: ['ヴィンチ<ruby>村<rt>むら</rt></ruby>', 'フィレンツェ', 'ローマ', 'ミラノ'], correctIndex: 0 },
+    ],
+    master: [
+      { question: 'ダ・ヴィンチが<ruby>絵画<rt>かいが</rt></ruby>で<ruby>用<rt>もち</rt></ruby>いた<ruby>ぼかし<rt>ぼかし</rt></ruby>の<ruby>技法<rt>ぎほう</rt></ruby>は？', choices: ['スフマート', 'キアロスクーロ', 'フレスコ', 'テンペラ'], correctIndex: 0 },
+      { question: 'モナ・リザのモデルとされる<ruby>女性<rt>じょせい</rt></ruby>は？', choices: ['リザ・デル・ジョコンド', 'ベアトリーチェ', 'イザベラ・デステ', 'チェチリア・ガッレラーニ'], correctIndex: 0 },
+      { question: 'ダ・ヴィンチが<ruby>残<rt>のこ</rt></ruby>した<ruby>手稿<rt>しゅこう</rt></ruby>の<ruby>特徴<rt>とくちょう</rt></ruby>は？', choices: ['<ruby>鏡文字<rt>かがみもじ</rt></ruby>で<ruby>書<rt>か</rt></ruby>かれている', '<ruby>全<rt>すべ</rt></ruby>てラテン<ruby>語<rt>ご</rt></ruby>', '<ruby>暗号<rt>あんごう</rt></ruby>で<ruby>書<rt>か</rt></ruby>かれている', '<ruby>絵<rt>え</rt></ruby>がない'], correctIndex: 0 },
+      { question: 'ダ・ヴィンチが<ruby>仕<rt>つか</rt></ruby>えた<ruby>最後<rt>さいご</rt></ruby>の<ruby>王<rt>おう</rt></ruby>は？', choices: ['フランソワ1<ruby>世<rt>せい</rt></ruby>', 'ルイ14<ruby>世<rt>せい</rt></ruby>', 'カール5<ruby>世<rt>せい</rt></ruby>', 'ヘンリー8<ruby>世<rt>せい</rt></ruby>'], correctIndex: 0 },
+      { question: '<ruby>最後<rt>さいご</rt></ruby>の<ruby>晩餐<rt>ばんさん</rt></ruby>が<ruby>描<rt>か</rt></ruby>かれた<ruby>場所<rt>ばしょ</rt></ruby>は？', choices: ['サンタ・マリア・デッレ・グラツィエ<ruby>教会<rt>きょうかい</rt></ruby>', 'サン・ピエトロ<ruby>大聖堂<rt>だいせいどう</rt></ruby>', 'ドゥオモ', 'システィーナ<ruby>礼拝堂<rt>れいはいどう</rt></ruby>'], correctIndex: 0 },
+    ],
+    legend: [
+      { question: 'ダ・ヴィンチが<ruby>構想<rt>こうそう</rt></ruby>していた<ruby>発明<rt>はつめい</rt></ruby>でないものは？', choices: ['<ruby>蒸気機関車<rt>じょうききかんしゃ</rt></ruby>', 'ヘリコプター', '<ruby>戦車<rt>せんしゃ</rt></ruby>', 'パラシュート'], correctIndex: 0 },
+      { question: 'モナ・リザが<ruby>盗難<rt>とうなん</rt></ruby>された<ruby>年<rt>とし</rt></ruby>は？', choices: ['1911<ruby>年<rt>ねん</rt></ruby>', '1800<ruby>年<rt>ねん</rt></ruby>', '1950<ruby>年<rt>ねん</rt></ruby>', '1870<ruby>年<rt>ねん</rt></ruby>'], correctIndex: 0 },
+      { question: 'ウィトルウィウス<ruby>的<rt>てき</rt></ruby><ruby>人体図<rt>じんたいず</rt></ruby>の<ruby>元<rt>もと</rt></ruby>になった<ruby>建築家<rt>けんちくか</rt></ruby>は？', choices: ['<ruby>古代<rt>こだい</rt></ruby>ローマのウィトルウィウス', 'ブルネレスキ', 'パラディオ', 'ブラマンテ'], correctIndex: 0 },
+      { question: 'ダ・ヴィンチが<ruby>最後<rt>さいご</rt></ruby>の<ruby>晩餐<rt>ばんさん</rt></ruby>で<ruby>使<rt>つか</rt></ruby>った<ruby>技法<rt>ぎほう</rt></ruby>の<ruby>問題点<rt>もんだいてん</rt></ruby>は？', choices: ['<ruby>壁<rt>かべ</rt></ruby>に<ruby>直接<rt>ちょくせつ</rt></ruby><ruby>描<rt>か</rt></ruby>いたため<ruby>劣化<rt>れっか</rt></ruby>が<ruby>早<rt>はや</rt></ruby>かった', '<ruby>色<rt>いろ</rt></ruby>が<ruby>少<rt>すく</rt></ruby>なかった', '<ruby>小<rt>ちい</rt></ruby>さすぎた', '<ruby>未完成<rt>みかんせい</rt></ruby>だった'], correctIndex: 0 },
+      { question: 'ダ・ヴィンチが<ruby>亡<rt>な</rt></ruby>くなった<ruby>国<rt>くに</rt></ruby>は？', choices: ['フランス', 'イタリア', 'スペイン', 'イギリス'], correctIndex: 0 },
+    ],
+  },
 };

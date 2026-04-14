@@ -58,7 +58,12 @@ export const EFFECT_COLORS: Record<CardEffectCategory, string> = {
 };
 
 export const EFFECT_DEFS: Record<string, CardEffect> = {
-  davinci:    { id: 'davinci',    name: '万能の天才',         description: '公開時、攻撃時は攻撃+3、防御時は防御+3。', category: 'special' },
+  davinci:    { id: 'davinci',    name: '万能の天才',         description: 'ベンチに「モナ・リザ」で攻撃+3、「設計図」で防御+2。', category: 'special' },
+  mona_lisa:     { id: 'mona_lisa',     name: '謎めいた微笑',     description: 'From the bench: ダ・ヴィンチ／レオナルド・ダ・ヴィンチの攻撃+3。', category: 'atk' },
+  flying_machine: { id: 'flying_machine', name: '空への夢',        description: '公開時、相手デッキトップ1枚を除外。防御時はベンチの「設計図」1枚につき防御+2（重複可能）。', category: 'debuff' },
+  blueprint:     { id: 'blueprint',     name: '未来への構想',     description: 'From the bench: 飛行機械の防御+2（重複可能）。', category: 'def' },
+  last_supper:   { id: 'last_supper',   name: '最期の饗宴',       description: '公開時、ベンチのダ・ヴィンチ系カード1枚をデッキの一番上に戻す。', category: 'bench' },
+  vitruvian_man: { id: 'vitruvian_man', name: '理想の調和',       description: '公開時、ベンチのダ・ヴィンチ系カード1枚につき自身の攻防+1。', category: 'special' },
   einstein:   { id: 'einstein',   name: '天才の頭脳',         description: 'ベンチに「相対性理論の論文」で攻撃+4。「光速」で防御+3。両方あれば相手全攻撃カードパワー-1。', category: 'special' },
   curie:      { id: 'curie',      name: '二度のノーベル賞',   description: 'ベンチに「ラジウム」で攻撃+3。「研究ノート」で防御+3。両方あれば全味方カード効果2回発動。', category: 'special' },
   napoleon:   { id: 'napoleon',   name: '皇帝の号令',         description: 'ベンチの大砲1枚につき攻撃+1、法典1枚につき防御+1（重複可能）。', category: 'special' },
@@ -307,6 +312,13 @@ export const EFFECT_BY_CARD_NAME: Record<string, string> = {
   '群れの掟':             'pack_law',
   '縄張り':               'territory',
   '一匹狼':               'lone_wolf',
+  // ===== ダ・ヴィンチデッキ =====
+  'レオナルド・ダ・ヴィンチ': 'davinci',
+  'モナ・リザ':           'mona_lisa',
+  '飛行機械':             'flying_machine',
+  '設計図':               'blueprint',
+  '最後の晩餐':           'last_supper',
+  'ウィトルウィウス的人体図': 'vitruvian_man',
 };
 
 export interface BattleCard {
@@ -492,6 +504,13 @@ export const CARD_STAT_OVERRIDES: Record<string, StatProfile> = {
   '群れの掟':             { attackPower: 1, defensePower: 2 },
   '縄張り':               { attackPower: 1, defensePower: 3 },
   '一匹狼':               { attackPower: 4, defensePower: 1 },
+  // ===== ダ・ヴィンチデッキ =====
+  'レオナルド・ダ・ヴィンチ': { attackPower: 2, defensePower: 2 },
+  'モナ・リザ':           { attackPower: 0, defensePower: 0 },
+  '飛行機械':             { attackPower: 1, defensePower: 1 },
+  '設計図':               { attackPower: 0, defensePower: 0 },
+  '最後の晩餐':           { attackPower: 1, defensePower: 3 },
+  'ウィトルウィウス的人体図': { attackPower: 3, defensePower: 3 },
 };
 
 // Combo card IDs for detection
@@ -1983,6 +2002,13 @@ export const SYNERGY_MAP: Record<string, string[]> = {
   '蒸気機関車': ['蒸気機関', '石炭', '紡績機', 'ジェームズ・ワット'],
   'ジェームズ・ワット': ['蒸気機関', '石炭', '紡績機', '蒸気機関車'],
   '車輪': ['蒸気機関車', '蒸気機関', '石炭'],
+  // ダ・ヴィンチコンボ
+  'レオナルド・ダ・ヴィンチ': ['モナ・リザ', '飛行機械', '設計図', '最後の晩餐', 'ウィトルウィウス的人体図'],
+  'モナ・リザ': ['レオナルド・ダ・ヴィンチ', '飛行機械', '設計図', '最後の晩餐', 'ウィトルウィウス的人体図'],
+  '飛行機械': ['レオナルド・ダ・ヴィンチ', 'モナ・リザ', '設計図', '最後の晩餐', 'ウィトルウィウス的人体図'],
+  '設計図': ['レオナルド・ダ・ヴィンチ', 'モナ・リザ', '飛行機械', '最後の晩餐', 'ウィトルウィウス的人体図'],
+  '最後の晩餐': ['レオナルド・ダ・ヴィンチ', 'モナ・リザ', '飛行機械', '設計図', 'ウィトルウィウス的人体図'],
+  'ウィトルウィウス的人体図': ['レオナルド・ダ・ヴィンチ', 'モナ・リザ', '飛行機械', '設計図', '最後の晩餐'],
 };
 
 // ===== Round-specific offering composition for synergy draft =====

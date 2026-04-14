@@ -7,7 +7,7 @@ import { getAuth, isAdmin, isGuest } from './auth';
 
 // ===== Types =====
 
-export type DeckKey = 'napoleon' | 'amazon' | 'qinshi' | 'galileo' | 'jeanne' | 'murasaki' | 'mandela';
+export type DeckKey = 'napoleon' | 'amazon' | 'qinshi' | 'galileo' | 'jeanne' | 'murasaki' | 'mandela' | 'davinci';
 export type QuestDifficulty = 'beginner' | 'challenger' | 'master' | 'legend';
 
 export interface QuestDifficultyProgress {
@@ -36,7 +36,7 @@ export function isAdminMode(): boolean {
 
 // ===== Constants =====
 
-export const DECK_KEYS: DeckKey[] = ['napoleon', 'amazon', 'qinshi', 'galileo', 'jeanne', 'murasaki', 'mandela'];
+export const DECK_KEYS: DeckKey[] = ['napoleon', 'amazon', 'qinshi', 'galileo', 'jeanne', 'murasaki', 'mandela', 'davinci'];
 
 export const QUEST_DIFFICULTIES: QuestDifficulty[] = ['beginner', 'challenger', 'master', 'legend'];
 
@@ -51,6 +51,7 @@ export const DECK_KEY_TO_STARTER_ID: Record<DeckKey, string> = {
   jeanne:   'starter-jeanne',
   murasaki: 'starter-murasaki',
   mandela:  'starter-mandela',
+  davinci:  'starter-davinci',
 };
 
 /** デッキ表示情報 */
@@ -62,6 +63,7 @@ export const DECK_QUEST_INFO: Record<DeckKey, { icon: string; name: string; colo
   jeanne:   { icon: '🗡️', name: 'ジャンヌ',   color: '#f59e0b' },
   murasaki: { icon: '📖', name: '紫式部',     color: '#ec4899' },
   mandela:  { icon: '🌍', name: 'マンデラ',   color: '#f97316' },
+  davinci:  { icon: '🎨', name: 'ダ・ヴィンチ', color: '#eab308' },
 };
 
 /** 難易度表示情報 */
@@ -84,6 +86,7 @@ export const DECK_SSR_CARDS: Record<DeckKey, string[]> = {
   jeanne:   [],                   // SSR なし
   murasaki: [],                   // SSR なし
   mandela:  ['虹の国'],           // レジェンドクリアで虹の国(SR)解放
+  davinci:  [],                   // SSR なし（今後追加可能）
 };
 
 // ===== Default Progress =====
