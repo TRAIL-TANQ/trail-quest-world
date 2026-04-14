@@ -171,6 +171,18 @@ export const EFFECT_DEFS: Record<string, CardEffect> = {
   prayer_light:     { id: 'prayer_light',     name: '聖なる祈り',       description: '公開時、ベンチにジャンヌがいる場合、ジャンヌをデッキの一番上に戻す（任意発動）。', category: 'bench' },
   lily_shield:      { id: 'lily_shield',      name: '百合の守り',       description: 'From the bench: ジャンヌ・ダルクの防御+2。', category: 'def' },
   holy_banner:      { id: 'holy_banner',      name: '聖女の導き',       description: '公開時、除外されたジャンヌ系カード1枚をデッキに戻す（任意発動）。', category: 'bench' },
+  // ===== 紫式部デッキ =====
+  murasaki:         { id: 'murasaki',         name: '文化の才媛',       description: 'ベンチの文化系カード1枚につき防御+1。源氏物語ベンチで攻撃+3。', category: 'special' },
+  genji:            { id: 'genji',            name: '物語の魔力',       description: '公開時、デッキの紙・筆・和歌1枚をデッキの一番上に置く。', category: 'bench' },
+  fude:             { id: 'fude',             name: '墨の一閃',         description: '公開時、相手の次に出すカードの攻撃-1。', category: 'debuff' },
+  waka:             { id: 'waka',             name: '雅の調べ',         description: 'From the bench: 紫式部の攻撃+1（重複可能）。', category: 'atk' },
+  junihitoe:        { id: 'junihitoe',        name: '十二の衣',         description: 'From the bench: 紫式部が除外されない（除外耐性）。', category: 'def' },
+  // ===== オオカミデッキ =====
+  wolf:             { id: 'wolf',             name: '群れの絆',         description: 'ベンチのオオカミ系カード1枚につき攻防+1。', category: 'special' },
+  howl:             { id: 'howl',             name: '遠吠え',           description: '公開時、デッキ内のオオカミ系1枚をデッキの一番上に移動。', category: 'bench' },
+  pack_law:         { id: 'pack_law',         name: '群れの掟',         description: 'From the bench: オオカミの防御+2（重複可能）。', category: 'def' },
+  territory:        { id: 'territory',        name: '縄張り',           description: 'From the bench: 相手の生き物カードの攻撃-1。', category: 'debuff' },
+  lone_wolf:        { id: 'lone_wolf',        name: '孤高の狼',         description: '公開時、ベンチにオオカミ系0枚なら攻撃+5。', category: 'atk' },
 };
 
 // Card name → effect id. These are the only cards that carry on-reveal effects.
@@ -283,6 +295,18 @@ export const EFFECT_BY_CARD_NAME: Record<string, string> = {
   '祈りの光':             'prayer_light',
   '白百合の盾':           'lily_shield',
   '聖女の旗印':           'holy_banner',
+  // ===== 紫式部デッキ =====
+  '紫式部':               'murasaki',
+  '源氏物語':             'genji',
+  '筆':                   'fude',
+  '和歌':                 'waka',
+  '十二単':               'junihitoe',
+  // ===== オオカミデッキ =====
+  'オオカミ':             'wolf',
+  '遠吠え':               'howl',
+  '群れの掟':             'pack_law',
+  '縄張り':               'territory',
+  '一匹狼':               'lone_wolf',
 };
 
 export interface BattleCard {

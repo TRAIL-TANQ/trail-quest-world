@@ -266,14 +266,28 @@ function hasRobbenIslandProtection(state: GameState, protectedSide: Side): boole
   return my.bench.some((b) => b.name === 'ロベン島' && !sealed.includes(b.name));
 }
 
-/** Filter out マンデラ from exile list if ロベン島 protects */
+/** Check if 十二単 is protecting 紫式部 from exile on the given side */
+function hasJunihitoeProtection(state: GameState, protectedSide: Side): boolean {
+  const my = protectedSide === 'player' ? state.player : state.ai;
+  const sealed = state.sealedBenchNames[protectedSide];
+  return my.bench.some((b) => b.name === '十二単' && !sealed.includes(b.name));
+}
+
+/** Filter out protected cards from exile list (ロベン島 → マンデラ, 十二単 → 紫式部) */
 function filterExileWithRobbenIsland(cards: BattleCard[], state: GameState, targetSide: Side): { exiled: BattleCard[]; protected: BattleCard[] } {
-  if (!hasRobbenIslandProtection(state, targetSide)) {
+  const robben = hasRobbenIslandProtection(state, targetSide);
+  const junihitoe = hasJunihitoeProtection(state, targetSide);
+  if (!robben && !junihitoe) {
     return { exiled: cards, protected: [] };
   }
-  const exiled = cards.filter((c) => c.name !== 'ネルソン・マンデラ');
-  const protectedCards = cards.filter((c) => c.name === 'ネルソン・マンデラ');
-  return { exiled, protected: protectedCards };
+  const exiled: BattleCard[] = [];
+  const saved: BattleCard[] = [];
+  for (const c of cards) {
+    if (robben && c.name === 'ネルソン・マンデラ') saved.push(c);
+    else if (junihitoe && c.name === '紫式部') saved.push(c);
+    else exiled.push(c);
+  }
+  return { exiled, protected: saved };
 }
 
 /**
@@ -1696,6 +1710,135 @@ export function applyRevealEffect(
       }
       break;
     }
+    // ===== 紫式部デッキ =====
+    case 'murasaki': {
+      // ベンチの文化系1枚につき防御+1。源氏物語で攻撃+3。和歌は重複可能で攻撃+1ずつ。
+      const cultureNames = new Set(['紫式部', '源氏物語', '筆', '和歌', '十二単', '紙']);
+      const my = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      const cultureSlots = my.bench.filter((b) => !sealed.includes(b.name) && cultureNames.has(b.name));
+      const cultureCount = cultureSlots.reduce((s, b) => s + b.count, 0);
+      const hasGenji = my.bench.some((b) => b.name === '源氏物語' && !sealed.includes(b.name));
+      const wakaSlot = my.bench.find((b) => b.name === '和歌' && !sealed.includes(b.name));
+      const wakaCount = wakaSlot?.count ?? 0;
+      const glow = cultureSlots.map((b) => b.name);
+      if (glow.length > 0) next = withBenchGlow(next, side, glow);
+      if (role === 'attacker') {
+        const atkBonus = (hasGenji ? 3 : 0) + wakaCount;
+        bonusAttack += atkBonus;
+        telop = { text: `📜紫式部 文化の才媛！攻撃+${atkBonus}`, color };
+      } else {
+        const defBonus = cultureCount;
+        next = { ...next, defenderBonus: next.defenderBonus + defBonus };
+        telop = { text: `📜紫式部 文化の才媛！防御+${defBonus}`, color };
+      }
+      break;
+    }
+    case 'genji': {
+      // 公開時: デッキ内の紙・筆・和歌から1枚をデッキトップへ
+      const myState = side === 'player' ? next.player : next.ai;
+      const targets = new Set(['紙', '筆', '和歌']);
+      const idx = myState.deck.findIndex((c) => targets.has(c.name));
+      if (idx > 0) {
+        const newDeck = [...myState.deck];
+        const [moved] = newDeck.splice(idx, 1);
+        newDeck.unshift(moved);
+        next = applySide(next, side, { ...myState, deck: newDeck });
+        telop = { text: `📖源氏物語！${moved.name}をデッキトップへ`, color };
+      } else if (idx === 0) {
+        telop = { text: '📖源氏物語！既にトップにあり', color };
+      } else {
+        telop = { text: '📖源氏物語（対象なし）', color };
+      }
+      break;
+    }
+    case 'fude': {
+      // 公開時: 相手の次に出すカードの攻撃-1
+      next = {
+        ...next,
+        pendingAttackBonus: {
+          ...next.pendingAttackBonus,
+          [opp]: next.pendingAttackBonus[opp] - 1,
+        },
+      };
+      telop = { text: '🖌️筆 墨の一閃！相手次攻撃-1', color };
+      break;
+    }
+    case 'waka': {
+      telop = { text: '🎴和歌！ベンチで紫式部を強化', color };
+      break;
+    }
+    case 'junihitoe': {
+      telop = { text: '👘十二単！紫式部を除外から守る', color };
+      break;
+    }
+    // ===== オオカミデッキ =====
+    case 'wolf': {
+      // 群れの絆: ベンチのオオカミ系カード1枚につき攻防+1
+      // 群れの掟: 防御時のみ追加+2ずつ（重複可能）
+      const wolfNames = new Set(['オオカミ', '遠吠え', '群れの掟', '縄張り', '一匹狼']);
+      const my = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      const wolfSlots = my.bench.filter((b) => !sealed.includes(b.name) && wolfNames.has(b.name));
+      const wolfCount = wolfSlots.reduce((s, b) => s + b.count, 0);
+      const packLawSlot = my.bench.find((b) => b.name === '群れの掟' && !sealed.includes(b.name));
+      const packLawCount = packLawSlot?.count ?? 0;
+      const glow = wolfSlots.map((b) => b.name);
+      if (glow.length > 0) next = withBenchGlow(next, side, glow);
+      if (role === 'attacker') {
+        bonusAttack += wolfCount;
+        telop = { text: `🐺オオカミ 群れの絆！攻撃+${wolfCount}`, color };
+      } else {
+        const defBonus = wolfCount + packLawCount * 2;
+        next = { ...next, defenderBonus: next.defenderBonus + defBonus };
+        telop = { text: `🐺オオカミ 群れの絆！防御+${defBonus}`, color };
+      }
+      break;
+    }
+    case 'howl': {
+      // 公開時: デッキ内のオオカミ系1枚をデッキトップへ
+      const wolfNames = new Set(['オオカミ', '遠吠え', '群れの掟', '縄張り', '一匹狼']);
+      const myState = side === 'player' ? next.player : next.ai;
+      const idx = myState.deck.findIndex((c) => wolfNames.has(c.name));
+      if (idx > 0) {
+        const newDeck = [...myState.deck];
+        const [moved] = newDeck.splice(idx, 1);
+        newDeck.unshift(moved);
+        next = applySide(next, side, { ...myState, deck: newDeck });
+        telop = { text: `🌙遠吠え！${moved.name}をデッキトップへ`, color };
+      } else if (idx === 0) {
+        telop = { text: '🌙遠吠え！既にトップにあり', color };
+      } else {
+        telop = { text: '🌙遠吠え（対象なし）', color };
+      }
+      break;
+    }
+    case 'pack_law': {
+      telop = { text: '📜群れの掟！オオカミの防御強化', color };
+      break;
+    }
+    case 'territory': {
+      telop = { text: '🚩縄張り！相手生き物の攻撃-1', color };
+      break;
+    }
+    case 'lone_wolf': {
+      // 公開時: ベンチにオオカミ系0枚なら攻撃+5
+      if (role === 'attacker') {
+        const wolfNames = new Set(['オオカミ', '遠吠え', '群れの掟', '縄張り', '一匹狼']);
+        const myState = side === 'player' ? next.player : next.ai;
+        const sealed = next.sealedBenchNames[side];
+        const wolfCount = myState.bench
+          .filter((b) => !sealed.includes(b.name) && wolfNames.has(b.name))
+          .reduce((s, b) => s + b.count, 0);
+        if (wolfCount === 0) {
+          bonusAttack += 5;
+          telop = { text: '🐺一匹狼！孤高の咆哮！攻撃+5', color };
+        } else {
+          telop = { text: '🐺一匹狼（仲間がいて効果なし）', color };
+        }
+      }
+      break;
+    }
   }
 
   return { state: next, bonusAttack, telop };
@@ -1750,6 +1893,11 @@ function computeAttackerAura(
   if (rubySlot) { const v = rubySlot.count >= 2 ? 2 : 1; bonus += v; details.push({ benchCardName: 'ルビー', atkBonus: v, defBonus: 0 }); }
   // サバンナ aura: 生き物カード攻撃+1
   if (names.has('サバンナ') && card.category === 'creature') { bonus += 1; details.push({ benchCardName: 'サバンナ', atkBonus: 1, defBonus: 0 }); }
+  // 縄張り aura (opp bench): 相手の生き物カードの攻撃-1（ベンチにある間ずっと）
+  if (card.category === 'creature') {
+    const oppHasTerritory = oppMe.bench.some((b) => b.name === '縄張り' && !oppSealed.includes(b.name));
+    if (oppHasTerritory) { bonus -= 1; details.push({ benchCardName: '縄張り', atkBonus: -1, defBonus: 0 }); }
+  }
   // サバンナ combo (アマゾン川 removed from bench auras)
   // 蒸気機関 aura: 科学発明カード攻撃+1 (石炭もあれば+2)
   if (names.has('蒸気機関') && card.category === 'invention') {
