@@ -36,12 +36,19 @@ import type { StageRules } from './stages';
 
 export const BENCH_MAX_SLOTS = 6;
 
-// 2026-04 rework: 5 rounds (回戦), each containing a full battle phase.
+// 2026-04 rework: rounds (回戦) each contain a full battle phase.
 // Each round ends when one side deck-outs or bench-overflows.
-// After 5 rounds, fan totals decide the overall winner.
+// After all rounds, fan totals decide the overall winner.
+// NPC mode: fixed 5 rounds. PvP: selectable 3/5/7.
 export const TOTAL_ROUNDS = 5;
-// Round victory fan rewards (fixed per round)
-export const ROUND_VICTORY_FANS = [10, 12, 14, 15, 20];
+// Round victory fan rewards per round-count mode
+export const ROUND_VICTORY_FANS_BY_TOTAL: Record<number, number[]> = {
+  3: [10, 14, 20],
+  5: [10, 12, 14, 15, 20],
+  7: [8, 10, 12, 14, 15, 18, 20],
+};
+// Legacy alias (5-round default)
+export const ROUND_VICTORY_FANS = ROUND_VICTORY_FANS_BY_TOTAL[5];
 // Card defeat fan rewards by rarity
 export const CARD_DEFEAT_FANS: Record<string, number> = { N: 1, R: 2, SR: 3, SSR: 5 };
 
@@ -49,8 +56,9 @@ export const CARD_DEFEAT_FANS: Record<string, number> = { N: 1, R: 2, SR: 3, SSR
 export const TROPHY_FAN_RANGES: Array<[number, number]> = [
   [10, 10], [12, 12], [14, 14], [15, 15], [20, 20],
 ];
-export function rollTrophyFans(round: number): number {
-  return ROUND_VICTORY_FANS[round - 1] ?? 0;
+export function rollTrophyFans(round: number, totalRounds: number = 5): number {
+  const arr = ROUND_VICTORY_FANS_BY_TOTAL[totalRounds] ?? ROUND_VICTORY_FANS_BY_TOTAL[5];
+  return arr[round - 1] ?? 0;
 }
 
 // ---------- Types ----------
@@ -102,7 +110,9 @@ export interface EffectTelop {
 
 export interface GameState {
   phase: GamePhase;
-  // Round counter (1..5). Only incremented in advanceToNextRound, NOT per sub-battle.
+  // Total rounds for this match (3, 5, or 7). NPC mode is always 5.
+  totalRounds: number;
+  // Round counter (1..totalRounds). Only incremented in advanceToNextRound, NOT per sub-battle.
   round: number;
   // Sub-battle counter within the current round. Resets to 0 at each round start.
   subBattleCount: number;
@@ -199,10 +209,16 @@ function otherSide(side: Side): Side {
 
 // ---------- Initial state ----------
 
-export function initGameState(playerDeck: BattleCard[], aiDeck: BattleCard[], stageRules?: StageRules): GameState {
-  const trophyFans = Array.from({ length: TOTAL_ROUNDS }, (_, i) => rollTrophyFans(i + 1));
+export function initGameState(
+  playerDeck: BattleCard[],
+  aiDeck: BattleCard[],
+  stageRules?: StageRules,
+  totalRounds: number = TOTAL_ROUNDS,
+): GameState {
+  const trophyFans = Array.from({ length: totalRounds }, (_, i) => rollTrophyFans(i + 1, totalRounds));
   return {
     phase: 'deck_phase',
+    totalRounds,
     round: 1,
     subBattleCount: 0,
     trophyFans,
@@ -2362,8 +2378,8 @@ export function advanceToNextRound(state: GameState): GameState {
 
   const nextRound = state.round + 1;
 
-  // After round 5 → game_over with fan totals
-  if (nextRound > TOTAL_ROUNDS) {
+  // After all rounds → game_over with fan totals
+  if (nextRound > state.totalRounds) {
     const fanWinner: Side = newPlayerFans >= newAiFans ? 'player' : 'ai';
     return {
       ...state,

@@ -277,7 +277,12 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
   const [deckOffer, setDeckOffer] = useState<DeckOffer | null>(null);
   // Round → max cards the player may keep this deck phase.
   // R5 is special: only 1 SR/SSR may be acquired. Other rounds: up to 2.
-  const maxPicksForRound = (round: number): number => (round >= 5 ? 1 : 2);
+  const maxPicksForRound = (round: number, totalRounds: number = 5): number => {
+    // 3回戦/7回戦: 各デッキフェイズで最大3枚獲得可
+    if (totalRounds === 3 || totalRounds === 7) return 3;
+    // 5回戦 (現行通り): 最終回戦は1枚、それ以外は2枚
+    return round >= 5 ? 1 : 2;
+  };
   const [activeQuiz, setActiveQuiz] = useState<{
     quiz: Quiz;
     cardIndex: number;
@@ -378,7 +383,9 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
     }
     const stage = stageId !== null ? getStage(stageId) : null;
     const rules = stage?.rules ?? undefined;
-    const state = initGameState(playerDeck, aiDeckCards, rules);
+    // PvP can override total rounds (3/5/7); NPC mode is always 5.
+    const totalRounds = isPvP && pvpSession ? pvpSession.roundCount : TOTAL_ROUNDS;
+    const state = initGameState(playerDeck, aiDeckCards, rules, totalRounds);
     // Special-rule banner (2s) at battle start
     const ruleMsgs = rules ? longSpecialRuleMessages(rules) : [];
     if (ruleMsgs.length > 0) {
@@ -558,7 +565,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
       : getUnlockedSSRCardNames(loadQuestProgress());
     // Generate offer against the active side's existing deck (P1→player, P2→ai)
     const activeDeck = pvpActiveSide === 'ai' ? gameState.ai.deck : gameState.player.deck;
-    const offered = sampleCardsWithSynergy(cardCount, 'offer', gameState.round, activeDeck, unlockedSSR);
+    const offered = sampleCardsWithSynergy(cardCount, 'offer', gameState.round, activeDeck, unlockedSSR, gameState.totalRounds);
     setDeckOffer({
       cards: offered,
       blocked: new Set(),
@@ -1503,8 +1510,8 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
     if (!deckOffer || !gameState) return;
     if (gameState.phase !== 'deck_phase') return;  // hard gate against battle-phase leaks
     if (deckOffer.blocked.has(index) || deckOffer.acquired.has(index)) return;
-    // Enforce per-round pick limit (R5 = 1, otherwise 2)
-    const maxPicks = maxPicksForRound(gameState.round);
+    // Enforce per-round pick limit (mode-aware: 5回戦は R5=1 else 2 / 3回戦・7回戦は3)
+    const maxPicks = maxPicksForRound(gameState.round, gameState.totalRounds);
     if (deckOffer.acquired.size >= maxPicks) {
       toast.info(`このラウンドは${maxPicks}枚までです`);
       return;
@@ -1613,7 +1620,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
   // 獲得済みカードはデッキに残したまま、未選択カードだけ入れ替える。
   const handleRedraw = useCallback(() => {
     if (!deckOffer || deckOffer.redrawsLeft <= 0 || !gameState) return;
-    const maxPicks = maxPicksForRound(gameState.round);
+    const maxPicks = maxPicksForRound(gameState.round, gameState.totalRounds);
     if (deckOffer.acquired.size >= maxPicks) return; // もう選べないなら引き直し不要
 
     // 未選択カードの数だけ新しく引く
@@ -1623,7 +1630,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
       ? (pvpDeckTurn === 'p1' ? pvpSession.player1.unlockedSSRCardNames : pvpSession.player2.unlockedSSRCardNames)
       : getUnlockedSSRCardNames(loadQuestProgress());
     const activeDeckForRedraw = pvpActiveSide === 'ai' ? gameState.ai.deck : gameState.player.deck;
-    const newCards = sampleCardsWithSynergy(newCount, 'offer', gameState.round, activeDeckForRedraw, unlockedSSR2);
+    const newCards = sampleCardsWithSynergy(newCount, 'offer', gameState.round, activeDeckForRedraw, unlockedSSR2, gameState.totalRounds);
 
     // 獲得済みカードを保持し、未選択分だけ差し替え
     const updatedCards: BattleCard[] = [];
@@ -1775,6 +1782,15 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
       setLastResult({ score: 100, maxScore: 100, timeSeconds: 0, accuracy: 1, isBestScore: false });
       toast.success(`🏆 勝者: ${winnerName}`);
       clearPvPSession();
+      // Defensive cleanup: clear all in-component battle state so a new battle starts fresh.
+      // Engine-level (initGameState) already resets exile/quarantine/sealed, but this guards
+      // against any race where stale gameState lingers across remount.
+      clearStepTimeouts();
+      setGameState(null);
+      setRemovedCards([]);
+      setDeckOffer(null);
+      setActiveQuiz(null);
+      setSwapState(null);
       navigate('/');
       return;
     }
@@ -1832,8 +1848,15 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
     addTotalAlt(altReward);
     triggerEarnEffect(altReward);
     setLastResult({ score: won ? 100 : 30, maxScore: 100, timeSeconds: 0, accuracy: won ? 1 : 0.3, isBestScore: won });
+    // Defensive cleanup before leaving: ensure next battle starts with fresh state.
+    clearStepTimeouts();
+    setGameState(null);
+    setRemovedCards([]);
+    setDeckOffer(null);
+    setActiveQuiz(null);
+    setSwapState(null);
     navigate('/result');
-  }, [gameState, currentStage, userId, addTotalAlt, triggerEarnEffect, setLastResult, navigate, markStageCleared, markStageRewarded, isStageRewarded, addCollectionCard, userStoreSet, isPvP, pvpSession]);
+  }, [gameState, currentStage, userId, addTotalAlt, triggerEarnEffect, setLastResult, navigate, markStageCleared, markStageRewarded, isStageRewarded, addCollectionCard, userStoreSet, isPvP, pvpSession, clearStepTimeouts]);
 
   // =============================================================
   // ===================== TITLE SCREEN =========================
@@ -2457,7 +2480,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
           <div className="text-center">
             <p className="text-[9px] font-bold text-amber-200/50">R</p>
             <p className="text-base font-black" style={{ color: '#ffd700', textShadow: '0 0 8px rgba(255,215,0,0.5)' }}>
-              {gameState.round}/{TOTAL_ROUNDS}
+              {gameState.round}/{gameState.totalRounds}
             </p>
           </div>
           {/* Trophy + Fan totals per side */}
@@ -3821,9 +3844,9 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                 );
               })()}
               <p className="text-xs text-amber-200/70 text-center">
-                5 枚の中から{maxPicksForRound(gameState.round)}枚まで選べる。タップでクイズ出題、正解で追加。
+                5 枚の中から{maxPicksForRound(gameState.round, gameState.totalRounds)}枚まで選べる。タップでクイズ出題、正解で追加。
                 <br />
-                獲得 {deckOffer.acquired.size}/{maxPicksForRound(gameState.round)} ・ デッキ {deckCount}/{MAX_DECK_SIZE} 枚
+                獲得 {deckOffer.acquired.size}/{maxPicksForRound(gameState.round, gameState.totalRounds)} ・ デッキ {deckCount}/{MAX_DECK_SIZE} 枚
               </p>
             </div>
 
@@ -3832,7 +3855,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
               {/* 左: 提示カード */}
               <div className="mb-3 md:mb-0 md:flex md:flex-col md:min-h-0">
                 <p className="text-[11px] font-bold text-amber-100 mb-1.5 md:mb-2">
-                  🎴 提示カード（5枚 / 獲得 {deckOffer.acquired.size}/{maxPicksForRound(gameState.round)}）
+                  🎴 提示カード（5枚 / 獲得 {deckOffer.acquired.size}/{maxPicksForRound(gameState.round, gameState.totalRounds)}）
                 </p>
                 <div className="md:flex-1 md:overflow-y-auto md:min-h-0">
                   {OfferGrid}
@@ -3879,7 +3902,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
             {/* ===== Sticky footer: 引き直し + バトル開始 ===== */}
             {(() => {
               const acquiredCount = deckOffer.acquired.size;
-              const maxPicks = maxPicksForRound(gameState.round);
+              const maxPicks = maxPicksForRound(gameState.round, gameState.totalRounds);
               const deckOk = gameState.player.deck.length >= MIN_DECK_SIZE;
               // Battle can always start when deck >= MIN. Picks are optional (0/1/2).
               const startEnabled = deckOk;

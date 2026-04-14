@@ -17,7 +17,7 @@ import type { StarterDeck } from '@/lib/stages';
 import { verifyPvPPin, loadQuestProgressFor, isStarterDeckUnlockedFor, getUnlockedSSRCardNamesFor } from '@/lib/pvpAuth';
 import type { QuestProgressData } from '@/lib/questProgress';
 import { savePvPSession, clearPvPSession } from '@/lib/pvpSession';
-import type { PvPPlayer } from '@/lib/pvpSession';
+import type { PvPPlayer, PvPRoundCount } from '@/lib/pvpSession';
 
 type Phase = 'p1-pin' | 'p1-deck' | 'p2-pin' | 'p2-deck' | 'ready';
 
@@ -209,6 +209,7 @@ export default function PvPSetupPage() {
   const [phase, setPhase] = useState<Phase>('p1-pin');
   const [p1, setP1] = useState<PlayerDraft | null>(null);
   const [p2, setP2] = useState<PlayerDraft | null>(null);
+  const [roundCount, setRoundCount] = useState<PvPRoundCount>(5);
 
   useEffect(() => { clearPvPSession(); }, []);
 
@@ -249,9 +250,9 @@ export default function PvPSetupPage() {
       starterDeckId: d.deckId!,
       unlockedSSRCardNames: d.unlockedSSRCardNames,
     });
-    savePvPSession({ player1: toPlayer(p1), player2: toPlayer(p2), startedAt: Date.now() });
+    savePvPSession({ player1: toPlayer(p1), player2: toPlayer(p2), startedAt: Date.now(), roundCount });
     navigate('/games/knowledge-challenger/pvp/battle');
-  }, [p1, p2, navigate]);
+  }, [p1, p2, navigate, roundCount]);
 
   return (
     <div
@@ -335,6 +336,43 @@ export default function PvPSetupPage() {
               <p className="text-[10px] text-amber-200/60">{STARTER_DECKS.find((d) => d.id === p2.deckId)?.icon} {STARTER_DECKS.find((d) => d.id === p2.deckId)?.name}</p>
             </div>
           </div>
+
+          {/* Round count selector */}
+          <div className="mb-6 rounded-xl p-3"
+            style={{
+              background: 'linear-gradient(135deg, rgba(21,29,59,0.95), rgba(14,20,45,0.95))',
+              border: '1.5px solid rgba(255,215,0,0.25)',
+            }}>
+            <p className="text-[11px] text-amber-200/70 mb-2 font-bold">🏆 試合形式</p>
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                { count: 3 as PvPRoundCount, label: '3回戦', icon: '⚡', sub: 'スピード' },
+                { count: 5 as PvPRoundCount, label: '5回戦', icon: '🔥', sub: '標準' },
+                { count: 7 as PvPRoundCount, label: '7回戦', icon: '👑', sub: 'フルマッチ' },
+              ]).map((opt) => {
+                const selected = roundCount === opt.count;
+                return (
+                  <button
+                    key={opt.count}
+                    onClick={() => setRoundCount(opt.count)}
+                    className="rounded-lg py-2 transition-all active:scale-95"
+                    style={{
+                      background: selected
+                        ? 'linear-gradient(135deg, rgba(255,215,0,0.25), rgba(255,215,0,0.08))'
+                        : 'rgba(255,255,255,0.04)',
+                      border: selected ? '2px solid rgba(255,215,0,0.7)' : '1.5px solid rgba(255,215,0,0.15)',
+                      color: selected ? '#ffd700' : 'rgba(255,215,0,0.5)',
+                    }}
+                  >
+                    <div className="text-lg leading-none">{opt.icon}</div>
+                    <div className="text-xs font-bold mt-1">{opt.label}</div>
+                    <div className="text-[9px] opacity-70">{opt.sub}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <button
             onClick={handleStart}
             className="w-full py-4 rounded-xl text-lg font-bold transition-all active:scale-95"

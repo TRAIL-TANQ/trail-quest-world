@@ -1778,12 +1778,17 @@ export function createAIDeck(): BattleCard[] {
 // 各ラウンドの [rarity, weight] タプル配列。weight は相対値。
 export type RarityWeight = [CardRarity, number];
 
+// 2026-04 累積プール方式へ更新（spec: 5回戦モード および ガチャ共有）
+//   R1-R2: N
+//   R3   : N+R
+//   R4   : N+R+SR
+//   R5   : N+R+SR+SSR
 export const ROUND_RARITY_WEIGHTS: Record<number, RarityWeight[]> = {
   1: [['N', 100]],
-  2: [['N', 50], ['R', 50]],
-  3: [['R', 50], ['SR', 50]],
-  4: [['SR', 100]],
-  5: [['SR', 50], ['SSR', 50]],
+  2: [['N', 100]],
+  3: [['N', 50], ['R', 50]],
+  4: [['N', 33], ['R', 33], ['SR', 34]],
+  5: [['N', 25], ['R', 25], ['SR', 25], ['SSR', 25]],
 };
 
 /** round に対応するレア度分布を取得。範囲外は R5 相当にクランプ。 */
@@ -1791,6 +1796,22 @@ export function availableRarities(round: number): RarityWeight[] {
   if (round <= 1) return ROUND_RARITY_WEIGHTS[1];
   if (round >= 5) return ROUND_RARITY_WEIGHTS[5];
   return ROUND_RARITY_WEIGHTS[round];
+}
+
+/** PvP回戦数モード別のレア度分布。totalRounds=5 の場合は availableRarities へ委譲。 */
+export function availableRaritiesForBattle(round: number, totalRounds: number): RarityWeight[] {
+  if (totalRounds === 3) {
+    if (round <= 1) return [['N', 50], ['R', 50]];
+    if (round === 2) return [['N', 33], ['R', 33], ['SR', 34]];
+    return [['N', 25], ['R', 25], ['SR', 25], ['SSR', 25]];
+  }
+  if (totalRounds === 7) {
+    if (round <= 2) return [['N', 100]];
+    if (round <= 4) return [['N', 50], ['R', 50]];
+    if (round <= 6) return [['N', 33], ['R', 33], ['SR', 34]];
+    return [['N', 25], ['R', 25], ['SR', 25], ['SSR', 25]];
+  }
+  return availableRarities(round);
 }
 
 /**
@@ -1805,9 +1826,9 @@ export function levelToGachaPhase(level: number): 1 | 2 | 3 | 4 | 5 {
   return 5;
 }
 
-/** weighted に1つのレア度を抽選 */
-function rollRarityByRound(round: number): CardRarity {
-  const weights = availableRarities(round);
+/** weighted に1つのレア度を抽選。totalRounds 指定で PvP モード別の分布を使用。 */
+function rollRarityByRound(round: number, totalRounds: number = 5): CardRarity {
+  const weights = availableRaritiesForBattle(round, totalRounds);
   const total = weights.reduce((s, [, w]) => s + w, 0);
   let r = Math.random() * total;
   for (const [rarity, w] of weights) {
@@ -1979,6 +2000,7 @@ export function sampleCardsWithSynergy(
   round: number,
   playerDeck: BattleCard[],
   unlockedSSRNames?: string[],
+  totalRounds: number = 5,
 ): BattleCard[] {
   const spec = ROUND_OFFER_SPEC[round] || ROUND_OFFER_SPEC[1];
   const timestamp = Date.now();
@@ -2016,8 +2038,8 @@ export function sampleCardsWithSynergy(
   });
   console.log(`[Synergy] targets=[${Array.from(synergyTargetNames).join(', ')}]`);
 
-  // Allowed rarities for this round
-  const allowedRarities = new Set(availableRarities(round).map(([r]) => r));
+  // Allowed rarities for this round (mode-aware)
+  const allowedRarities = new Set(availableRaritiesForBattle(round, totalRounds).map(([r]) => r));
 
   // 1. Synergy cards — weighted by combo concentration + rarity in deck
   const RARITY_WEIGHT: Record<CardRarity, number> = { N: 1, R: 3, SR: 5, SSR: 8 };
@@ -2078,7 +2100,7 @@ export function sampleCardsWithSynergy(
     const randomPool = DRAFTABLE_BATTLE_CARDS.filter((c) => !usedIds.has(c.id));
     const shuffledRandom = [...randomPool].sort(() => Math.random() - 0.5);
     for (let i = 0; i < remaining && shuffledRandom.length > 0; i++) {
-      const rarity = rollRarityByRound(round);
+      const rarity = rollRarityByRound(round, totalRounds);
       const rarityFiltered = shuffledRandom.filter((c) => c.rarity === rarity);
       const pick = rarityFiltered.length > 0 ? rarityFiltered[0] : shuffledRandom[0];
       if (pick) {
