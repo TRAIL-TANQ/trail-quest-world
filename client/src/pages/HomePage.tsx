@@ -332,6 +332,33 @@ export default function HomePage() {
           </div>
         </div>
 
+        {/* Quest Board entry */}
+        <div className="mb-3">
+          <Link href="/games/quest-board">
+            <div
+              className="rounded-xl p-4 flex items-center gap-3 transition-all active:scale-[0.98] cursor-pointer relative overflow-hidden"
+              style={{
+                background: 'linear-gradient(135deg, rgba(245,158,11,0.18), rgba(139,92,246,0.18))',
+                border: '1.5px solid rgba(255,215,0,0.35)',
+                boxShadow: '0 2px 12px rgba(0,0,0,0.3), inset 0 0 20px rgba(255,215,0,0.04)',
+              }}
+            >
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{
+                  background: 'linear-gradient(135deg, #f59e0b, #8b5cf6)',
+                  boxShadow: '0 0 12px rgba(255,215,0,0.25)',
+                }}>
+                <span className="text-2xl">📋</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-amber-100">クエストボード</p>
+                <p className="text-[10px] text-amber-200/60">デッキ別クイズで進捗を記録</p>
+              </div>
+              <span className="text-amber-200/50 text-lg">›</span>
+            </div>
+          </Link>
+        </div>
+
         {/* 2-player local battle (PIN-only) */}
         {!getAuth().isGuest && (
           <div className="mb-5">
