@@ -7,13 +7,14 @@ import { useLocation } from 'wouter';
 import { useUserStore } from '@/lib/stores';
 import { calculateLevel } from '@/lib/level';
 import { IMAGES, AVATAR_ITEMS } from '@/lib/constants';
-import { isGuest, clearAuth } from '@/lib/auth';
+import { isGuest, isAdmin, clearAuth } from '@/lib/auth';
 
 export default function Header() {
   const [, navigate] = useLocation();
   const user = useUserStore((s) => s.user);
   const levelInfo = calculateLevel(user.totalAlt);
   const guestMode = isGuest();
+  const adminMode = isAdmin();
 
   // Determine which avatar icon to show
   const getAvatarIcon = () => {
@@ -76,6 +77,12 @@ export default function Header() {
             <span className="text-[11px] text-amber-200/70 truncate font-medium">
               {levelInfo.title}
             </span>
+            {adminMode && (
+              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded"
+                style={{ background: 'rgba(255,215,0,0.2)', color: '#ffd700', border: '1px solid rgba(255,215,0,0.4)' }}>
+                👑 ADMIN
+              </span>
+            )}
           </div>
           <div className="w-full h-2.5 rounded-full overflow-hidden relative"
             style={{

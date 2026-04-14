@@ -23,7 +23,7 @@
 import { supabase } from './supabase';
 import type { CardRarity } from './knowledgeCards';
 import { calculateLevel } from './level';
-import { isGuest } from './auth';
+import { isGuest, isAdmin } from './auth';
 
 // ---------- localStorage fallback cache ----------
 // 2026-04: Supabase が 400 / ネットワーク失敗を返してもゲームが機能し続ける
@@ -195,7 +195,7 @@ export async function fetchChildStatus(childId: string): Promise<ChildStatus | n
  * クイズ回答をquiz_attemptsテーブルに保存
  */
 export async function saveQuizAttempt(attempt: QuizAttemptRecord): Promise<boolean> {
-  if (isGuest()) return true; // skip for guests
+  if (isGuest() || isAdmin()) return true; // skip for guests/admin
   // Legacy non-uuid id → skip DB write, pretend it worked.
   if (!isUuid(attempt.child_id)) return true;
   try {
@@ -233,8 +233,8 @@ export async function updateChildStatus(
   altDelta: number,
   xpDelta: number,
 ): Promise<ChildStatus | null> {
-  if (isGuest()) {
-    // Guest mode: local-only update via cache
+  if (isGuest() || isAdmin()) {
+    // Guest/Admin mode: local-only update via cache
     const current = readCachedStatus(childId) ?? initialCachedStatus(childId);
     const optimistic: ChildStatus = {
       child_id: childId,

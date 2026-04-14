@@ -10,7 +10,7 @@
  */
 import { supabase } from './supabase';
 import type { AvatarType } from './types';
-import { isGuest } from './auth';
+import { isGuest, isAdmin } from './auth';
 
 export interface UserProfileRow {
   child_id: string;
@@ -24,7 +24,7 @@ export async function fetchUserProfile(
   childId: string,
   fallback: { nickname: string; avatarType: AvatarType },
 ): Promise<UserProfileRow> {
-  if (isGuest()) {
+  if (isGuest() || isAdmin()) {
     return { child_id: childId, nickname: fallback.nickname, avatar_type: fallback.avatarType };
   }
   const { data, error } = await supabase
@@ -52,7 +52,7 @@ export async function saveUserProfile(
   nickname: string,
   avatarType: AvatarType,
 ): Promise<boolean> {
-  if (isGuest()) return true; // skip for guests
+  if (isGuest() || isAdmin()) return true; // skip for guests/admin
   const { error } = await supabase
     .from('user_profile')
     .upsert(

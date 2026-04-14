@@ -13,7 +13,7 @@
 import { supabase } from './supabase';
 import { updateChildStatus, fetchChildStatus } from './quizService';
 import type { CollectionRarity } from './types';
-import { isGuest } from './auth';
+import { isGuest, isAdmin } from './auth';
 
 // ---------- Types ----------
 export interface GachaPityRow {
@@ -41,7 +41,7 @@ export interface GachaSpendResult {
 
 /** 天井行を取得。無ければ 0,0 で新規作成。 */
 export async function fetchPity(childId: string): Promise<GachaPityRow> {
-  if (isGuest()) return { child_id: childId, normal_pity: 0, premium_pity: 0 };
+  if (isGuest() || isAdmin()) return { child_id: childId, normal_pity: 0, premium_pity: 0 };
   const { data, error } = await supabase
     .from('gacha_pity')
     .select('child_id, normal_pity, premium_pity')
@@ -63,7 +63,7 @@ export async function fetchPity(childId: string): Promise<GachaPityRow> {
 
 /** 天井カウンタを上書き更新。resetPity / incrementPity の結果を書き込む用途。 */
 export async function savePity(childId: string, normal: number, premium: number): Promise<boolean> {
-  if (isGuest()) return true; // skip for guests
+  if (isGuest() || isAdmin()) return true; // skip for guests/admin
   const { error } = await supabase
     .from('gacha_pity')
     .upsert(
@@ -79,8 +79,9 @@ export async function savePity(childId: string, normal: number, premium: number)
 
 // ---------- ALT spend ----------
 
-/** ALT を減算。残高不足なら db_error なしで insufficient_alt を返す。 */
+/** ALT を減算。残高不足なら db_error なしで insufficient_alt を返す。管理者はスキップ。 */
 export async function spendAltForGacha(childId: string, cost: number): Promise<GachaSpendResult> {
+  if (isAdmin()) return { ok: true, newAltBalance: 99999 };
   const current = await fetchChildStatus(childId);
   if (!current) return { ok: false, reason: 'db_error' };
   if (current.alt_points < cost) return { ok: false, reason: 'insufficient_alt' };
@@ -93,7 +94,7 @@ export async function spendAltForGacha(childId: string, cost: number): Promise<G
 
 /** 複数引き（1連でも10連でも）の結果をまとめて gacha_pulls に保存。 */
 export async function recordPulls(records: GachaPullRecord[]): Promise<boolean> {
-  if (isGuest()) return true; // skip for guests
+  if (isGuest() || isAdmin()) return true; // skip for guests/admin
   if (records.length === 0) return true;
   const { error } = await supabase.from('gacha_pulls').insert(records);
   if (error) {

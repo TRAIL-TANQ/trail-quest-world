@@ -23,14 +23,18 @@ import LoginPage from "./pages/LoginPage";
 import AdminPage from "./pages/AdminPage";
 import QuestBoardPage from "./pages/QuestBoardPage";
 import QuizPracticePage from "./pages/QuizPracticePage";
+import PvPSetupPage from "./pages/PvPSetupPage";
+import PvPBattlePage from "./pages/PvPBattlePage";
 
 function Router() {
   return (
     <Switch>
       <Route path="/login" component={LoginPage} />
-      <Route path="/games/knowledge-challenger/stage/:id" component={KnowledgeChallenger} />
-      <Route path="/games/knowledge-challenger" component={KnowledgeChallenger} />
-      <Route path="/games/quiz/:genre" component={QuizPracticePage} />
+      <Route path="/games/knowledge-challenger/pvp/battle"><PvPBattlePage /></Route>
+      <Route path="/games/knowledge-challenger/pvp"><PvPSetupPage /></Route>
+      <Route path="/games/knowledge-challenger/stage/:id"><KnowledgeChallenger /></Route>
+      <Route path="/games/knowledge-challenger"><KnowledgeChallenger /></Route>
+      <Route path="/games/quiz/:deck/:difficulty" component={QuizPracticePage} />
       <Route path="/result" component={ResultPage} />
       <Route>
         <PageShell>

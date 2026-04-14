@@ -130,6 +130,67 @@ export function getStage(id: number): StageConfig | null {
   return STAGES.find((s) => s.id === id) ?? null;
 }
 
+// ===== Special Rule Descriptions =====
+
+/** 短いタグ形式（ステージ選択カード向け） */
+export function shortSpecialRuleTags(rules: StageRules): string[] {
+  const tags: string[] = [];
+  if (rules.benchLimit !== undefined && rules.benchLimit !== 6) {
+    tags.push(`⚠️ ベンチ${rules.benchLimit}枠`);
+  }
+  if (rules.npcBenchSlots !== undefined && rules.npcBenchSlots !== 6) {
+    tags.push(`⚠️ 相手ベンチ${rules.npcBenchSlots}枠`);
+  }
+  if (rules.deckPhaseCards !== undefined && rules.deckPhaseCards !== 5) {
+    tags.push(`⚠️ 提示${rules.deckPhaseCards}枚`);
+  }
+  if (rules.skipDeckPhase) {
+    tags.push('⚠️ デッキフェイズなし');
+  }
+  if (rules.npcDeckSize !== undefined && rules.npcDeckSize !== 10) {
+    tags.push(`⚠️ 相手デッキ${rules.npcDeckSize}枚`);
+  }
+  if (rules.npcDoubleBenchEffect) {
+    tags.push('⚠️ 相手ベンチ効果2倍');
+  }
+  if (rules.npcEffectMultiplier !== undefined && rules.npcEffectMultiplier !== 1.0) {
+    tags.push(`⚠️ 相手効果${rules.npcEffectMultiplier}倍`);
+  }
+  return tags;
+}
+
+/** 長文形式（バトル開始時バナー向け） */
+export function longSpecialRuleMessages(rules: StageRules): string[] {
+  const msgs: string[] = [];
+  if (rules.benchLimit !== undefined && rules.benchLimit !== 6) {
+    msgs.push(`あなたのベンチは${rules.benchLimit}枠です（通常6枠）`);
+  }
+  if (rules.npcBenchSlots !== undefined && rules.npcBenchSlots !== 6) {
+    msgs.push(`相手のベンチは${rules.npcBenchSlots}枠です（通常6枠）`);
+  }
+  if (rules.deckPhaseCards !== undefined && rules.deckPhaseCards !== 5) {
+    msgs.push(`提示カードが${rules.deckPhaseCards}枚です（通常5枚）`);
+  }
+  if (rules.skipDeckPhase) {
+    msgs.push('デッキフェイズなし');
+  }
+  if (rules.npcDeckSize !== undefined && rules.npcDeckSize !== 10) {
+    msgs.push(`相手の初期デッキが${rules.npcDeckSize}枚です（通常10枚）`);
+  }
+  if (rules.npcDoubleBenchEffect) {
+    msgs.push('相手のベンチ効果が2回発動');
+  }
+  if (rules.npcEffectMultiplier !== undefined && rules.npcEffectMultiplier !== 1.0) {
+    msgs.push(`相手カード効果が${rules.npcEffectMultiplier}倍`);
+  }
+  return msgs;
+}
+
+/** 特殊ルールがあるか */
+export function hasSpecialRules(rules: StageRules): boolean {
+  return longSpecialRuleMessages(rules).length > 0;
+}
+
 // ===== Special Card Data =====
 export const SPECIAL_CARDS: SpecialCardReward[] = STAGES
   .filter((s) => s.specialCard)
@@ -182,6 +243,33 @@ export const STARTER_DECKS: StarterDeck[] = [
     themeCards: ['望遠鏡', '地動説'],
     noiseCards: ['紙', 'ハチドリ', '車輪', 'ピラニア', 'コロッセオ', 'モアイ像', '光合成'],
     description: '望遠鏡で地動説や天動説をサーチ。ベンチを育ててガリレオを覚醒させろ',
+  },
+  {
+    id: 'starter-murasaki',
+    name: '紫式部デッキ',
+    icon: '📖',
+    trumpCard: '紫式部',
+    themeCards: ['紙', '法隆寺'],
+    noiseCards: ['電話', '車輪', 'ハチドリ', '光合成', 'コロッセオ', 'ピラニア', '富士山'],
+    description: '紙と日本文化のカードで戦え。知識と防御で堅実に勝つデッキ',
+  },
+  {
+    id: 'starter-jeanne',
+    name: 'ジャンヌダルクデッキ',
+    icon: '🗡️',
+    trumpCard: 'ジャンヌ・ダルク',
+    themeCards: ['聖剣', '軍旗', '祈りの光'],
+    noiseCards: ['紙', '電話', '車輪', 'ハチドリ', '光合成', 'コロッセオ'],
+    description: '聖剣と軍旗でジャンヌを覚醒させろ。祈りの光でジャンヌを何度も呼び戻せ',
+  },
+  {
+    id: 'starter-mandela',
+    name: 'マンデラデッキ',
+    icon: '🌍',
+    trumpCard: 'ネルソン・マンデラ',
+    themeCards: ['アパルトヘイト', 'ロベン島', '自由憲章'],
+    noiseCards: ['サバンナ', 'キリマンジャロ', 'アフリカゾウ', 'ライオン', '紙', '光合成'],
+    description: 'ロベン島と自由憲章でマンデラを守り育てろ。虹の国で除外カードを全回収',
   },
   {
     id: 'starter-random',

@@ -10,6 +10,7 @@ import { Link } from 'wouter';
 import { IMAGES, GAME_CATEGORIES, AVATAR_ITEMS } from '@/lib/constants';
 import { useUserStore, useMissionStore, useAltStore } from '@/lib/stores';
 import { calculateLevel } from '@/lib/level';
+import { getAuth } from '@/lib/auth';
 
 // Quest board categories use color from GAME_CATEGORIES directly
 
@@ -330,6 +331,35 @@ export default function HomePage() {
             ))}
           </div>
         </div>
+
+        {/* 2-player local battle (PIN-only) */}
+        {!getAuth().isGuest && (
+          <div className="mb-5">
+            <Link href="/games/knowledge-challenger/pvp">
+              <div
+                className="rounded-xl p-4 flex items-center gap-3 transition-all active:scale-[0.98] cursor-pointer relative overflow-hidden"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(239,68,68,0.18), rgba(59,130,246,0.18))',
+                  border: '1.5px solid rgba(255,215,0,0.35)',
+                  boxShadow: '0 2px 12px rgba(0,0,0,0.3), inset 0 0 20px rgba(255,215,0,0.04)',
+                }}
+              >
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
+                  style={{
+                    background: 'linear-gradient(135deg, #ef4444, #3b82f6)',
+                    boxShadow: '0 0 12px rgba(255,215,0,0.25)',
+                  }}>
+                  <span className="text-2xl">🤝</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-amber-100">2人対戦</p>
+                  <p className="text-[10px] text-amber-200/60">同じ端末で友だちと対戦（PIN会員限定）</p>
+                </div>
+                <span className="text-amber-200/50 text-lg">›</span>
+              </div>
+            </Link>
+          </div>
+        )}
 
         {/* Quick Actions */}
         <div className="grid grid-cols-3 gap-2 mb-5">

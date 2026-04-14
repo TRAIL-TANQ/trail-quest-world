@@ -145,6 +145,11 @@ export const EFFECT_DEFS: Record<string, CardEffect> = {
   apartheid:        { id: 'apartheid',        name: '差別との闘い',     description: 'From the bench: マンデラの防御+4。', category: 'def' },
   african_elephant: { id: 'african_elephant', name: '突進',             description: '攻撃時+2。サバンナベンチでさらに+2。', category: 'atk' },
   savanna:          { id: 'savanna',          name: '広大な大地',       description: 'From the bench: 生き物カード攻防+1。アマゾン川もあれば攻撃さらに+1。', category: 'special' },
+  // ===== マンデラデッキ追加 =====
+  robben_island:    { id: 'robben_island',    name: '27年の忍耐',       description: 'From the bench: マンデラが除外されない（除外耐性）。', category: 'special' },
+  rainbow_nation:   { id: 'rainbow_nation',   name: '希望の虹',         description: '公開時、除外されたカード全てをデッキに戻す（任意発動）。', category: 'bench' },
+  freedom_charter:  { id: 'freedom_charter',  name: '自由の誓い',       description: 'From the bench: マンデラの攻撃+2（重複可能）。', category: 'atk' },
+  nobel_peace:      { id: 'nobel_peace',      name: '栄光の証',         description: '公開時、このラウンド中味方全カードの攻防+1（任意発動）。', category: 'special' },
   // ===== 産業革命デッキ =====
   steam_engine:     { id: 'steam_engine',     name: '動力革命',         description: 'From the bench: 全科学発明カード攻撃+1。石炭もあれば+2。', category: 'atk' },
   coal:             { id: 'coal',             name: '黒いダイヤ',       description: 'From the bench: 蒸気機関の攻防+2。2枚以上で全科学発明防御+1。', category: 'special' },
@@ -161,7 +166,11 @@ export const EFFECT_DEFS: Record<string, CardEffect> = {
   anaconda_hunter:  { id: 'anaconda_hunter',  name: '蛇使い',           description: '公開時、ベンチのアナコンダ1枚をデッキの一番上に戻す。', category: 'bench' },
   arc_de_triomphe:  { id: 'arc_de_triomphe',  name: '凱旋の門',         description: 'From the bench: ナポレオンがカードを撃破した時、追加で+2ファン獲得。', category: 'special' },
   qin_soldier:      { id: 'qin_soldier',      name: '皇帝の尖兵',       description: 'ベンチに万里の長城がある時、攻撃+2。', category: 'atk' },
-  imperial_decree:  { id: 'imperial_decree',  name: '天子の命',         description: '公開時、デッキ内の紙1枚をデッキトップに置ける（任意発動）。', category: 'bench' },
+  imperial_decree:  { id: 'imperial_decree',  name: '天子の命',         description: '公開時、デッキの紙を一番上に、焚書坑儒を一番下に配置する（任意発動）。', category: 'bench' },
+  // ===== ジャンヌダルクデッキ =====
+  prayer_light:     { id: 'prayer_light',     name: '聖なる祈り',       description: '公開時、ベンチにジャンヌがいる場合、ジャンヌをデッキの一番上に戻す（任意発動）。', category: 'bench' },
+  lily_shield:      { id: 'lily_shield',      name: '百合の守り',       description: 'From the bench: ジャンヌ・ダルクの防御+2。', category: 'def' },
+  holy_banner:      { id: 'holy_banner',      name: '聖女の導き',       description: '公開時、除外されたジャンヌ系カード1枚をデッキに戻す（任意発動）。', category: 'bench' },
 };
 
 // Card name → effect id. These are the only cards that carry on-reveal effects.
@@ -249,6 +258,10 @@ export const EFFECT_BY_CARD_NAME: Record<string, string> = {
   'アパルトヘイト':       'apartheid',
   'アフリカゾウ':         'african_elephant',
   'サバンナ':             'savanna',
+  'ロベン島':             'robben_island',
+  '虹の国':               'rainbow_nation',
+  '自由憲章':             'freedom_charter',
+  'ノーベル平和賞':       'nobel_peace',
   // ===== 産業革命デッキ =====
   '蒸気機関':             'steam_engine',
   '石炭':                 'coal',
@@ -262,10 +275,14 @@ export const EFFECT_BY_CARD_NAME: Record<string, string> = {
   '不老不死の薬':         'elixir',
   '大蛇':                 'giant_snake',
   '光合成':               'photosynthesis',
-  'アナコンダハンター':   'anaconda_hunter',
+  '大蛇の巫師':           'anaconda_hunter',
   '凱旋門':               'arc_de_triomphe',
   '秦の兵士':             'qin_soldier',
   '始皇帝の勅令':         'imperial_decree',
+  // ===== ジャンヌダルクデッキ =====
+  '祈りの光':             'prayer_light',
+  '白百合の盾':           'lily_shield',
+  '聖女の旗印':           'holy_banner',
 };
 
 export interface BattleCard {
@@ -401,6 +418,10 @@ export const CARD_STAT_OVERRIDES: Record<string, StatProfile> = {
   'アパルトヘイト':       { attackPower: 1, defensePower: 1 },
   'アフリカゾウ':         { attackPower: 4, defensePower: 3 },
   'サバンナ':             { attackPower: 1, defensePower: 1 },
+  'ロベン島':             { attackPower: 1, defensePower: 3 },
+  '虹の国':               { attackPower: 1, defensePower: 2 },
+  '自由憲章':             { attackPower: 1, defensePower: 2 },
+  'ノーベル平和賞':       { attackPower: 1, defensePower: 1 },
   // ===== 産業革命デッキ =====
   '蒸気機関':             { attackPower: 1, defensePower: 2 },
   '石炭':                 { attackPower: 1, defensePower: 1 },
@@ -413,12 +434,16 @@ export const CARD_STAT_OVERRIDES: Record<string, StatProfile> = {
   'モアイ像':             { attackPower: 1, defensePower: 2 },
   '焚書坑儒':             { attackPower: 1, defensePower: 1 },
   '不老不死の薬':         { attackPower: 1, defensePower: 1 },
-  '大蛇':                 { attackPower: 5, defensePower: 4 },
+  '大蛇':                 { attackPower: 4, defensePower: 3 },
   '光合成':               { attackPower: 1, defensePower: 1 },
-  'アナコンダハンター':   { attackPower: 2, defensePower: 2 },
+  '大蛇の巫師':           { attackPower: 5, defensePower: 4 },
   '凱旋門':               { attackPower: 1, defensePower: 3 },
   '秦の兵士':             { attackPower: 2, defensePower: 1 },
   '始皇帝の勅令':         { attackPower: 1, defensePower: 2 },
+  // ===== ジャンヌダルクデッキ =====
+  '祈りの光':             { attackPower: 1, defensePower: 2 },
+  '白百合の盾':           { attackPower: 1, defensePower: 3 },
+  '聖女の旗印':           { attackPower: 2, defensePower: 2 },
 };
 
 // Combo card IDs for detection
@@ -1257,6 +1282,27 @@ const QUIZ_DATA: Record<string, Quiz[]> = {
     { question: 'サバンナはどの大陸に最も広く分布している？', choices: ['アフリカ', 'アジア', '南アメリカ', 'ヨーロッパ'], correctIndex: 0 },
     { question: 'サバンナの特徴的な植生は？', choices: ['草原と散在する木', '密林', '針葉樹林', '砂漠'], correctIndex: 0 },
   ],
+  // ===== マンデラデッキ追加 =====
+  'card-173': [
+    { question: 'マンデラがロベン島に投獄されていた期間は？', choices: ['27年', '10年', '5年', '50年'], correctIndex: 0 },
+    { question: 'ロベン島はどこの国にある？', choices: ['南アフリカ', 'ケニア', 'エジプト', 'ナイジェリア'], correctIndex: 0 },
+    { question: 'ロベン島は現在何になっている？', choices: ['世界遺産の博物館', '刑務所', '軍事基地', 'リゾート'], correctIndex: 0 },
+  ],
+  'card-174': [
+    { question: '南アフリカが「虹の国」と呼ばれる理由は？', choices: ['多民族が共存しているから', '虹がよく出るから', '国旗が虹色だから', '名産品が虹色'], correctIndex: 0 },
+    { question: '南アフリカの公用語は何語ある？', choices: ['11語', '2語', '5語', '1語'], correctIndex: 0 },
+    { question: 'マンデラが大統領になった年は？', choices: ['1994年', '1990年', '2000年', '1980年'], correctIndex: 0 },
+  ],
+  'card-175': [
+    { question: '自由憲章が採択された年は？', choices: ['1955年', '1990年', '1948年', '1994年'], correctIndex: 0 },
+    { question: '自由憲章の主な内容は？', choices: ['全ての人種の平等', '白人だけの自由', '経済発展', '軍事強化'], correctIndex: 0 },
+    { question: 'アパルトヘイトとは何？', choices: ['人種隔離政策', '貿易協定', '憲法の名前', '戦争の名前'], correctIndex: 0 },
+  ],
+  'card-176': [
+    { question: 'マンデラと共同でノーベル平和賞を受賞したのは？', choices: ['デクラーク', 'オバマ', 'ガンジー', 'キング牧師'], correctIndex: 0 },
+    { question: 'マンデラがノーベル平和賞を受賞した年は？', choices: ['1993年', '2000年', '1990年', '1994年'], correctIndex: 0 },
+    { question: 'ノーベル平和賞はどこの国で授賞式が行われる？', choices: ['ノルウェー', 'スウェーデン', 'アメリカ', 'イギリス'], correctIndex: 0 },
+  ],
   // ===== 産業革命デッキ =====
   'card-156': [
     { question: '産業革命で最も重要なエネルギー源は？', choices: ['石炭', '石油', '天然ガス', '水力'], correctIndex: 0 },
@@ -1310,9 +1356,9 @@ const QUIZ_DATA: Record<string, Quiz[]> = {
     { question: 'アナコンダの狩りの方法は？', choices: ['毒で麻痺させる', '体で締めつける', '噛みつく', '追いかける'], correctIndex: 1 },
   ],
   'card-166': [
-    { question: 'アナコンダが住む川は？', choices: ['ナイル川', 'アマゾン川', 'ガンジス川', 'ミシシッピ川'], correctIndex: 1 },
-    { question: 'アナコンダの最大体長は約何メートル？', choices: ['3m', '5m', '9m', '15m'], correctIndex: 2 },
-    { question: 'アナコンダハンターが使う道具は？', choices: ['銃', '素手と罠', '剣', '弓矢'], correctIndex: 1 },
+    { question: 'アナコンダを祖先の創造者として崇める部族は？', choices: ['トゥカノ族', 'マヤ族', 'インカ族', 'アステカ族'], correctIndex: 0 },
+    { question: 'トゥカノ族が住んでいる川は？', choices: ['バウペス川', 'ナイル川', 'ガンジス川', 'ミシシッピ川'], correctIndex: 0 },
+    { question: 'トゥカノ族の集会所の名前は？', choices: ['マロカ', 'テピ', 'イグルー', 'ユルト'], correctIndex: 0 },
   ],
   'card-167': [
     { question: '凱旋門がある都市は？', choices: ['ロンドン', 'ローマ', 'パリ', 'ベルリン'], correctIndex: 2 },
@@ -1328,6 +1374,22 @@ const QUIZ_DATA: Record<string, Quiz[]> = {
     { question: '始皇帝が統一した文字は？', choices: ['甲骨文字', '小篆', 'ひらがな', 'アルファベット'], correctIndex: 1 },
     { question: '始皇帝の勅令で統一されたものは？', choices: ['度量衡（長さ・重さ）', '食べ物', '髪型', '建物の色'], correctIndex: 0 },
     { question: '始皇帝が中国を統一した時代は？', choices: ['紀元前3世紀', '紀元後3世紀', '紀元前10世紀', '紀元後10世紀'], correctIndex: 0 },
+  ],
+  // ===== ジャンヌダルクデッキ =====
+  'card-170': [
+    { question: 'ジャンヌ・ダルクが神の声を聞いたのは何歳の頃？', choices: ['13歳', '5歳', '25歳', '30歳'], correctIndex: 0 },
+    { question: 'ジャンヌ・ダルクが戦ったのはどの戦争？', choices: ['百年戦争', '十字軍', '薔薇戦争', '三十年戦争'], correctIndex: 0 },
+    { question: 'ジャンヌ・ダルクが解放した都市は？', choices: ['オルレアン', 'パリ', 'マルセイユ', 'リヨン'], correctIndex: 0 },
+  ],
+  'card-171': [
+    { question: 'フランス王家の紋章に使われた花は？', choices: ['百合', '薔薇', '菊', '桜'], correctIndex: 0 },
+    { question: 'フランスの国旗の色の組み合わせは？', choices: ['青白赤', '赤白緑', '青白黄', '赤白青'], correctIndex: 0 },
+    { question: '百年戦争の相手国はどこ？', choices: ['イギリス', 'ドイツ', 'スペイン', 'イタリア'], correctIndex: 0 },
+  ],
+  'card-172': [
+    { question: 'ジャンヌ・ダルクが「聖女」と認められたのはいつ？', choices: ['1920年', '1500年', '1800年', '1431年'], correctIndex: 0 },
+    { question: 'ジャンヌ・ダルクの別名は？', choices: ['オルレアンの乙女', 'パリの薔薇', 'フランスの太陽', '百合の騎士'], correctIndex: 0 },
+    { question: 'ジャンヌ・ダルクが掲げた旗に描かれていたものは？', choices: ['神と天使', '百合と剣', '十字と王冠', '鷲と星'], correctIndex: 0 },
   ],
 };
 
@@ -1798,8 +1860,8 @@ export const SYNERGY_MAP: Record<string, string[]> = {
   '始皇帝の勅令': ['紙', '焚書坑儒', '始皇帝'],
   'アマゾン川': ['アナコンダ', '毒矢カエル', 'ピラニア', '光合成'],
   'ピラニア': ['アマゾン川', 'アナコンダ', '毒矢カエル', '光合成', 'ダーウィン'],
-  'アナコンダ': ['アマゾン川', '毒矢カエル', 'ピラニア', 'ダーウィン', '大蛇', 'アナコンダハンター'],
-  'アナコンダハンター': ['アナコンダ', 'アマゾン川'],
+  'アナコンダ': ['アマゾン川', '毒矢カエル', 'ピラニア', 'ダーウィン', '大蛇', '大蛇の巫師'],
+  '大蛇の巫師': ['アナコンダ', 'アマゾン川'],
   '大蛇': ['アマゾン川', 'アナコンダ', '毒矢カエル'],
   '毒矢カエル': ['アマゾン川', 'アナコンダ', 'ピラニア', '光合成'],
   'ニュートン': ['リンゴ', 'プリズム', '万有引力'],
@@ -1814,9 +1876,12 @@ export const SYNERGY_MAP: Record<string, string[]> = {
   'ひまわり': ['ゴッホ', '星月夜', '糸杉'],
   '星月夜': ['ゴッホ', 'ひまわり', '糸杉'],
   '糸杉': ['ゴッホ', 'ひまわり', '星月夜'],
-  'ジャンヌ・ダルク': ['聖剣', '軍旗'],
-  '聖剣': ['ジャンヌ・ダルク', '軍旗'],
-  '軍旗': ['ジャンヌ・ダルク', '聖剣'],
+  'ジャンヌ・ダルク': ['聖剣', '軍旗', '祈りの光', '白百合の盾', '聖女の旗印'],
+  '聖剣': ['ジャンヌ・ダルク', '軍旗', '祈りの光', '聖女の旗印'],
+  '軍旗': ['ジャンヌ・ダルク', '聖剣', '白百合の盾', '聖女の旗印'],
+  '祈りの光': ['ジャンヌ・ダルク', '聖剣', '白百合の盾', '聖女の旗印'],
+  '白百合の盾': ['ジャンヌ・ダルク', '軍旗', '祈りの光', '聖女の旗印'],
+  '聖女の旗印': ['ジャンヌ・ダルク', '聖剣', '軍旗', '祈りの光', '白百合の盾'],
   'マリー・アントワネット': ['ヴェルサイユ宮殿', 'ケーキ'],
   'ヴェルサイユ宮殿': ['マリー・アントワネット', 'ケーキ'],
   'ケーキ': ['マリー・アントワネット', 'ヴェルサイユ宮殿'],
@@ -1831,12 +1896,17 @@ export const SYNERGY_MAP: Record<string, string[]> = {
   '光合成': ['アマゾン川', 'ピラニア', 'アナコンダ', '毒矢カエル', '大蛇'],
   '紙': ['焚書坑儒'],
   '火薬': ['ダイナマイト', '大砲', 'ナポレオン'],
-  // アフリカコンボ
-  'ネルソン・マンデラ': ['アパルトヘイト', 'キリマンジャロ', 'アフリカゾウ', 'サバンナ'],
-  'アパルトヘイト': ['ネルソン・マンデラ', 'キリマンジャロ', 'アフリカゾウ', 'サバンナ'],
-  'キリマンジャロ': ['ネルソン・マンデラ', 'アパルトヘイト', 'アフリカゾウ', 'サバンナ'],
-  'アフリカゾウ': ['サバンナ', 'アマゾン川', 'ネルソン・マンデラ', 'ダーウィン'],
-  'サバンナ': ['アフリカゾウ', 'アマゾン川', 'ダーウィン', 'ネルソン・マンデラ'],
+  // アフリカコンボ（マンデラデッキ強化）
+  'ネルソン・マンデラ': ['アパルトヘイト', 'ロベン島', '虹の国', '自由憲章', 'ノーベル平和賞', 'アフリカゾウ', 'サバンナ', 'キリマンジャロ', 'ライオン'],
+  'アパルトヘイト': ['ネルソン・マンデラ', 'ロベン島', '自由憲章', '虹の国', 'サバンナ', 'キリマンジャロ'],
+  'ロベン島': ['ネルソン・マンデラ', 'アパルトヘイト', '虹の国', '自由憲章', 'キリマンジャロ'],
+  '虹の国': ['ネルソン・マンデラ', 'アパルトヘイト', 'ロベン島', '自由憲章'],
+  '自由憲章': ['ネルソン・マンデラ', 'アパルトヘイト', 'ロベン島', '虹の国', 'ノーベル平和賞'],
+  'ノーベル平和賞': ['ネルソン・マンデラ', '自由憲章'],
+  'キリマンジャロ': ['ネルソン・マンデラ', 'アパルトヘイト', 'ロベン島', 'アフリカゾウ', 'サバンナ', 'ライオン'],
+  'アフリカゾウ': ['サバンナ', 'キリマンジャロ', 'ライオン', 'アマゾン川', 'ネルソン・マンデラ', 'ダーウィン'],
+  'サバンナ': ['アフリカゾウ', 'ライオン', 'キリマンジャロ', 'アマゾン川', 'ダーウィン', 'ネルソン・マンデラ', 'アパルトヘイト'],
+  'ライオン': ['ネルソン・マンデラ', 'サバンナ', 'キリマンジャロ', 'アフリカゾウ'],
   // 産業革命コンボ
   '蒸気機関': ['石炭', '紡績機', '蒸気機関車', 'ジェームズ・ワット'],
   '石炭': ['蒸気機関', '紡績機', '蒸気機関車', 'ジェームズ・ワット'],
@@ -1860,6 +1930,7 @@ export function sampleCardsWithSynergy(
   prefix: string,
   round: number,
   playerDeck: BattleCard[],
+  unlockedSSRNames?: string[],
 ): BattleCard[] {
   const spec = ROUND_OFFER_SPEC[round] || ROUND_OFFER_SPEC[1];
   const timestamp = Date.now();
@@ -1925,9 +1996,14 @@ export function sampleCardsWithSynergy(
     if (pick) addCard(pick.card);
   }
 
-  // 2. SSR guaranteed slot (R5)
+  // 2. SSR guaranteed slot (R5) — only unlocked SSR cards
   if (spec.ssrGuarantee) {
-    const ssrPool = DRAFTABLE_BATTLE_CARDS.filter((c) => c.rarity === 'SSR' && !usedIds.has(c.id));
+    const ssrPool = DRAFTABLE_BATTLE_CARDS.filter((c) => {
+      if (c.rarity !== 'SSR' || usedIds.has(c.id)) return false;
+      // If unlock list provided, only include unlocked SSR names
+      if (unlockedSSRNames && !unlockedSSRNames.includes(c.name)) return false;
+      return true;
+    });
     if (ssrPool.length > 0) {
       addCard(ssrPool[Math.floor(Math.random() * ssrPool.length)]);
     }

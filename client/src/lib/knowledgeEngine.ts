@@ -84,6 +84,7 @@ export interface SubBattleResult {
   attackerSide: Side;
   attackCards: BattleCard[];
   attackPower: number;
+  defeatFans: number;  // card defeat fans earned by attacker
   winner: Side;  // always the attacker (defender cannot win a sub-battle, they can only run out the attacker's deck → game over)
 }
 
@@ -105,8 +106,12 @@ export interface GameState {
   round: number;
   // Sub-battle counter within the current round. Resets to 0 at each round start.
   subBattleCount: number;
-  // Trophy fans: awarded to the round winner.
+  // Trophy fans: fan bonus awarded to the round winner per round.
   trophyFans: number[];
+  // Trophy count: number of rounds won (0..5).
+  playerTrophies: number;
+  aiTrophies: number;
+  // Fan totals: cumulative (card defeat fans + trophy fans).
   playerFans: number;
   aiFans: number;
   player: PlayerState;
@@ -201,6 +206,8 @@ export function initGameState(playerDeck: BattleCard[], aiDeck: BattleCard[], st
     round: 1,
     subBattleCount: 0,
     trophyFans,
+    playerTrophies: 0,
+    aiTrophies: 0,
     playerFans: 0,
     aiFans: 0,
     player: { deck: shuffleDeck(playerDeck), bench: [], isAI: false },
@@ -250,6 +257,23 @@ export function removeOneFromBench(bench: BenchSlot[], name: string): BenchSlot[
     if (s.count <= 1) return [];
     return [{ ...s, count: s.count - 1 }];
   });
+}
+
+/** Check if ロベン島 is protecting マンデラ from exile on the given side */
+function hasRobbenIslandProtection(state: GameState, protectedSide: Side): boolean {
+  const my = protectedSide === 'player' ? state.player : state.ai;
+  const sealed = state.sealedBenchNames[protectedSide];
+  return my.bench.some((b) => b.name === 'ロベン島' && !sealed.includes(b.name));
+}
+
+/** Filter out マンデラ from exile list if ロベン島 protects */
+function filterExileWithRobbenIsland(cards: BattleCard[], state: GameState, targetSide: Side): { exiled: BattleCard[]; protected: BattleCard[] } {
+  if (!hasRobbenIslandProtection(state, targetSide)) {
+    return { exiled: cards, protected: [] };
+  }
+  const exiled = cards.filter((c) => c.name !== 'ネルソン・マンデラ');
+  const protectedCards = cards.filter((c) => c.name === 'ネルソン・マンデラ');
+  return { exiled, protected: protectedCards };
 }
 
 /**
@@ -363,9 +387,14 @@ export function applyRevealEffect(
       const oppState = opp === 'player' ? next.player : next.ai;
       if (oppState.deck.length > 0) {
         const [top, ...rest] = oppState.deck;
-        next = applySide(next, opp, { ...oppState, deck: rest });
-        next = { ...next, exile: { ...next.exile, [opp]: [...next.exile[opp], top] } };
-        telop = { text: '👑 魅了！相手デッキ上1枚を除外！', color };
+        const { exiled, protected: saved } = filterExileWithRobbenIsland([top], next, opp);
+        next = applySide(next, opp, { ...oppState, deck: [...saved, ...rest] });
+        if (exiled.length > 0) {
+          next = { ...next, exile: { ...next.exile, [opp]: [...next.exile[opp], ...exiled] } };
+          telop = { text: '👑 魅了！相手デッキ上1枚を除外！', color };
+        } else {
+          telop = { text: '🏝️ ロベン島がマンデラを守った！', color };
+        }
       }
       break;
     }
@@ -495,13 +524,17 @@ export function applyRevealEffect(
       const paperSlot = myState.bench.find((b) => b.name === '紙' && !sealed.includes(b.name));
       const paperCount = paperSlot?.count ?? 0;
       if (paperCount > 0) {
-        const toExile = oppState.deck.slice(0, paperCount);
+        const candidates = oppState.deck.slice(0, paperCount);
         const remaining = oppState.deck.slice(paperCount);
-        if (toExile.length > 0) {
-          next = applySide(next, opp, { ...oppState, deck: remaining });
-          next = { ...next, exile: { ...next.exile, [opp]: [...next.exile[opp], ...toExile] } };
+        const { exiled: toExile, protected: saved } = filterExileWithRobbenIsland(candidates, next, opp);
+        if (candidates.length > 0) {
+          next = applySide(next, opp, { ...oppState, deck: [...saved, ...remaining] });
+          if (toExile.length > 0) {
+            next = { ...next, exile: { ...next.exile, [opp]: [...next.exile[opp], ...toExile] } };
+          }
           next = withBenchGlow(next, side, ['紙']);
-          telop = { text: `📚 思想統制！紙${paperCount}枚 → 相手デッキ${toExile.length}枚を除外！`, color };
+          const protectMsg = saved.length > 0 ? `（マンデラはロベン島が守った！）` : '';
+          telop = { text: `📚 思想統制！紙${paperCount}枚 → 相手デッキ${toExile.length}枚を除外！${protectMsg}`, color };
         }
       } else {
         telop = { text: '📚 焚書坑儒（ベンチに紙がありません）', color };
@@ -733,12 +766,17 @@ export function applyRevealEffect(
     case 'wind_tunnel': {
       // 公開時：相手デッキ上2枚を除外
       const oppState = opp === 'player' ? next.player : next.ai;
-      const slice = oppState.deck.slice(0, 2);
-      if (slice.length > 0) {
-        next = applySide(next, opp, { ...oppState, deck: oppState.deck.slice(slice.length) });
-        next = { ...next, exile: { ...next.exile, [opp]: [...next.exile[opp], ...slice] } };
+      const candidates = oppState.deck.slice(0, 2);
+      let windExileCount = 0;
+      if (candidates.length > 0) {
+        const { exiled: slice, protected: saved } = filterExileWithRobbenIsland(candidates, next, opp);
+        windExileCount = slice.length;
+        next = applySide(next, opp, { ...oppState, deck: [...saved, ...oppState.deck.slice(candidates.length)] });
+        if (slice.length > 0) {
+          next = { ...next, exile: { ...next.exile, [opp]: [...next.exile[opp], ...slice] } };
+        }
       }
-      telop = { text: `💨 風洞実験！相手デッキ上${slice.length}枚を除外！`, color };
+      telop = { text: `💨 風洞実験！相手デッキ上${windExileCount}枚を除外！`, color };
       break;
     }
     case 'wright_bros': {
@@ -902,16 +940,24 @@ export function applyRevealEffect(
       const oppState = opp === 'player' ? next.player : next.ai;
       if (oppState.bench.length > 0) {
         if (side === 'ai') {
-          // AI: auto-select weakest bench card to exile
-          const target = oppState.bench.reduce((a, b) => {
-            const aPow = (a.card.attackPower ?? a.card.power) + (a.card.defensePower ?? a.card.power);
-            const bPow = (b.card.attackPower ?? b.card.power) + (b.card.defensePower ?? b.card.power);
-            return aPow <= bPow ? a : b;
-          });
-          const newBench = removeOneFromBench(oppState.bench, target.name);
-          next = applySide(next, opp, { ...oppState, bench: newBench });
-          next = { ...next, exile: { ...next.exile, [opp]: [...next.exile[opp], target.card] } };
-          telop = { text: `🐸 猛毒！${target.name}を除外！`, color };
+          // AI: auto-select weakest bench card to exile (skip マンデラ if ロベン島 protects)
+          let candidates = oppState.bench;
+          if (hasRobbenIslandProtection(next, opp)) {
+            candidates = candidates.filter((b) => b.name !== 'ネルソン・マンデラ');
+          }
+          if (candidates.length > 0) {
+            const target = candidates.reduce((a, b) => {
+              const aPow = (a.card.attackPower ?? a.card.power) + (a.card.defensePower ?? a.card.power);
+              const bPow = (b.card.attackPower ?? b.card.power) + (b.card.defensePower ?? b.card.power);
+              return aPow <= bPow ? a : b;
+            });
+            const newBench = removeOneFromBench(oppState.bench, target.name);
+            next = applySide(next, opp, { ...oppState, bench: newBench });
+            next = { ...next, exile: { ...next.exile, [opp]: [...next.exile[opp], target.card] } };
+            telop = { text: `🐸 猛毒！${target.name}を除外！`, color };
+          } else {
+            telop = { text: '🏝️ ロベン島がマンデラを守った！', color };
+          }
         } else {
           // Player: UI selection handled in battle loop
           telop = { text: '🐸 毒矢カエル！相手ベンチから除外...', color };
@@ -1087,15 +1133,22 @@ export function applyRevealEffect(
       telop = { text: '⚔️ジャンヌの装備', color };
       break;
     }
+    case 'lily_shield': {
+      telop = { text: '🛡️百合の守り', color };
+      break;
+    }
     case 'jeanne': {
       const my = side === 'player' ? next.player : next.ai;
       const sealed = next.sealedBenchNames[side];
       const hasSword = my.bench.some((b) => b.name === '聖剣' && !sealed.includes(b.name));
       const hasBanner = my.bench.some((b) => b.name === '軍旗' && !sealed.includes(b.name));
+      const hasLilyShield = my.bench.some((b) => b.name === '白百合の盾' && !sealed.includes(b.name));
       const jeanneGlow: string[] = [];
       if (hasSword) jeanneGlow.push('聖剣');
       if (hasBanner) jeanneGlow.push('軍旗');
+      if (hasLilyShield) jeanneGlow.push('白百合の盾');
       if (jeanneGlow.length > 0) next = withBenchGlow(next, side, jeanneGlow);
+      const lilyDefBonus = hasLilyShield ? 2 : 0;
       if (hasSword && hasBanner) {
         if (role === 'attacker') {
           bonusAttack += 4;
@@ -1110,17 +1163,19 @@ export function applyRevealEffect(
             };
           }
         } else {
-          next = { ...next, defenderBonus: next.defenderBonus + 4 };
+          next = { ...next, defenderBonus: next.defenderBonus + 4 + lilyDefBonus };
         }
-        telop = { text: '⚜️オルレアンの乙女！攻防+4', color };
+        telop = { text: hasLilyShield ? `⚜️オルレアンの乙女！攻防+4＋百合の守り防御+${lilyDefBonus}` : '⚜️オルレアンの乙女！攻防+4', color };
       } else if (hasSword) {
         if (role === 'attacker') bonusAttack += 3;
+        else if (lilyDefBonus > 0) next = { ...next, defenderBonus: next.defenderBonus + lilyDefBonus };
         telop = { text: '⚔️聖剣の加護！攻撃+3', color };
       } else if (hasBanner) {
-        if (role === 'defender') next = { ...next, defenderBonus: next.defenderBonus + 3 };
-        telop = { text: '🚩軍旗の加護！防御+3', color };
+        if (role === 'defender') next = { ...next, defenderBonus: next.defenderBonus + 3 + lilyDefBonus };
+        telop = { text: hasLilyShield ? `🚩軍旗の加護！防御+3＋百合の守り防御+${lilyDefBonus}` : '🚩軍旗の加護！防御+3', color };
       } else {
-        telop = { text: '⚜️ジャンヌ・ダルク！', color };
+        if (role === 'defender' && lilyDefBonus > 0) next = { ...next, defenderBonus: next.defenderBonus + lilyDefBonus };
+        telop = { text: hasLilyShield ? `🛡️百合の守り！ジャンヌの防御+${lilyDefBonus}` : '⚜️ジャンヌ・ダルク！', color };
       }
       break;
     }
@@ -1259,20 +1314,81 @@ export function applyRevealEffect(
       break;
     }
     case 'imperial_decree': {
-      // 始皇帝の勅令: デッキ内の紙1枚をデッキトップに置く（AI自動、プレイヤーはUI）
+      // 始皇帝の勅令: 紙をデッキトップ、焚書坑儒をデッキボトムに配置（任意発動）
       const my = side === 'player' ? next.player : next.ai;
       const paperIdx = my.deck.findIndex((c) => c.name === '紙');
-      if (paperIdx >= 0 && side === 'ai') {
-        const paper = my.deck[paperIdx];
-        const newDeck = [...my.deck];
-        newDeck.splice(paperIdx, 1);
-        newDeck.unshift(paper);
+      const burnIdx = my.deck.findIndex((c) => c.name === '焚書坑儒');
+      const hasPaper = paperIdx >= 0;
+      const hasBurn = burnIdx >= 0;
+      if ((hasPaper || hasBurn) && side === 'ai') {
+        let newDeck = [...my.deck];
+        // Move 焚書坑儒 to bottom first (indices shift if paper is before burn)
+        if (hasBurn) {
+          const bIdx = newDeck.findIndex((c) => c.name === '焚書坑儒');
+          const [burn] = newDeck.splice(bIdx, 1);
+          newDeck.push(burn);
+        }
+        // Move 紙 to top
+        if (hasPaper) {
+          const pIdx = newDeck.findIndex((c) => c.name === '紙');
+          const [paper] = newDeck.splice(pIdx, 1);
+          newDeck.unshift(paper);
+        }
         next = applySide(next, side, { ...my, deck: newDeck });
-        telop = { text: '📜 天子の命！紙をデッキトップへ！', color: '#ffd700' };
-      } else if (paperIdx >= 0) {
-        telop = { text: '📜 天子の命！紙をサーチ中...', color };
+        const parts = [hasPaper ? '紙をデッキトップ' : '', hasBurn ? '焚書坑儒をデッキボトム' : ''].filter(Boolean).join('、');
+        telop = { text: `📜 天子の命！${parts}へ！`, color: '#ffd700' };
+      } else if (hasPaper || hasBurn) {
+        telop = { text: '📜 天子の命！サーチ中...', color: '#ffd700' };
       } else {
-        telop = { text: '📜 天子の命（デッキに紙がありません）', color };
+        telop = { text: '📜 天子の命（対象カードがありません）', color };
+      }
+      break;
+    }
+    case 'prayer_light': {
+      // 祈りの光: ベンチにジャンヌがいる場合、ジャンヌをデッキの一番上に戻す（任意発動）
+      const my = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      const jeanneSlot = my.bench.find((b) => b.name === 'ジャンヌ・ダルク' && !sealed.includes(b.name));
+      if (jeanneSlot) {
+        if (side === 'ai') {
+          const newBench = removeOneFromBench(my.bench, 'ジャンヌ・ダルク');
+          const newDeck = [jeanneSlot.card, ...my.deck];
+          next = applySide(next, side, { ...my, bench: newBench, deck: newDeck });
+          next = withBenchGlow(next, side, ['ジャンヌ・ダルク']);
+          telop = { text: '✨ 聖なる祈り！ジャンヌをデッキトップへ！', color: '#ffd700' };
+        } else {
+          telop = { text: '✨ 聖なる祈り！ジャンヌをサーチ中...', color: '#ffd700' };
+        }
+      } else {
+        telop = { text: '✨ 聖なる祈り（ベンチにジャンヌがいません）', color };
+      }
+      break;
+    }
+    case 'holy_banner': {
+      // 聖女の旗印: 除外されたジャンヌ系カード1枚をデッキに戻す（任意発動）
+      const jeanneFamily = ['ジャンヌ・ダルク', '聖剣', '軍旗', '祈りの光', '白百合の盾'];
+      const exiled = next.exile[side].filter((c) => jeanneFamily.includes(c.name));
+      if (exiled.length > 0) {
+        if (side === 'ai') {
+          // AI: auto-select strongest exiled jeanne-family card
+          const target = exiled.reduce((a, b) => {
+            const aPow = (a.attackPower ?? a.power) + (a.defensePower ?? a.power);
+            const bPow = (b.attackPower ?? b.power) + (b.defensePower ?? b.power);
+            return aPow >= bPow ? a : b;
+          });
+          const newExile = next.exile[side].filter((c) => c.id !== target.id);
+          const my = next.ai;
+          const newDeck = [...my.deck, target];
+          next = applySide(
+            { ...next, exile: { ...next.exile, [side]: newExile } },
+            side, { ...my, deck: newDeck },
+          );
+          telop = { text: `🏳️ 聖女の導き！${target.name}をデッキへ！`, color: '#ffd700' };
+        } else {
+          telop = { text: '🏳️ 聖女の導き！除外カードをサーチ中...', color: '#ffd700' };
+        }
+      } else {
+        telop = { text: '🏳️ 聖女の導き（対象カードがありません）', color };
       }
       break;
     }
@@ -1378,8 +1494,12 @@ export function applyRevealEffect(
       const sealed = next.sealedBenchNames[side];
       const hasApartheid = my.bench.some((b) => b.name === 'アパルトヘイト' && !sealed.includes(b.name));
       const distinctBenchCount = my.bench.length;
+      // 自由憲章: +2 attack per copy (stackable)
+      const charterSlot = my.bench.find((b) => b.name === '自由憲章' && !sealed.includes(b.name));
+      const charterBonus = (charterSlot?.count ?? 0) * 2;
       const glow: string[] = [];
       if (hasApartheid) glow.push('アパルトヘイト');
+      if (charterSlot) glow.push('自由憲章');
       if (glow.length > 0) next = withBenchGlow(next, side, glow);
       // Unseal all
       next = {
@@ -1387,7 +1507,7 @@ export function applyRevealEffect(
         sealedBenchNames: { ...next.sealedBenchNames, [side]: [] },
       };
       if (role === 'attacker') {
-        const atkBonus = distinctBenchCount >= 4 ? 3 : 0;
+        const atkBonus = (distinctBenchCount >= 4 ? 3 : 0) + charterBonus;
         bonusAttack += atkBonus;
         telop = { text: `✊マンデラ不屈の精神！攻撃+${atkBonus} 封印解除`, color };
       } else {
@@ -1399,6 +1519,52 @@ export function applyRevealEffect(
     }
     case 'apartheid': {
       telop = { text: '✊アパルトヘイト！マンデラを強化', color };
+      break;
+    }
+    case 'robben_island': {
+      // From the bench: マンデラが除外されない（除外耐性）— passive, no reveal action
+      telop = { text: '🏝️ロベン島！マンデラを除外から守る', color };
+      break;
+    }
+    case 'rainbow_nation': {
+      // 公開時、除外されたカード全てをデッキに戻す（任意発動）
+      const myExile = next.exile[side];
+      if (myExile.length > 0) {
+        if (side === 'ai' || role === 'defender') {
+          // AI or defender: auto-apply (defender has no UI interaction window)
+          const my = side === 'player' ? next.player : next.ai;
+          const newDeck = [...my.deck, ...myExile];
+          next = applySide(next, side, { ...my, deck: newDeck });
+          next = { ...next, exile: { ...next.exile, [side]: [] } };
+          telop = { text: `🌈 希望の虹！除外カード${myExile.length}枚が全てデッキに戻った！`, color };
+        } else {
+          // Player attacker: UI selection handled in battle loop (waitCardSelect with skip)
+          telop = { text: '🌈 希望の虹！除外カードを復元...', color };
+        }
+      } else {
+        telop = { text: '🌈 希望の虹（除外カードがありません）', color };
+      }
+      break;
+    }
+    case 'freedom_charter': {
+      // From the bench: マンデラの攻撃+2（重複可能）— passive, read by mandela
+      telop = { text: '✊自由の誓い！マンデラの攻撃を強化', color };
+      break;
+    }
+    case 'nobel_peace': {
+      // 公開時、このラウンド中味方全カードの攻防+1（任意発動）
+      if (side === 'ai' || role === 'defender') {
+        // AI or defender: auto-apply (defender has no UI interaction window)
+        next = {
+          ...next,
+          roundAttackBonus: { ...next.roundAttackBonus, [side]: next.roundAttackBonus[side] + 1 },
+          defenderBonus: next.defenderBonus + 1,
+        };
+        telop = { text: '🏅 栄光の証！味方全カード攻防+1！', color };
+      } else {
+        // Player attacker: UI selection handled in battle loop
+        telop = { text: '🏅 栄光の証！発動を選択...', color };
+      }
       break;
     }
     case 'african_elephant': {
@@ -1725,20 +1891,37 @@ export function beginAttackLoop(state: GameState): GameState {
  * If the attacker's deck is empty and they haven't beaten the defender,
  * transitions to game_over with the defender as winner (deck-out rule).
  */
-export function revealNextAttackCard(state: GameState): GameState {
+export function revealNextAttackCard(
+  state: GameState,
+  opts?: { skipEffect?: boolean },
+): GameState {
   if (state.phase !== 'battle') return state;
   const attackerSide = otherSide(state.flagHolder);
   const attacker = attackerSide === 'player' ? state.player : state.ai;
 
   if (attacker.deck.length === 0) {
     // Attacker ran out of cards → defender wins THIS ROUND.
+    // Spec (2026-04): 攻撃失敗時は attackRevealed の全カードを攻撃側の隔離に移す。
+    // 回戦終了時に advanceToNextRound で隔離はクリアされるが、ログ/状態の一貫性のため
+    // この時点で正しく quarantine に積んでおく。
     const roundWinnerSide = state.flagHolder; // defender wins
+    const failedAttackCards = state.attackRevealed;
+    const updatedAttackerQuarantine = [...state.quarantine[attackerSide], ...failedAttackCards];
     console.log(`[Engine] デッキ切れ: ${attackerSide} のデッキが0枚 → ${roundWinnerSide} が第${state.round}回戦勝利`);
+    if (failedAttackCards.length > 0) {
+      console.log(`[隔離] 攻撃失敗: ${failedAttackCards.map((c) => c.name).join(', ')} → 隔離へ（現在隔離${updatedAttackerQuarantine.length}枚）`);
+    }
     return {
       ...state,
       phase: 'round_end',
       roundWinner: roundWinnerSide,
       message: `第${state.round}回戦: ${roundWinnerSide === 'player' ? 'あなた' : '相手'}の勝利！(デッキ切れ)`,
+      quarantine: {
+        ...state.quarantine,
+        [attackerSide]: updatedAttackerQuarantine,
+      },
+      attackRevealed: [],
+      attackCurrentPower: 0,
     };
   }
 
@@ -1770,10 +1953,10 @@ export function revealNextAttackCard(state: GameState): GameState {
     }
   }
 
-  // Card-specific on-reveal effect
+  // Card-specific on-reveal effect (skippable when the attacker chose "効果なしで出す").
   const myBench = (attackerSide === 'player' ? next.player : next.ai).bench;
-  console.log(`[Engine] revealNextAttackCard: "${nextCard.name}" (effect=${nextCard.effect?.id ?? 'none'}) | attacker=${attackerSide} | bench=[${myBench.map(b => `${b.name}×${b.count}`).join(', ')}]`);
-  if (nextCard.effect) {
+  console.log(`[Engine] revealNextAttackCard: "${nextCard.name}" (effect=${nextCard.effect?.id ?? 'none'}, skipEffect=${opts?.skipEffect ?? false}) | attacker=${attackerSide} | bench=[${myBench.map(b => `${b.name}×${b.count}`).join(', ')}]`);
+  if (nextCard.effect && !opts?.skipEffect) {
     const eff = applyRevealEffect(next, nextCard, attackerSide, 'attacker');
     next = withTelop(eff.state, eff.telop);
     addedPower += eff.bonusAttack;
@@ -1865,6 +2048,17 @@ export function resolveSubBattleWin(state: GameState): GameState {
     ? [...state.quarantine[defenderSide]]
     : [defenderCard, ...state.quarantine[defenderSide]];
   let newDefenderBench = defenderState.bench;
+  // [Bench] user-readable logs
+  const benchBeforeStr = newDefenderBench.map((s) => `${s.name}×${s.count}`).join(', ') || '(空)';
+  console.log(`[Bench] 現在: ${benchBeforeStr} (${newDefenderBench.length}/${getBenchMax(state, defenderSide)}) — ${defenderSide} (奪取前)`);
+  const movingNames = flushedCards.map((c) => c.name);
+  console.log(`[Bench] 移動: ${movingNames.join(', ')} → ${defenderSide}のベンチへ`);
+  const fromQuarantine = state.quarantine[defenderSide].map((c) => c.name);
+  if (fromQuarantine.length > 0) {
+    console.log(`[Bench] 隔離から移動: ${fromQuarantine.join(', ')}`);
+    console.log(`[隔離→ベンチ] フラッグ奪取: ${fromQuarantine.join(', ')} → ${defenderSide}のベンチへ`);
+  }
+  // Legacy engine logs kept for debug parity
   console.log(`[Engine] resolveSubBattleWin: ${defenderSide} bench BEFORE flush: ${newDefenderBench.length}/6 slots`, newDefenderBench.map(s => `${s.name}×${s.count}`).join(', '));
   console.log(`[Engine]   flushing ${flushedCards.length} cards:`, flushedCards.map(c => c.name).join(', '));
   const unflushed: BattleCard[] = [];
@@ -1880,10 +2074,13 @@ export function resolveSubBattleWin(state: GameState): GameState {
       console.log(`[Engine] ベンチ満杯！ ${defenderSide} bench=${slotsUsed}/${defBenchMax} slots, card="${c.name}" alreadyOnBench=${alreadyOnBench} → game_over`);
       console.log(`[Engine]   bench slots:`, newDefenderBench.map(s => `${s.name}×${s.count}`).join(', '));
       console.log(`[Engine]   flushed ${fi}/${flushedCards.length} cards, ${unflushed.length} stuck`);
+      console.log(`[Bench] ⚠️ ベンチ満杯！ "${c.name}" が入らない (${slotsUsed}/${defBenchMax}) — ${defenderSide} 敗北`);
       break;
     }
     newDefenderBench = addToBench(newDefenderBench, c);
     console.log(`[Engine]   +${c.name} → bench now ${newDefenderBench.length}/6 slots`);
+    const added = newDefenderBench.find((s) => s.name === c.name);
+    console.log(`[Bench]   +${c.name} (${added?.count === 1 ? '新スロット' : `スタック×${added?.count}`}) — ${newDefenderBench.length}/${defBenchMax}`);
   }
   if (benchOverflow) {
     // Update state with the partial flush so result screen shows accurate bench
@@ -1905,6 +2102,9 @@ export function resolveSubBattleWin(state: GameState): GameState {
 
   console.log(`[Engine] resolveSubBattleWin: ${defenderSide} defended with "${defenderCard.name}", flushed ${flushedCards.length} cards to bench (bench now ${newDefenderBench.length}/6)`);
   console.log(`[Engine]   quarantine[${defenderSide}] was ${state.quarantine[defenderSide].length} → flushed to bench, clearing`);
+  // [Bench] final state log
+  const benchAfterStr = newDefenderBench.map((s) => `${s.name}×${s.count}`).join(', ') || '(空)';
+  console.log(`[Bench] 現在: ${benchAfterStr} (${newDefenderBench.length}/${getBenchMax(state, defenderSide)}) — ${defenderSide} (奪取後)`);
 
   // Split attack cards: all except last → attacker's quarantine; last becomes new defender.
   const attackCards = state.attackRevealed;
@@ -1930,16 +2130,6 @@ export function resolveSubBattleWin(state: GameState): GameState {
     ? attackerStateForTrim.deck.slice(attackerDeckTrim)
     : attackerStateForTrim.deck;
 
-  const result: SubBattleResult = {
-    idx: state.history.length + 1,
-    defenderSide,
-    defenderCard,
-    attackerSide,
-    attackCards,
-    attackPower: state.attackCurrentPower,
-    winner: attackerSide,
-  };
-
   // 不老不死の薬: 始皇帝をデッキ底に戻す
   const defenderDeckForSide = (s: Side): BattleCard[] => {
     const baseDeck = s === attackerSide ? trimmedAttackerDeck : (s === 'player' ? state.player.deck : state.ai.deck);
@@ -1964,12 +2154,23 @@ export function resolveSubBattleWin(state: GameState): GameState {
   const newAiFans = attackerSide === 'ai' ? state.aiFans + defeatFans : state.aiFans;
   console.log(`[Engine] Card defeat fans: ${attackerSide} earns +${defeatFans} for defeating ${defenderCard.rarity} "${defenderCard.name}"`);
 
+  const result: SubBattleResult = {
+    idx: state.history.length + 1,
+    defenderSide,
+    defenderCard,
+    attackerSide,
+    attackCards,
+    attackPower: state.attackCurrentPower,
+    defeatFans,
+    winner: attackerSide,
+  };
+
   return {
     ...state,
     phase: 'battle_resolve',
     playerFans: newPlayerFans,
     aiFans: newAiFans,
-    message: `${attackerSide === 'player' ? 'あなた' : '相手'}がフラッグ奪取！`,
+    message: `${attackerSide === 'player' ? 'あなた' : '相手'}がフラッグ奪取！ +${defeatFans}ファン`,
     // Attacker's bench is untouched; only the defender's bench grows.
     player: {
       ...state.player,
@@ -2004,10 +2205,12 @@ export function resolveSubBattleWin(state: GameState): GameState {
 export function advanceToNextRound(state: GameState): GameState {
   if (state.phase !== 'round_end' || !state.roundWinner) return state;
 
-  // Award fans for this round
-  const trophy = state.trophyFans[state.round - 1] ?? 0;
-  const newPlayerFans = state.roundWinner === 'player' ? state.playerFans + trophy : state.playerFans;
-  const newAiFans = state.roundWinner === 'ai' ? state.aiFans + trophy : state.aiFans;
+  // Award trophy (round win count) and trophy fans for this round
+  const trophyFanBonus = state.trophyFans[state.round - 1] ?? 0;
+  const newPlayerTrophies = state.roundWinner === 'player' ? state.playerTrophies + 1 : state.playerTrophies;
+  const newAiTrophies = state.roundWinner === 'ai' ? state.aiTrophies + 1 : state.aiTrophies;
+  const newPlayerFans = state.roundWinner === 'player' ? state.playerFans + trophyFanBonus : state.playerFans;
+  const newAiFans = state.roundWinner === 'ai' ? state.aiFans + trophyFanBonus : state.aiFans;
 
   const nextRound = state.round + 1;
 
@@ -2019,6 +2222,8 @@ export function advanceToNextRound(state: GameState): GameState {
       phase: 'game_over',
       round: state.round,
       winner: fanWinner,
+      playerTrophies: newPlayerTrophies,
+      aiTrophies: newAiTrophies,
       playerFans: newPlayerFans,
       aiFans: newAiFans,
       message: `最終結果: あなた ${newPlayerFans} ファン vs 相手 ${newAiFans} ファン`,
@@ -2027,14 +2232,26 @@ export function advanceToNextRound(state: GameState): GameState {
 
   // Advance to next round: collect ALL cards back to deck, reset bench/quarantine.
   // ベンチ + 隔離 + 防御カード + 攻撃中カード → 全てデッキに回収してシャッフル
-  const collectCards = (ps: PlayerState, side: Side): BattleCard[] => {
-    const cards: BattleCard[] = [...ps.deck];
-    for (const slot of ps.bench) {
-      for (let i = 0; i < slot.count; i++) cards.push(slot.card);
+  // 大蛇はラウンド内限定進化のため、アナコンダに戻す
+  const revertEvolution = (card: BattleCard): BattleCard => {
+    if (card.name === '大蛇' && card.id.startsWith('evolved-giant-snake-')) {
+      const anaconda = ALL_BATTLE_CARDS.find((c) => c.name === 'アナコンダ');
+      if (anaconda) {
+        console.log('[Engine] 大蛇 → アナコンダに戻す (ラウンド終了)');
+        return { ...anaconda, id: `reverted-anaconda-${Date.now()}` };
+      }
     }
-    cards.push(...state.quarantine[side]);
-    if (state.defenseCard && state.flagHolder === side) cards.push(state.defenseCard);
-    if (otherSide(state.flagHolder) === side) cards.push(...state.attackRevealed);
+    return card;
+  };
+
+  const collectCards = (ps: PlayerState, side: Side): BattleCard[] => {
+    const cards: BattleCard[] = ps.deck.map(revertEvolution);
+    for (const slot of ps.bench) {
+      for (let i = 0; i < slot.count; i++) cards.push(revertEvolution(slot.card));
+    }
+    cards.push(...state.quarantine[side].map(revertEvolution));
+    if (state.defenseCard && state.flagHolder === side) cards.push(revertEvolution(state.defenseCard));
+    if (otherSide(state.flagHolder) === side) cards.push(...state.attackRevealed.map(revertEvolution));
     return cards;
   };
 
@@ -2048,6 +2265,8 @@ export function advanceToNextRound(state: GameState): GameState {
     phase: 'deck_phase',
     round: nextRound,
     subBattleCount: 0,
+    playerTrophies: newPlayerTrophies,
+    aiTrophies: newAiTrophies,
     playerFans: newPlayerFans,
     aiFans: newAiFans,
     roundWinner: null,

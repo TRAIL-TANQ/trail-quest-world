@@ -189,6 +189,10 @@ export const COLLECTION_CARDS: CollectionCard[] = [
   { id: 'card-153', name: 'キリマンジャロ', category: 'world_heritage', rarity: 'N', description: 'アフリカ大陸最高峰。標高5895メートルの雪を頂く山。', imageUrl: '/images/cards/kilimanjaro.png' },
   { id: 'card-154', name: 'アフリカゾウ', category: 'creatures', rarity: 'R', description: 'サバンナの王者。巨大な体と長い牙で全てを薙ぎ倒す。', imageUrl: '/images/cards/card-019.webp' },
   { id: 'card-155', name: 'サバンナ', category: 'inventions', rarity: 'N', description: 'アフリカの広大な草原地帯。多様な野生動物の生息地。', imageUrl: '/images/cards/savanna.png' },
+  { id: 'card-173', name: 'ロベン島', category: 'world_heritage', rarity: 'N', description: 'マンデラが27年間投獄された監獄島。不屈の精神の象徴。', imageUrl: '/images/cards/robben-island.png' },
+  { id: 'card-174', name: '虹の国', category: 'inventions', rarity: 'SR', description: '多民族が共存する南アフリカの理想。全てを取り戻す希望の虹。', imageUrl: '/images/cards/rainbow-nation.png' },
+  { id: 'card-175', name: '自由憲章', category: 'inventions', rarity: 'N', description: '1955年に採択された反アパルトヘイト宣言。自由への誓い。', imageUrl: '/images/cards/freedom-charter.png' },
+  { id: 'card-176', name: 'ノーベル平和賞', category: 'inventions', rarity: 'N', description: '1993年、デクラークと共同受賞。平和の力で全員を強くする。', imageUrl: '/images/cards/nobel-peace-prize.png' },
 
   // ===== 産業革命デッキ (4枚新規 + 蒸気機関は既存card-037) =====
   { id: 'card-156', name: '石炭', category: 'inventions', rarity: 'N', description: '産業革命の燃料。黒いダイヤとも呼ばれた地下資源。', imageUrl: '/images/cards/coal.png' },
@@ -202,11 +206,16 @@ export const COLLECTION_CARDS: CollectionCard[] = [
   { id: 'card-162', name: 'モアイ像', category: 'world_heritage', rarity: 'N', description: 'イースター島の巨大石像。約900体が海を見つめるように立つ謎の遺跡。', imageUrl: '/images/cards/moai.png' },
   { id: 'card-163', name: '焚書坑儒', category: 'inventions', rarity: 'SSR', description: '始皇帝が行った思想統制。書物を焼き、儒者を生き埋めにした。', imageUrl: '/images/cards/book-burning.png' },
   { id: 'card-164', name: '不老不死の薬', category: 'inventions', rarity: 'N', description: '始皇帝が求め続けた永遠の命。徐福を東方に派遣して探させた。', imageUrl: '/images/cards/elixir.png' },
-  { id: 'card-165', name: '大蛇', category: 'creatures', rarity: 'SSR', description: 'アマゾンの密林に潜む伝説の巨大蛇。全てを呑み込む恐怖の存在。', imageUrl: '/images/cards/giant-serpent.png' },
-  { id: 'card-166', name: 'アナコンダハンター', category: 'great_people', rarity: 'SR', description: 'アマゾンの密林で大蛇を追うハンター。アナコンダの弱点を知り尽くしている。', imageUrl: '/images/cards/anaconda-hunter.png' },
+  { id: 'card-165', name: '大蛇', category: 'creatures', rarity: 'SR', description: 'アマゾンの密林に潜む伝説の巨大蛇。全てを呑み込む恐怖の存在。', imageUrl: '/images/cards/giant-serpent.png' },
+  { id: 'card-166', name: '大蛇の巫師', category: 'great_people', rarity: 'SSR', description: 'トゥカノ族の戦士。祖先のアナコンダを崇め、その力を操る蛇の巫師。', imageUrl: '/images/cards/anaconda-hunter.png' },
   { id: 'card-167', name: '凱旋門', category: 'world_heritage', rarity: 'R', description: 'パリのシャンゼリゼ通りに建つ勝利の門。ナポレオンが建設を命じた。', imageUrl: '/images/cards/arc-de-triomphe.png' },
   { id: 'card-168', name: '秦の兵士', category: 'great_people', rarity: 'N', description: '始皇帝に仕える忠実な兵士。万里の長城と共に力を発揮する。', imageUrl: '/images/cards/qin-soldier.png' },
   { id: 'card-169', name: '始皇帝の勅令', category: 'inventions', rarity: 'N', description: '始皇帝が発した命令書。紙を集める力を持つ。', imageUrl: '/images/cards/imperial-decree.png' },
+
+  // ===== ジャンヌダルクデッキ用追加カード =====
+  { id: 'card-170', name: '祈りの光', category: 'inventions', rarity: 'N', description: '教会から差す聖なる光。ジャンヌを戦場に呼び戻す。', imageUrl: '/images/cards/prayer-light.png' },
+  { id: 'card-171', name: '白百合の盾', category: 'inventions', rarity: 'N', description: 'フランス王家の百合が刻まれた聖なる盾。', imageUrl: '/images/cards/lily-shield.png' },
+  { id: 'card-172', name: '聖女の旗印', category: 'inventions', rarity: 'SR', description: '聖女が掲げた旗。失われた仲間を呼び戻す力を持つ。', imageUrl: '/images/cards/holy-banner.png' },
 ];
 
 // ガチャ排出率

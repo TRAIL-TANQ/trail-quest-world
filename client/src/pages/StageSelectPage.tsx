@@ -5,7 +5,7 @@
  * ★ボスステージ（5,10）は背景を赤く。各ステージにNPCテーマアイコン表示。
  */
 import { Link } from 'wouter';
-import { STAGES } from '@/lib/stages';
+import { STAGES, shortSpecialRuleTags } from '@/lib/stages';
 import { useStageProgressStore } from '@/lib/stageProgressStore';
 import { IMAGES } from '@/lib/constants';
 
@@ -106,7 +106,24 @@ export default function StageSelectPage() {
                   )}
                 </div>
                 <p className="text-[12px] font-bold text-amber-100 leading-snug mb-0.5">{stage.name}</p>
-                <p className="text-[10px] text-amber-200/60 leading-snug mb-1.5">{ruleText}</p>
+                <p className="text-[10px] text-amber-200/60 leading-snug mb-1">{ruleText}</p>
+                {unlocked && (() => {
+                  const tags = shortSpecialRuleTags(stage.rules);
+                  if (tags.length === 0) return null;
+                  return (
+                    <div className="flex flex-wrap gap-1 mb-1.5">
+                      {tags.map((t, ti) => (
+                        <span
+                          key={ti}
+                          className="text-[9px] font-bold px-1.5 py-0.5 rounded"
+                          style={{ background: 'rgba(250,204,21,0.12)', color: '#facc15', border: '1px solid rgba(250,204,21,0.35)' }}
+                        >
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  );
+                })()}
                 <div className="flex items-center justify-between mt-auto">
                   <div className="flex items-center gap-0.5">
                     <div className="w-3 h-3 rounded-full flex items-center justify-center text-[6px] font-bold"

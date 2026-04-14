@@ -62,6 +62,17 @@ export default function LoginPage() {
     }
     setLoading(true);
     setError('');
+
+    // Admin PIN check
+    const adminPin = import.meta.env.VITE_ADMIN_PIN;
+    if (adminPin && pin === adminPin) {
+      saveAuth('admin', '管理者', true);
+      setUser({ ...user, id: 'admin', nickname: '管理者' });
+      navigate('/');
+      setLoading(false);
+      return;
+    }
+
     try {
       const result = await verifyPin(pin);
       if (!result.success || !result.childId || !result.childName) {

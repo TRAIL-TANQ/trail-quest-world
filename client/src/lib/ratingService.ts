@@ -13,7 +13,7 @@
  *   Diamond 1900 -
  */
 import { supabase } from './supabase';
-import { isGuest } from './auth';
+import { isGuest, isAdmin } from './auth';
 
 export type RankTier = 'bronze' | 'silver' | 'gold' | 'platinum' | 'diamond';
 
@@ -102,8 +102,8 @@ export async function applyRatingChange(
   opponentRating: number,
   won: boolean,
 ): Promise<{ newRating: number; delta: number; wins: number; losses: number } | null> {
-  if (isGuest()) {
-    // Guest mode: return a local-only calculation
+  if (isGuest() || isAdmin()) {
+    // Guest/Admin mode: return a local-only calculation (no Supabase write)
     const delta = calculateEloDelta(1000, opponentRating, won);
     return { newRating: Math.max(0, 1000 + delta), delta, wins: won ? 1 : 0, losses: won ? 0 : 1 };
   }
@@ -124,4 +124,57 @@ export async function applyRatingChange(
     return null;
   }
   return { newRating, delta, wins: newWins, losses: newLosses };
+}
+
+/**
+ * PvP: 両プレイヤーの rating / wins / losses を更新。
+ * - admin はローカル計算のみで Supabase 書き込みスキップ。
+ * - 相手レートは現行値を双方から fetch して適用（1試合あたり 1 回だけ）。
+ */
+export async function applyPvPRatingChange(args: {
+  p1Id: string; p1IsAdmin: boolean;
+  p2Id: string; p2IsAdmin: boolean;
+  p1Won: boolean;
+}): Promise<{
+  p1: { newRating: number; delta: number; wins: number; losses: number };
+  p2: { newRating: number; delta: number; wins: number; losses: number };
+}> {
+  const { p1Id, p1IsAdmin, p2Id, p2IsAdmin, p1Won } = args;
+
+  const p1Current = p1IsAdmin ? { rating: 1000, wins: 0, losses: 0 } : (await fetchRatingStatus(p1Id)) ?? { rating: 1000, wins: 0, losses: 0 };
+  const p2Current = p2IsAdmin ? { rating: 1000, wins: 0, losses: 0 } : (await fetchRatingStatus(p2Id)) ?? { rating: 1000, wins: 0, losses: 0 };
+
+  const p1Delta = calculateEloDelta(p1Current.rating, p2Current.rating, p1Won);
+  const p2Delta = calculateEloDelta(p2Current.rating, p1Current.rating, !p1Won);
+
+  const p1New = {
+    newRating: Math.max(0, p1Current.rating + p1Delta),
+    delta: p1Delta,
+    wins: p1Current.wins + (p1Won ? 1 : 0),
+    losses: p1Current.losses + (p1Won ? 0 : 1),
+  };
+  const p2New = {
+    newRating: Math.max(0, p2Current.rating + p2Delta),
+    delta: p2Delta,
+    wins: p2Current.wins + (!p1Won ? 1 : 0),
+    losses: p2Current.losses + (!p1Won ? 0 : 1),
+  };
+
+  // Supabase writes — skip for admin
+  if (!p1IsAdmin) {
+    const { error } = await supabase
+      .from('child_status')
+      .update({ rating: p1New.newRating, wins: p1New.wins, losses: p1New.losses })
+      .eq('child_id', p1Id);
+    if (error) console.error('[RatingService] PvP p1 update error:', error);
+  }
+  if (!p2IsAdmin) {
+    const { error } = await supabase
+      .from('child_status')
+      .update({ rating: p2New.newRating, wins: p2New.wins, losses: p2New.losses })
+      .eq('child_id', p2Id);
+    if (error) console.error('[RatingService] PvP p2 update error:', error);
+  }
+
+  return { p1: p1New, p2: p2New };
 }
