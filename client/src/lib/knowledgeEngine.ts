@@ -471,20 +471,14 @@ export function applyRevealEffect(
       break;
     }
     case 'napoleon': {
-      // ベンチの大砲1枚につき攻撃+1、法典1枚につき防御+1（重複可能）
+      // ナポレオン法典1枚につき防御+1（重複可能）
       const my = side === 'player' ? next.player : next.ai;
       const sealed = next.sealedBenchNames[side];
-      const cannonSlot = my.bench.find((b) => b.name === '大砲' && !sealed.includes(b.name));
       const codeSlot = my.bench.find((b) => b.name === 'ナポレオン法典' && !sealed.includes(b.name));
-      const cannonCount = cannonSlot?.count ?? 0;
       const codeCount = codeSlot?.count ?? 0;
-      const napoleonGlow: string[] = [];
-      if (cannonCount > 0) napoleonGlow.push('大砲');
-      if (codeCount > 0) napoleonGlow.push('ナポレオン法典');
-      if (napoleonGlow.length > 0) next = withBenchGlow(next, side, napoleonGlow);
+      if (codeCount > 0) next = withBenchGlow(next, side, ['ナポレオン法典']);
       if (role === 'attacker') {
-        bonusAttack += cannonCount;
-        telop = { text: `⚡皇帝の号令！大砲${cannonCount}枚→攻撃+${cannonCount}`, color };
+        telop = { text: '⚡皇帝の号令！', color };
       } else {
         if (codeCount > 0) next = { ...next, defenderBonus: next.defenderBonus + codeCount };
         telop = { text: `⚡皇帝の号令！法典${codeCount}枚→防御+${codeCount}`, color };
@@ -726,22 +720,28 @@ export function applyRevealEffect(
       break;
     }
     case 'gunpowder': {
-      // Passive bench effect — bonus read by Dynamite and Cannon (+1 per copy, stackable)
-      telop = { text: '💥火薬！ベンチでダイナマイト・大砲を強化（重複可能）', color };
+      // Material card — consumed by Cannon/Dynamite on reveal. No passive effect.
+      telop = { text: '💥火薬！素材カード（大砲・ダイナマイトの発動コスト）', color };
       break;
     }
     case 'dynamite': {
-      // Combo: +2 attack per 「火薬」 on own bench.
+      // 任意発動: consume 1 火薬 from bench for +2 attack.
       if (role === 'attacker') {
         const myState = side === 'player' ? next.player : next.ai;
-        const gunpowderSlot = myState.bench.find((b) => b.name === '火薬');
-        const copies = gunpowderSlot?.count ?? 0;
-        if (copies > 0) {
-          bonusAttack += copies;
+        const sealed = next.sealedBenchNames[side];
+        const gunpowderSlot = myState.bench.find((b) => b.name === '火薬' && !sealed.includes(b.name));
+        if (gunpowderSlot) {
+          bonusAttack += 2;
+          const newBench = removeOneFromBench(myState.bench, '火薬');
+          next = applySide(
+            { ...next, exile: { ...next.exile, [side]: [...next.exile[side], gunpowderSlot.card] } },
+            side,
+            { ...myState, bench: newBench },
+          );
           next = withBenchGlow(next, side, ['火薬']);
-          telop = { text: `📋 火薬${copies}枚→ダイナマイト攻撃+${copies}`, color };
+          telop = { text: '💣ダイナマイト！火薬1枚を除外して攻撃+2', color };
         } else {
-          telop = { text: '💣ダイナマイトの大爆発！火薬なし...', color };
+          telop = { text: '💣ダイナマイト（火薬なし）', color };
         }
       }
       break;
@@ -1357,21 +1357,26 @@ export function applyRevealEffect(
       break;
     }
     case 'cannon': {
-      // 大砲: ベンチの火薬1枚につき攻撃+1（重複可能）
+      // 任意発動: consume 1 火薬 from bench for +2 attack.
       if (role === 'attacker') {
         const my = side === 'player' ? next.player : next.ai;
         const sealed = next.sealedBenchNames[side];
         const gunpowderSlot = my.bench.find((b) => b.name === '火薬' && !sealed.includes(b.name));
-        const gpCount = gunpowderSlot?.count ?? 0;
-        if (gpCount > 0) {
-          bonusAttack += gpCount;
+        if (gunpowderSlot) {
+          bonusAttack += 2;
+          const newBench = removeOneFromBench(my.bench, '火薬');
+          next = applySide(
+            { ...next, exile: { ...next.exile, [side]: [...next.exile[side], gunpowderSlot.card] } },
+            side,
+            { ...my, bench: newBench },
+          );
           next = withBenchGlow(next, side, ['火薬']);
-          telop = { text: `💥 火薬${gpCount}枚→大砲攻撃+${gpCount}`, color };
+          telop = { text: '🏰大砲！火薬1枚を除外して攻撃+2', color };
         } else {
-          telop = { text: '🏰大砲！ナポレオンの装備', color };
+          telop = { text: '🏰大砲（火薬なし）', color };
         }
       } else {
-        telop = { text: '🏰大砲！ナポレオンの装備', color };
+        telop = { text: '🏰大砲！', color };
       }
       break;
     }

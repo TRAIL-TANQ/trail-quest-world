@@ -66,7 +66,7 @@ export const EFFECT_DEFS: Record<string, CardEffect> = {
   vitruvian_man: { id: 'vitruvian_man', name: '理想の調和',       description: '公開時、ベンチのダ・ヴィンチ系カード1枚につき自身の攻防+1。', category: 'special' },
   einstein:   { id: 'einstein',   name: '天才の頭脳',         description: 'ベンチに「相対性理論の論文」で攻撃+4。「光速」で防御+3。両方あれば相手全攻撃カードパワー-1。', category: 'special' },
   curie:      { id: 'curie',      name: '二度のノーベル賞',   description: 'ベンチに「ラジウム」で攻撃+3。「研究ノート」で防御+3。両方あれば全味方カード効果2回発動。', category: 'special' },
-  napoleon:   { id: 'napoleon',   name: '皇帝の号令',         description: 'ベンチの大砲1枚につき攻撃+1、法典1枚につき防御+1（重複可能）。', category: 'special' },
+  napoleon:   { id: 'napoleon',   name: '皇帝の号令',         description: 'ベンチのナポレオン法典1枚につき防御+1（重複可能）。', category: 'special' },
   cleopatra:  { id: 'cleopatra',  name: '魅了',               description: '公開時、相手のデッキ一番上を除外する。', category: 'debuff' },
   nobunaga:   { id: 'nobunaga',   name: '天下布武',           description: 'ベンチに「鉄砲」で攻撃+3。「楽市楽座」で防御+2。両方あれば相手ベンチ1枚封印。', category: 'special' },
   mozart:     { id: 'mozart',     name: '天才の旋律',         description: '公開時、次に公開する味方カードの攻撃+2。', category: 'atk' },
@@ -78,12 +78,12 @@ export const EFFECT_DEFS: Record<string, CardEffect> = {
   phone:      { id: 'phone',      name: '通信',               description: '公開時、次デッキフェイズは5枚中3枚取得可。', category: 'special' },
   // Telescope: search own deck for 地動説 and move it to the top.
   telescope:  { id: 'telescope',  name: '天体観測',           description: '公開時、デッキ内の「地動説」をデッキの一番上に移動する。', category: 'special' },
-  // Gunpowder: passive bench effect (no reveal action) — read by Dynamite at reveal.
-  gunpowder:  { id: 'gunpowder',  name: '爆薬の基礎',         description: 'From the bench: ダイナマイトと大砲の攻撃+1（重複可能）。', category: 'special' },
+  // Gunpowder: material card — consumed by Cannon/Dynamite on reveal for +2 attack.
+  gunpowder:  { id: 'gunpowder',  name: '爆薬の素材',         description: '素材カード。ベンチに置き、大砲・ダイナマイトの公開時に1枚除外して攻撃+2の発動コストとなる。', category: 'special' },
   // Heliocentric: passive bench effect — read by Galileo at reveal.
   heliocentric: { id: 'heliocentric', name: 'コペルニクスの真理', description: 'From the bench: ベンチにある間、「ガリレオ」の攻撃+1/防御+1 (重複可)。', category: 'special' },
-  // Dynamite: gains +2 attack per 火薬 on own bench.
-  dynamite:   { id: 'dynamite',   name: '大爆発',             description: '公開時、自分ベンチの「火薬」1枚につき攻撃+2。', category: 'atk' },
+  // Dynamite: on reveal, optionally consume 1 火薬 from bench for +2 attack.
+  dynamite:   { id: 'dynamite',   name: '大爆発',             description: '公開時（任意発動）、ベンチの「火薬」1枚を除外して攻撃+2。', category: 'atk' },
   compass:    { id: 'compass',    name: '航海術',             description: '公開時、デッキ内の「コロンブス」or「マゼラン」を上3枚以内に移動。', category: 'bench' },
   penicillin: { id: 'penicillin', name: '治療',               description: '公開時、自分ベンチ最強カード1枚をデッキの下へ戻す。', category: 'bench' },
   paper:      { id: 'paper',      name: '記録の復元',         description: '公開時、除外されたカード1枚をデッキの一番上に戻す（任意発動）。', category: 'bench' },
@@ -137,7 +137,7 @@ export const EFFECT_DEFS: Record<string, CardEffect> = {
   radium:          { id: 'radium',          name: '放射能の力',       description: 'From the bench: キュリー夫人の攻撃+3。', category: 'atk' },
   research_notes:  { id: 'research_notes',  name: '献身の記録',       description: 'From the bench: キュリー夫人の防御+3。', category: 'def' },
   nobel_medal:     { id: 'nobel_medal',     name: '栄光の証',         description: 'From the bench: キュリー夫人/アインシュタイン/ダーウィンの攻防+2。', category: 'special' },
-  cannon:          { id: 'cannon',          name: '砲撃',             description: 'From the bench: ナポレオンの攻撃+4。公開時、ベンチに火薬があれば攻撃2倍。', category: 'atk' },
+  cannon:          { id: 'cannon',          name: '砲撃',             description: '公開時（任意発動）、ベンチの「火薬」1枚を除外して攻撃+2。', category: 'atk' },
   napoleon_code:   { id: 'napoleon_code',   name: '法の支配',         description: 'From the bench: ナポレオンの防御+1（重複可能）。', category: 'def' },
   waterloo:        { id: 'waterloo',        name: '最後の戦い',       description: 'From the bench: デッキ残り3枚以下の時、ベンチのナポレオンをデッキの一番下に戻す。', category: 'special' },
   // ===== 宝石カード + アフリカデッキ =====
@@ -398,6 +398,7 @@ function pickStatProfile(id: string, profiles: StatProfile[]): StatProfile {
 // outside the category default. Keyed by card name for stability.
 export const CARD_STAT_OVERRIDES: Record<string, StatProfile> = {
   'ダイナマイト': { attackPower: 3, defensePower: 2 },
+  '火薬':           { attackPower: 0, defensePower: 0 },
   // ===== コンボ系 (2026-04) =====
   '蓄音機':           { attackPower: 1, defensePower: 1 },
   'ゾウガメ':         { attackPower: 1, defensePower: 1 },

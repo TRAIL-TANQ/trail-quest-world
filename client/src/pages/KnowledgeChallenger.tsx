@@ -221,10 +221,23 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
     ]),
     [],
   );
+  // Effects that are only optional when a specific bench condition is met.
+  // cannon/dynamite: optional only if bench has 火薬 (consumed for +2 attack).
+  const conditionalOptional = useCallback((card: BattleCard): boolean => {
+    const effId = card.effect?.id;
+    if (effId !== 'cannon' && effId !== 'dynamite') return false;
+    const gs = gameStateRef.current;
+    if (!gs) return false;
+    const atkSide: 'player' | 'ai' = gs.flagHolder === 'player' ? 'ai' : 'player';
+    const sealed = gs.sealedBenchNames[atkSide];
+    return gs[atkSide].bench.some((b) => b.name === '火薬' && !sealed.includes(b.name));
+  }, []);
   const waitAttackPreview = useCallback(
     (card: BattleCard): Promise<{ skipEffect: boolean }> => {
       if (unmountedRef.current) return Promise.resolve({ skipEffect: false });
-      const optional = !!(card.effect && OPTIONAL_EFFECT_IDS.has(card.effect.id));
+      const optional =
+        !!(card.effect && OPTIONAL_EFFECT_IDS.has(card.effect.id)) ||
+        conditionalOptional(card);
       setAttackPreview({ card, optionalEffect: optional });
       return new Promise((resolve) => {
         previewResolveRef.current = (v) => {
@@ -234,7 +247,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
         };
       });
     },
-    [OPTIONAL_EFFECT_IDS],
+    [OPTIONAL_EFFECT_IDS, conditionalOptional],
   );
   const handlePreviewChoice = useCallback((skipEffect: boolean) => {
     previewResolveRef.current?.({ skipEffect });
