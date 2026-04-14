@@ -43,7 +43,13 @@ function lsKey(childId: string) {
   return `${LS_PREFIX}${childId}`;
 }
 
+// Guest sessions are kept in memory only — never persisted across reloads.
+const guestStatusMap = new Map<string, ChildStatus>();
+
 function readCachedStatus(childId: string): ChildStatus | null {
+  if (isGuest()) {
+    return guestStatusMap.get(childId) ?? null;
+  }
   try {
     const raw = localStorage.getItem(lsKey(childId));
     if (!raw) return null;
@@ -62,6 +68,10 @@ function readCachedStatus(childId: string): ChildStatus | null {
 }
 
 function writeCachedStatus(status: ChildStatus): void {
+  if (isGuest()) {
+    guestStatusMap.set(status.child_id, { ...status });
+    return;
+  }
   try {
     localStorage.setItem(
       lsKey(status.child_id),

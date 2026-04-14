@@ -16,13 +16,24 @@ interface UserState {
 }
 
 const _auth = getAuth();
+// Guests start fresh every session: ALT=0, streak=0, level=1, no purchased avatars.
+// Registered users see MOCK_USER demo defaults until their real progress loads.
+const _initialUser = _auth.isGuest
+  ? {
+      ...MOCK_USER,
+      id: _auth.childId,
+      nickname: _auth.childName,
+      totalAlt: 0,
+      currentAlt: 0,
+      streakDays: 0,
+      level: 1,
+      purchasedAvatarIds: [],
+      equippedAvatarId: null,
+    }
+  : { ...MOCK_USER, id: _auth.childId, nickname: _auth.childName };
 
 export const useUserStore = create<UserState>((set, get) => ({
-  user: {
-    ...MOCK_USER,
-    id: _auth.childId,
-    nickname: _auth.childName,
-  },
+  user: _initialUser,
   setUser: (user) => set({ user }),
   setNickname: (nickname) =>
     set((state) => ({ user: { ...state.user, nickname } })),

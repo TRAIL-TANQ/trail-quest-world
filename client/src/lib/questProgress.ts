@@ -3,7 +3,7 @@
  * デッキ別クエスト進捗管理（localStorage + Supabase）
  */
 import { supabase } from './supabase';
-import { getAuth, isAdmin } from './auth';
+import { getAuth, isAdmin, isGuest } from './auth';
 
 // ===== Types =====
 
@@ -113,7 +113,14 @@ export function createDefaultProgress(): QuestProgressData {
 
 const LS_KEY = 'trail-quest-progress';
 
+// Guest sessions: in-memory only. Reset on page reload.
+let guestProgressCache: QuestProgressData | null = null;
+
 export function loadQuestProgress(): QuestProgressData {
+  if (isGuest()) {
+    if (!guestProgressCache) guestProgressCache = createDefaultProgress();
+    return guestProgressCache;
+  }
   try {
     const raw = localStorage.getItem(LS_KEY);
     if (!raw) return createDefaultProgress();
@@ -133,6 +140,11 @@ export function loadQuestProgress(): QuestProgressData {
 }
 
 export function saveQuestProgress(data: QuestProgressData): void {
+  if (isGuest()) {
+    // Guest: in-memory only. Skip localStorage and Supabase entirely.
+    guestProgressCache = data;
+    return;
+  }
   try {
     localStorage.setItem(LS_KEY, JSON.stringify(data));
   } catch { /* quota exceeded — silently ignore */ }
