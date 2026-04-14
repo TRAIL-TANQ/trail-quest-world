@@ -12,12 +12,12 @@ export const COLLECTION_CARDS: CollectionCard[] = [
   { id: 'card-006', name: '織田信長', category: 'great_people', rarity: 'R', description: '戦国時代の革命児。天下統一を目指した武将。', imageUrl: '/images/cards/oda-nobunaga.png' },
   { id: 'card-007', name: '坂本龍馬', category: 'great_people', rarity: 'R', description: '幕末の志士。薩長同盟を仲介し、明治維新の立役者となった。', imageUrl: '/images/cards/card-007.webp' },
   { id: 'card-008', name: 'エジソン', category: 'great_people', rarity: 'R', description: '発明王。電球や蓄音機など1000以上の発明をした。', imageUrl: '/images/cards/edison.png' },
-  { id: 'card-009', name: 'ニュートン', category: 'great_people', rarity: 'SR', description: '万有引力の法則を発見した物理学者・数学者。', imageUrl: '/images/cards/card-009.webp' },
+  { id: 'card-009', name: 'ニュートン', category: 'great_people', rarity: 'SR', description: '万有引力の法則を発見した物理学者・数学者。', imageUrl: '/images/cards/newton.png' },
   { id: 'card-010', name: 'ガリレオ', category: 'great_people', rarity: 'R', description: '天文学の父。望遠鏡で天体を観測し、地動説を支持した。', imageUrl: '/images/cards/galileo.png' },
   { id: 'card-011', name: 'モーツァルト', category: 'great_people', rarity: 'N', description: '神童と呼ばれた作曲家。5歳で作曲を始めた音楽の天才。', imageUrl: '/images/cards/mozart.png' },
   { id: 'card-012', name: 'シェイクスピア', category: 'great_people', rarity: 'N', description: 'イギリスの劇作家。ロミオとジュリエットなど名作を残した。', imageUrl: '/images/cards/card-012.webp' },
   { id: 'card-013', name: '野口英世', category: 'great_people', rarity: 'N', description: '細菌学者。黄熱病の研究に生涯を捧げた。千円札の肖像。', imageUrl: '/images/cards/noguchi.png' },
-  { id: 'card-014', name: '北里柴三郎', category: 'great_people', rarity: 'N', description: '近代日本医学の父。破傷風の治療法を開発した。', imageUrl: '/images/cards/card-014.webp' },
+  { id: 'card-014', name: '北里柴三郎', category: 'great_people', rarity: 'N', description: '近代日本医学の父。破傷風の治療法を開発した。', imageUrl: '/images/cards/kitasato.png' },
   { id: 'card-015', name: '伊能忠敬', category: 'great_people', rarity: 'N', description: '日本全国を歩いて測量し、精密な日本地図を作った。', imageUrl: '/images/cards/card-015.webp' },
 
   // ===== 生き物 (10枚) =====
@@ -64,7 +64,7 @@ export const COLLECTION_CARDS: CollectionCard[] = [
   { id: 'card-050', name: '進化論', category: 'discovery', rarity: 'SR', description: 'ダーウィンが唱えた理論。生物は環境に適応して変化する。', imageUrl: '/images/cards/card-050.webp' },
 
   // ===== 追加50枚 (偉人15+生き物10+世界遺産10+発明10+探究5) =====
-  { id: 'card-051', name: 'ゴッホ', category: 'great_people', rarity: 'SR', description: '後期印象派の画家。星月夜やひまわりなど情熱的な作品を残した。', imageUrl: '/images/cards/card-051.webp' },
+  { id: 'card-051', name: 'ゴッホ', category: 'great_people', rarity: 'SR', description: '後期印象派の画家。星月夜やひまわりなど情熱的な作品を残した。', imageUrl: '/images/cards/gogh.png' },
   { id: 'card-052', name: 'ピカソ', category: 'great_people', rarity: 'SR', description: 'キュビズムの創始者。ゲルニカなど革新的な作品で美術史を変えた。', imageUrl: '/images/cards/card-052.webp' },
   { id: 'card-053', name: 'ベートーヴェン', category: 'great_people', rarity: 'SR', description: '聴覚を失いながらも交響曲第九番など不朽の名作を作曲した。', imageUrl: '/images/cards/card-053.webp' },
   { id: 'card-054', name: 'マリー・アントワネット', category: 'great_people', rarity: 'R', description: 'フランス王妃。豪華な生活で知られ、フランス革命で処刑された。', imageUrl: '/images/cards/card-054.webp' },
@@ -78,7 +78,7 @@ export const COLLECTION_CARDS: CollectionCard[] = [
   { id: 'card-062', name: 'ヘレン・ケラー', category: 'great_people', rarity: 'N', description: '三重苦を克服した女性。サリバン先生と共に障害者教育に貢献した。', imageUrl: '/images/cards/card-062.webp' },
   { id: 'card-063', name: 'アルキメデス', category: 'great_people', rarity: 'N', description: '古代ギリシャの数学者。浮力の原理やてこの原理を発見した。', imageUrl: '/images/cards/card-063.webp' },
   { id: 'card-064', name: 'ヒポクラテス', category: 'great_people', rarity: 'N', description: '医学の父。医師の倫理を説き、ヒポクラテスの誓いを残した。', imageUrl: '/images/cards/card-064.webp' },
-  { id: 'card-065', name: '紫式部', category: 'great_people', rarity: 'N', description: '源氏物語の作者。世界最古の長編小説を書いた平安時代の女性文学者。', imageUrl: '/images/cards/card-065.webp' },
+  { id: 'card-065', name: '紫式部', category: 'great_people', rarity: 'R', description: '源氏物語の作者。世界最古の長編小説を書いた平安時代の女性文学者。', imageUrl: '/images/cards/murasaki-shikibu.png' },
   { id: 'card-066', name: 'プテラノドン', category: 'creatures', rarity: 'SR', description: '白亜紀の翼竜。翼を広げると7メートル以上にもなる空の支配者。', imageUrl: '/images/cards/card-066.webp' },
   { id: 'card-067', name: 'サーベルタイガー', category: 'creatures', rarity: 'SR', description: '氷河期の猛獣。20センチもの長い犬歯を持つ大型ネコ科動物。', imageUrl: '/images/cards/card-067.webp' },
   { id: 'card-068', name: 'オオカミ', category: 'creatures', rarity: 'R', description: '群れで狩りをする社会性の高い動物。月に向かって遠吠えする。', imageUrl: '/images/cards/card-068.webp' },
@@ -216,6 +216,31 @@ export const COLLECTION_CARDS: CollectionCard[] = [
   { id: 'card-170', name: '祈りの光', category: 'inventions', rarity: 'N', description: '教会から差す聖なる光。ジャンヌを戦場に呼び戻す。', imageUrl: '/images/cards/prayer-light.png' },
   { id: 'card-171', name: '白百合の盾', category: 'inventions', rarity: 'N', description: 'フランス王家の百合が刻まれた聖なる盾。', imageUrl: '/images/cards/lily-shield.png' },
   { id: 'card-172', name: '聖女の旗印', category: 'inventions', rarity: 'SR', description: '聖女が掲げた旗。失われた仲間を呼び戻す力を持つ。', imageUrl: '/images/cards/holy-banner.png' },
+
+  // ===== 紫式部デッキ追加 (4枚) =====
+  { id: 'card-177', name: '源氏物語', category: 'inventions', rarity: 'SR', description: '紫式部が書いた世界最古の長編小説。光源氏の恋と運命を描いた平安文学の傑作。', imageUrl: '/images/cards/tale-of-genji.png' },
+  { id: 'card-178', name: '筆', category: 'inventions', rarity: 'N', description: '和紙に墨で文字を綴る平安の筆記具。紫式部が物語を書き残した道具。', imageUrl: '/images/cards/fude.png' },
+  { id: 'card-179', name: '和歌', category: 'inventions', rarity: 'N', description: '五七五七七の日本古来の詩歌。平安貴族の心を伝える言葉の花。', imageUrl: '/images/cards/waka.png' },
+  { id: 'card-180', name: '十二単', category: 'inventions', rarity: 'N', description: '平安時代の女官が着用した豪華な重ね着装束。宮廷文化の象徴。', imageUrl: '/images/cards/junihitoe.png' },
+
+  // ===== 信長デッキ拡張 (11枚) =====
+  { id: 'card-181', name: '敦盛の舞', category: 'inventions', rarity: 'N', description: '信長が愛した幸若舞。「人間五十年」の一節を舞い、出陣の前に気を奮い立たせた。', imageUrl: '/images/cards/atsumori.png' },
+  { id: 'card-182', name: '足軽', category: 'great_people', rarity: 'N', description: '戦国の歩兵。鉄砲や槍を手に、信長軍の主力として戦場を駆け抜けた。', imageUrl: '/images/cards/ashigaru.png' },
+  { id: 'card-183', name: '馬防柵', category: 'inventions', rarity: 'N', description: '長篠の戦いで使われた木柵。騎馬武者の突撃を防ぎ、鉄砲隊を守った。', imageUrl: '/images/cards/babousaku.png' },
+  { id: 'card-184', name: '長篠の陣', category: 'inventions', rarity: 'N', description: '1575年、信長が武田騎馬隊を鉄砲三段撃ちで撃破した布陣。戦術革命の象徴。', imageUrl: '' },
+  { id: 'card-185', name: '南蛮貿易', category: 'inventions', rarity: 'N', description: 'ポルトガル・スペインとの交易。鉄砲やキリスト教が日本に伝わった。', imageUrl: '/images/cards/nanban-trade.png' },
+  { id: 'card-186', name: '安土城', category: 'world_heritage', rarity: 'N', description: '信長が築いた天下の名城。天守閣を持つ日本初の近世城郭とされる。', imageUrl: '/images/cards/azuchi-castle.png' },
+  { id: 'card-187', name: '本能寺の変', category: 'discovery', rarity: 'SR', description: '1582年、明智光秀の謀反で織田信長が命を落とした事件。戦国史最大の転換点。', imageUrl: '/images/cards/honnoji.png' },
+  { id: 'card-188', name: '明智光秀', category: 'great_people', rarity: 'SR', description: '織田信長の家臣。本能寺の変で主君を討ったが、わずか11日で秀吉に敗れた武将。', imageUrl: '/images/cards/akechi-mitsuhide.png' },
+  { id: 'card-189', name: '愛宕百韻', category: 'inventions', rarity: 'SR', description: '本能寺の変の直前、光秀が愛宕山で詠んだ連歌。「時は今」の句に謀反の暗示を残した。', imageUrl: '/images/cards/atago-hyakuin.png' },
+  { id: 'card-190', name: '天王山', category: 'discovery', rarity: 'SR', description: '山崎の戦いの舞台。光秀と秀吉が覇権を賭けて激突した天下分け目の地。', imageUrl: '/images/cards/tennouzan.png' },
+  { id: 'card-191', name: '三日天下', category: 'discovery', rarity: 'SR', description: '光秀が信長を討ってから秀吉に敗れるまでの短命な支配。儚き権力の象徴。', imageUrl: '/images/cards/mikka-tenka.png' },
+
+  // ===== オオカミデッキ追加 (4枚) =====
+  { id: 'card-192', name: '遠吠え', category: 'inventions', rarity: 'N', description: '月夜に響くオオカミの咆哮。仲間を呼び寄せる群れの合図。', imageUrl: '' },
+  { id: 'card-193', name: '群れの掟', category: 'inventions', rarity: 'N', description: 'オオカミの社会を支える厳格な序列。アルファを頂点とする絆の結束。', imageUrl: '' },
+  { id: 'card-194', name: '縄張り', category: 'inventions', rarity: 'N', description: 'オオカミが匂いで示す支配領域。侵入者を威嚇で退ける。', imageUrl: '' },
+  { id: 'card-195', name: '一匹狼', category: 'creatures', rarity: 'SR', description: '群れを離れ独りで生きる孤高のオオカミ。誰にも頼らぬ強さの象徴。', imageUrl: '' },
 ];
 
 // ガチャ排出率
