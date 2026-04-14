@@ -237,10 +237,18 @@ export const COLLECTION_CARDS: CollectionCard[] = [
   { id: 'card-191', name: '三日天下', category: 'discovery', rarity: 'SR', description: '光秀が信長を討ってから秀吉に敗れるまでの短命な支配。儚き権力の象徴。', imageUrl: '/images/cards/mikka-tenka.png' },
 
   // ===== オオカミデッキ追加 (4枚) =====
-  { id: 'card-192', name: '遠吠え', category: 'inventions', rarity: 'N', description: '月夜に響くオオカミの咆哮。仲間を呼び寄せる群れの合図。', imageUrl: '' },
-  { id: 'card-193', name: '群れの掟', category: 'inventions', rarity: 'N', description: 'オオカミの社会を支える厳格な序列。アルファを頂点とする絆の結束。', imageUrl: '' },
-  { id: 'card-194', name: '縄張り', category: 'inventions', rarity: 'N', description: 'オオカミが匂いで示す支配領域。侵入者を威嚇で退ける。', imageUrl: '' },
-  { id: 'card-195', name: '一匹狼', category: 'creatures', rarity: 'SR', description: '群れを離れ独りで生きる孤高のオオカミ。誰にも頼らぬ強さの象徴。', imageUrl: '' },
+  { id: 'card-192', name: '遠吠え', category: 'inventions', rarity: 'N', description: '月夜に響くオオカミの咆哮。仲間を呼び寄せる群れの合図。', imageUrl: '/images/cards/howl.png' },
+  { id: 'card-193', name: '群れの掟', category: 'inventions', rarity: 'N', description: 'オオカミの社会を支える厳格な序列。アルファを頂点とする絆の結束。', imageUrl: '/images/cards/pack-law.png' },
+  { id: 'card-194', name: '縄張り', category: 'inventions', rarity: 'N', description: 'オオカミが匂いで示す支配領域。侵入者を威嚇で退ける。', imageUrl: '/images/cards/territory.png' },
+  { id: 'card-195', name: '一匹狼', category: 'creatures', rarity: 'SR', description: '群れを離れ独りで生きる孤高のオオカミ。誰にも頼らぬ強さの象徴。', imageUrl: '/images/cards/lone-wolf.png' },
+
+  // ===== ダ・ヴィンチデッキ (6枚) =====
+  { id: 'card-196', name: 'レオナルド・ダ・ヴィンチ', category: 'great_people', rarity: 'R', description: 'ルネサンスの万能の天才。絵画・解剖学・工学に類い稀な才能を発揮した。', imageUrl: '/images/cards/leonardo-da-vinci.png' },
+  { id: 'card-197', name: 'モナ・リザ', category: 'inventions', rarity: 'SR', description: '謎めいた微笑みで世界を魅了するダ・ヴィンチの最高傑作。', imageUrl: '/images/cards/mona-lisa.png' },
+  { id: 'card-198', name: '飛行機械', category: 'inventions', rarity: 'N', description: '鳥の翼を研究してダ・ヴィンチが構想した人類初の飛行装置の設計。', imageUrl: '/images/cards/flying-machine.png' },
+  { id: 'card-199', name: '設計図', category: 'inventions', rarity: 'N', description: 'ダ・ヴィンチが残した精密なスケッチ。未来を見通した発明の数々。', imageUrl: '/images/cards/blueprint.png' },
+  { id: 'card-200', name: '最後の晩餐', category: 'inventions', rarity: 'N', description: 'キリストと十二使徒を描いた壁画。構図と心理描写の革新。', imageUrl: '/images/cards/last-supper.png' },
+  { id: 'card-201', name: 'ウィトルウィウス的人体図', category: 'inventions', rarity: 'N', description: '円と正方形の中の人体。古代建築家の理論を視覚化した素描。', imageUrl: '/images/cards/vitruvian-man.png' },
 ];
 
 // ガチャ排出率
