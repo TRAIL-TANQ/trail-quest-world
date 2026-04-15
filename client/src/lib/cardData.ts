@@ -230,7 +230,7 @@ export const COLLECTION_CARDS: CollectionCard[] = [
   { id: 'card-184', name: '長篠の陣', category: 'inventions', rarity: 'N', description: '1575年、信長が武田騎馬隊を鉄砲三段撃ちで撃破した布陣。戦術革命の象徴。', imageUrl: '/images/cards/nagashino-formation.png' },
   { id: 'card-185', name: '南蛮貿易', category: 'inventions', rarity: 'N', description: 'ポルトガル・スペインとの交易。鉄砲やキリスト教が日本に伝わった。', imageUrl: '/images/cards/nanban-trade.png' },
   { id: 'card-186', name: '安土城', category: 'world_heritage', rarity: 'N', description: '信長が築いた天下の名城。天守閣を持つ日本初の近世城郭とされる。', imageUrl: '/images/cards/azuchi-castle.png' },
-  { id: 'card-187', name: '本能寺の変', category: 'discovery', rarity: 'SR', description: '1582年、明智光秀の謀反で織田信長が命を落とした事件。戦国史最大の転換点。', imageUrl: '/images/cards/honnoji.png' },
+  { id: 'card-187', name: '本能寺の変', category: 'discovery', rarity: 'SSR', description: '1582年、明智光秀の謀反で織田信長が命を落とした事件。戦国史最大の転換点。ベンチの信長を犠牲に歴史を塗り替える。', imageUrl: '/images/cards/honnoji.png' },
   { id: 'card-188', name: '明智光秀', category: 'great_people', rarity: 'SR', description: '織田信長の家臣。本能寺の変で主君を討ったが、わずか11日で秀吉に敗れた武将。', imageUrl: '/images/cards/akechi-mitsuhide.png' },
   { id: 'card-189', name: '愛宕百韻', category: 'inventions', rarity: 'SR', description: '本能寺の変の直前、光秀が愛宕山で詠んだ連歌。「時は今」の句に謀反の暗示を残した。', imageUrl: '/images/cards/atago-hyakuin.png' },
   { id: 'card-190', name: '天王山', category: 'discovery', rarity: 'SR', description: '山崎の戦いの舞台。光秀と秀吉が覇権を賭けて激突した天下分け目の地。', imageUrl: '/images/cards/tennouzan.png' },
@@ -243,18 +243,26 @@ export const COLLECTION_CARDS: CollectionCard[] = [
   { id: 'card-195', name: '一匹狼', category: 'creatures', rarity: 'SR', description: '群れを離れ独りで生きる孤高のオオカミ。誰にも頼らぬ強さの象徴。', imageUrl: '/images/cards/lone-wolf.png' },
 
   // ===== ダ・ヴィンチデッキ (6枚) =====
-  { id: 'card-196', name: 'レオナルド・ダ・ヴィンチ', category: 'great_people', rarity: 'R', description: 'ルネサンスの万能の天才。絵画・解剖学・工学に類い稀な才能を発揮した。', imageUrl: '/images/cards/leonardo-da-vinci.png' },
-  { id: 'card-197', name: 'モナ・リザ', category: 'inventions', rarity: 'SR', description: '謎めいた微笑みで世界を魅了するダ・ヴィンチの最高傑作。', imageUrl: '/images/cards/mona-lisa.png' },
+  { id: 'card-196', name: 'レオナルド・ダ・ヴィンチ', category: 'great_people', rarity: 'SR', description: 'ルネサンスの万能の天才。絵画・解剖学・工学に類い稀な才能を発揮した。', imageUrl: '/images/cards/leonardo-da-vinci.png' },
+  { id: 'card-197', name: 'モナ・リザ', category: 'inventions', rarity: 'R', description: '世界で一番有名な絵。微笑みの謎は今も解けない。', imageUrl: '/images/cards/mona-lisa-card.png' },
   { id: 'card-198', name: '飛行機械', category: 'inventions', rarity: 'N', description: '鳥の翼を研究してダ・ヴィンチが構想した人類初の飛行装置の設計。', imageUrl: '/images/cards/flying-machine.png' },
-  { id: 'card-199', name: '設計図', category: 'inventions', rarity: 'N', description: 'ダ・ヴィンチが残した精密なスケッチ。未来を見通した発明の数々。', imageUrl: '/images/cards/blueprint.png' },
-  { id: 'card-200', name: '最後の晩餐', category: 'inventions', rarity: 'N', description: 'キリストと十二使徒を描いた壁画。構図と心理描写の革新。', imageUrl: '/images/cards/last-supper.png' },
+  { id: 'card-199', name: '設計図', category: 'inventions', rarity: 'N', description: 'ヘリコプター、パラシュート、戦車…500年先を見た発明の設計図。', imageUrl: '/images/cards/blueprint.png' },
+  { id: 'card-200', name: '最後の晩餐', category: 'inventions', rarity: 'R', description: '科学的な観察に基づいて描かれた傑作。', imageUrl: '/images/cards/last-supper-card.png' },
   { id: 'card-201', name: 'ウィトルウィウス的人体図', category: 'inventions', rarity: 'N', description: '円と正方形の中の人体。古代建築家の理論を視覚化した素描。', imageUrl: '/images/cards/vitruvian-man.png' },
+  { id: 'card-204', name: '解剖学', category: 'inventions', rarity: 'N', description: '人体を解剖し、筋肉や骨を正確にスケッチした。', imageUrl: '/images/cards/anatomy.png' },
+  { id: 'card-205', name: '鏡文字', category: 'inventions', rarity: 'N', description: '右から左に書かれた秘密のメモ。読まれたくないものを隠すため。', imageUrl: '/images/cards/mirror-writing.png' },
+  { id: 'card-206', name: '万能の天才', category: 'great_people', rarity: 'SSR', description: '画家、科学者、発明家…あらゆる分野を極めた人類史上最高の天才。', imageUrl: '/images/cards/universal-genius.png' },
 
   // ===== 進化専用カード =====
   { id: 'card-202', name: '聖女ジャンヌ', category: 'great_people', rarity: 'SSR', description: 'カトリック教会に聖人として認められた救国の乙女。聖女の祈りが全てを守り、失われた仲間を呼び戻す。', imageUrl: '/images/cards/saint-jeanne.png' },
 
   // ===== 変身トリガーカード =====
   { id: 'card-203', name: '火刑', category: 'inventions', rarity: 'SR', description: '1431年、ジャンヌは「魔女」として火刑に処された。しかしその炎の中から聖女が生まれる。', imageUrl: '/images/cards/burning-stake.png' },
+
+  // ===== デッキ別 SSR (2026-04) =====
+  { id: 'card-207', name: 'アウステルリッツの太陽', category: 'discovery', rarity: 'SSR', description: '1805年、三帝会戦の朝に霧が晴れナポレオンに勝利の予兆をもたらした伝説の陽光。', imageUrl: '/images/cards/austerlitz.png' },
+  { id: 'card-208', name: '月下の遠吠え', category: 'creatures', rarity: 'SSR', description: '満月の夜、群れを呼び戻す祖先の咆哮。失われた仲間を集わせる原初の声。', imageUrl: '/images/cards/moonlight-howl.png' },
+  { id: 'card-209', name: '地球は動いている', category: 'discovery', rarity: 'SSR', description: 'ガリレオが裁判の後に呟いたとされる一言。真理は何人にも止められない。', imageUrl: '/images/cards/earth-moves.png' },
 ];
 
 // ガチャ排出率

@@ -137,8 +137,7 @@ export default function HomePage() {
               <div className="h-px flex-1 max-w-[40px]" style={{
                 background: 'linear-gradient(90deg, transparent, rgba(255,215,0,0.5))',
               }} />
-              <h1 className="text-xl font-bold font-[var(--font-cinzel)] tracking-[0.15em]"
-                style={{ color: '#ffd700', textShadow: '0 0 20px rgba(255,215,0,0.4), 0 2px 4px rgba(0,0,0,0.8)' }}>
+              <h1 className="tqw-title-game text-xl font-[var(--font-cinzel)] tracking-[0.15em]">
                 TRAIL QUEST WORLD
               </h1>
               <div className="h-px flex-1 max-w-[40px]" style={{
@@ -190,7 +189,7 @@ export default function HomePage() {
         </div>
 
         {/* Daily Missions Panel */}
-        <div className="mb-5 rounded-xl overflow-hidden"
+        <div className="mb-6 rounded-xl overflow-hidden"
           style={{
             background: 'linear-gradient(135deg, rgba(34,197,94,0.08), rgba(34,197,94,0.02))',
             border: '1.5px solid rgba(34,197,94,0.25)',
@@ -298,9 +297,9 @@ export default function HomePage() {
           )}
         </div>
 
-        {/* メインエントリ: バトル / デッキクエスト (Manus design mock) */}
-        <div className="mb-5 space-y-2.5">
-          <Link href="/games/knowledge-challenger">
+        {/* メインエントリ: バトル / デッキクエスト / 2人対戦 */}
+        <div className="mb-6 flex flex-col" style={{ gap: 20 }}>
+          <Link href="/games/knowledge-challenger?screen=deck_select">
             <div
               className="tappable relative overflow-hidden cursor-pointer"
               style={{
@@ -363,10 +362,7 @@ export default function HomePage() {
               <span className="text-amber-100 text-xl">›</span>
             </div>
           </Link>
-        </div>
 
-        {/* 2-player local battle (monitor period: visible to all users) */}
-        <div className="mb-5">
           <Link href="/games/knowledge-challenger/pvp">
             <div
               className="rounded-xl p-4 flex items-center gap-3 transition-all active:scale-[0.98] cursor-pointer relative overflow-hidden"
@@ -393,7 +389,7 @@ export default function HomePage() {
         </div>
 
         {/* Ranking Preview (Top 3 + self) */}
-        <div className="mb-4 rounded-xl p-3"
+        <div className="mb-6 rounded-xl p-3"
           style={{
             background: 'linear-gradient(135deg, rgba(21,29,59,0.92), rgba(14,20,45,0.95))',
             border: '1.5px solid rgba(255,215,0,0.25)',
@@ -409,17 +405,24 @@ export default function HomePage() {
           ) : rankingPreview.length === 0 ? (
             <p className="text-[11px] text-amber-200/40 text-center py-2">まだデータがありません</p>
           ) : (
-            <div className="space-y-1 mb-2">
+            <div className="space-y-1.5 mb-2">
               {rankingPreview.slice(0, 3).map((e, i) => {
-                const medals = ['🥇', '🥈', '🥉'];
+                const rankClass = ['tqw-rank-1', 'tqw-rank-2', 'tqw-rank-3'][i];
+                const tier = i === 0 ? 'Master' : i === 1 ? 'Master' : 'Diamond';
                 const isMe = e.childId === user.id;
                 return (
-                  <div key={e.childId} className="flex items-center gap-2 text-[11px]">
-                    <span className="text-sm w-5 text-center">{medals[i]}</span>
-                    <span className="flex-1 text-amber-100 truncate font-bold">
+                  <div key={e.childId}
+                    className="flex items-center gap-2 px-2 py-1.5 rounded-lg"
+                    style={{
+                      background: 'rgba(255,255,255,0.03)',
+                      border: '1px solid rgba(255,255,255,0.05)',
+                    }}>
+                    <span className={`${rankClass} font-black text-base w-5 text-center`}>{i + 1}</span>
+                    <span className="flex-1 text-amber-100 truncate font-bold text-[11px]">
                       {e.nickname}{isMe && <span className="text-amber-200/50 ml-1">(あなた)</span>}
                     </span>
-                    <span className="font-bold" style={{ color: '#ffd700' }}>{e.primary}</span>
+                    <span className="font-bold text-[11px]" style={{ color: '#ffd700' }}>{e.primary}</span>
+                    <span className="tqw-rank-badge text-[9px] px-1.5 py-0.5">{tier}</span>
                   </div>
                 );
               })}
@@ -455,7 +458,7 @@ export default function HomePage() {
         </div>
 
         {/* Quick Actions */}
-        <div className="grid grid-cols-3 gap-2 mb-5">
+        <div className="grid grid-cols-3 gap-2 mb-6">
           {[
             { href: '/ranking', icon: '🏆', label: 'ランキング', color: '#ffd700' },
             { href: '/collection', icon: '🃏', label: 'コレクション', color: '#a855f7' },

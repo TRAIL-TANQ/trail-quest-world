@@ -66,15 +66,17 @@ export default function RankingPage() {
 
       <div className="relative z-10 px-4 pt-4 pb-24">
         <div className="flex items-center gap-2 mb-4">
-          <span className="text-xl">🏆</span>
-          <h1 className="text-lg font-bold" style={{ color: '#ffd700', textShadow: '0 0 10px rgba(255,215,0,0.3)' }}>ランキング</h1>
+          <span className="text-2xl">🏆</span>
+          <h1 className="tqw-title-game text-xl">ランキング</h1>
+          <div className="flex-1 tqw-divider ml-2" />
         </div>
 
-        {/* Personal title card */}
-        <div className="mb-4 rounded-xl p-3 flex items-center gap-3"
+        {/* Personal title card (tqw-card-panel) */}
+        <div className="tqw-card-panel mb-4 p-3 flex items-center gap-3 tqw-animate-fadeIn"
           style={{
             background: `linear-gradient(135deg, ${myTitle.color}22, ${myTitle.color}08)`,
-            border: `1.5px solid ${myTitle.color}66`,
+            borderColor: `${myTitle.color}66`,
+            boxShadow: `0 4px 20px rgba(0,0,0,0.5), 0 0 18px ${myTitle.color}22`,
           }}>
           <div className="w-12 h-12 rounded-full flex items-center justify-center text-2xl"
             style={{
@@ -102,15 +104,17 @@ export default function RankingPage() {
               <button
                 key={cat.id}
                 onClick={() => setActiveTab(cat.id)}
-                className="shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all active:scale-95"
+                className="shrink-0 px-3.5 py-2 rounded-full text-[11px] font-bold transition-all active:scale-95"
                 style={isActive ? {
-                  background: 'linear-gradient(135deg, #ffd700, #f0a500)',
-                  color: '#0b1128',
-                  boxShadow: '0 2px 8px rgba(255,215,0,0.3)',
+                  background: 'linear-gradient(180deg, var(--tqw-gold-light) 0%, var(--tqw-gold) 50%, var(--tqw-gold-dark) 100%)',
+                  color: '#1a1000',
+                  border: '1.5px solid var(--tqw-gold)',
+                  boxShadow: '0 4px 12px rgba(255,215,0,0.35), inset 0 1px 0 rgba(255,255,255,0.3)',
                 } : {
-                  background: 'rgba(255,255,255,0.05)',
-                  border: '1px solid rgba(255,215,0,0.15)',
-                  color: 'rgba(255,255,255,0.55)',
+                  background: 'rgba(0,0,0,0.45)',
+                  border: '1px solid rgba(255,215,0,0.18)',
+                  color: 'rgba(255,236,224,0.65)',
+                  backdropFilter: 'blur(6px)',
                 }}
               >
                 <span className="mr-1">{cat.emoji}</span>{cat.label}
@@ -119,8 +123,48 @@ export default function RankingPage() {
           })}
         </div>
 
+        {/* Podium TOP 3 */}
+        {!loading && entries.length >= 3 && (
+          <div className="mb-4 flex items-end justify-center gap-2 px-2">
+            {[1, 0, 2].map((idx) => {
+              const e = entries[idx];
+              if (!e) return null;
+              const rank = idx + 1;
+              const heights = ['h-24', 'h-20', 'h-16'];
+              const podiumColors = [
+                'linear-gradient(180deg, #ffd700, #c5a03f)',
+                'linear-gradient(180deg, #e0e0e0, #a8a8a8)',
+                'linear-gradient(180deg, #cd7f32, #8b5a2b)',
+              ];
+              const rankClass = ['tqw-rank-1', 'tqw-rank-2', 'tqw-rank-3'][idx];
+              const isMe = e.childId === user.id;
+              return (
+                <div key={e.childId} className="flex flex-col items-center flex-1 min-w-0">
+                  <div className="w-12 h-12 rounded-full mb-1.5 flex items-center justify-center text-xl tqw-avatar-ring flex-shrink-0"
+                    style={{ background: 'linear-gradient(135deg, #2a3060, #1a2040)' }}>
+                    {rank === 1 ? '👑' : rank === 2 ? '🥈' : '🥉'}
+                  </div>
+                  <p className="text-[11px] font-bold text-amber-100 truncate max-w-full px-1">
+                    {e.nickname}{isMe && <span className="text-amber-200/50"> (あなた)</span>}
+                  </p>
+                  <p className="text-[10px] font-black mb-1" style={{ color: '#ffd700' }}>
+                    {activeCategory.formatPrimary(e.primary)}
+                  </p>
+                  <div className={`w-full ${heights[idx]} rounded-t-lg flex items-start justify-center pt-1.5`}
+                    style={{
+                      background: podiumColors[idx],
+                      boxShadow: `inset 0 2px 0 rgba(255,255,255,0.3), 0 -2px 12px ${idx === 0 ? 'rgba(255,215,0,0.4)' : 'rgba(0,0,0,0.4)'}`,
+                    }}>
+                    <span className={`${rankClass} font-black text-xl`}>{rank}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         {/* Ranking list */}
-        <div className="gold-frame rounded-xl overflow-hidden">
+        <div className="tqw-card-panel overflow-hidden p-0">
           {loading ? (
             <div className="text-center text-amber-200/50 text-xs py-8">読み込み中…</div>
           ) : entries.length === 0 ? (
@@ -135,9 +179,12 @@ export default function RankingPage() {
                   className="flex items-center gap-3 px-3 py-2.5"
                   style={{
                     borderBottom: i < entries.length - 1 ? '1px solid rgba(255,215,0,0.08)' : 'none',
-                    background: entry.rank <= 3
-                      ? `linear-gradient(90deg, ${medalColors[entry.rank - 1]}11, transparent)`
-                      : isMe ? 'rgba(255,215,0,0.1)' : 'transparent',
+                    background: isMe
+                      ? 'linear-gradient(90deg, rgba(255,215,0,0.22), rgba(255,215,0,0.08))'
+                      : entry.rank <= 3
+                      ? `linear-gradient(90deg, ${medalColors[entry.rank - 1]}22, transparent)`
+                      : 'transparent',
+                    boxShadow: isMe ? 'inset 0 0 14px rgba(255,215,0,0.15)' : 'none',
                   }}>
                   <div className="w-8 text-center shrink-0">
                     {entry.rank <= 3
@@ -184,7 +231,7 @@ export default function RankingPage() {
         )}
 
         {/* Title bands legend */}
-        <div className="mt-4 gold-frame-thin rounded-xl p-3">
+        <div className="tqw-card-panel mt-4 p-3">
           <p className="text-[10px] text-amber-200/40 mb-2 font-bold">🏅 称号（Eloレート帯）</p>
           <div className="space-y-1">
             {[

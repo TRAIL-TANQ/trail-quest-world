@@ -70,6 +70,7 @@ import CardPreviewOverlay from '@/components/CardPreviewOverlay';
 import { loadMyDecks, buildMyDeckCards, MY_DECK_MAX_DECKS } from '@/lib/myDecks';
 import { saveHallOfFame } from '@/lib/hallOfFameService';
 import { toast } from 'sonner';
+import { loadEquippedBg, getBg } from '@/lib/backgrounds';
 
 type ScreenPhase = 'title' | 'deck_select' | 'playing' | 'result';
 
@@ -240,6 +241,8 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
       'photosynthesis', 'poison_frog', 'paper',
       'prayer_light', 'holy_banner',
       'imperial_decree', 'rainbow_nation', 'nobel_peace',
+      'book_burning', 'anatomy', 'mirror_writing',
+      'honnoji', 'moonlit_howl',
     ]),
     [],
   );
@@ -257,6 +260,9 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
     }
     if (effId === 'burning_stake') {
       return gs[atkSide].bench.some((b) => b.name === 'ジャンヌ・ダルク' && !sealed.includes(b.name));
+    }
+    if (effId === 'honnoji') {
+      return gs[atkSide].bench.some((b) => b.name === '織田信長' && !sealed.includes(b.name));
     }
     return false;
   }, []);
@@ -1170,6 +1176,21 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
             }
           }
 
+          // ===== Check for evolution (ダ・ヴィンチ → 万能の天才) =====
+          {
+            const lastRevealed = rs.attackRevealed[rs.attackRevealed.length - 1];
+            if (lastRevealed?.name === '万能の天才' && lastRevealed.id.startsWith('evolved-genius-')) {
+              const davinciTemplate = ALL_BATTLE_CARDS.find((c) => c.name === 'レオナルド・ダ・ヴィンチ');
+              if (davinciTemplate) {
+                playSound('evolve');
+                setEvolutionOverlay({ from: davinciTemplate, to: lastRevealed });
+                await waitMs(3000);
+                if (unmountedRef.current) return;
+                setEvolutionOverlay(null);
+              }
+            }
+          }
+
           // ===== Check for combo names =====
           {
             const lastRevealed = rs.attackRevealed[rs.attackRevealed.length - 1];
@@ -2053,7 +2074,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
               }
             }}
             disabled={!imagesPreloaded || (stageId === null && !(previewValidation?.valid))}
-            className="rpg-btn rpg-btn-green tappable pulse-btn w-full text-lg py-3.5 mb-2"
+            className="tqw-btn-battle tappable pulse-btn w-full text-lg font-black py-3.5 mb-2 rounded-xl tracking-widest"
             style={{ opacity: (!imagesPreloaded || (stageId === null && !(previewValidation?.valid))) ? 0.5 : 1 }}
           >
             {!imagesPreloaded
@@ -2661,16 +2682,24 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
     <div className={`min-h-screen flex flex-col relative ${turnGlowClass}`} style={{
       background: 'linear-gradient(180deg, #0a0e1a 0%, #1a1f3a 50%, #0a0e1a 100%)',
     }}>
-      {/* Battle bg overlay (Manus mock) */}
-      <div aria-hidden className="absolute inset-0 pointer-events-none"
-        style={{
-          backgroundImage: 'url(/images/ui/bg-battle.png)',
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          opacity: 0.25,
-          mixBlendMode: 'screen',
-          zIndex: 0,
-        }} />
+      {/* Battle bg + overlay (Manus mock battle.html) — uses equipped shop background if available */}
+      {(() => {
+        const equipped = getBg(loadEquippedBg());
+        const bgUrl = equipped?.image ?? '/images/ui/bg-battle.png';
+        const fallback = equipped?.fallbackGradient;
+        return (
+          <>
+            <div
+              aria-hidden
+              className="tqw-battle-bg"
+              style={{
+                backgroundImage: `url(${bgUrl})${fallback ? `, ${fallback}` : ''}`,
+              }}
+            />
+            <div aria-hidden className="tqw-battle-bg-overlay" />
+          </>
+        );
+      })()}
       {/* ===== Turn Banner (fades in/out on change) ===== */}
       {turnLabel && (
         <div
@@ -2778,20 +2807,20 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="text-center">
-            <p className="text-[10px] font-bold text-green-200/60">山札</p>
-            <p className="text-lg font-black text-green-300">{gameState.player.deck.length}</p>
-          </div>
-          <div className="text-center">
-            <p className="text-[10px] font-bold text-red-200/60">相手山札</p>
-            <p className="text-lg font-black text-red-300">{gameState.ai.deck.length}</p>
-          </div>
-          <div className="text-center relative">
-            <p className="text-[10px] font-bold text-amber-200/50">ALT</p>
-            <p className="text-sm font-black" style={{ color: '#ffd700' }}>
-              {altBalance !== null ? altBalance.toLocaleString() : '---'}
-            </p>
+        <div className="flex items-center gap-1.5">
+          <span className="tqw-hud-pill text-[10px]" title="あなたの山札">
+            <span className="hud-label">山札</span>
+            <span className="hud-value" style={{ color: '#86efac' }}>{gameState.player.deck.length}</span>
+          </span>
+          <span className="tqw-hud-pill text-[10px]" title="相手の山札">
+            <span className="hud-label">敵</span>
+            <span className="hud-value" style={{ color: '#fca5a5' }}>{gameState.ai.deck.length}</span>
+          </span>
+          <div className="relative">
+            <span className="tqw-hud-pill tqw-hud-pill--gold text-[10px]">
+              <span className="hud-label">ALT</span>
+              <span className="hud-value">{altBalance !== null ? altBalance.toLocaleString() : '---'}</span>
+            </span>
             {altRewardPopup && (
               <div
                 key={altRewardPopup.key}
@@ -3287,33 +3316,45 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
           const effectText = card.effect?.description ?? null;
           const effectName = card.effect?.name ?? null;
           const optional = attackPreview.optionalEffect;
-          const playLabel = optional ? '⬆️ 上にスワイプで発動 / ボタンで選択' : '⬆️ 上にスワイプで出す';
+          const playLabel = optional
+            ? '⬆️ 上にスワイプで発動'
+            : '⬆️ 上にスワイプで出す';
+          const playButtonLabel = optional ? '✨ 発動する' : '⚔️ 出す';
 
           const subActions = (
-            <div className="flex flex-col items-center gap-2 mt-2 max-w-xs">
+            <div className="flex flex-col items-center gap-2 mt-2" style={{ width: 'min(80vw, 340px)' }}>
               {effectText && (
                 <div
-                  className="rounded-lg px-3 py-2 text-center w-full"
-                  style={{ background: 'rgba(255,215,0,0.1)', border: '1px solid rgba(255,215,0,0.35)' }}
+                  className="rounded-xl px-3 py-2.5 text-center w-full"
+                  style={{
+                    background: 'rgba(0,0,0,0.65)',
+                    border: `1.5px solid ${optional ? 'rgba(255,215,0,0.55)' : 'rgba(255,215,0,0.35)'}`,
+                    boxShadow: optional ? '0 0 14px rgba(255,215,0,0.18)' : 'none',
+                  }}
                 >
-                  <p className="text-[10px] font-bold mb-0.5" style={{ color: '#ffd700' }}>
-                    ✨ {optional ? '任意発動効果' : hasAutoEffect ? '自動発動効果' : '効果'}
-                    {effectName ? ` — ${effectName}` : ''}
+                  <p className="font-black mb-1" style={{ color: '#ffd700', fontSize: 13, letterSpacing: 0.5 }}>
+                    ✨ 効果{effectName ? `: ${effectName}` : ''}
+                    {!optional && hasAutoEffect ? ' (自動)' : ''}
                   </p>
-                  <p className="text-[11px] text-amber-100/90 leading-tight">{effectText}</p>
+                  <p className="font-medium leading-snug" style={{ color: '#ffffff', fontSize: 14 }}>
+                    {effectText}
+                  </p>
                 </div>
               )}
               {optional && (
                 <button
-                  onClick={() => { playTap(); handlePreviewChoice(true); }}
-                  className="tappable px-4 py-2 rounded-lg text-xs font-bold"
+                  onClick={(e) => { e.stopPropagation(); playTap(); handlePreviewChoice(true); }}
+                  className="tappable rounded-lg font-bold"
                   style={{
-                    background: 'rgba(255,255,255,0.08)',
-                    border: '1.5px solid rgba(255,255,255,0.3)',
-                    color: 'rgba(255,255,255,0.85)',
+                    width: '55%',
+                    minHeight: 36,
+                    background: 'rgba(255,255,255,0.1)',
+                    border: '1px solid rgba(255,255,255,0.22)',
+                    color: 'rgba(255,255,255,0.75)',
+                    fontSize: 12,
                   }}
                 >
-                  効果なしで出す
+                  そのまま出す
                 </button>
               )}
             </div>
@@ -3323,6 +3364,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
             <CardPreviewOverlay
               onPlay={() => handlePreviewChoice(false)}
               playLabel={playLabel}
+              playButtonLabel={playButtonLabel}
               subActions={subActions}
             >
               {/* Full-aspect 360x500 preview — no cropping */}
@@ -4053,9 +4095,10 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
       {/* ===== Evolution Overlay ===== */}
       {evolutionOverlay && (() => {
         const isSaint = evolutionOverlay.to.name === '聖女ジャンヌ';
-        const accentColor = isSaint ? '#ffffff' : '#ffd700';
-        const particleColors = isSaint ? ['#ffffff', '#ffd700', '#fff7cc'] : ['#ffd700'];
-        const label = isSaint ? 'SAINT!' : 'EVOLVE!';
+        const isGenius = evolutionOverlay.to.name === '万能の天才';
+        const accentColor = isSaint || isGenius ? '#ffffff' : '#ffd700';
+        const particleColors = isSaint || isGenius ? ['#ffffff', '#ffd700', '#fff7cc'] : ['#ffd700'];
+        const label = isSaint ? 'SAINT!' : isGenius ? 'GENIUS!' : 'EVOLVE!';
         return (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.85)' }}>
           {/* Phase 1: From card glowing */}
@@ -4063,20 +4106,20 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
             <div className="kc-evolve-from-card" style={{ position: 'absolute' }}>
               <img src={evolutionOverlay.from.imageUrl} alt={evolutionOverlay.from.name}
                 className="rounded-xl"
-                style={{ width: 180, height: 250, objectFit: 'cover', boxShadow: `inset 0 0 30px ${accentColor}, 0 0 40px ${isSaint ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.5)'}` }} />
+                style={{ width: 180, height: 250, objectFit: 'cover', boxShadow: `inset 0 0 30px ${accentColor}, 0 0 40px ${isSaint || isGenius ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.5)'}` }} />
             </div>
             {/* Phase 2: To card appearing */}
             <div className="kc-evolve-to-card" style={{ position: 'absolute' }}>
               <img src={evolutionOverlay.to.imageUrl} alt={evolutionOverlay.to.name}
                 className="rounded-xl"
-                style={{ width: 200, height: 280, objectFit: 'cover', boxShadow: `0 0 40px ${isSaint ? 'rgba(255,255,255,0.8)' : 'rgba(255,215,0,0.6)'}, 0 0 80px ${isSaint ? 'rgba(255,215,0,0.35)' : 'transparent'}` }} />
+                style={{ width: 200, height: 280, objectFit: 'cover', boxShadow: `0 0 40px ${isSaint || isGenius ? 'rgba(255,255,255,0.8)' : 'rgba(255,215,0,0.6)'}, 0 0 80px ${isSaint || isGenius ? 'rgba(255,215,0,0.35)' : 'transparent'}` }} />
             </div>
           </div>
           {/* EVOLVE / SAINT text */}
           <div className="absolute bottom-[20vh] left-0 right-0 text-center">
             <p className="kc-evolve-text font-black" style={{
               fontSize: '48px', color: accentColor,
-              textShadow: isSaint
+              textShadow: isSaint || isGenius
                 ? '0 0 30px rgba(255,255,255,0.9), 0 0 60px rgba(255,215,0,0.5)'
                 : '0 0 30px rgba(255,215,0,0.8), 0 0 60px rgba(255,215,0,0.4)',
               letterSpacing: '8px',

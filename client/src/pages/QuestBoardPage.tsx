@@ -19,10 +19,19 @@ import {
   loadQuestProgress,
   type QuestProgressData,
 } from '@/lib/questProgress';
+import { getRemainingAltCount, getTodayKeyJST } from '@/lib/altDailyLimit';
+import { useUserStore } from '@/lib/stores';
 
 export default function QuestBoardPage() {
   const [, navigate] = useLocation();
+  const userId = useUserStore((s) => s.user.id);
   const [progress, setProgress] = useState<QuestProgressData>(loadQuestProgress);
+  // 日付が変わったら残り回数表示をリフレッシュするための鍵
+  const [todayKey, setTodayKey] = useState(getTodayKeyJST);
+  useEffect(() => {
+    const t = setInterval(() => setTodayKey(getTodayKeyJST()), 30_000);
+    return () => clearInterval(t);
+  }, []);
 
   // Reload on focus (in case quiz was completed in another tab)
   useEffect(() => {
@@ -126,9 +135,16 @@ export default function QuestBoardPage() {
                     statusIcon = '▶️';
                   }
 
-                  // Special labels for master/legend
-                  const isRewardDiff = diff === 'master' || diff === 'legend';
-                  const rewardLabel = diff === 'master' ? 'デッキ解放' : diff === 'legend' ? 'SSR解放' : '';
+                  // Labels: beginner = デッキ解放条件 / legend = SSR解放 / challenger・master = ALT稼ぎ
+                  const isRewardDiff = diff === 'beginner' || diff === 'legend';
+                  const rewardLabel =
+                    diff === 'beginner' ? 'デッキ解放' :
+                    diff === 'legend'   ? 'SSR解放'   : '';
+
+                  // 1日3回ALT獲得制限の残り回数（todayKey 参照で日替わりを検知）
+                  void todayKey;
+                  const altRemaining = getRemainingAltCount(userId, deckKey, diff);
+                  const altExhausted = altRemaining === 0;
 
                   return (
                     <button
@@ -183,6 +199,17 @@ export default function QuestBoardPage() {
                           {rewardLabel}
                         </div>
                       )}
+
+                      {/* ALT 残り回数 */}
+                      <div
+                        className="text-[8px] mt-0.5 font-bold"
+                        style={{
+                          color: altExhausted ? 'rgba(148,163,184,0.55)' : '#ffd700',
+                        }}
+                        title={altExhausted ? '明日0:00（JST）リセット' : `本日あと${altRemaining}回 ALT 獲得可能`}
+                      >
+                        {altExhausted ? '明日リセット' : `残り${altRemaining}回`}
+                      </div>
                     </button>
                   );
                 })}
@@ -190,25 +217,21 @@ export default function QuestBoardPage() {
 
               {/* Progress subtitle */}
               {(() => {
-                const masterDp = deckProgress.master;
-                const challengerDp = deckProgress.challenger;
                 const beginnerDp = deckProgress.beginner;
+                const legendDp = deckProgress.legend;
                 let subtitle = '';
-                if (!masterDp.cleared && isDifficultyUnlocked(progress, deckKey, 'master')) {
-                  const remain = CLEAR_THRESHOLD - masterDp.correctCount;
-                  subtitle = `デッキ解放まであと${remain}問！`;
-                } else if (!challengerDp.cleared && isDifficultyUnlocked(progress, deckKey, 'challenger')) {
-                  subtitle = 'チャレンジャー挑戦中';
-                } else if (!beginnerDp.cleared) {
-                  subtitle = 'ビギナーに挑戦しよう！';
-                } else if (masterDp.cleared && !deckProgress.legend.cleared) {
-                  const remain = CLEAR_THRESHOLD - deckProgress.legend.correctCount;
-                  subtitle = `SSR解放まであと${remain}問！`;
+                if (!beginnerDp.cleared) {
+                  const remain = Math.max(0, CLEAR_THRESHOLD - beginnerDp.correctCount);
+                  subtitle = `⭐ ビギナー${CLEAR_THRESHOLD}問正解でデッキ解放！（あと${remain}問）`;
+                } else if (!legendDp.cleared) {
+                  const remain = Math.max(0, CLEAR_THRESHOLD - legendDp.correctCount);
+                  subtitle = `👑 レジェンド${CLEAR_THRESHOLD}問正解でSSR解放！（あと${remain}問）`;
+                } else {
+                  subtitle = '全解放済み — ALT稼ぎに何度でも挑戦しよう！';
                 }
-                if (!subtitle) return null;
                 return (
                   <div className="px-3.5 pb-2.5 -mt-1">
-                    <p className="text-[10px] text-amber-200/40">{subtitle}</p>
+                    <p className="text-[10px] text-amber-200/50">{subtitle}</p>
                   </div>
                 );
               })()}

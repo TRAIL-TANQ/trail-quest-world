@@ -14,7 +14,8 @@ interface Props {
   children: ReactNode;           // カード本体（画像+装飾）
   onPlay: () => void;            // 「出す」時に発火
   onCancel?: () => void;         // 背景タップ or キャンセル
-  playLabel?: string;            // 出すボタン表記
+  playLabel?: string;            // スワイプ案内文
+  playButtonLabel?: string;      // メインボタンの文言（デフォルト: ⚔️ 出す）
   disabled?: boolean;            // プレイ不可の場合
   subActions?: ReactNode;        // 追加のアクションボタン（効果なしで出す 等）
 }
@@ -26,6 +27,7 @@ export default function CardPreviewOverlay({
   onPlay,
   onCancel,
   playLabel = '⬆️ 上にスワイプで出す',
+  playButtonLabel = '⚔️ 出す',
   disabled = false,
   subActions,
 }: Props) {
@@ -214,16 +216,16 @@ export default function CardPreviewOverlay({
               className="tappable pulse-btn px-6 rounded-lg text-sm font-black"
               style={{
                 minHeight: 48,
-                minWidth: 120,
+                minWidth: 160,
                 background: 'linear-gradient(135deg, #ffd700, #f59e0b)',
                 color: '#0b1128',
-                boxShadow: '0 3px 12px rgba(255,215,0,0.4)',
+                boxShadow: '0 3px 14px rgba(255,215,0,0.55)',
                 opacity: disabled ? 0.5 : 1,
                 touchAction: 'manipulation',
                 pointerEvents: 'auto',
               }}
             >
-              ⚔️ 出す
+              {playButtonLabel}
             </button>
           </div>
           {subActions}

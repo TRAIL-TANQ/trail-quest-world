@@ -58,12 +58,19 @@ export const EFFECT_COLORS: Record<CardEffectCategory, string> = {
 };
 
 export const EFFECT_DEFS: Record<string, CardEffect> = {
-  davinci:    { id: 'davinci',    name: '万能の天才',         description: 'ベンチに「モナ・リザ」で攻撃+3、「設計図」で防御+2。', category: 'special' },
-  mona_lisa:     { id: 'mona_lisa',     name: '謎めいた微笑',     description: 'From the bench: ダ・ヴィンチ／レオナルド・ダ・ヴィンチの攻撃+3。', category: 'atk' },
+  davinci:    { id: 'davinci',    name: '万能の天才',         description: 'ベンチにモナ・リザ+最後の晩餐で万能の天才に進化。', category: 'special' },
+  mona_lisa:     { id: 'mona_lisa',     name: '謎めいた微笑',     description: 'From the bench: ダ・ヴィンチ／レオナルド・ダ・ヴィンチの防御+2。', category: 'def' },
   flying_machine: { id: 'flying_machine', name: '空への夢',        description: '公開時、相手デッキトップ1枚を除外。防御時はベンチの「設計図」1枚につき防御+2（重複可能）。', category: 'debuff' },
-  blueprint:     { id: 'blueprint',     name: '未来への構想',     description: 'From the bench: 飛行機械の防御+2（重複可能）。', category: 'def' },
-  last_supper:   { id: 'last_supper',   name: '最期の饗宴',       description: '公開時、ベンチのダ・ヴィンチ系カード1枚をデッキの一番上に戻す。', category: 'bench' },
+  blueprint:     { id: 'blueprint',     name: '未来への構想',     description: 'From the bench: ダ・ヴィンチ系カードの攻撃+1（重複可能）。', category: 'atk' },
+  last_supper:   { id: 'last_supper',   name: '最期の饗宴',       description: 'From the bench: ダ・ヴィンチ／レオナルド・ダ・ヴィンチの攻撃+2。', category: 'atk' },
   vitruvian_man: { id: 'vitruvian_man', name: '理想の調和',       description: '公開時、ベンチのダ・ヴィンチ系カード1枚につき自身の攻防+1。', category: 'special' },
+  anatomy:       { id: 'anatomy',       name: '人体の探求',       description: '公開時、デッキ内のダ・ヴィンチ系1枚をデッキトップに移動（任意発動）。', category: 'bench' },
+  mirror_writing:{ id: 'mirror_writing',name: '逆さの秘密',       description: '公開時、相手の次のカードの効果を無効化（任意発動）。', category: 'debuff' },
+  genius:        { id: 'genius',        name: 'ルネサンスの光',   description: '公開時、味方全カード攻防+2、相手の効果カードを全て無効化（このラウンド中）。', category: 'special' },
+  honnoji:       { id: 'honnoji',       name: '灰からの継承',     description: '公開時（任意発動・ベンチに信長）: 信長を除外、両者ベンチ全除外、自デッキを明智光秀・愛宕百韻・天王山・三日天下の4枚に再構成する。', category: 'special' },
+  austerlitz_sun:{ id: 'austerlitz_sun',name: '三帝会戦の陽光',   description: '公開時、このラウンド中、味方ベンチのナポレオン系カードの効果を2倍にする。', category: 'special' },
+  moonlit_howl:  { id: 'moonlit_howl',  name: '祖先の咆哮',       description: '公開時、除外されたオオカミ系カードを全てデッキに戻し、ベンチのオオカミ系1枚につき自身の攻防+2。', category: 'special' },
+  earth_moves:   { id: 'earth_moves',   name: 'それでも動いている', description: '公開時、相手ベンチの効果を全封印し、このラウンド中味方全カードの攻撃+3。', category: 'special' },
   einstein:   { id: 'einstein',   name: '天才の頭脳',         description: 'ベンチに「相対性理論の論文」で攻撃+4。「光速」で防御+3。両方あれば相手全攻撃カードパワー-1。', category: 'special' },
   curie:      { id: 'curie',      name: '二度のノーベル賞',   description: 'ベンチに「ラジウム」で攻撃+3。「研究ノート」で防御+3。両方あれば全味方カード効果2回発動。', category: 'special' },
   napoleon:   { id: 'napoleon',   name: '皇帝の号令',         description: 'ベンチのナポレオン法典1枚につき防御+1（重複可能）。', category: 'special' },
@@ -310,6 +317,12 @@ export const EFFECT_BY_CARD_NAME: Record<string, string> = {
   '筆':                   'fude',
   '和歌':                 'waka',
   '十二単':               'junihitoe',
+  // ===== 信長拡張デッキ =====
+  '本能寺の変':           'honnoji',
+  // ===== デッキ別 SSR =====
+  'アウステルリッツの太陽': 'austerlitz_sun',
+  '月下の遠吠え':           'moonlit_howl',
+  '地球は動いている':       'earth_moves',
   // ===== オオカミデッキ =====
   'オオカミ':             'wolf',
   '遠吠え':               'howl',
@@ -323,6 +336,9 @@ export const EFFECT_BY_CARD_NAME: Record<string, string> = {
   '設計図':               'blueprint',
   '最後の晩餐':           'last_supper',
   'ウィトルウィウス的人体図': 'vitruvian_man',
+  '解剖学':               'anatomy',
+  '鏡文字':               'mirror_writing',
+  '万能の天才':           'genius',
 };
 
 export interface BattleCard {
@@ -361,7 +377,7 @@ export const CATEGORY_RARITY_STATS: Record<CardCategory, Record<CardRarity, Stat
     N:   [{ attackPower: 1, defensePower: 1 }, { attackPower: 2, defensePower: 1 }],
     R:   [{ attackPower: 3, defensePower: 2 }],
     SR:  [{ attackPower: 5, defensePower: 3 }],
-    SSR: [{ attackPower: 6, defensePower: 4 }],
+    SSR: [{ attackPower: 6, defensePower: 3 }],
   },
   creature: {
     N:   [{ attackPower: 2, defensePower: 1 }, { attackPower: 1, defensePower: 1 }],
@@ -372,19 +388,19 @@ export const CATEGORY_RARITY_STATS: Record<CardCategory, Record<CardRarity, Stat
   heritage: {
     N:   [{ attackPower: 1, defensePower: 3 }],
     R:   [{ attackPower: 1, defensePower: 5 }],
-    SR:  [{ attackPower: 1, defensePower: 6 }],
+    SR:  [{ attackPower: 1, defensePower: 4 }],
     SSR: [{ attackPower: 1, defensePower: 8 }],
   },
   invention: {
     N:   [{ attackPower: 1, defensePower: 1 }, { attackPower: 2, defensePower: 2 }],
     R:   [{ attackPower: 2, defensePower: 2 }, { attackPower: 3, defensePower: 3 }],
-    SR:  [{ attackPower: 4, defensePower: 4 }],
+    SR:  [{ attackPower: 4, defensePower: 3 }],
     SSR: [{ attackPower: 5, defensePower: 5 }],
   },
   discovery: {
     N:   [{ attackPower: 1, defensePower: 1 }, { attackPower: 2, defensePower: 2 }],
     R:   [{ attackPower: 2, defensePower: 2 }, { attackPower: 3, defensePower: 3 }],
-    SR:  [{ attackPower: 4, defensePower: 4 }],
+    SR:  [{ attackPower: 4, defensePower: 3 }],
     SSR: [{ attackPower: 5, defensePower: 5 }],
   },
 };
@@ -402,7 +418,7 @@ function pickStatProfile(id: string, profiles: StatProfile[]): StatProfile {
 // outside the category default. Keyed by card name for stability.
 export const CARD_STAT_OVERRIDES: Record<string, StatProfile> = {
   'ダイナマイト': { attackPower: 3, defensePower: 2 },
-  '火薬':           { attackPower: 0, defensePower: 0 },
+  '火薬':           { attackPower: 1, defensePower: 1 },
   // ===== コンボ系 (2026-04) =====
   '蓄音機':           { attackPower: 1, defensePower: 1 },
   'ゾウガメ':         { attackPower: 1, defensePower: 1 },
@@ -410,7 +426,7 @@ export const CARD_STAT_OVERRIDES: Record<string, StatProfile> = {
   '風洞':             { attackPower: 1, defensePower: 1 },
   'ペスト菌':         { attackPower: 1, defensePower: 1 },
   '血清':             { attackPower: 1, defensePower: 1 },
-  '始皇帝':           { attackPower: 4, defensePower: 4 },
+  '始皇帝':           { attackPower: 4, defensePower: 3 },
   'アマゾン川':       { attackPower: 1, defensePower: 3 },
   'アナコンダ':       { attackPower: 2, defensePower: 2 },
   '毒矢カエル':       { attackPower: 1, defensePower: 1 },
@@ -425,7 +441,7 @@ export const CARD_STAT_OVERRIDES: Record<string, StatProfile> = {
   '聖剣':             { attackPower: 2, defensePower: 1 },
   '軍旗':             { attackPower: 1, defensePower: 2 },
   'ケーキ':           { attackPower: 1, defensePower: 1 },
-  '兵馬俑':           { attackPower: 1, defensePower: 4 },
+  '兵馬俑':           { attackPower: 1, defensePower: 3 },
   // ===== コンボ系 第2弾 =====
   'コロンブス':       { attackPower: 3, defensePower: 2 },
   'マゼラン':         { attackPower: 2, defensePower: 3 },
@@ -455,7 +471,7 @@ export const CARD_STAT_OVERRIDES: Record<string, StatProfile> = {
   'サファイア':           { attackPower: 1, defensePower: 2 },
   'エメラルド':           { attackPower: 1, defensePower: 1 },
   'アメジスト':           { attackPower: 1, defensePower: 1 },
-  'ネルソン・マンデラ':   { attackPower: 2, defensePower: 4 },
+  'ネルソン・マンデラ':   { attackPower: 2, defensePower: 3 },
   'アパルトヘイト':       { attackPower: 1, defensePower: 1 },
   'アフリカゾウ':         { attackPower: 4, defensePower: 3 },
   'サバンナ':             { attackPower: 1, defensePower: 1 },
@@ -477,7 +493,7 @@ export const CARD_STAT_OVERRIDES: Record<string, StatProfile> = {
   '不老不死の薬':         { attackPower: 1, defensePower: 1 },
   '大蛇':                 { attackPower: 4, defensePower: 3 },
   '光合成':               { attackPower: 1, defensePower: 1 },
-  '大蛇の巫師':           { attackPower: 5, defensePower: 4 },
+  '大蛇の巫師':           { attackPower: 5, defensePower: 3 },
   '凱旋門':               { attackPower: 1, defensePower: 3 },
   '秦の兵士':             { attackPower: 2, defensePower: 1 },
   '始皇帝の勅令':         { attackPower: 1, defensePower: 2 },
@@ -485,7 +501,7 @@ export const CARD_STAT_OVERRIDES: Record<string, StatProfile> = {
   '祈りの光':             { attackPower: 1, defensePower: 2 },
   '白百合の盾':           { attackPower: 1, defensePower: 3 },
   '聖女の旗印':           { attackPower: 2, defensePower: 2 },
-  '聖女ジャンヌ':         { attackPower: 3, defensePower: 6 },
+  '聖女ジャンヌ':         { attackPower: 3, defensePower: 4 },
   '火刑':                 { attackPower: 1, defensePower: 1 },
   // ===== 紫式部デッキ =====
   '紫式部':               { attackPower: 2, defensePower: 3 },
@@ -512,12 +528,19 @@ export const CARD_STAT_OVERRIDES: Record<string, StatProfile> = {
   '縄張り':               { attackPower: 1, defensePower: 3 },
   '一匹狼':               { attackPower: 4, defensePower: 1 },
   // ===== ダ・ヴィンチデッキ =====
-  'レオナルド・ダ・ヴィンチ': { attackPower: 2, defensePower: 2 },
-  'モナ・リザ':           { attackPower: 0, defensePower: 0 },
+  'レオナルド・ダ・ヴィンチ': { attackPower: 5, defensePower: 5 },
+  'モナ・リザ':           { attackPower: 2, defensePower: 3 },
   '飛行機械':             { attackPower: 1, defensePower: 1 },
-  '設計図':               { attackPower: 0, defensePower: 0 },
-  '最後の晩餐':           { attackPower: 1, defensePower: 3 },
+  '設計図':               { attackPower: 1, defensePower: 1 },
+  '最後の晩餐':           { attackPower: 3, defensePower: 2 },
   'ウィトルウィウス的人体図': { attackPower: 3, defensePower: 3 },
+  '解剖学':               { attackPower: 1, defensePower: 2 },
+  '鏡文字':               { attackPower: 1, defensePower: 1 },
+  '万能の天才':           { attackPower: 7, defensePower: 7 },
+  // ===== デッキ別 SSR =====
+  'アウステルリッツの太陽': { attackPower: 3, defensePower: 3 },
+  '月下の遠吠え':           { attackPower: 4, defensePower: 3 },
+  '地球は動いている':       { attackPower: 3, defensePower: 3 },
 };
 
 // Combo card IDs for detection
@@ -1591,7 +1614,7 @@ export function uniqueCardId(prefix: string, baseId: string): string {
 export const ALL_BATTLE_CARDS: BattleCard[] = COLLECTION_CARDS.map(toBattleCard);
 
 // Cards that only appear via in-battle evolution (excluded from deck phase, gacha, AI decks)
-export const EVOLUTION_ONLY_CARDS = new Set(['大蛇', '聖女ジャンヌ']);
+export const EVOLUTION_ONLY_CARDS = new Set(['大蛇', '聖女ジャンヌ', '万能の天才', '明智光秀', '愛宕百韻', '天王山', '三日天下']);
 
 // Draftable pool: excludes evolution-only cards
 export const DRAFTABLE_BATTLE_CARDS: BattleCard[] = ALL_BATTLE_CARDS.filter((c) => !EVOLUTION_ONLY_CARDS.has(c.name));
@@ -2018,12 +2041,15 @@ export const SYNERGY_MAP: Record<string, string[]> = {
   'ジェームズ・ワット': ['蒸気機関', '石炭', '紡績機', '蒸気機関車'],
   '車輪': ['蒸気機関車', '蒸気機関', '石炭'],
   // ダ・ヴィンチコンボ
-  'レオナルド・ダ・ヴィンチ': ['モナ・リザ', '飛行機械', '設計図', '最後の晩餐', 'ウィトルウィウス的人体図'],
-  'モナ・リザ': ['レオナルド・ダ・ヴィンチ', '飛行機械', '設計図', '最後の晩餐', 'ウィトルウィウス的人体図'],
+  'レオナルド・ダ・ヴィンチ': ['モナ・リザ', '最後の晩餐', '設計図', '解剖学', '鏡文字', '飛行機械', 'ウィトルウィウス的人体図', '万能の天才'],
+  'モナ・リザ': ['レオナルド・ダ・ヴィンチ', '最後の晩餐', '飛行機械', '設計図', '万能の天才'],
   '飛行機械': ['レオナルド・ダ・ヴィンチ', 'モナ・リザ', '設計図', '最後の晩餐', 'ウィトルウィウス的人体図'],
-  '設計図': ['レオナルド・ダ・ヴィンチ', 'モナ・リザ', '飛行機械', '最後の晩餐', 'ウィトルウィウス的人体図'],
-  '最後の晩餐': ['レオナルド・ダ・ヴィンチ', 'モナ・リザ', '飛行機械', '設計図', 'ウィトルウィウス的人体図'],
+  '設計図': ['レオナルド・ダ・ヴィンチ', 'モナ・リザ', '飛行機械', '最後の晩餐', 'ウィトルウィウス的人体図', '解剖学', '鏡文字'],
+  '最後の晩餐': ['レオナルド・ダ・ヴィンチ', 'モナ・リザ', '飛行機械', '設計図', 'ウィトルウィウス的人体図', '万能の天才'],
   'ウィトルウィウス的人体図': ['レオナルド・ダ・ヴィンチ', 'モナ・リザ', '飛行機械', '設計図', '最後の晩餐'],
+  '解剖学': ['レオナルド・ダ・ヴィンチ', '設計図', '鏡文字'],
+  '鏡文字': ['レオナルド・ダ・ヴィンチ', '設計図', '解剖学'],
+  '万能の天才': ['レオナルド・ダ・ヴィンチ', 'モナ・リザ', '最後の晩餐'],
 };
 
 // ===== Round-specific offering composition for synergy draft =====

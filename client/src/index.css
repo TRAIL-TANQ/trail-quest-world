@@ -92,6 +92,23 @@
   --sidebar-accent-foreground: oklch(0.82 0.16 85);
   --sidebar-border: oklch(0.30 0.06 260);
   --sidebar-ring: oklch(0.82 0.16 85);
+
+  /* ===== TQW (Manus mock) design tokens ===== */
+  --tqw-bg-dark: #0a0e1a;
+  --tqw-bg-mid: #0f1428;
+  --tqw-bg-light: #1a1f3a;
+  --tqw-gold: #ffd700;
+  --tqw-gold-dark: #c5a03f;
+  --tqw-gold-light: #ffe066;
+  --tqw-red: #cc2233;
+  --tqw-red-dark: #8b1122;
+  --tqw-red-light: #ff4455;
+  --tqw-purple: #7b2fbe;
+  --tqw-text-white: #f0ece0;
+  --tqw-text-gray: #8a8fa8;
+  --tqw-card-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+  --tqw-btn-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), 0 0 20px rgba(255, 215, 0, 0.15);
+  --tqw-glow-gold: 0 0 15px rgba(255, 215, 0, 0.4);
 }
 
 @layer base {
@@ -133,6 +150,185 @@
   }
   @media (min-width: 1024px) {
     .container { padding-left: 2rem; padding-right: 2rem; max-width: 430px; }
+  }
+
+  /* ===== TQW (Manus mock) utilities ===== */
+  .tqw-title-game {
+    font-weight: 900;
+    background: linear-gradient(180deg, var(--tqw-gold-light) 0%, var(--tqw-gold) 40%, var(--tqw-gold-dark) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+    letter-spacing: 0.05em;
+  }
+  .tqw-card-panel {
+    background: linear-gradient(135deg, rgba(26, 31, 58, 0.9), rgba(15, 20, 40, 0.95));
+    border: 1px solid rgba(197, 160, 63, 0.2);
+    border-radius: 16px;
+    box-shadow: var(--tqw-card-shadow);
+    backdrop-filter: blur(10px);
+  }
+  .tqw-divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--tqw-gold-dark), transparent);
+    opacity: 0.5;
+  }
+  .tqw-btn-battle {
+    background: linear-gradient(180deg, #ee3344 0%, #cc1122 50%, #991122 100%);
+    color: var(--tqw-gold-light);
+    border: 2px solid var(--tqw-gold-dark);
+    box-shadow: var(--tqw-btn-shadow), inset 0 1px 0 rgba(255,255,255,0.2);
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+  }
+  .tqw-btn-quest {
+    background: linear-gradient(180deg, #2244aa 0%, #1a3388 50%, #112266 100%);
+    color: var(--tqw-gold-light);
+    border: 2px solid var(--tqw-gold-dark);
+    box-shadow: var(--tqw-btn-shadow), inset 0 1px 0 rgba(255,255,255,0.2);
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+  }
+  .tqw-btn-gold {
+    background: linear-gradient(180deg, var(--tqw-gold-light) 0%, var(--tqw-gold) 50%, var(--tqw-gold-dark) 100%);
+    color: #1a1000;
+    border: 2px solid var(--tqw-gold);
+    box-shadow: var(--tqw-btn-shadow);
+  }
+  .tqw-avatar-ring {
+    border-radius: 50%;
+    border: 2px solid var(--tqw-gold);
+    padding: 2px;
+    box-shadow: var(--tqw-glow-gold);
+  }
+  .tqw-alt-badge {
+    background: linear-gradient(135deg, var(--tqw-gold-dark), var(--tqw-gold));
+    color: #1a1000;
+    font-weight: 900;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+  .tqw-rank-1 { color: #ffd700; text-shadow: 0 0 10px rgba(255, 215, 0, 0.5); }
+  .tqw-rank-2 { color: #c0c0c0; }
+  .tqw-rank-3 { color: #cd7f32; }
+  /* Rarity frames (N silver / R blue / SR purple-gold / SSR rainbow) */
+  .tqw-rarity-n {
+    border: 2px solid #9ca3af;
+    box-shadow: 0 0 12px rgba(156,163,175,0.35), inset 0 0 10px rgba(156,163,175,0.08);
+  }
+  .tqw-rarity-r {
+    border: 2px solid #3b82f6;
+    box-shadow: 0 0 14px rgba(59,130,246,0.45), inset 0 0 10px rgba(59,130,246,0.1);
+  }
+  .tqw-rarity-sr {
+    border: 2px solid transparent;
+    background-image:
+      linear-gradient(#0f1428, #0f1428),
+      linear-gradient(135deg, #a855f7, #ffd700, #a855f7);
+    background-origin: border-box;
+    background-clip: padding-box, border-box;
+    box-shadow: 0 0 18px rgba(168,85,247,0.5);
+  }
+  .tqw-rarity-ssr {
+    border: 2px solid transparent;
+    background-image:
+      linear-gradient(#0f1428, #0f1428),
+      linear-gradient(135deg, #ef4444, #f59e0b, #10b981, #3b82f6, #8b5cf6, #ec4899);
+    background-origin: border-box;
+    background-clip: padding-box, border-box;
+    box-shadow: 0 0 22px rgba(255,215,0,0.55);
+    animation: rainbow-border 4s linear infinite;
+  }
+
+  .tqw-rank-badge {
+    font-weight: 700;
+    background: rgba(255, 215, 0, 0.1);
+    color: var(--tqw-gold);
+    border: 1px solid rgba(255, 215, 0, 0.2);
+    border-radius: 10px;
+  }
+  @keyframes tqw-shimmer {
+    0% { left: -100%; }
+    100% { left: 200%; }
+  }
+  @keyframes tqw-fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .tqw-animate-fadeIn { animation: tqw-fadeIn 0.6s ease-out forwards; }
+
+  /* Frosted-glass HUD pill (mock battle.html .hud-item / .turn-indicator) */
+  .tqw-hud-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(0, 0, 0, 0.55);
+    padding: 4px 10px;
+    border-radius: 999px;
+    color: var(--tqw-text-gray);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    font-weight: 700;
+    line-height: 1.1;
+  }
+  .tqw-hud-pill--gold {
+    color: var(--tqw-gold);
+    border-color: rgba(255, 215, 0, 0.25);
+  }
+  .tqw-hud-pill .hud-label { color: rgba(255,255,255,0.45); font-weight: 600; }
+  .tqw-hud-pill .hud-value { color: var(--tqw-gold); font-weight: 800; }
+
+  /* Layered battle background (mock battle.html .bg-overlay) */
+  .tqw-battle-bg {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    opacity: 0.28;
+    z-index: 0;
+    pointer-events: none;
+  }
+  .tqw-battle-bg-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background: linear-gradient(
+      180deg,
+      rgba(5, 8, 16, 0.55) 0%,
+      rgba(5, 8, 16, 0.25) 20%,
+      rgba(5, 8, 16, 0.15) 50%,
+      rgba(5, 8, 16, 0.35) 80%,
+      rgba(5, 8, 16, 0.75) 100%
+    );
+  }
+
+  /* Score flag container (mock .flag-container) */
+  .tqw-flag-container {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(0, 0, 0, 0.6);
+    padding: 5px 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 215, 0, 0.22);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+
+  /* Gold progress bar (mock gold divider vibe) */
+  .tqw-progress-track {
+    height: 6px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+    border: 1px solid rgba(255, 215, 0, 0.12);
+  }
+  .tqw-progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--tqw-gold-dark), var(--tqw-gold), var(--tqw-gold-light));
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+    transition: width 0.4s ease;
   }
 
   /* ===== Fantasy RPG Gold Frame System ===== */

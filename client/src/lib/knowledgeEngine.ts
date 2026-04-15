@@ -291,11 +291,19 @@ function hasJunihitoeProtection(state: GameState, protectedSide: Side): boolean 
   return my.bench.some((b) => b.name === '十二単' && !sealed.includes(b.name));
 }
 
-/** Filter out protected cards from exile list (ロベン島 → マンデラ, 十二単 → 紫式部) */
+/** Check if 安土城 is protecting 織田信長 from exile on the given side */
+function hasAzuchiProtection(state: GameState, protectedSide: Side): boolean {
+  const my = protectedSide === 'player' ? state.player : state.ai;
+  const sealed = state.sealedBenchNames[protectedSide];
+  return my.bench.some((b) => b.name === '安土城' && !sealed.includes(b.name));
+}
+
+/** Filter out protected cards from exile list (ロベン島 → マンデラ, 十二単 → 紫式部, 安土城 → 信長) */
 function filterExileWithRobbenIsland(cards: BattleCard[], state: GameState, targetSide: Side): { exiled: BattleCard[]; protected: BattleCard[] } {
   const robben = hasRobbenIslandProtection(state, targetSide);
   const junihitoe = hasJunihitoeProtection(state, targetSide);
-  if (!robben && !junihitoe) {
+  const azuchi = hasAzuchiProtection(state, targetSide);
+  if (!robben && !junihitoe && !azuchi) {
     return { exiled: cards, protected: [] };
   }
   const exiled: BattleCard[] = [];
@@ -303,6 +311,7 @@ function filterExileWithRobbenIsland(cards: BattleCard[], state: GameState, targ
   for (const c of cards) {
     if (robben && c.name === 'ネルソン・マンデラ') saved.push(c);
     else if (junihitoe && c.name === '紫式部') saved.push(c);
+    else if (azuchi && c.name === '織田信長') saved.push(c);
     else exiled.push(c);
   }
   return { exiled, protected: saved };
@@ -340,24 +349,101 @@ export function applyRevealEffect(
       const my = side === 'player' ? next.player : next.ai;
       const sealed = next.sealedBenchNames[side];
       const hasMona = my.bench.some((b) => b.name === 'モナ・リザ' && !sealed.includes(b.name));
-      const hasBlueprint = my.bench.some((b) => b.name === '設計図' && !sealed.includes(b.name));
+      const hasSupper = my.bench.some((b) => b.name === '最後の晩餐' && !sealed.includes(b.name));
+
+      // ===== 進化判定: モナ・リザ + 最後の晩餐 両方ベンチにあれば 万能の天才 に進化 =====
+      if (hasMona && hasSupper) {
+        const geniusTemplate = ALL_BATTLE_CARDS.find((c) => c.name === '万能の天才');
+        if (geniusTemplate) {
+          const evolved: BattleCard = { ...geniusTemplate, id: `evolved-genius-${Date.now()}` };
+          const newRevealed = next.attackRevealed.map((c) => c.id === card.id ? evolved : c);
+          const oldAtk = getBaseAttack(card);
+          const newAtk = getBaseAttack(evolved);
+          next = {
+            ...next,
+            attackRevealed: newRevealed,
+            attackCurrentPower: next.attackCurrentPower - oldAtk + newAtk,
+          };
+          next = withBenchGlow(next, side, ['モナ・リザ', '最後の晩餐']);
+          // ルネサンスの光 自動発動: 味方全カード攻防+2 + 相手効果封印
+          next = {
+            ...next,
+            roundAttackBonus: { ...next.roundAttackBonus, [side]: next.roundAttackBonus[side] + 2 },
+            defenderBonus: role === 'defender' ? next.defenderBonus + 2 : next.defenderBonus,
+            effectSuppressed: { ...next.effectSuppressed, [opp]: true },
+          };
+          telop = { text: '🎨 ルネサンスの光！万能の天才が全てを照らす！', color: '#ffd700' };
+          console.log('[Engine] レオナルド・ダ・ヴィンチ → 万能の天才に進化！');
+          break;
+        }
+      }
+
+      // ===== 非進化時: ベンチカードからのパッシブ加算 =====
+      const supperCount = my.bench.find((b) => b.name === '最後の晩餐' && !sealed.includes(b.name))?.count ?? 0;
+      const monaCount = my.bench.find((b) => b.name === 'モナ・リザ' && !sealed.includes(b.name))?.count ?? 0;
+      const blueprintCount = my.bench.find((b) => b.name === '設計図' && !sealed.includes(b.name))?.count ?? 0;
       const glowNames: string[] = [];
-      if (hasMona) glowNames.push('モナ・リザ');
-      if (hasBlueprint) glowNames.push('設計図');
+      if (monaCount > 0) glowNames.push('モナ・リザ');
+      if (supperCount > 0) glowNames.push('最後の晩餐');
+      if (blueprintCount > 0) glowNames.push('設計図');
       if (glowNames.length > 0) next = withBenchGlow(next, side, glowNames);
+
       if (role === 'attacker') {
-        const atk = hasMona ? 3 : 0;
+        const atk = supperCount * 2 + blueprintCount * 1;
         bonusAttack += atk;
-        telop = { text: `🎨ダ・ヴィンチ万能の天才！攻撃+${atk}`, color };
+        if (supperCount > 0) console.log(`[ベンチ効果] 最後の晩餐 → ダ・ヴィンチ 攻撃+${supperCount * 2}`);
+        if (blueprintCount > 0) console.log(`[ベンチ効果] 設計図 → ダ・ヴィンチ 攻撃+${blueprintCount}`);
+        telop = { text: `🎨 ダ・ヴィンチ！攻撃+${atk}`, color };
       } else {
-        const def = hasBlueprint ? 2 : 0;
-        if (def > 0) next = { ...next, defenderBonus: next.defenderBonus + def };
-        telop = { text: `🎨ダ・ヴィンチ万能の天才！防御+${def}`, color };
+        const def = monaCount * 2;
+        if (def > 0) {
+          next = { ...next, defenderBonus: next.defenderBonus + def };
+          console.log(`[ベンチ効果] モナ・リザ → ダ・ヴィンチ 防御+${def}`);
+        }
+        telop = { text: `🎨 ダ・ヴィンチ！防御+${def}`, color };
       }
       break;
     }
+    case 'genius': {
+      // 万能の天才 が素で公開された場合（進化以外の経路）もルネサンスの光を発動
+      next = {
+        ...next,
+        roundAttackBonus: { ...next.roundAttackBonus, [side]: next.roundAttackBonus[side] + 2 },
+        defenderBonus: role === 'defender' ? next.defenderBonus + 2 : next.defenderBonus,
+        effectSuppressed: { ...next.effectSuppressed, [opp]: true },
+      };
+      telop = { text: '🎨 ルネサンスの光！万能の天才が全てを照らす！', color: '#ffd700' };
+      break;
+    }
     case 'mona_lisa': {
-      telop = { text: '🖼️ モナ・リザ！ベンチでダ・ヴィンチを強化', color };
+      telop = { text: '🖼️ モナ・リザ！ベンチでダ・ヴィンチの防御を強化', color };
+      break;
+    }
+    case 'anatomy': {
+      // 公開時、デッキ内のダ・ヴィンチ系1枚をデッキトップに移動（任意発動）
+      const davinciFamily = new Set(['レオナルド・ダ・ヴィンチ', 'モナ・リザ', '最後の晩餐', '設計図', '鏡文字', '万能の天才', '飛行機械', 'ウィトルウィウス的人体図']);
+      const my = side === 'player' ? next.player : next.ai;
+      const idx = my.deck.findIndex((c) => davinciFamily.has(c.name));
+      if (idx > 0) {
+        const target = my.deck[idx];
+        const newDeck = [...my.deck];
+        newDeck.splice(idx, 1);
+        newDeck.unshift(target);
+        next = applySide(next, side, { ...my, deck: newDeck });
+        telop = { text: `🫀 人体の探求！${target.name}をデッキトップへ`, color };
+      } else {
+        telop = { text: '🫀 人体の探求（対象なし）', color };
+      }
+      break;
+    }
+    case 'mirror_writing': {
+      // 公開時、相手の次のカード効果を無効化。pendingEffectSuppress として相手の次の1枚を封じる。
+      // 既存の effectSuppressed はラウンド全体なので、ここでは「次の1枚だけ」を別管理するのが理想だが
+      // 現在の engine には単発封印フラグがないため、相手の次の reveal 1枚のみ封じる近似として
+      // effectSuppressed を立て、相手が効果解決したら reveal 側で 1回で解除する仕組みは未実装。
+      // 簡易版: 相手の effectSuppressed を立てる（今ラウンド中、最初の1枚で解除される想定で描画）。
+      next = { ...next, effectSuppressed: { ...next.effectSuppressed, [opp]: true } };
+      telop = { text: '🪞 鏡文字！相手の次の効果を無効化', color };
       break;
     }
     case 'flying_machine': {
@@ -389,23 +475,11 @@ export function applyRevealEffect(
       break;
     }
     case 'blueprint': {
-      telop = { text: '📐 設計図！ベンチで飛行機械を強化（重複可能）', color };
+      telop = { text: '📐 設計図！ベンチでダ・ヴィンチ系の攻撃を強化（重複可能）', color };
       break;
     }
     case 'last_supper': {
-      const davinciFamily = new Set(['レオナルド・ダ・ヴィンチ', 'モナ・リザ', '飛行機械', '設計図', '最後の晩餐', 'ウィトルウィウス的人体図']);
-      const my = side === 'player' ? next.player : next.ai;
-      const sealed = next.sealedBenchNames[side];
-      const target = my.bench.find((b) => davinciFamily.has(b.name) && !sealed.includes(b.name));
-      if (target) {
-        const newBench = removeOneFromBench(my.bench, target.name);
-        const newDeck = [target.card, ...my.deck];
-        next = applySide(next, side, { ...my, bench: newBench, deck: newDeck });
-        next = withBenchGlow(next, side, [target.name]);
-        telop = { text: `🍷 最期の饗宴！${target.name}をデッキ上に回収`, color };
-      } else {
-        telop = { text: '🍷 最期の饗宴（対象なし）', color };
-      }
+      telop = { text: '🍷 最後の晩餐！ベンチでダ・ヴィンチの攻撃を強化', color };
       break;
     }
     case 'vitruvian_man': {
@@ -481,17 +555,35 @@ export function applyRevealEffect(
       break;
     }
     case 'napoleon': {
-      // ナポレオン法典1枚につき防御+1（重複可能）
+      // ナポレオン法典1枚につき防御+1（重複可能）、大砲1枚につき攻撃+1（重複可能）
+      // アウステルリッツの太陽がベンチにあればナポレオン系効果を2倍
       const my = side === 'player' ? next.player : next.ai;
       const sealed = next.sealedBenchNames[side];
       const codeSlot = my.bench.find((b) => b.name === 'ナポレオン法典' && !sealed.includes(b.name));
       const codeCount = codeSlot?.count ?? 0;
-      if (codeCount > 0) next = withBenchGlow(next, side, ['ナポレオン法典']);
+      const cannonSlot = my.bench.find((b) => b.name === '大砲' && !sealed.includes(b.name));
+      const cannonCount = cannonSlot?.count ?? 0;
+      const hasAusterlitz = my.bench.some((b) => b.name === 'アウステルリッツの太陽' && !sealed.includes(b.name));
+      const mult = hasAusterlitz ? 2 : 1;
+      const napoleonGlow: string[] = [];
+      if (codeCount > 0) napoleonGlow.push('ナポレオン法典');
+      if (cannonCount > 0) napoleonGlow.push('大砲');
+      if (hasAusterlitz) napoleonGlow.push('アウステルリッツの太陽');
+      if (napoleonGlow.length > 0) next = withBenchGlow(next, side, napoleonGlow);
       if (role === 'attacker') {
-        telop = { text: '⚡皇帝の号令！', color };
+        const atk = cannonCount * mult;
+        if (atk > 0) {
+          bonusAttack += atk;
+          console.log(`[ベンチ効果] 大砲 → ナポレオン 攻撃+${atk}${hasAusterlitz ? ' (太陽×2)' : ''}`);
+        }
+        telop = { text: `⚡皇帝の号令！大砲${cannonCount}枚→攻撃+${atk}${hasAusterlitz ? ' ☀️×2' : ''}`, color };
       } else {
-        if (codeCount > 0) next = { ...next, defenderBonus: next.defenderBonus + codeCount };
-        telop = { text: `⚡皇帝の号令！法典${codeCount}枚→防御+${codeCount}`, color };
+        const def = codeCount * mult;
+        if (def > 0) {
+          next = { ...next, defenderBonus: next.defenderBonus + def };
+          console.log(`[ベンチ効果] ナポレオン法典 → ナポレオン 防御+${def}${hasAusterlitz ? ' (太陽×2)' : ''}`);
+        }
+        telop = { text: `⚡皇帝の号令！法典${codeCount}枚→防御+${def}${hasAusterlitz ? ' ☀️×2' : ''}`, color };
       }
       break;
     }
@@ -515,13 +607,21 @@ export function applyRevealEffect(
       const sealed = next.sealedBenchNames[side];
       const hasGun = my.bench.some((b) => b.name === '鉄砲' && !sealed.includes(b.name));
       const hasRakuichi = my.bench.some((b) => b.name === '楽市楽座' && !sealed.includes(b.name));
+      const hasAtsumori = my.bench.some((b) => b.name === '敦盛の舞' && !sealed.includes(b.name));
+      const ashigaruCount = my.bench.find((b) => b.name === '足軽' && !sealed.includes(b.name))?.count ?? 0;
+      const gunCount = my.bench.find((b) => b.name === '鉄砲' && !sealed.includes(b.name))?.count ?? 0;
+      const hasBaboSaku = my.bench.some((b) => b.name === '馬防柵' && !sealed.includes(b.name));
       const nobunagaGlow: string[] = [];
       if (hasGun) nobunagaGlow.push('鉄砲');
       if (hasRakuichi) nobunagaGlow.push('楽市楽座');
+      if (hasAtsumori) nobunagaGlow.push('敦盛の舞');
+      if (hasBaboSaku) nobunagaGlow.push('馬防柵');
       if (nobunagaGlow.length > 0) next = withBenchGlow(next, side, nobunagaGlow);
       if (role === 'attacker') {
-        const atkBonus = hasGun ? 3 : 0;
+        const atsumoriBonus = hasAtsumori ? 5 : 0;
+        const atkBonus = (hasGun ? 3 : 0) + atsumoriBonus;
         bonusAttack += atkBonus;
+        if (hasAtsumori) console.log(`[ベンチ効果] 敦盛の舞 → 織田信長 攻撃+${atsumoriBonus}`);
         if (hasGun && hasRakuichi) {
           const oppState = opp === 'player' ? next.player : next.ai;
           if (oppState.bench.length > 0) {
@@ -537,8 +637,10 @@ export function applyRevealEffect(
         }
         telop = { text: `🔥信長天下布武！攻撃+${atkBonus}${hasGun && hasRakuichi ? ' 敵封印' : ''}`, color };
       } else {
-        const defBonus = hasRakuichi ? 2 : 0;
+        const baboDef = hasBaboSaku ? (ashigaruCount + gunCount) : 0;
+        const defBonus = (hasRakuichi ? 2 : 0) + baboDef;
         next = { ...next, defenderBonus: next.defenderBonus + defBonus };
+        if (hasBaboSaku && baboDef > 0) console.log(`[ベンチ効果] 馬防柵 → 織田信長 防御+${baboDef} (足軽${ashigaruCount}+鉄砲${gunCount})`);
         if (hasGun && hasRakuichi) {
           const oppState = opp === 'player' ? next.player : next.ai;
           if (oppState.bench.length > 0) {
@@ -629,24 +731,29 @@ export function applyRevealEffect(
       break;
     }
     case 'book_burning': {
-      // 焚書坑儒: ベンチの紙の枚数分だけ相手デッキから除外
+      // 焚書坑儒: ベンチの紙の枚数分だけ相手デッキから除外、始皇帝がベンチにいれば×2
       const oppState = opp === 'player' ? next.player : next.ai;
       const myState = side === 'player' ? next.player : next.ai;
       const sealed = next.sealedBenchNames[side];
       const paperSlot = myState.bench.find((b) => b.name === '紙' && !sealed.includes(b.name));
       const paperCount = paperSlot?.count ?? 0;
-      if (paperCount > 0) {
-        const candidates = oppState.deck.slice(0, paperCount);
-        const remaining = oppState.deck.slice(paperCount);
+      const hasQinshi = myState.bench.some((b) => b.name === '始皇帝' && !sealed.includes(b.name));
+      const exileCount = paperCount * (hasQinshi ? 2 : 1);
+      if (exileCount > 0) {
+        const candidates = oppState.deck.slice(0, exileCount);
+        const remaining = oppState.deck.slice(exileCount);
         const { exiled: toExile, protected: saved } = filterExileWithRobbenIsland(candidates, next, opp);
         if (candidates.length > 0) {
           next = applySide(next, opp, { ...oppState, deck: [...saved, ...remaining] });
           if (toExile.length > 0) {
             next = { ...next, exile: { ...next.exile, [opp]: [...next.exile[opp], ...toExile] } };
           }
-          next = withBenchGlow(next, side, ['紙']);
+          const glow = ['紙']; if (hasQinshi) glow.push('始皇帝');
+          next = withBenchGlow(next, side, glow);
           const protectMsg = saved.length > 0 ? `（マンデラはロベン島が守った！）` : '';
-          telop = { text: `📚 思想統制！紙${paperCount}枚 → 相手デッキ${toExile.length}枚を除外！${protectMsg}`, color };
+          const multi = hasQinshi ? ` (紙${paperCount}×始皇帝=2倍)` : '';
+          telop = { text: `📚 思想統制！${toExile.length}枚を除外！${multi}${protectMsg}`, color };
+          console.log(`[特殊効果] 焚書坑儒: 紙${paperCount}枚${hasQinshi ? '+始皇帝×2' : ''} → ${toExile.length}枚除外`);
         }
       } else {
         telop = { text: '📚 焚書坑儒（ベンチに紙がありません）', color };
@@ -1354,6 +1461,105 @@ export function applyRevealEffect(
       }
       telop = { text: '🔥 殉教の炎！ジャンヌが炎に包まれ…聖女として蘇る！', color: '#ffffff' };
       console.log(`[Engine] 火刑 → 聖女ジャンヌに変身！ジャンヌを除外、除外回収=${recoveredCount}枚`);
+      break;
+    }
+    case 'honnoji': {
+      // 本能寺の変（任意発動・ベンチに織田信長が必要）
+      // 1. 自分ベンチから織田信長1枚を除外
+      // 2. 両陣営のベンチを全て除外へ送る
+      // 3. 自分のデッキを 明智光秀・愛宕百韻・天王山・三日天下 の4枚に再構成
+      const my = side === 'player' ? next.player : next.ai;
+      const nobunagaSlot = my.bench.find((b) => b.name === '織田信長' && !next.sealedBenchNames[side].includes(b.name));
+      if (!nobunagaSlot) {
+        telop = { text: '本能寺の変（ベンチに織田信長がいません）', color };
+        break;
+      }
+      // Step 1: remove 織田信長 from bench → exile
+      const newMyBench = removeOneFromBench(my.bench, '織田信長');
+      let newExileSelf = [...next.exile[side], nobunagaSlot.card];
+      // Step 2: exile all remaining bench of both sides
+      for (const slot of newMyBench) {
+        for (let i = 0; i < slot.count; i++) newExileSelf.push(slot.card);
+      }
+      const oppState = opp === 'player' ? next.player : next.ai;
+      let newExileOpp = [...next.exile[opp]];
+      for (const slot of oppState.bench) {
+        for (let i = 0; i < slot.count; i++) newExileOpp.push(slot.card);
+      }
+      // Step 3: rebuild own deck with the four 明智ルート cards
+      const akechiNames = ['明智光秀', '愛宕百韻', '天王山', '三日天下'];
+      const newDeck: BattleCard[] = [];
+      const stamp = Date.now();
+      for (const name of akechiNames) {
+        const tmpl = ALL_BATTLE_CARDS.find((c) => c.name === name);
+        if (tmpl) newDeck.push({ ...tmpl, id: `evolved-akechi-${tmpl.id}-${stamp}-${newDeck.length}` });
+      }
+      next = {
+        ...next,
+        exile: { ...next.exile, [side]: newExileSelf, [opp]: newExileOpp },
+      };
+      next = applySide(next, side, { ...my, bench: [], deck: newDeck });
+      next = applySide(next, opp, { ...oppState, bench: [] });
+      telop = { text: '⚡ 灰からの継承！本能寺で信長が散り、明智の時代が始まる！', color: '#ffd700' };
+      console.log('[特殊効果] 本能寺の変: 信長と両陣営ベンチを全除外、デッキを明智ルート4枚に再構成');
+      break;
+    }
+    case 'austerlitz_sun': {
+      // 公開時の即時効果としては「ベンチに居ればナポレオン系効果2倍」のフックを
+      // napoleon case に組み込んでいるため、ここは演出のみ。
+      telop = { text: '☀️ 三帝会戦の陽光！ナポレオン系の効果が倍化する！', color: '#ffd700' };
+      console.log('[特殊効果] アウステルリッツの太陽: ナポレオン系効果2倍 (napoleon case でフック)');
+      break;
+    }
+    case 'moonlit_howl': {
+      // 除外オオカミ系全回収 + ベンチのオオカミ系1枚につき攻防+2
+      const wolfFamily = new Set(['オオカミ', '遠吠え', '群れの掟', '縄張り', '一匹狼', '月下の遠吠え']);
+      const my = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      // 1. 除外オオカミ系回収
+      const exilePool = next.exile[side];
+      const recovered = exilePool.filter((c) => wolfFamily.has(c.name));
+      const remainingExile = exilePool.filter((c) => !wolfFamily.has(c.name));
+      if (recovered.length > 0) {
+        next = {
+          ...next,
+          exile: { ...next.exile, [side]: remainingExile },
+        };
+        const mySideNow = side === 'player' ? next.player : next.ai;
+        next = applySide(next, side, { ...mySideNow, deck: [...mySideNow.deck, ...recovered] });
+      }
+      // 2. ベンチのオオカミ系カウント
+      const wolfBenchCount = my.bench
+        .filter((b) => wolfFamily.has(b.name) && !sealed.includes(b.name))
+        .reduce((sum, b) => sum + b.count, 0);
+      if (wolfBenchCount > 0) {
+        const glowNames = my.bench.filter((b) => wolfFamily.has(b.name) && !sealed.includes(b.name)).map((b) => b.name);
+        next = withBenchGlow(next, side, glowNames);
+        const buff = wolfBenchCount * 2;
+        if (role === 'attacker') bonusAttack += buff;
+        else next = { ...next, defenderBonus: next.defenderBonus + buff };
+      }
+      telop = { text: `🌙 祖先の咆哮！回収${recovered.length}枚 / オオカミ系${wolfBenchCount}枚→自身+${wolfBenchCount * 2}`, color: '#ffd700' };
+      console.log(`[特殊効果] 月下の遠吠え: オオカミ系${recovered.length}枚回収、ベンチ${wolfBenchCount}枚で自身+${wolfBenchCount * 2}`);
+      break;
+    }
+    case 'earth_moves': {
+      // 相手ベンチの効果を全封印 + このラウンド中、味方全攻撃+3
+      const oppState = opp === 'player' ? next.player : next.ai;
+      const allOppBenchNames = oppState.bench.map((b) => b.name);
+      next = {
+        ...next,
+        sealedBenchNames: {
+          ...next.sealedBenchNames,
+          [opp]: [...next.sealedBenchNames[opp], ...allOppBenchNames],
+        },
+        roundAttackBonus: {
+          ...next.roundAttackBonus,
+          [side]: next.roundAttackBonus[side] + 3,
+        },
+      };
+      telop = { text: '🌍 それでも地球は動いている！相手ベンチ効果を封印、味方攻撃+3', color: '#ffd700' };
+      console.log(`[特殊効果] 地球は動いている: 相手ベンチ${allOppBenchNames.length}枚封印、味方攻撃+3(ラウンド中)`);
       break;
     }
     // ===== 新コンボ効果（第2弾） =====
@@ -2555,6 +2761,13 @@ export function advanceToNextRound(state: GameState): GameState {
       if (anaconda) {
         console.log('[Engine] 大蛇 → アナコンダに戻す (ラウンド終了)');
         return { ...anaconda, id: `reverted-anaconda-${Date.now()}` };
+      }
+    }
+    if (card.name === '万能の天才' && card.id.startsWith('evolved-genius-')) {
+      const davinci = ALL_BATTLE_CARDS.find((c) => c.name === 'レオナルド・ダ・ヴィンチ');
+      if (davinci) {
+        console.log('[Engine] 万能の天才 → レオナルド・ダ・ヴィンチに戻す (ラウンド終了)');
+        return { ...davinci, id: `reverted-davinci-${Date.now()}` };
       }
     }
     // 聖女ジャンヌは火刑により変身したカード。ジャンヌ本体はすでに除外されているため

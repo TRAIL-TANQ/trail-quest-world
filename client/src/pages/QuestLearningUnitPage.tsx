@@ -256,7 +256,7 @@ export default function QuestLearningUnitPage() {
         style={{ background: 'linear-gradient(180deg, #0b1128, #151d3b)' }}>
         <div className="text-5xl mb-3">🔍</div>
         <h2 className="text-amber-100 text-base font-bold mb-2">デッキが見つかりません</h2>
-        <Link href="/games/knowledge-challenger"><a style={{ color: '#ffd700' }} className="text-sm">← デッキ選択に戻る</a></Link>
+        <Link href="/games/knowledge-challenger?screen=deck_select"><a style={{ color: '#ffd700' }} className="text-sm">← デッキ選択に戻る</a></Link>
       </div>
     );
   }
@@ -278,7 +278,7 @@ export default function QuestLearningUnitPage() {
       <div className="px-3 py-2 flex items-center justify-between shrink-0 gap-2"
         style={{ background: 'linear-gradient(180deg, rgba(11,17,40,0.98), rgba(16,22,48,0.95))', borderBottom: `2px solid ${info.color}30` }}>
         <button
-          onClick={() => navigate('/games/knowledge-challenger')}
+          onClick={() => navigate('/games/knowledge-challenger?screen=deck_select')}
           className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold active:scale-95 transition-transform shrink-0"
           style={{ background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.2)', color: '#ffd700' }}
           aria-label="デッキ選択へ戻る"
@@ -504,7 +504,7 @@ export default function QuestLearningUnitPage() {
               )}
               <div className="flex gap-2 mt-3">
                 <button
-                  onClick={() => navigate('/games/knowledge-challenger')}
+                  onClick={() => navigate('/games/knowledge-challenger?screen=deck_select')}
                   className="flex-1 rounded-lg py-2.5 font-black text-sm active:scale-[0.98] transition-transform"
                   style={{ background: 'linear-gradient(135deg, #ef4444, #b91c1c)', color: '#fff', boxShadow: '0 2px 12px rgba(239,68,68,0.35)' }}>
                   ⚔️ バトルに行く
@@ -580,7 +580,7 @@ export default function QuestLearningUnitPage() {
           <div className="rounded-md px-2.5 py-1.5 text-center text-[10px]"
             style={{ background: 'rgba(0,0,0,0.35)', border: '1px solid rgba(255,215,0,0.15)' }}>
             {!deckUnlocked ? (
-              <span className="text-amber-200/70">⭐⭐⭐ マスターをクリアでデッキ解放！</span>
+              <span className="text-amber-200/70">⭐ ビギナーで{CLEAR_THRESHOLD}問正解でデッキ解放！</span>
             ) : !ssrUnlocked ? (
               <span className="text-amber-200/70">👑 レジェンドをクリアでSSR解放！</span>
             ) : (
@@ -588,7 +588,7 @@ export default function QuestLearningUnitPage() {
             )}
           </div>
           <button
-            onClick={() => navigate('/games/knowledge-challenger')}
+            onClick={() => navigate('/games/knowledge-challenger?screen=deck_select')}
             className="w-full rounded-md py-1.5 text-[11px] font-bold active:scale-95 transition-transform"
             style={{ background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.25)', color: '#ffd700' }}
           >

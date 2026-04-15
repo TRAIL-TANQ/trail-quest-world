@@ -40,7 +40,7 @@ export const DECK_KEYS: DeckKey[] = ['napoleon', 'amazon', 'qinshi', 'galileo', 
 
 export const QUEST_DIFFICULTIES: QuestDifficulty[] = ['beginner', 'challenger', 'master', 'legend'];
 
-export const CLEAR_THRESHOLD = 5; // 5問正解でクリア
+export const CLEAR_THRESHOLD = 10; // ビギナー10問正解でデッキ解放（他難易度は解放条件なし・ALT稼ぎ用）
 
 /** デッキ key → starter deck id マッピング */
 export const DECK_KEY_TO_STARTER_ID: Record<DeckKey, string> = {
@@ -71,10 +71,10 @@ export const DIFFICULTY_INFO: Record<QuestDifficulty, {
   label: string; stars: number; color: string;
   timeLimit: number | null; altPerCorrect: number;
 }> = {
-  beginner:   { label: 'ビギナー',       stars: 1, color: '#22c55e', timeLimit: null, altPerCorrect: 5 },
-  challenger: { label: 'チャレンジャー', stars: 2, color: '#3b82f6', timeLimit: 30,   altPerCorrect: 10 },
-  master:     { label: 'マスター',       stars: 3, color: '#a855f7', timeLimit: 20,   altPerCorrect: 15 },
-  legend:     { label: 'レジェンド',     stars: 4, color: '#ffd700', timeLimit: 15,   altPerCorrect: 20 },
+  beginner:   { label: 'ビギナー',       stars: 1, color: '#22c55e', timeLimit: null, altPerCorrect: 1 },
+  challenger: { label: 'チャレンジャー', stars: 2, color: '#3b82f6', timeLimit: 30,   altPerCorrect: 2 },
+  master:     { label: 'マスター',       stars: 3, color: '#a855f7', timeLimit: 20,   altPerCorrect: 3 },
+  legend:     { label: 'レジェンド',     stars: 4, color: '#ffd700', timeLimit: 15,   altPerCorrect: 5 },
 };
 
 /** 各デッキの SSR 解放対象カード名 */
@@ -159,25 +159,19 @@ export function saveQuestProgress(data: QuestProgressData): void {
 
 // ===== Progress Queries =====
 
-/** 難易度が解放されているか（管理者・モニターモードは全解放） */
+/** 難易度が解放されているか — 全難易度を常時解放（ALT稼ぎ用） */
 export function isDifficultyUnlocked(
-  progress: QuestProgressData,
-  deck: DeckKey,
-  diff: QuestDifficulty,
+  _progress: QuestProgressData,
+  _deck: DeckKey,
+  _diff: QuestDifficulty,
 ): boolean {
-  if (MONITOR_MODE || isAdminMode()) return true;
-  switch (diff) {
-    case 'beginner':   return true;
-    case 'challenger': return progress[deck].beginner.cleared;
-    case 'master':     return progress[deck].challenger.cleared;
-    case 'legend':     return progress[deck].master.cleared;
-  }
+  return true;
 }
 
-/** デッキが使用可能か（マスタークリア or ランダムデッキ / モニターモード or 管理者なら常にtrue） */
+/** デッキが使用可能か（ビギナー10問正解で解放 / モニターモード or 管理者なら常にtrue） */
 export function isDeckUnlocked(progress: QuestProgressData, deckKey: DeckKey): boolean {
   if (MONITOR_MODE || isAdminMode()) return true;
-  return progress[deckKey].master.cleared;
+  return progress[deckKey].beginner.cleared;
 }
 
 /** SSR が解放されているか（モニターモード or 管理者なら常にtrue） */
