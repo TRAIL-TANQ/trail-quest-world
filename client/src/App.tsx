@@ -23,6 +23,7 @@ import LoginPage from "./pages/LoginPage";
 import AdminPage from "./pages/AdminPage";
 import QuizPracticePage from "./pages/QuizPracticePage";
 import QuestLearningUnitPage from "./pages/QuestLearningUnitPage";
+import DeckBuilderPage from "./pages/DeckBuilderPage";
 import PvPSetupPage from "./pages/PvPSetupPage";
 import PvPBattlePage from "./pages/PvPBattlePage";
 
@@ -36,6 +37,7 @@ function Router() {
       <Route path="/games/knowledge-challenger"><KnowledgeChallenger /></Route>
       <Route path="/games/quiz/:deck/:difficulty" component={QuizPracticePage} />
       <Route path="/quest/:deckKey" component={QuestLearningUnitPage} />
+      <Route path="/deck-builder" component={DeckBuilderPage} />
       <Route path="/result" component={ResultPage} />
       <Route>
         <PageShell>

@@ -128,10 +128,10 @@ export default function CardPreviewOverlay({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center p-4"
+      className="fixed inset-0 flex flex-col items-center justify-center p-4"
       style={{
+        zIndex: 300,
         background: 'radial-gradient(circle at 50% 50%, rgba(0,0,0,0.55), rgba(0,0,0,0.85))',
-        touchAction: 'none',
       }}
       onClick={backdropClick}
     >
@@ -144,14 +144,15 @@ export default function CardPreviewOverlay({
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
         style={{
-          width: 'min(78vw, 320px)',
-          aspectRatio: '3 / 4',
+          width: 'min(72vw, 300px)',
+          aspectRatio: '360 / 500',
           transform,
           transition: drag.active && !played
             ? 'none'
             : 'transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1)',
           transformStyle: 'preserve-3d',
           filter: 'drop-shadow(0 10px 30px rgba(0,0,0,0.5))',
+          touchAction: 'none',
           '--holo-x': `${tilt.holo}%`,
         } as React.CSSProperties}
       >
@@ -177,33 +178,49 @@ export default function CardPreviewOverlay({
         )}
       </div>
 
-      {/* Swipe hint / fallback buttons */}
+      {/* Swipe hint / fallback buttons — high z-index, explicit pointer-events */}
       {!played && (
-        <div className="mt-5 flex flex-col items-center gap-2">
+        <div
+          className="mt-4 flex flex-col items-center gap-2 relative"
+          style={{ zIndex: 320, pointerEvents: 'auto', touchAction: 'manipulation' }}
+          onTouchStart={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
+          onTouchEnd={(e) => e.stopPropagation()}
+        >
           <p className="text-amber-200/70 text-xs">{playLabel}</p>
           <div className="flex items-center gap-2">
             {onCancel && (
               <button
+                type="button"
                 onClick={(e) => { e.stopPropagation(); playTap(); onCancel(); }}
-                className="tappable px-4 py-2 rounded-lg text-xs font-bold"
+                className="tappable px-4 rounded-lg text-xs font-bold"
                 style={{
+                  minHeight: 48,
+                  minWidth: 80,
                   background: 'rgba(255,255,255,0.08)',
-                  color: 'rgba(255,255,255,0.8)',
-                  border: '1px solid rgba(255,255,255,0.15)',
+                  color: 'rgba(255,255,255,0.85)',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  touchAction: 'manipulation',
+                  pointerEvents: 'auto',
                 }}
               >
                 キャンセル
               </button>
             )}
             <button
+              type="button"
               disabled={disabled}
               onClick={(e) => { e.stopPropagation(); fireOnPlay(); }}
-              className="tappable pulse-btn px-5 py-2 rounded-lg text-sm font-black"
+              className="tappable pulse-btn px-6 rounded-lg text-sm font-black"
               style={{
+                minHeight: 48,
+                minWidth: 120,
                 background: 'linear-gradient(135deg, #ffd700, #f59e0b)',
                 color: '#0b1128',
                 boxShadow: '0 3px 12px rgba(255,215,0,0.4)',
                 opacity: disabled ? 0.5 : 1,
+                touchAction: 'manipulation',
+                pointerEvents: 'auto',
               }}
             >
               ⚔️ 出す

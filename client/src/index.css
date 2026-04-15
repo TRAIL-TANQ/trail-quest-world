@@ -400,4 +400,157 @@
     pointer-events: none;
     transition: background-position 0.08s linear;
   }
+
+  /* ===== Battle Motion Kit ===== */
+
+  /* Card draw: pick up from deck then float toward center */
+  .card-draw {
+    animation: cardDraw 0.45s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+  }
+  @keyframes cardDraw {
+    0%   { transform: translateY(0) scale(1); }
+    30%  { transform: translateY(-10px) scale(1.02); }
+    100% { transform: translateY(-60px) scale(1.1); }
+  }
+
+  /* Card flip: back → front over its center */
+  .card-flip {
+    animation: cardFlip 0.35s ease-in-out forwards;
+    transform-style: preserve-3d;
+  }
+  @keyframes cardFlip {
+    0%   { transform: rotateY(180deg); }
+    100% { transform: rotateY(0deg); }
+  }
+
+  /* Card land (place on field): bounce to rest */
+  .card-land-bounce {
+    animation: cardLandBounce 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+  @keyframes cardLandBounce {
+    0%   { transform: scale(1.15) rotate(-3deg); }
+    60%  { transform: scale(0.98) rotate(0deg); }
+    100% { transform: scale(1) rotate(0deg); }
+  }
+
+  /* Defender block (attack bounces off) */
+  .card-block {
+    animation: cardBlock 0.45s ease-out;
+  }
+  @keyframes cardBlock {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    50% { transform: translateX(5px); }
+    75% { transform: translateX(-3px); }
+  }
+
+  /* Collision hit (attacker wins breaking through) */
+  .card-hit {
+    animation: cardHit 0.4s ease-out;
+  }
+  @keyframes cardHit {
+    0%   { transform: scale(1); filter: brightness(1); }
+    40%  { transform: scale(1.1); filter: brightness(1.6) drop-shadow(0 0 12px #ffd700); }
+    100% { transform: scale(1); filter: brightness(1); }
+  }
+
+  /* Exile: spin shrink fade */
+  .card-exile {
+    animation: cardExile 0.5s ease-in forwards;
+  }
+  @keyframes cardExile {
+    0%   { transform: scale(1) rotate(0deg); opacity: 1; filter: brightness(1); }
+    30%  { transform: scale(1.05) rotate(40deg); filter: brightness(1.8) drop-shadow(0 0 8px #ef4444); }
+    100% { transform: scale(0) rotate(180deg); opacity: 0; }
+  }
+
+  /* Bench move: shrink + slide into place */
+  .card-to-bench {
+    animation: cardToBench 0.4s cubic-bezier(0.4, 0.8, 0.2, 1) forwards;
+  }
+  @keyframes cardToBench {
+    0%   { transform: scale(1) translate(0, 0); }
+    80%  { transform: scale(0.55) translate(0, 10px); }
+    100% { transform: scale(0.5) translate(0, 0); }
+  }
+
+  /* Defender slide out / new defender slide in */
+  .defender-fall {
+    animation: defenderFall 0.3s ease-in forwards;
+  }
+  @keyframes defenderFall {
+    0%   { transform: translateY(0); opacity: 1; }
+    100% { transform: translateY(120px) scale(0.7); opacity: 0; }
+  }
+  .defender-rise {
+    animation: defenderRise 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+  @keyframes defenderRise {
+    0%   { transform: translateY(-80px) scale(0.9); opacity: 0; }
+    100% { transform: translateY(0) scale(1); opacity: 1; }
+  }
+
+  /* ===== Turn side glow ===== */
+  .turn-glow-self-attack {
+    box-shadow: inset 0 -40px 30px -20px rgba(34, 197, 94, 0.35);
+    animation: glowPulseGreen 2s ease-in-out infinite;
+  }
+  .turn-glow-self-defense {
+    box-shadow: inset 0 -40px 30px -20px rgba(59, 130, 246, 0.35);
+    animation: glowPulseBlue 2s ease-in-out infinite;
+  }
+  .turn-glow-enemy-attack {
+    box-shadow: inset 0 40px 30px -20px rgba(239, 68, 68, 0.35);
+    animation: glowPulseRed 2s ease-in-out infinite;
+  }
+  @keyframes glowPulseGreen {
+    0%, 100% { box-shadow: inset 0 -40px 30px -20px rgba(34,197,94,0.25); }
+    50%      { box-shadow: inset 0 -60px 50px -20px rgba(34,197,94,0.5); }
+  }
+  @keyframes glowPulseBlue {
+    0%, 100% { box-shadow: inset 0 -40px 30px -20px rgba(59,130,246,0.25); }
+    50%      { box-shadow: inset 0 -60px 50px -20px rgba(59,130,246,0.5); }
+  }
+  @keyframes glowPulseRed {
+    0%, 100% { box-shadow: inset 0 40px 30px -20px rgba(239,68,68,0.25); }
+    50%      { box-shadow: inset 0 60px 50px -20px rgba(239,68,68,0.5); }
+  }
+
+  /* Deck tap invitation bounce */
+  .deck-invite {
+    animation: deckInvite 1.2s ease-in-out infinite;
+  }
+  @keyframes deckInvite {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-6px); }
+  }
+
+  /* Flag capture flash */
+  .flag-flash-green {
+    animation: flagFlash 0.25s ease-out;
+  }
+  .flag-flash-red {
+    animation: flagFlashRed 0.25s ease-out;
+  }
+  @keyframes flagFlash {
+    0%   { background: rgba(34,197,94,0); }
+    50%  { background: rgba(34,197,94,0.35); }
+    100% { background: rgba(34,197,94,0); }
+  }
+  @keyframes flagFlashRed {
+    0%   { background: rgba(239,68,68,0); }
+    50%  { background: rgba(239,68,68,0.35); }
+    100% { background: rgba(239,68,68,0); }
+  }
+
+  /* Small fade-out turn banner */
+  .turn-banner {
+    animation: turnBanner 1.2s ease-out forwards;
+  }
+  @keyframes turnBanner {
+    0%   { opacity: 0; transform: translateY(-10px); }
+    20%  { opacity: 1; transform: translateY(0); }
+    80%  { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(-10px); }
+  }
 }

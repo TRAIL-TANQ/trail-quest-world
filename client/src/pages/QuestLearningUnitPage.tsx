@@ -26,6 +26,40 @@ import {
 import { QUEST_QUIZ_DATA, type QuestQuiz } from '@/lib/questQuizData';
 import { processQuizResult, fetchChildStatus } from '@/lib/quizService';
 import { useUserStore } from '@/lib/stores';
+import { supabase } from '@/lib/supabase';
+
+const DIFFICULTY_INT: Record<QuestDifficulty, number> = {
+  beginner: 1, challenger: 2, master: 3, legend: 4,
+};
+
+function stripHtml(s: string): string {
+  return s.replace(/<[^>]+>/g, '');
+}
+
+/** Fire-and-forget quiz_history insert (skip guest/admin) */
+async function logQuizHistory(params: {
+  childId: string;
+  deckKey: string;
+  difficulty: QuestDifficulty;
+  questionText: string;
+  selectedAnswer: string;
+  correctAnswer: string;
+  correct: boolean;
+}): Promise<void> {
+  const { childId } = params;
+  if (!childId || childId.startsWith('user-') || childId === 'admin' || childId === 'guest') return;
+  try {
+    await supabase.from('quiz_history').insert({
+      child_id: childId,
+      deck_key: params.deckKey,
+      difficulty: DIFFICULTY_INT[params.difficulty],
+      question_text: params.questionText,
+      selected_answer: params.selectedAnswer,
+      correct_answer: params.correctAnswer,
+      correct: params.correct,
+    });
+  } catch { /* offline / table missing — ignore */ }
+}
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
@@ -137,6 +171,17 @@ export default function QuestLearningUnitPage() {
     const isCorrect = !timedOut && idx === q.correctIndex;
     setSelected(timedOut ? -1 : idx);
     setShowFeedback(true);
+
+    // quiz_history へログ記録（正解/不正解の両方、ゲスト/admin除外）
+    void logQuizHistory({
+      childId: userId,
+      deckKey,
+      difficulty,
+      questionText: stripHtml(q.question),
+      selectedAnswer: idx >= 0 ? stripHtml(q.choices[idx]) : '(時間切れ)',
+      correctAnswer: stripHtml(q.choices[q.correctIndex]),
+      correct: isCorrect,
+    });
 
     if (isCorrect) {
       setSessionCorrect((c) => c + 1);

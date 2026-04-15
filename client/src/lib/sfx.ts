@@ -84,3 +84,9 @@ export function playSuccess() {
 export function playError() {
   tone({ freq: 280, freqEnd: 140, dur: 0.25, type: 'sawtooth', gain: 0.07 });
 }
+
+/** 敗北SE（重たい下降音） */
+export function playDefeat() {
+  tone({ freq: 300, freqEnd: 80, dur: 0.5, type: 'sawtooth', gain: 0.1 });
+  tone({ freq: 180, freqEnd: 60, dur: 0.6, type: 'triangle', gain: 0.08, delay: 0.1 });
+}

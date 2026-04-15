@@ -47,6 +47,14 @@ import { loadQuestProgress, isDeckUnlocked, DECK_KEYS } from '@/lib/questProgres
 import { fetchRatingStatus } from '@/lib/ratingService';
 import { COLLECTION_CARDS } from '@/lib/cardData';
 import { supabase } from '@/lib/supabase';
+import {
+  BACKGROUNDS,
+  loadOwnedBgs,
+  saveOwnedBgs,
+  loadEquippedBg,
+  saveEquippedBg,
+  type BgItem,
+} from '@/lib/backgrounds';
 
 // ===== 特別解放条件（レベル以外のロック）=====
 interface SpecialUnlockContext {
@@ -75,8 +83,9 @@ const SPECIAL_UNLOCK: Record<string, {
 
 const shopTabs = [
   { id: 'avatar', label: 'アバター', emoji: '👤', color: '#a855f7' },
-  { id: 'title', label: '称号', emoji: '🏷️', color: '#f59e0b' },
-  { id: 'item', label: 'アイテム', emoji: '🎒', color: '#22c55e' },
+  { id: 'bg',     label: '背景',     emoji: '🖼️', color: '#3b82f6' },
+  { id: 'title',  label: '称号',     emoji: '🏷️', color: '#f59e0b' },
+  { id: 'item',   label: 'アイテム', emoji: '🎒', color: '#22c55e' },
 ];
 
 const titleEmojis = ['👑', '📚', '🌟'];
@@ -99,6 +108,43 @@ export default function ShopPage() {
   const [confirmItem, setConfirmItem] = useState<ShopItem | null>(null);
   const [purchasing, setPurchasing] = useState(false);
   const [sparkleItemId, setSparkleItemId] = useState<string | null>(null);
+
+  // ===== 背景 (localStorage-backed) =====
+  const [ownedBgs, setOwnedBgs] = useState<Set<string>>(() => loadOwnedBgs());
+  const [equippedBg, setEquippedBg] = useState<string>(() => loadEquippedBg());
+  const [confirmBg, setConfirmBg] = useState<BgItem | null>(null);
+
+  const handleBgPurchase = useCallback((bg: BgItem) => {
+    if (ownedBgs.has(bg.key)) {
+      // Equip
+      setEquippedBg(bg.key);
+      saveEquippedBg(bg.key);
+      toast.success(`${bg.name} を装備しました`);
+      return;
+    }
+    if (altBalance < bg.price) {
+      toast.error('ALTが足りません');
+      return;
+    }
+    setConfirmBg(bg);
+  }, [ownedBgs, altBalance]);
+
+  const confirmBgPurchase = useCallback(() => {
+    if (!confirmBg) return;
+    // Deduct ALT locally
+    setAltBalance((prev) => prev - confirmBg.price);
+    spendAlt(updateAlt, confirmBg.price, 'shop_item');
+    const next = new Set(ownedBgs);
+    next.add(confirmBg.key);
+    setOwnedBgs(next);
+    saveOwnedBgs(next);
+    setEquippedBg(confirmBg.key);
+    saveEquippedBg(confirmBg.key);
+    setSparkleItemId(`bg-${confirmBg.key}`);
+    toast.success(`${confirmBg.name} を購入・装備しました！`);
+    setConfirmBg(null);
+    window.setTimeout(() => setSparkleItemId(null), 1600);
+  }, [confirmBg, ownedBgs, updateAlt]);
 
   // レベルは totalAlt ベースで算出（既存ロジックと一致）
   const levelInfo = useMemo(() => calculateLevel(user.totalAlt), [user.totalAlt]);
@@ -451,8 +497,132 @@ export default function ShopPage() {
           </>
         )}
 
+        {/* ========== 背景 tab ========== */}
+        {activeTab === 'bg' && (
+          <div className="grid grid-cols-2 gap-3">
+            {BACKGROUNDS.map((bg, i) => {
+              const owned = ownedBgs.has(bg.key);
+              const equipped = equippedBg === bg.key;
+              const cannotAfford = !owned && altBalance < bg.price;
+              return (
+                <div key={bg.key}
+                  className="rounded-xl overflow-hidden transition-all duration-200 animate-slide-up card-shine relative"
+                  style={{
+                    animationDelay: `${i * 40}ms`,
+                    background: 'linear-gradient(135deg, rgba(21,29,59,0.95), rgba(14,20,45,0.95))',
+                    border: equipped ? '1.5px solid rgba(255,215,0,0.6)'
+                      : owned ? '1.5px solid rgba(34,197,94,0.3)'
+                      : '1.5px solid rgba(59,130,246,0.25)',
+                    boxShadow: equipped ? '0 0 16px rgba(255,215,0,0.2)' : '0 2px 12px rgba(0,0,0,0.3)',
+                  }}>
+                  {sparkleItemId === `bg-${bg.key}` && (
+                    <div className="absolute inset-0 z-20 pointer-events-none overflow-hidden rounded-xl">
+                      <div className="absolute inset-0 animate-pulse"
+                        style={{ background: 'radial-gradient(circle, rgba(255,215,0,0.4), transparent 70%)' }} />
+                    </div>
+                  )}
+                  {/* Preview */}
+                  <div className="aspect-[3/2] relative overflow-hidden"
+                    style={{ background: bg.fallbackGradient }}>
+                    <img
+                      src={bg.image}
+                      alt={bg.name}
+                      className="absolute inset-0 w-full h-full object-cover"
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                      loading="lazy"
+                    />
+                    {bg.price === 0 && !equipped && (
+                      <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[9px] font-bold"
+                        style={{ background: 'rgba(34,197,94,0.25)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.5)' }}>
+                        無料
+                      </div>
+                    )}
+                    {equipped && (
+                      <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded text-[9px] font-bold"
+                        style={{ background: 'rgba(255,215,0,0.25)', color: '#ffd700', border: '1px solid rgba(255,215,0,0.5)' }}>
+                        装備中
+                      </div>
+                    )}
+                    {owned && !equipped && (
+                      <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded text-[9px] font-bold"
+                        style={{ background: 'rgba(34,197,94,0.2)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.4)' }}>
+                        購入済
+                      </div>
+                    )}
+                    {!owned && bg.price > 0 && (
+                      <div className="absolute bottom-2 left-2 flex items-center gap-0.5 px-1.5 py-0.5 rounded"
+                        style={{ background: 'rgba(255,215,0,0.15)', border: '1px solid rgba(255,215,0,0.35)' }}>
+                        <div className="w-2.5 h-2.5 rounded-full flex items-center justify-center text-[6px] font-bold"
+                          style={{ background: 'linear-gradient(135deg, #ffd700, #f0a500)', color: '#0b1128' }}>A</div>
+                        <span className="text-[9px] font-bold" style={{ color: '#ffd700' }}>{bg.price}</span>
+                      </div>
+                    )}
+                  </div>
+                  {/* Info */}
+                  <div className="p-2.5" style={{ borderTop: '1px solid rgba(59,130,246,0.12)' }}>
+                    <p className="text-xs font-bold text-amber-100 mb-1 truncate">{bg.name}</p>
+                    {owned ? (
+                      <button onClick={() => handleBgPurchase(bg)}
+                        className="tappable w-full py-1.5 rounded-lg text-[11px] font-bold transition-all"
+                        style={equipped ? {
+                          background: 'linear-gradient(135deg, rgba(255,215,0,0.2), rgba(255,215,0,0.08))',
+                          color: '#ffd700',
+                          border: '1px solid rgba(255,215,0,0.4)',
+                        } : {
+                          background: 'rgba(34,197,94,0.15)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.35)',
+                        }}>
+                        {equipped ? '装備中' : '装備する'}
+                      </button>
+                    ) : (
+                      <button onClick={() => handleBgPurchase(bg)} disabled={cannotAfford}
+                        className="tappable w-full py-1.5 rounded-lg text-[11px] font-bold transition-all disabled:opacity-50"
+                        style={{
+                          background: 'linear-gradient(135deg, rgba(59,130,246,0.2), rgba(59,130,246,0.05))',
+                          color: '#3b82f6', border: '1px solid rgba(59,130,246,0.35)',
+                        }}>
+                        {cannotAfford ? 'ALT不足' : '購入する'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ===== 背景 purchase confirm ===== */}
+        {confirmBg && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4"
+            style={{ background: 'rgba(0,0,0,0.7)' }}
+            onClick={() => setConfirmBg(null)}>
+            <div className="rounded-xl p-4 max-w-xs w-full text-center"
+              style={{
+                background: 'linear-gradient(135deg, rgba(21,29,59,0.98), rgba(14,20,45,0.98))',
+                border: '2px solid rgba(59,130,246,0.5)',
+              }}
+              onClick={(e) => e.stopPropagation()}>
+              <p className="text-sm font-bold text-amber-100 mb-2">{confirmBg.name} を購入しますか？</p>
+              <p className="text-xs text-amber-200/70 mb-3">
+                <span style={{ color: '#ffd700' }}>{confirmBg.price}</span> ALT を消費します
+              </p>
+              <div className="flex gap-2">
+                <button onClick={() => setConfirmBg(null)}
+                  className="tappable flex-1 py-2 rounded-lg text-xs font-bold"
+                  style={{ background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.8)', border: '1px solid rgba(255,255,255,0.2)' }}>
+                  キャンセル
+                </button>
+                <button onClick={confirmBgPurchase}
+                  className="tappable flex-1 py-2 rounded-lg text-xs font-bold"
+                  style={{ background: 'linear-gradient(135deg, #ffd700, #f0a500)', color: '#0b1128' }}>
+                  購入する
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ========== Legacy Title / Item tabs ========== */}
-        {activeTab !== 'avatar' && (
+        {activeTab !== 'avatar' && activeTab !== 'bg' && (
           <div className="grid grid-cols-2 gap-3">
             {legacyItems.map((it, i) => {
               const emojiList = activeTab === 'title' ? titleEmojis : itemEmojis;

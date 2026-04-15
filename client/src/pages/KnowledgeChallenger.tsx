@@ -65,8 +65,9 @@ import { loadQuestProgress, isDeckUnlocked, getUnlockedSSRCardNames, DECK_KEY_TO
 import type { PvPSession } from '@/lib/pvpSession';
 import { clearPvPSession } from '@/lib/pvpSession';
 import { applyRatingChange, applyPvPRatingChange } from '@/lib/ratingService';
-import { playBattleStart, playTap } from '@/lib/sfx';
+import { playBattleStart, playTap, playDefeat } from '@/lib/sfx';
 import CardPreviewOverlay from '@/components/CardPreviewOverlay';
+import { loadMyDecks, buildMyDeckCards, MY_DECK_MAX_DECKS } from '@/lib/myDecks';
 import { saveHallOfFame } from '@/lib/hallOfFameService';
 import { toast } from 'sonner';
 
@@ -178,6 +179,13 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
   // Per-sub-battle ref: set to npcSpeed when attacker is NPC (solo non-PvP),
   // else 1. waitStep/waitMs divide delay by this value.
   const npcScaleRef = useRef<number>(1);
+  // NPC reveal anim (solo only): deck→flying→flip→placed 4-phase演出
+  const [npcRevealAnim, setNpcRevealAnim] = useState<{
+    phase: 'draw' | 'flip' | 'place';
+    card: BattleCard;
+  } | null>(null);
+  // Bench-overflow defeat banner (2s)
+  const [benchOverflowBanner, setBenchOverflowBanner] = useState<{ loserSide: 'player' | 'ai' } | null>(null);
   // Direct ref to current npcSpeed for the battle loop's per-sub-battle setup.
   const npcSpeedRef = useRef<NpcSpeed>(1);
   useEffect(() => { npcSpeedRef.current = npcSpeed; }, [npcSpeed]);
@@ -383,7 +391,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
   const [specialRuleBanner, setSpecialRuleBanner] = useState<string[] | null>(null);
 
   // ===== Start game =====
-  const startGame = useCallback((starterOverride?: StarterDeck) => {
+  const startGame = useCallback((starterOverride?: StarterDeck, myDeckCards?: BattleCard[]) => {
     clearStepTimeouts();
     let playerDeck: BattleCard[];
     let aiDeckCards: BattleCard[];
@@ -393,6 +401,9 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
       const p2Starter = STARTER_DECKS.find((d) => d.id === pvpSession.player2.starterDeckId);
       playerDeck = p1Starter ? buildStarterDeck(p1Starter) : createInitialDeck();
       aiDeckCards = p2Starter ? buildStarterDeck(p2Starter) : createInitialDeck();
+    } else if (myDeckCards && myDeckCards.length > 0) {
+      playerDeck = myDeckCards;
+      aiDeckCards = stageId !== null ? createStageAIDeck(stageId) : createAIDeck();
     } else if (starterOverride) {
       playerDeck = buildStarterDeck(starterOverride);
       aiDeckCards = stageId !== null ? createStageAIDeck(stageId) : createAIDeck();
@@ -829,8 +840,29 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
               await waitForPlayerAction();
               setWaitingForPlayerReveal(false);
             } else {
-              // Auto mode: NPC reveals at 1.0s — tight but still trackable.
-              await waitStep(1000);
+              // Auto mode: NPC reveal with 4-phase animation (solo only, ~1.0s base ×1/2/3 speed)
+              const gsNow = gameStateRef.current;
+              const npcTopCard = gsNow && !isPvP && !isPlayerAttacker
+                ? gsNow.ai.deck[0]
+                : null;
+              if (npcTopCard) {
+                // phase 1: draw (card lifts off deck)
+                setNpcRevealAnim({ phase: 'draw', card: npcTopCard });
+                await waitStep(300);
+                if (unmountedRef.current) { setNpcRevealAnim(null); return; }
+                // phase 2: flip (back → face)
+                setNpcRevealAnim({ phase: 'flip', card: npcTopCard });
+                await waitStep(300);
+                if (unmountedRef.current) { setNpcRevealAnim(null); return; }
+                // phase 3: place (slide toward field)
+                setNpcRevealAnim({ phase: 'place', card: npcTopCard });
+                await waitStep(300);
+                if (unmountedRef.current) { setNpcRevealAnim(null); return; }
+                // phase 4: clear overlay; actual reveal happens in the setGameState below
+                setNpcRevealAnim(null);
+              } else {
+                await waitStep(1000);
+              }
             }
           }
           if (unmountedRef.current) return;
@@ -1226,6 +1258,10 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
               reasonIcon = '💀';
               const m = msg.match(/ベンチ満杯「([^」]+)」/);
               reasonText = m ? `ベンチ満杯「${m[1]}」` : 'ベンチ満杯';
+              // Distinct defeat演出 for bench overflow
+              playDefeat();
+              setBenchOverflowBanner({ loserSide });
+              window.setTimeout(() => setBenchOverflowBanner(null), 2000);
             } else if (msg.includes('諦めた')) { reasonIcon = '🏳️'; reasonText = '攻撃を諦めた'; }
             else if (msg.includes('ブロック')) { reasonIcon = '🛡️'; reasonText = 'ブロック'; }
             setRoundVictoryTelop(`${reasonIcon} ${reasonText}！${loserName}の敗北`);
@@ -2032,6 +2068,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
   // =============================================================
   if (screen === 'deck_select') {
     const questProgress = loadQuestProgress();
+    const myDecks = loadMyDecks();
 
     const difficultyIcon = (d: typeof QUEST_DIFFICULTIES[number], deckKey: DeckKey): string => {
       const dp = questProgress[deckKey][d];
@@ -2054,7 +2091,76 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
         <h1 className="text-xl font-bold text-center mb-1" style={{ color: '#ffd700', textShadow: '0 0 15px rgba(255,215,0,0.3)' }}>
           デッキ選択
         </h1>
-        <p className="text-center text-amber-200/50 text-xs mb-5">解放済みデッキで出撃、未解放はクエストで解放しよう！</p>
+        <p className="text-center text-amber-200/50 text-xs mb-4">解放済みデッキで出撃、未解放はクエストで解放しよう！</p>
+
+        {/* ===== My Decks セクション ===== */}
+        <div className="max-w-md mx-auto mb-4">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-sm">🔨</span>
+            <h2 className="text-xs font-bold text-amber-100">マイデッキ</h2>
+            <span className="text-[10px] text-amber-200/40">({myDecks.length}/{MY_DECK_MAX_DECKS})</span>
+            <div className="flex-1 h-px" style={{ background: 'linear-gradient(90deg, rgba(255,215,0,0.3), transparent)' }} />
+          </div>
+          <div className="space-y-2">
+            {myDecks.map((md) => {
+              const total = md.cards.reduce((s, e) => s + e.count, 0);
+              return (
+                <div key={md.id}
+                  className="rounded-xl p-2.5 flex items-center gap-2"
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(139,92,246,0.15), rgba(59,130,246,0.1))',
+                    border: '1.5px solid rgba(139,92,246,0.4)',
+                  }}>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-bold text-amber-100 truncate">🔨 {md.deck_name}</p>
+                    <p className="text-[10px] text-amber-200/60">{total}枚</p>
+                  </div>
+                  <button
+                    onClick={() => navigate(`/deck-builder?id=${md.id}`)}
+                    className="shrink-0 px-2.5 py-1 rounded-md text-[11px] font-bold active:scale-95 transition-transform"
+                    style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.8)' }}>
+                    ✏️ 編集
+                  </button>
+                  <button
+                    onClick={() => {
+                      const cards = buildMyDeckCards(md);
+                      if (cards.length === 0) { return; }
+                      startGame(undefined, cards);
+                    }}
+                    disabled={total !== 15}
+                    className="shrink-0 px-3 py-1.5 rounded-md text-[12px] font-black active:scale-95 transition-transform"
+                    style={{
+                      background: total === 15 ? 'linear-gradient(135deg, #ef4444, #b91c1c)' : 'rgba(90,90,100,0.4)',
+                      color: '#fff',
+                      boxShadow: total === 15 ? '0 2px 10px rgba(239,68,68,0.4)' : 'none',
+                      opacity: total === 15 ? 1 : 0.5,
+                    }}>
+                    ⚔️ 出撃
+                  </button>
+                </div>
+              );
+            })}
+            {myDecks.length < MY_DECK_MAX_DECKS && (
+              <button
+                onClick={() => navigate('/deck-builder')}
+                className="w-full rounded-xl py-2.5 text-[12px] font-bold active:scale-[0.98] transition-transform flex items-center justify-center gap-1.5"
+                style={{
+                  background: 'rgba(139,92,246,0.12)',
+                  border: '1.5px dashed rgba(139,92,246,0.5)',
+                  color: '#a78bfa',
+                }}>
+                ＋ 新規デッキを作る
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* ===== Theme decks セクション ===== */}
+        <div className="flex items-center gap-2 mb-2 max-w-md mx-auto">
+          <span className="text-sm">📦</span>
+          <h2 className="text-xs font-bold text-amber-100">テーマデッキ</h2>
+          <div className="flex-1 h-px" style={{ background: 'linear-gradient(90deg, rgba(255,215,0,0.3), transparent)' }} />
+        </div>
 
         <div className="space-y-2.5 max-w-md mx-auto">
           {STARTER_DECKS.map((deck) => {
@@ -2496,8 +2602,84 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
   // =============================================================
   if (!gameState) return null;
 
+  // ===== Turn indicator (self attack/defense/opponent attack) =====
+  const turnKind: 'self_attack' | 'self_defense' | 'enemy_attack' | null = (() => {
+    if (!gameState || gameState.phase === 'deck_phase' || gameState.phase === 'game_over' || gameState.phase === 'round_end') return null;
+    const playerIsDefender = gameState.flagHolder === 'player';
+    // In PvP, "self" vs "enemy" is ambiguous — only show for solo.
+    if (isPvP) return null;
+    if (playerIsDefender) return 'self_defense';
+    return 'enemy_attack'; // flagHolder = ai → player attacks, or ai attacks? flagHolder=ai means player attacks next (player takes AI flag). Actually flagHolder is the defender.
+  })();
+  // Correction: flagHolder holds the defender slot.
+  // playerIsDefender = flagHolder === 'player' → player defends, ai attacks.
+  // else → player attacks.
+  const turnKindCorrected: 'self_attack' | 'self_defense' | 'enemy_attack' | null = (() => {
+    if (!gameState || gameState.phase === 'deck_phase' || gameState.phase === 'game_over' || gameState.phase === 'round_end') return null;
+    if (isPvP) return null;
+    const playerIsDefender = gameState.flagHolder === 'player';
+    if (playerIsDefender) return 'self_defense';
+    return 'self_attack';
+  })();
+  // If waiting for AI to reveal attack (= we defend AND waiting), show "enemy attack"
+  const finalTurnKind: 'self_attack' | 'self_defense' | 'enemy_attack' | null = (() => {
+    if (turnKindCorrected === 'self_defense' && cineStep === 'attack_reveal') return 'enemy_attack';
+    return turnKindCorrected;
+  })();
+  void turnKind; // suppress unused var; kept for readability
+
+  const turnGlowClass = finalTurnKind === 'self_attack' ? 'turn-glow-self-attack'
+    : finalTurnKind === 'self_defense' ? 'turn-glow-self-defense'
+    : finalTurnKind === 'enemy_attack' ? 'turn-glow-enemy-attack'
+    : '';
+
+  const turnLabel = finalTurnKind === 'self_attack' ? '⚔️ あなたの攻撃'
+    : finalTurnKind === 'self_defense' ? '🛡️ 防御中'
+    : finalTurnKind === 'enemy_attack' ? '⚠️ 相手の攻撃'
+    : '';
+  const turnLabelColor = finalTurnKind === 'self_attack' ? '#22c55e'
+    : finalTurnKind === 'self_defense' ? '#3b82f6'
+    : finalTurnKind === 'enemy_attack' ? '#ef4444'
+    : '#ffd700';
+
+  // Mount-keyed banner: re-fires on turnKind change
+  const bannerKey = `${finalTurnKind}-${gameState?.round ?? 0}-${gameState?.attackRevealed.length ?? 0}`;
+
   return (
-    <div className="min-h-screen flex flex-col relative" style={{ background: 'linear-gradient(180deg, #0b1128 0%, #131b38 50%, #0e1430 100%)' }}>
+    <div className={`min-h-screen flex flex-col relative ${turnGlowClass}`} style={{
+      background: 'linear-gradient(180deg, #0a0e1a 0%, #1a1f3a 50%, #0a0e1a 100%)',
+    }}>
+      {/* Battle bg overlay (Manus mock) */}
+      <div aria-hidden className="absolute inset-0 pointer-events-none"
+        style={{
+          backgroundImage: 'url(/images/ui/bg-battle.png)',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          opacity: 0.25,
+          mixBlendMode: 'screen',
+          zIndex: 0,
+        }} />
+      {/* ===== Turn Banner (fades in/out on change) ===== */}
+      {turnLabel && (
+        <div
+          key={bannerKey}
+          className="turn-banner fixed top-0 left-0 right-0 z-[180] flex justify-center pt-2 pointer-events-none"
+        >
+          <div
+            className="px-3 py-1 rounded-b-lg text-[12px] font-black"
+            style={{
+              background: 'rgba(11,17,40,0.88)',
+              border: `1.5px solid ${turnLabelColor}`,
+              color: turnLabelColor,
+              textShadow: `0 0 8px ${turnLabelColor}66`,
+              boxShadow: `0 2px 10px ${turnLabelColor}33`,
+            }}
+          >
+            {turnLabel}
+          </div>
+        </div>
+      )}
+
       {/* ===== Special Rule Banner (2s on battle start) ===== */}
       {specialRuleBanner && (
         <div
@@ -2685,30 +2867,50 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
             // Before any reveals, show the attacker's deck top as a card back.
             return <CardBack side={attackerSide} />;
           }
-          // Show the attack pile as a stacked fan of cards. Most recent on top.
+          // Staircase stack: each successive card offset right + up so edges are all visible.
           const lastCard = attackCards[attackCards.length - 1];
-          const priorCount = attackCards.length - 1;
+          const lastIdx = attackCards.length - 1;
           const enterClass = attackerSide === 'ai' ? 'kc-ai-card-enter' : 'kc-player-card-enter';
+          const STEP_X = 15;
+          const STEP_Y = 5;
+          // Extend width/height to fit the staircase spread
+          const extraW = lastIdx * STEP_X;
+          const extraH = lastIdx * STEP_Y;
           return (
-            <div className="relative" style={{ width: 'clamp(110px, 30vw, 180px)', height: 'clamp(154px, 42vw, 250px)' }}>
-              {/* Earlier attack cards stacked behind (offset by a bit).
-                  On sub-battle resolve they fade out toward the off-screen
-                  quarantine area via kc-card-exile. */}
-              {attackCards.slice(0, -1).map((c, i) => (
-                <div key={`stack-${i}`} className={`absolute ${attackerWonSub ? 'kc-card-exile' : ''}`}
-                  style={{
-                    top: 0,
-                    left: 0,
-                    transform: `translate(${(i - priorCount / 2) * 16}px, ${(i - priorCount / 2) * 8}px) rotate(${(i - priorCount / 2) * 4}deg)`,
-                    opacity: 0.6,
-                    zIndex: i,
-                  }}
-                >
-                  <CardDisplay card={c} size="battle" mode="attack" onTap={() => setDetailCard(c)} />
-                </div>
-              ))}
-              {/* Latest card on top with kcCardFlip animation on mount */}
-              <div key={`latest-${attackCards.length}`} className={`absolute inset-0 ${enterClass} kc-card-float`} style={{ zIndex: 100 }}>
+            <div className="relative" style={{
+              width: `calc(clamp(110px, 30vw, 180px) + ${extraW}px)`,
+              height: `calc(clamp(154px, 42vw, 250px) + ${extraH}px)`,
+            }}>
+              {/* Prior cards at staircase positions (no rotation, full opacity so edges are visible).
+                  On sub-battle resolve: stagger fly-out 0.2s per card, topmost first. */}
+              {attackCards.slice(0, -1).map((c, i) => {
+                // Stagger: topmost (highest i in slice = length-2) flies first.
+                // Delay = (priorCount - 1 - i) * 0.2s
+                const priorCount = attackCards.length - 1;
+                const delay = attackerWonSub ? (priorCount - 1 - i) * 0.2 : 0;
+                return (
+                  <div key={`stack-${i}`} className={`absolute ${attackerWonSub ? 'kc-card-exile' : ''}`}
+                    style={{
+                      left: i * STEP_X,
+                      bottom: i * STEP_Y,
+                      zIndex: i + 1,
+                      width: 'clamp(110px, 30vw, 180px)',
+                      height: 'clamp(154px, 42vw, 250px)',
+                      animationDelay: `${delay}s`,
+                    }}
+                  >
+                    <CardDisplay card={c} size="battle" mode="attack" onTap={() => setDetailCard(c)} />
+                  </div>
+                );
+              })}
+              {/* Latest card on top with kcCardFlip animation on mount; card-hit on win */}
+              <div key={`latest-${attackCards.length}`} className={`absolute ${enterClass} kc-card-float ${attackerWonSub ? 'card-hit' : ''}`} style={{
+                left: lastIdx * STEP_X,
+                bottom: lastIdx * STEP_Y,
+                zIndex: 100,
+                width: 'clamp(110px, 30vw, 180px)',
+                height: 'clamp(154px, 42vw, 250px)',
+              }}>
                 <CardDisplay card={lastCard} size="battle" mode="attack" onTap={() => setDetailCard(lastCard)} />
                 {/* Light ripple on reveal */}
                 <div key={`ripple-${attackCards.length}`} className="absolute inset-0 pointer-events-none z-[105]">
@@ -3111,8 +3313,48 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
               playLabel={playLabel}
               subActions={subActions}
             >
-              <div className="w-full h-full flex items-center justify-center">
-                <CardDisplay card={card} size="md" />
+              {/* Full-aspect 360x500 preview — no cropping */}
+              <div className="w-full h-full relative rounded-xl overflow-hidden"
+                style={{ background: '#0b1128', boxShadow: '0 6px 22px rgba(0,0,0,0.5)' }}>
+                {card.imageUrl && (
+                  <img
+                    src={card.imageUrl}
+                    alt={card.name}
+                    className="absolute inset-0 w-full h-full"
+                    style={{ objectFit: 'cover', objectPosition: 'center center' }}
+                    draggable={false}
+                  />
+                )}
+                <img
+                  src={CARD_RARITY_IMAGES[card.rarity] || CARD_RARITY_IMAGES['N']}
+                  alt=""
+                  className="absolute inset-0 w-full h-full pointer-events-none"
+                  style={{ objectFit: 'fill' }}
+                />
+                {/* Card name */}
+                <div className="absolute left-0 right-0 bottom-[14%] px-3 text-center pointer-events-none">
+                  <span className="font-bold text-white text-sm truncate block"
+                    style={{ textShadow: '0 1px 3px rgba(0,0,0,0.9)' }}>
+                    {card.name}
+                  </span>
+                </div>
+                {/* ATK / DEF badges */}
+                <div className="absolute left-2 bottom-2 px-2 py-0.5 rounded font-black text-white text-xs pointer-events-none"
+                  style={{ background: 'rgba(239,68,68,0.85)' }}>
+                  ⚔️ {card.attackPower ?? card.power}
+                </div>
+                <div className="absolute right-2 bottom-2 px-2 py-0.5 rounded font-black text-white text-xs pointer-events-none"
+                  style={{ background: 'rgba(59,130,246,0.85)' }}>
+                  🛡️ {card.defensePower ?? card.power}
+                </div>
+                {/* Rarity badge */}
+                <div className="absolute left-2 top-2 px-1.5 py-0.5 rounded font-black text-[10px] pointer-events-none"
+                  style={{
+                    background: card.rarity === 'SSR' ? '#ffd700' : card.rarity === 'SR' ? '#a855f7' : card.rarity === 'R' ? '#3b82f6' : '#9ca3af',
+                    color: '#0b1128',
+                  }}>
+                  {card.rarity}
+                </div>
               </div>
             </CardPreviewOverlay>
           );
@@ -3180,7 +3422,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
               ? `${pvpSession.player2.childName} タップでめくる`
               : 'タップでめくる';
             return (
-              <div className="flex flex-col items-center gap-1 relative">
+              <div id="kc-ai-deck-anchor" className="flex flex-col items-center gap-1 relative">
                 {aiDeckTappable && (
                   <div className="kc-tap-hint absolute -top-5 left-1/2 -translate-x-1/2 z-10" style={{ fontSize: '20px' }}>
                     👆
@@ -3585,6 +3827,179 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
           </div>
         </div>
       )}
+
+      {/* ===== Bench Overflow Defeat ===== */}
+      {benchOverflowBanner && (
+        <>
+          {/* Red screen flash */}
+          <div
+            className="fixed inset-0 z-[900] pointer-events-none"
+            style={{ animation: 'kcDefeatFlash 0.5s ease-out forwards' }}
+          />
+          {/* Defeat banner */}
+          <div className="fixed inset-0 z-[950] flex items-center justify-center pointer-events-none px-4">
+            <div
+              className="rounded-2xl px-6 py-5 text-center"
+              style={{
+                background: 'linear-gradient(135deg, rgba(127,29,29,0.95), rgba(69,10,10,0.95))',
+                border: '3px solid rgba(239,68,68,0.8)',
+                boxShadow: '0 0 40px rgba(239,68,68,0.6), 0 10px 30px rgba(0,0,0,0.7)',
+                animation: 'kcDefeatBanner 2s ease-out forwards',
+              }}
+            >
+              <p className="text-4xl mb-2">💀</p>
+              <p className="text-xl font-black mb-1" style={{ color: '#ef4444', textShadow: '0 0 12px rgba(239,68,68,0.8)' }}>
+                ベンチ満杯！
+              </p>
+              <p className="text-sm font-bold text-amber-100">
+                {benchOverflowBanner.loserSide === 'player' ? 'あなたの敗北' : '相手の敗北'}
+              </p>
+            </div>
+          </div>
+          <style>{`
+            @keyframes kcDefeatFlash {
+              0%   { background: rgba(239,68,68,0); }
+              20%  { background: rgba(239,68,68,0.55); }
+              100% { background: rgba(239,68,68,0); }
+            }
+            @keyframes kcDefeatBanner {
+              0%   { opacity: 0; transform: scale(0.4); }
+              15%  { opacity: 1; transform: scale(1.1); }
+              25%  { transform: scale(1); }
+              85%  { opacity: 1; transform: scale(1); }
+              100% { opacity: 0; transform: scale(0.9); }
+            }
+          `}</style>
+        </>
+      )}
+
+      {/* ===== Effect Activation: flash + name popup ===== */}
+      {gameState?.effectTelop && (
+        <div key={`eff-${gameState.effectTelop.key}`} className="fixed inset-0 pointer-events-none z-[190]">
+          {/* White flash (brief) */}
+          <div style={{ position: 'absolute', inset: 0, animation: 'kcEffectFlash 0.35s ease-out forwards' }} />
+          {/* Floating effect name (center-top) */}
+          <div className="absolute left-0 right-0 top-[32%] text-center kc-effect-telop">
+            <p
+              className="inline-block px-4 py-1.5 rounded-lg text-sm font-black"
+              style={{
+                background: 'rgba(11,17,40,0.75)',
+                color: gameState.effectTelop.color,
+                textShadow: `0 0 10px ${gameState.effectTelop.color}88, 0 2px 4px rgba(0,0,0,0.9)`,
+                border: `1.5px solid ${gameState.effectTelop.color}66`,
+                boxShadow: `0 3px 14px ${gameState.effectTelop.color}55`,
+                backdropFilter: 'blur(4px)',
+              }}
+            >
+              {gameState.effectTelop.text}
+            </p>
+          </div>
+          <style>{`
+            @keyframes kcEffectFlash {
+              0%   { background: rgba(255,255,255,0); }
+              30%  { background: rgba(255,255,255,0.25); }
+              100% { background: rgba(255,255,255,0); }
+            }
+          `}</style>
+        </div>
+      )}
+
+      {/* ===== NPC Reveal Animation (solo only, 4 phases) ===== */}
+      {npcRevealAnim && (() => {
+        const { phase, card } = npcRevealAnim;
+        // Compute origin from real AI deck position (fallback to top-right area)
+        const anchor = typeof document !== 'undefined' ? document.getElementById('kc-ai-deck-anchor') : null;
+        let originX = '30vw';
+        let originY = '-28vh';
+        if (anchor) {
+          const rect = anchor.getBoundingClientRect();
+          const viewportCenterX = window.innerWidth / 2;
+          const viewportCenterY = window.innerHeight / 2;
+          const deckCenterX = rect.left + rect.width / 2;
+          const deckCenterY = rect.top + rect.height / 2;
+          // Delta from viewport center (since overlay card is centered by flex)
+          originX = `${deckCenterX - viewportCenterX}px`;
+          originY = `${deckCenterY - viewportCenterY}px`;
+        }
+        const containerStyle: React.CSSProperties = {
+          position: 'fixed',
+          inset: 0,
+          zIndex: 200,
+          pointerEvents: 'none',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        };
+        let cardTransform: string;
+        let opacity = 1;
+        const transition = 'transform 0.3s cubic-bezier(0.22, 0.61, 0.36, 1), opacity 0.2s linear';
+        if (phase === 'draw') {
+          // Start from actual AI deck position, slight lift
+          cardTransform = `translate(${originX}, calc(${originY} - 10px)) scale(0.6)`;
+        } else if (phase === 'flip') {
+          // Slide to center, scale up, flipping (handled by .card-flip class)
+          cardTransform = 'translate(0, 0) scale(1) rotateY(0deg)';
+        } else {
+          // Slide up toward AI field zone
+          cardTransform = 'translate(0, -22vh) scale(0.85)';
+          opacity = 0.95;
+        }
+        return (
+          <div style={containerStyle}>
+            <div
+              key={`npc-anim-${card.id}-${phase}`}
+              className={phase === 'flip' ? 'card-flip' : ''}
+              style={{
+                width: 'min(44vw, 180px)',
+                aspectRatio: '360 / 500',
+                transform: cardTransform,
+                transition,
+                opacity,
+                perspective: 800,
+                transformStyle: 'preserve-3d',
+                filter: 'drop-shadow(0 10px 20px rgba(0,0,0,0.6))',
+              }}
+            >
+              {phase === 'draw' ? (
+                // Back face (still hidden)
+                <div
+                  className="w-full h-full rounded-xl"
+                  style={{
+                    background: 'linear-gradient(135deg, #7f1d1d, #b91c1c)',
+                    border: '2px solid rgba(255,215,0,0.4)',
+                    boxShadow: 'inset 0 0 20px rgba(0,0,0,0.5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <span className="text-3xl opacity-60">🂠</span>
+                </div>
+              ) : (
+                // flip + place: show front face
+                <div className="relative w-full h-full rounded-xl overflow-hidden"
+                  style={{ background: '#0b1128', border: `2px solid ${card.rarity === 'SSR' ? '#ffd700' : card.rarity === 'SR' ? '#a855f7' : '#3b82f6'}` }}>
+                  {card.imageUrl && (
+                    <img src={card.imageUrl} alt={card.name}
+                      className="absolute inset-0 w-full h-full"
+                      style={{ objectFit: 'cover', objectPosition: 'center' }} />
+                  )}
+                  <div className="absolute left-0 right-0 bottom-2 text-center pointer-events-none">
+                    <span className="text-xs font-black text-white"
+                      style={{ textShadow: '0 2px 6px rgba(0,0,0,0.9)' }}>
+                      {card.name}
+                    </span>
+                  </div>
+                  <div className="absolute left-1 bottom-1 px-1.5 py-0.5 rounded text-[10px] font-black text-white"
+                    style={{ background: 'rgba(239,68,68,0.85)' }}>
+                    ⚔️ {card.attackPower ?? card.power}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ===== Effect Cutin (SR+ cards) ===== */}
       {cutinCard && (
@@ -5040,7 +5455,7 @@ function CardDisplay({ card, isDefense, isWinner, size, mode, onTap, atkBonus = 
 
   return (
     <div
-      className={`inline-block rounded-xl p-0 relative overflow-hidden ${isWinner ? 'kc-win-glow' : ''} ${onTap ? 'cursor-pointer active:scale-95 transition-transform' : ''}`}
+      className={`inline-block rounded-xl p-0 relative overflow-hidden ${isWinner ? 'kc-win-glow' : ''} ${onTap ? 'tappable cursor-pointer' : ''}`}
       onClick={onTap}
       style={{
         background: '#0b1128',
@@ -5173,7 +5588,7 @@ function MiniDeckStack({
     <button
       onClick={interactive && count > 0 ? onTap : undefined}
       disabled={!interactive || count === 0}
-      className={`relative ${glow && count > 0 ? 'kc-deck-stack' : ''} ${interactive ? 'active:scale-95' : ''} transition-transform`}
+      className={`relative ${glow && count > 0 ? 'kc-deck-stack' : ''} ${interactive && count > 0 ? 'deck-invite' : ''} ${interactive ? 'active:scale-95' : ''} transition-transform`}
       style={{
         width: W + 6,
         height: H + 6,

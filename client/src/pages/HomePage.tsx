@@ -106,13 +106,17 @@ export default function HomePage() {
   };
 
   return (
-    <div className="relative min-h-full">
-      {/* World Map Background */}
+    <div className="relative min-h-full" style={{ background: '#0a0e1a' }}>
+      {/* World Map Background + Manus home mock overlay */}
       <div className="absolute inset-0 z-0">
         <img src={IMAGES.HERO_BG} alt="world map" className="w-full h-full object-cover"
-          style={{ filter: 'brightness(0.35) saturate(0.8)' }} />
+          style={{ filter: 'brightness(0.3) saturate(0.8)' }} />
+        <img src="/images/ui/bg-home.png" alt="" aria-hidden
+          className="absolute inset-0 w-full h-full object-cover"
+          style={{ opacity: 0.45, mixBlendMode: 'screen' }}
+          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
         <div className="absolute inset-0" style={{
-          background: 'linear-gradient(180deg, rgba(11,17,40,0.5) 0%, rgba(11,17,40,0.75) 30%, rgba(11,17,40,0.92) 100%)',
+          background: 'linear-gradient(180deg, rgba(10,14,26,0.45) 0%, rgba(10,14,26,0.7) 30%, rgba(10,14,26,0.92) 100%)',
         }} />
         <div className="absolute top-0 left-0 right-0 h-32" style={{
           background: 'radial-gradient(ellipse at top, rgba(255,215,0,0.06) 0%, transparent 70%)',
@@ -294,53 +298,69 @@ export default function HomePage() {
           )}
         </div>
 
-        {/* メインエントリ: バトル / デッキクエスト */}
+        {/* メインエントリ: バトル / デッキクエスト (Manus design mock) */}
         <div className="mb-5 space-y-2.5">
           <Link href="/games/knowledge-challenger">
             <div
-              className="rounded-xl p-4 flex items-center gap-3 transition-all active:scale-[0.98] cursor-pointer relative overflow-hidden"
+              className="tappable relative overflow-hidden cursor-pointer"
               style={{
-                background: 'linear-gradient(135deg, rgba(239,68,68,0.2), rgba(245,158,11,0.2))',
-                border: '1.5px solid rgba(255,215,0,0.4)',
-                boxShadow: '0 2px 14px rgba(0,0,0,0.3), inset 0 0 22px rgba(255,215,0,0.05)',
+                borderRadius: 16,
+                padding: '16px 18px',
+                background: 'linear-gradient(135deg, #8b1a1a 0%, #c0392b 50%, #e74c3c 100%)',
+                border: '2px solid #c5a03f',
+                boxShadow: '0 4px 15px rgba(0,0,0,0.5), inset 0 0 28px rgba(255,215,0,0.08)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 14,
               }}
             >
-              <div className="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0"
+              <div className="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0 relative overflow-hidden"
                 style={{
-                  background: 'linear-gradient(135deg, #ef4444, #f59e0b)',
-                  boxShadow: '0 0 14px rgba(239,68,68,0.35)',
+                  background: 'rgba(0,0,0,0.35)',
+                  border: '1.5px solid rgba(255,215,0,0.5)',
+                  boxShadow: 'inset 0 0 10px rgba(0,0,0,0.5)',
                 }}>
-                <span className="text-3xl">⚔️</span>
+                <img src="/images/ui/icon-sword.png" alt="" className="w-10 h-10 object-contain"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                <span className="absolute text-3xl" style={{ zIndex: 0, opacity: 0.4 }}>⚔️</span>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-base font-black text-amber-100">バトル</p>
-                <p className="text-[11px] text-amber-200/70">デッキを選んで戦おう</p>
+                <p className="text-lg font-black text-white" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.6)' }}>バトル</p>
+                <p className="text-[11px] text-amber-100/85" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.6)' }}>デッキを選んで戦おう</p>
               </div>
-              <span className="text-amber-200/60 text-xl">›</span>
+              <span className="text-amber-100 text-xl">›</span>
             </div>
           </Link>
 
           <Link href="/games/knowledge-challenger">
             <div
-              className="rounded-xl p-4 flex items-center gap-3 transition-all active:scale-[0.98] cursor-pointer relative overflow-hidden"
+              className="tappable relative overflow-hidden cursor-pointer"
               style={{
-                background: 'linear-gradient(135deg, rgba(139,92,246,0.2), rgba(59,130,246,0.2))',
-                border: '1.5px solid rgba(255,215,0,0.4)',
-                boxShadow: '0 2px 14px rgba(0,0,0,0.3), inset 0 0 22px rgba(255,215,0,0.05)',
+                borderRadius: 16,
+                padding: '16px 18px',
+                background: 'linear-gradient(135deg, #1a3a5c 0%, #2980b9 50%, #3498db 100%)',
+                border: '2px solid #c5a03f',
+                boxShadow: '0 4px 15px rgba(0,0,0,0.5), inset 0 0 28px rgba(255,215,0,0.08)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 14,
               }}
             >
-              <div className="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0"
+              <div className="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0 relative overflow-hidden"
                 style={{
-                  background: 'linear-gradient(135deg, #8b5cf6, #3b82f6)',
-                  boxShadow: '0 0 14px rgba(139,92,246,0.35)',
+                  background: 'rgba(0,0,0,0.35)',
+                  border: '1.5px solid rgba(255,215,0,0.5)',
+                  boxShadow: 'inset 0 0 10px rgba(0,0,0,0.5)',
                 }}>
-                <span className="text-3xl">📖</span>
+                <img src="/images/ui/icon-book.png" alt="" className="w-10 h-10 object-contain"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                <span className="absolute text-3xl" style={{ zIndex: 0, opacity: 0.4 }}>📖</span>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-base font-black text-amber-100">デッキクエスト</p>
-                <p className="text-[11px] text-amber-200/70">学んでデッキを手に入れよう</p>
+                <p className="text-lg font-black text-white" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.6)' }}>デッキクエスト</p>
+                <p className="text-[11px] text-amber-100/85" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.6)' }}>学んでデッキを手に入れよう</p>
               </div>
-              <span className="text-amber-200/60 text-xl">›</span>
+              <span className="text-amber-100 text-xl">›</span>
             </div>
           </Link>
         </div>
