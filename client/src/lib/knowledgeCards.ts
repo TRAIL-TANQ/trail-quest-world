@@ -1661,7 +1661,7 @@ const INITIAL_CARDS: BattleCard[] = [
 
 // ===== Deck Building Rules =====
 // Initial deck = 10 cards. Max deck = 15. Minimum during trim = 6 (MIN_DECK_SIZE).
-export const INITIAL_DECK_SIZE = 10;
+export const INITIAL_DECK_SIZE = 15;
 export const MAX_DECK_SIZE = 15;
 export const MIN_DECK_SIZE = 6;  // デッキフェイズで削除できる下限
 

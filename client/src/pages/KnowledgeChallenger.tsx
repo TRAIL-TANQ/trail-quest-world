@@ -4378,49 +4378,55 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
               </p>
             </div>
 
-            {/* ===== 単一カラム (モバイル優先) ===== */}
+            {/* ===== レイアウト: モバイル縦積み / PC(md+)横並び ===== */}
             <div className="flex-1 min-h-0 overflow-y-auto px-4">
-              {/* 提示カード（メイン） */}
-              <div className="mb-3">
-                <p className="text-[12px] font-bold text-amber-100 mb-2">
-                  🎴 提示カード（{deckOffer.cards.length}枚 / 獲得 {deckOffer.acquired.size}/{maxPicksForRound(gameState.round, gameState.totalRounds)}）
-                </p>
-                {OfferGrid}
-              </div>
+              <div className="flex flex-col md:flex-row gap-4 max-w-5xl mx-auto">
+                {/* 提示カード（左 / 上） */}
+                <div className="md:flex-[3] min-w-0">
+                  <p className="text-[12px] font-bold text-amber-100 mb-2">
+                    🎴 提示カード（{deckOffer.cards.length}枚 / 獲得 {deckOffer.acquired.size}/{maxPicksForRound(gameState.round, gameState.totalRounds)}）
+                  </p>
+                  {OfferGrid}
+                </div>
 
-              {/* 現在のデッキ（折りたたみ式、デフォルト閉じる） */}
-              <div
-                className="rounded-xl p-2.5 mb-2"
-                style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,215,0,0.2)' }}
-              >
-                {DeckPanelHeader}
-                {!deckPanelCollapsed && (
-                  <div className="mt-2">
-                    {DeckStatsLine}
-                    {DeckGrid}
-                    {/* Excluded cards area */}
-                    {removedCards.length > 0 && (
-                      <div className="mt-2 rounded-lg p-2" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
-                        <p className="text-[10px] font-bold text-red-300/70 mb-1">🚫 除外したカード（タップで戻す）</p>
-                        <div className="flex gap-1.5 flex-wrap">
-                          {removedCards.map((c, i) => (
-                            <button
-                              key={`removed-${i}`}
-                              onClick={() => handleRestoreRemovedCard(i)}
-                              className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold active:scale-95 transition-transform"
-                              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.5)' }}
-                            >
-                              ↩ {c.name}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    <p className="text-[10px] text-amber-200/50 mt-1.5 text-center">
-                      💡 デッキ整理のコツ: 攻撃と防御のバランスを考えよう
+                {/* 現在のデッキ（右 / 下） — md+ では常時展開 */}
+                <div
+                  className="md:flex-[2] min-w-0 rounded-xl p-2.5 self-start w-full"
+                  style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,215,0,0.2)' }}
+                >
+                  <div className="md:hidden">{DeckPanelHeader}</div>
+                  <div className="hidden md:block">
+                    <p className="text-[12px] font-bold text-amber-100 mb-2">
+                      📋 現在のデッキ {deckCount}/{MAX_DECK_SIZE}枚
                     </p>
                   </div>
-                )}
+                  {(!deckPanelCollapsed || typeof window !== 'undefined') && (
+                    <div className={`mt-2 ${deckPanelCollapsed ? 'hidden md:block' : ''}`}>
+                      {DeckStatsLine}
+                      {DeckGrid}
+                      {removedCards.length > 0 && (
+                        <div className="mt-2 rounded-lg p-2" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                          <p className="text-[10px] font-bold text-red-300/70 mb-1">🚫 除外したカード（タップで戻す）</p>
+                          <div className="flex gap-1.5 flex-wrap">
+                            {removedCards.map((c, i) => (
+                              <button
+                                key={`removed-${i}`}
+                                onClick={() => handleRestoreRemovedCard(i)}
+                                className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold active:scale-95 transition-transform"
+                                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.5)' }}
+                              >
+                                ↩ {c.name}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      <p className="text-[10px] text-amber-200/50 mt-1.5 text-center">
+                        💡 デッキ整理のコツ: 攻撃と防御のバランスを考えよう
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
