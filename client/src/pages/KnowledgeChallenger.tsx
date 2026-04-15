@@ -118,7 +118,19 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
   const markStageRewarded = useStageProgressStore((s) => s.markRewarded);
   const isStageRewarded = useStageProgressStore((s) => s.isRewarded);
 
-  const [screen, setScreen] = useState<ScreenPhase>('title');
+  // Initial screen can be set via ?screen=deck_select (or other valid phase) in URL.
+  // Used by ホーム「デッキクエスト」ボタン等からデッキ一覧へ直接ランディング。
+  const initialScreen: ScreenPhase = (() => {
+    if (typeof window === 'undefined') return 'title';
+    try {
+      const p = new URLSearchParams(window.location.search).get('screen');
+      if (p === 'deck_select' || p === 'playing' || p === 'result' || p === 'title') {
+        return p as ScreenPhase;
+      }
+    } catch { /* ignore */ }
+    return 'title';
+  })();
+  const [screen, setScreen] = useState<ScreenPhase>(initialScreen);
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [imagesPreloaded, setImagesPreloaded] = useState(false);
   const [preloadProgress, setPreloadProgress] = useState(0);

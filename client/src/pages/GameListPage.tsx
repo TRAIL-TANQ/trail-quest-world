@@ -72,7 +72,7 @@ export default function GameListPage() {
           </Link>
 
           {/* Quest Board - Quiz Practice */}
-          <Link href="/games/quest-board">
+          <Link href="/games/knowledge-challenger?screen=deck_select">
             <div className="rounded-xl overflow-hidden transition-all duration-200 hover:scale-[1.01] active:scale-[0.98] card-shine animate-slide-up relative"
               style={{
                 background: 'linear-gradient(135deg, rgba(21,29,59,0.95), rgba(14,20,45,0.95))',

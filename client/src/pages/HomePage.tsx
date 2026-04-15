@@ -332,7 +332,7 @@ export default function HomePage() {
             </div>
           </Link>
 
-          <Link href="/games/knowledge-challenger">
+          <Link href="/games/knowledge-challenger?screen=deck_select">
             <div
               className="tappable relative overflow-hidden cursor-pointer"
               style={{

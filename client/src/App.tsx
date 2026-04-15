@@ -52,8 +52,8 @@ function Router() {
             <Route path="/shop" component={ShopPage} />
             <Route path="/mypage" component={MyPage} />
             {/* Legacy routes → redirect to unified deck select */}
-            <Route path="/games/quest-board"><Redirect to="/games/knowledge-challenger" /></Route>
-            <Route path="/quest"><Redirect to="/games/knowledge-challenger" /></Route>
+            <Route path="/games/quest-board"><Redirect to="/games/knowledge-challenger?screen=deck_select" /></Route>
+            <Route path="/quest"><Redirect to="/games/knowledge-challenger?screen=deck_select" /></Route>
             <Route path="/admin" component={AdminPage} />
             <Route>
               <div className="flex items-center justify-center min-h-[60vh]">
