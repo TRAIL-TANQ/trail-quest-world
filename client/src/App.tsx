@@ -4,7 +4,7 @@
  */
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Route, Switch } from "wouter";
+import { Route, Switch, Redirect } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import PageShell from "./components/layout/PageShell";
@@ -21,8 +21,8 @@ import MyPage from "./pages/MyPage";
 import ResultPage from "./pages/ResultPage";
 import LoginPage from "./pages/LoginPage";
 import AdminPage from "./pages/AdminPage";
-import QuestBoardPage from "./pages/QuestBoardPage";
 import QuizPracticePage from "./pages/QuizPracticePage";
+import QuestLearningUnitPage from "./pages/QuestLearningUnitPage";
 import PvPSetupPage from "./pages/PvPSetupPage";
 import PvPBattlePage from "./pages/PvPBattlePage";
 
@@ -35,6 +35,7 @@ function Router() {
       <Route path="/games/knowledge-challenger/stage/:id"><KnowledgeChallenger /></Route>
       <Route path="/games/knowledge-challenger"><KnowledgeChallenger /></Route>
       <Route path="/games/quiz/:deck/:difficulty" component={QuizPracticePage} />
+      <Route path="/quest/:deckKey" component={QuestLearningUnitPage} />
       <Route path="/result" component={ResultPage} />
       <Route>
         <PageShell>
@@ -48,7 +49,9 @@ function Router() {
             <Route path="/collection" component={CollectionPage} />
             <Route path="/shop" component={ShopPage} />
             <Route path="/mypage" component={MyPage} />
-            <Route path="/games/quest-board" component={QuestBoardPage} />
+            {/* Legacy routes → redirect to unified deck select */}
+            <Route path="/games/quest-board"><Redirect to="/games/knowledge-challenger" /></Route>
+            <Route path="/quest"><Redirect to="/games/knowledge-challenger" /></Route>
             <Route path="/admin" component={AdminPage} />
             <Route>
               <div className="flex items-center justify-center min-h-[60vh]">

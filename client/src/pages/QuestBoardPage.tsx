@@ -1,5 +1,5 @@
 /**
- * QuestBoardPage - デッキ別クエストボード
+ * QuestBoardPage - デッキ別デッキクエスト
  * 6デッキ × 4難易度のクエスト進捗を表示
  * 難易度3クリアでデッキ解放、難易度4クリアでSSR解放
  */
@@ -60,7 +60,7 @@ export default function QuestBoardPage() {
       <div className="text-center mb-5">
         <span className="text-3xl block mb-1.5">📋</span>
         <h1 className="text-lg font-bold mb-0.5" style={{ color: '#ffd700', textShadow: '0 0 15px rgba(255,215,0,0.3)' }}>
-          クエストボード
+          デッキクエスト
         </h1>
         <p className="text-amber-200/50 text-[11px]">クイズをクリアしてデッキとSSRカードを解放しよう！</p>
       </div>

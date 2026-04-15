@@ -90,8 +90,8 @@ export default function GameListPage() {
                     boxShadow: '0 0 10px rgba(59,130,246,0.15)',
                   }}>📚</div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-sm font-bold text-amber-100 truncate mb-0.5">クエストボード</h3>
-                  <p className="text-[11px] text-amber-200/45 mb-1.5 line-clamp-2">4ジャンルのクイズ練習・ALTも稼げる</p>
+                  <h3 className="text-sm font-bold text-amber-100 truncate mb-0.5">デッキクエスト</h3>
+                  <p className="text-[11px] text-amber-200/45 mb-1.5 line-clamp-2">デッキを解放してバトルに挑もう</p>
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] text-amber-200/40">👑偉人</span>
                     <span className="text-[10px] text-amber-200/40">🐟生き物</span>

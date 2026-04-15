@@ -81,7 +81,7 @@ export const COLLECTION_CARDS: CollectionCard[] = [
   { id: 'card-065', name: '紫式部', category: 'great_people', rarity: 'R', description: '源氏物語の作者。世界最古の長編小説を書いた平安時代の女性文学者。', imageUrl: '/images/cards/murasaki-shikibu.png' },
   { id: 'card-066', name: 'プテラノドン', category: 'creatures', rarity: 'SR', description: '白亜紀の翼竜。翼を広げると7メートル以上にもなる空の支配者。', imageUrl: '/images/cards/card-066.webp' },
   { id: 'card-067', name: 'サーベルタイガー', category: 'creatures', rarity: 'SR', description: '氷河期の猛獣。20センチもの長い犬歯を持つ大型ネコ科動物。', imageUrl: '/images/cards/card-067.webp' },
-  { id: 'card-068', name: 'オオカミ', category: 'creatures', rarity: 'R', description: '群れで狩りをする社会性の高い動物。月に向かって遠吠えする。', imageUrl: '/images/cards/card-068.webp' },
+  { id: 'card-068', name: 'オオカミ', category: 'creatures', rarity: 'R', description: '群れで狩りをする社会性の高い動物。月に向かって遠吠えする。', imageUrl: '/images/cards/wolf.png' },
   { id: 'card-069', name: 'イルカ', category: 'creatures', rarity: 'R', description: '知能の高い海洋哺乳類。超音波で仲間とコミュニケーションする。', imageUrl: '/images/cards/card-069.webp' },
   { id: 'card-070', name: 'カメレオン', category: 'creatures', rarity: 'R', description: '体の色を自在に変える爬虫類。360度回転する目を持つ。', imageUrl: '/images/cards/card-070.webp' },
   { id: 'card-071', name: 'ホッキョクグマ', category: 'creatures', rarity: 'N', description: '北極圏に住む最大の陸上肉食動物。厚い毛皮で極寒に耐える。', imageUrl: '/images/cards/card-071.webp' },
@@ -227,7 +227,7 @@ export const COLLECTION_CARDS: CollectionCard[] = [
   { id: 'card-181', name: '敦盛の舞', category: 'inventions', rarity: 'N', description: '信長が愛した幸若舞。「人間五十年」の一節を舞い、出陣の前に気を奮い立たせた。', imageUrl: '/images/cards/atsumori.png' },
   { id: 'card-182', name: '足軽', category: 'great_people', rarity: 'N', description: '戦国の歩兵。鉄砲や槍を手に、信長軍の主力として戦場を駆け抜けた。', imageUrl: '/images/cards/ashigaru.png' },
   { id: 'card-183', name: '馬防柵', category: 'inventions', rarity: 'N', description: '長篠の戦いで使われた木柵。騎馬武者の突撃を防ぎ、鉄砲隊を守った。', imageUrl: '/images/cards/babousaku.png' },
-  { id: 'card-184', name: '長篠の陣', category: 'inventions', rarity: 'N', description: '1575年、信長が武田騎馬隊を鉄砲三段撃ちで撃破した布陣。戦術革命の象徴。', imageUrl: '' },
+  { id: 'card-184', name: '長篠の陣', category: 'inventions', rarity: 'N', description: '1575年、信長が武田騎馬隊を鉄砲三段撃ちで撃破した布陣。戦術革命の象徴。', imageUrl: '/images/cards/nagashino-formation.png' },
   { id: 'card-185', name: '南蛮貿易', category: 'inventions', rarity: 'N', description: 'ポルトガル・スペインとの交易。鉄砲やキリスト教が日本に伝わった。', imageUrl: '/images/cards/nanban-trade.png' },
   { id: 'card-186', name: '安土城', category: 'world_heritage', rarity: 'N', description: '信長が築いた天下の名城。天守閣を持つ日本初の近世城郭とされる。', imageUrl: '/images/cards/azuchi-castle.png' },
   { id: 'card-187', name: '本能寺の変', category: 'discovery', rarity: 'SR', description: '1582年、明智光秀の謀反で織田信長が命を落とした事件。戦国史最大の転換点。', imageUrl: '/images/cards/honnoji.png' },
@@ -249,6 +249,12 @@ export const COLLECTION_CARDS: CollectionCard[] = [
   { id: 'card-199', name: '設計図', category: 'inventions', rarity: 'N', description: 'ダ・ヴィンチが残した精密なスケッチ。未来を見通した発明の数々。', imageUrl: '/images/cards/blueprint.png' },
   { id: 'card-200', name: '最後の晩餐', category: 'inventions', rarity: 'N', description: 'キリストと十二使徒を描いた壁画。構図と心理描写の革新。', imageUrl: '/images/cards/last-supper.png' },
   { id: 'card-201', name: 'ウィトルウィウス的人体図', category: 'inventions', rarity: 'N', description: '円と正方形の中の人体。古代建築家の理論を視覚化した素描。', imageUrl: '/images/cards/vitruvian-man.png' },
+
+  // ===== 進化専用カード =====
+  { id: 'card-202', name: '聖女ジャンヌ', category: 'great_people', rarity: 'SSR', description: 'カトリック教会に聖人として認められた救国の乙女。聖女の祈りが全てを守り、失われた仲間を呼び戻す。', imageUrl: '/images/cards/saint-jeanne.png' },
+
+  // ===== 変身トリガーカード =====
+  { id: 'card-203', name: '火刑', category: 'inventions', rarity: 'SR', description: '1431年、ジャンヌは「魔女」として火刑に処された。しかしその炎の中から聖女が生まれる。', imageUrl: '/images/cards/burning-stake.png' },
 ];
 
 // ガチャ排出率

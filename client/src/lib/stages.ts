@@ -1,7 +1,7 @@
 /**
  * Solo Stage Mode - ステージ定義 + AI デッキビルダー + NPCデッキフェイズ + スターターデッキ
  *
- * 全10ステージ。各ステージ5回戦制。プレイヤーもNPCも初期デッキ10枚から成長。
+ * 全10ステージ。各ステージ3回戦制。プレイヤーもNPCも初期デッキ10枚から成長。
  * 各回戦開始時にデッキフェイズでカードを追加取得（NPC自動、プレイヤーはクイズ）。
  */
 import { ALL_BATTLE_CARDS, DRAFTABLE_BATTLE_CARDS, INITIAL_DECK_SIZE, SYNERGY_MAP, maxSameNameFor } from './knowledgeCards';
@@ -10,7 +10,7 @@ import type { BattleCard, CardRarity } from './knowledgeCards';
 // ===== Stage Rules =====
 export interface StageRules {
   benchLimit?: number;            // player bench max (default 6)
-  deckPhaseCards?: number;        // cards offered per deck phase (default 5)
+  deckPhaseCards?: number;        // cards offered per deck phase (default 9)
   npcEffectMultiplier?: number;   // multiply NPC effect bonuses (default 1.0)
   npcAttackBonus?: number;        // flat attack bonus for NPC cards matching condition
   npcAttackBonusFilter?: string;  // category filter for npcAttackBonus (e.g. 'creature')
@@ -141,7 +141,7 @@ export function shortSpecialRuleTags(rules: StageRules): string[] {
   if (rules.npcBenchSlots !== undefined && rules.npcBenchSlots !== 6) {
     tags.push(`⚠️ 相手ベンチ${rules.npcBenchSlots}枠`);
   }
-  if (rules.deckPhaseCards !== undefined && rules.deckPhaseCards !== 5) {
+  if (rules.deckPhaseCards !== undefined && rules.deckPhaseCards !== 9) {
     tags.push(`⚠️ 提示${rules.deckPhaseCards}枚`);
   }
   if (rules.skipDeckPhase) {
@@ -168,8 +168,8 @@ export function longSpecialRuleMessages(rules: StageRules): string[] {
   if (rules.npcBenchSlots !== undefined && rules.npcBenchSlots !== 6) {
     msgs.push(`相手のベンチは${rules.npcBenchSlots}枠です（通常6枠）`);
   }
-  if (rules.deckPhaseCards !== undefined && rules.deckPhaseCards !== 5) {
-    msgs.push(`提示カードが${rules.deckPhaseCards}枚です（通常5枚）`);
+  if (rules.deckPhaseCards !== undefined && rules.deckPhaseCards !== 9) {
+    msgs.push(`提示カードが${rules.deckPhaseCards}枚です（通常9枚）`);
   }
   if (rules.skipDeckPhase) {
     msgs.push('デッキフェイズなし');

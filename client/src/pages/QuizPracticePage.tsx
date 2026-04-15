@@ -259,7 +259,7 @@ export default function QuizPracticePage() {
               <p className="text-sm font-bold" style={{ color: '#ffd700' }}>SSRカード解放！</p>
               {DECK_SSR_CARDS[deckKey].length > 0 && (
                 <p className="text-[10px] text-amber-200/60 mt-0.5">
-                  {DECK_SSR_CARDS[deckKey].join('・')}が第5回戦で提示されるようになりました
+                  {DECK_SSR_CARDS[deckKey].join('・')}が最終回戦で提示されるようになりました
                 </p>
               )}
             </div>
@@ -306,7 +306,7 @@ export default function QuizPracticePage() {
               onClick={() => navigate('/games/quest-board')}
               className="rpg-btn rpg-btn-gold flex-1 py-2.5"
             >
-              📋 クエストボードへ
+              📋 デッキクエストへ
             </button>
           </div>
         </div>

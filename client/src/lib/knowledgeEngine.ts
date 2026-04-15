@@ -39,16 +39,16 @@ export const BENCH_MAX_SLOTS = 6;
 // 2026-04 rework: rounds (回戦) each contain a full battle phase.
 // Each round ends when one side deck-outs or bench-overflows.
 // After all rounds, fan totals decide the overall winner.
-// NPC mode: fixed 5 rounds. PvP: selectable 3/5/7.
-export const TOTAL_ROUNDS = 5;
+// NPC mode: fixed 3 rounds. PvP: selectable 3/5/7.
+export const TOTAL_ROUNDS = 3;
 // Round victory fan rewards per round-count mode
 export const ROUND_VICTORY_FANS_BY_TOTAL: Record<number, number[]> = {
-  3: [10, 14, 20],
+  3: [15, 20, 25],
   5: [10, 12, 14, 15, 20],
   7: [8, 10, 12, 14, 15, 18, 20],
 };
-// Legacy alias (5-round default)
-export const ROUND_VICTORY_FANS = ROUND_VICTORY_FANS_BY_TOTAL[5];
+// Legacy alias (3-round default for NPC)
+export const ROUND_VICTORY_FANS = ROUND_VICTORY_FANS_BY_TOTAL[3];
 // Card defeat fan rewards by rarity
 export const CARD_DEFEAT_FANS: Record<string, number> = { N: 1, R: 2, SR: 3, SSR: 5 };
 
@@ -151,6 +151,7 @@ export interface GameState {
   lastRevealPowerAdded: number;
   // ===== Evolution / once-per-round tracking =====
   usedGiantSnake: { player: boolean; ai: boolean }; // 大蛇の呑み込み効果（1回戦1回）
+  effectSuppressed: { player: boolean; ai: boolean }; // 聖女ジャンヌ「神の啓示」で相手効果をこのラウンド無効化
   // ===== Stage rules =====
   stageRules: StageRules | null;      // null = free battle (no stage rules)
   // ===== Round result =====
@@ -245,6 +246,7 @@ export function initGameState(
     benchBoostDetails: null,
     lastRevealPowerAdded: 0,
     usedGiantSnake: { player: false, ai: false },
+    effectSuppressed: { player: false, ai: false },
     stageRules: stageRules ?? null,
     roundWinner: null,
     history: [],
@@ -319,6 +321,14 @@ export function applyRevealEffect(
 ): EffectResult {
   const effId = card.effect?.id;
   if (!effId || !card.effect) return { state, bonusAttack: 0 };
+  // 神の啓示（聖女ジャンヌ）で相手効果がこのラウンド中無効化されている場合は skip
+  if (state.effectSuppressed[side] && effId !== 'saint_jeanne') {
+    return {
+      state,
+      bonusAttack: 0,
+      telop: { text: '✨ 神の加護により効果が封じられた', color: '#ffffff' },
+    };
+  }
   const opp = otherSide(side);
   const color = EFFECT_COLORS[card.effect.category];
   let next = state;
@@ -1285,6 +1295,65 @@ export function applyRevealEffect(
         if (role === 'defender' && lilyDefBonus > 0) next = { ...next, defenderBonus: next.defenderBonus + lilyDefBonus };
         telop = { text: hasLilyShield ? `🛡️百合の守り！ジャンヌの防御+${lilyDefBonus}` : '⚜️ジャンヌ・ダルク！', color };
       }
+      break;
+    }
+    case 'burning_stake': {
+      // 殉教の炎: ベンチのジャンヌ・ダルクを除外して、火刑自体を聖女ジャンヌに変身させる。
+      const my = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      const jeanneSlot = my.bench.find((b) => b.name === 'ジャンヌ・ダルク' && !sealed.includes(b.name));
+      if (!jeanneSlot) {
+        telop = { text: 'ベンチにジャンヌがいません', color };
+        break;
+      }
+      const saintTemplate = ALL_BATTLE_CARDS.find((c) => c.name === '聖女ジャンヌ');
+      if (!saintTemplate) {
+        telop = { text: 'ベンチにジャンヌがいません', color };
+        break;
+      }
+      // 1. ベンチからジャンヌを1枚除外
+      const newBench = removeOneFromBench(my.bench, 'ジャンヌ・ダルク');
+      next = applySide(
+        { ...next, exile: { ...next.exile, [side]: [...next.exile[side], jeanneSlot.card] } },
+        side,
+        { ...my, bench: newBench },
+      );
+      // 2. 火刑自体を聖女ジャンヌに変身させる（attackRevealed 内で差し替え）
+      const transformed: BattleCard = { ...saintTemplate, id: `evolved-saint-jeanne-${Date.now()}` };
+      const newRevealed = next.attackRevealed.map((c) => c.id === card.id ? transformed : c);
+      const oldAtk = getBaseAttack(card);
+      const newAtk = getBaseAttack(transformed);
+      next = {
+        ...next,
+        attackRevealed: newRevealed,
+        attackCurrentPower: role === 'attacker' ? next.attackCurrentPower - oldAtk + newAtk : next.attackCurrentPower,
+      };
+      // 3. 聖女ジャンヌの効果「救国の祈り」を即座に適用
+      // 3a. 味方除外カードを全てデッキに戻す
+      const exiledForSide = next.exile[side];
+      const recoveredCount = exiledForSide.length;
+      if (recoveredCount > 0) {
+        next = {
+          ...next,
+          exile: { ...next.exile, [side]: [] },
+        };
+        const mySideNow = side === 'player' ? next.player : next.ai;
+        next = applySide(next, side, { ...mySideNow, deck: [...mySideNow.deck, ...exiledForSide] });
+      }
+      // 3b. 相手防御-3
+      if (role === 'attacker') {
+        next = { ...next, defenderBonus: next.defenderBonus - 3 };
+      } else {
+        next = {
+          ...next,
+          roundAttackBonus: {
+            ...next.roundAttackBonus,
+            [opp]: next.roundAttackBonus[opp] - 3,
+          },
+        };
+      }
+      telop = { text: '🔥 殉教の炎！ジャンヌが炎に包まれ…聖女として蘇る！', color: '#ffffff' };
+      console.log(`[Engine] 火刑 → 聖女ジャンヌに変身！ジャンヌを除外、除外回収=${recoveredCount}枚`);
       break;
     }
     // ===== 新コンボ効果（第2弾） =====
@@ -2479,7 +2548,7 @@ export function advanceToNextRound(state: GameState): GameState {
 
   // Advance to next round: collect ALL cards back to deck, reset bench/quarantine.
   // ベンチ + 隔離 + 防御カード + 攻撃中カード → 全てデッキに回収してシャッフル
-  // 大蛇はラウンド内限定進化のため、アナコンダに戻す
+  // 進化カードはラウンド内限定のため、元のカードに戻す
   const revertEvolution = (card: BattleCard): BattleCard => {
     if (card.name === '大蛇' && card.id.startsWith('evolved-giant-snake-')) {
       const anaconda = ALL_BATTLE_CARDS.find((c) => c.name === 'アナコンダ');
@@ -2488,6 +2557,8 @@ export function advanceToNextRound(state: GameState): GameState {
         return { ...anaconda, id: `reverted-anaconda-${Date.now()}` };
       }
     }
+    // 聖女ジャンヌは火刑により変身したカード。ジャンヌ本体はすでに除外されているため
+    // ラウンド終了時に戻す先がなく、聖女ジャンヌのまま残る。
     return card;
   };
 
@@ -2535,6 +2606,7 @@ export function advanceToNextRound(state: GameState): GameState {
     benchBoostDetails: null,
     lastRevealPowerAdded: 0,
     usedGiantSnake: { player: false, ai: false },
+    effectSuppressed: { player: false, ai: false },
     message: `第${nextRound}回戦 デッキフェイズ：カードを選ぼう`,
   };
 }

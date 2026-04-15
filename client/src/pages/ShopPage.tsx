@@ -43,6 +43,35 @@ import {
 import { fetchChildStatus } from '@/lib/quizService';
 import { spendAlt } from '@/lib/altGuard';
 import { toast } from 'sonner';
+import { loadQuestProgress, isDeckUnlocked, DECK_KEYS } from '@/lib/questProgress';
+import { fetchRatingStatus } from '@/lib/ratingService';
+import { COLLECTION_CARDS } from '@/lib/cardData';
+import { supabase } from '@/lib/supabase';
+
+// ===== 特別解放条件（レベル以外のロック）=====
+interface SpecialUnlockContext {
+  allDecksCleared: boolean;
+  collectionPct: number; // 0-100
+  rating: number;
+}
+
+const SPECIAL_UNLOCK: Record<string, {
+  hint: string;
+  check: (ctx: SpecialUnlockContext) => boolean;
+}> = {
+  'avatar-angel-chibi': {
+    hint: '全デッキクリアで解放',
+    check: (c) => c.allDecksCleared,
+  },
+  'avatar-catgirl': {
+    hint: 'コレクション50%で解放',
+    check: (c) => c.collectionPct >= 50,
+  },
+  'avatar-dancer': {
+    hint: 'レート1200以上で解放',
+    check: (c) => c.rating >= 1200,
+  },
+};
 
 const shopTabs = [
   { id: 'avatar', label: 'アバター', emoji: '👤', color: '#a855f7' },
@@ -75,6 +104,62 @@ export default function ShopPage() {
   const levelInfo = useMemo(() => calculateLevel(user.totalAlt), [user.totalAlt]);
   const currentLevel = levelInfo.level;
 
+  // ===== 特別解放条件の進捗 =====
+  const [specialCtx, setSpecialCtx] = useState<SpecialUnlockContext>({
+    allDecksCleared: false,
+    collectionPct: 0,
+    rating: 1000,
+  });
+  const [prevUnlocked, setPrevUnlocked] = useState<Set<string> | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      // クエスト: 全デッキが解放（master以上クリア）されているかどうか
+      const qp = loadQuestProgress();
+      const allDecksCleared = DECK_KEYS.every((k) => isDeckUnlocked(qp, k));
+
+      // レート
+      const r = await fetchRatingStatus(user.id);
+      const rating = r?.rating ?? 1000;
+
+      // コレクション%: gacha_pulls の distinct card_id 数 / COLLECTION_CARDS 総数
+      let collectedCount = 0;
+      try {
+        const { data } = await supabase
+          .from('gacha_pulls')
+          .select('card_id')
+          .eq('child_id', user.id);
+        if (data) collectedCount = new Set(data.map((d) => d.card_id)).size;
+      } catch { /* offline: keep 0 */ }
+      const collectionPct = COLLECTION_CARDS.length > 0
+        ? Math.round((collectedCount / COLLECTION_CARDS.length) * 100)
+        : 0;
+
+      if (cancelled) return;
+      const ctx: SpecialUnlockContext = { allDecksCleared, collectionPct, rating };
+      setSpecialCtx(ctx);
+
+      // 新規解放を検知してトースト
+      const currentUnlocked = new Set(
+        Object.entries(SPECIAL_UNLOCK)
+          .filter(([, rule]) => rule.check(ctx))
+          .map(([id]) => id)
+      );
+      if (prevUnlocked !== null) {
+        currentUnlocked.forEach((id) => {
+          if (!prevUnlocked.has(id)) {
+            const loc = JP_SKIN_I18N[id];
+            toast.success(`🎉 ${loc?.name ?? id} が解放されました！`);
+          }
+        });
+      }
+      setPrevUnlocked(currentUnlocked);
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user.id, user.totalAlt]);
+
   // ===== Load from Supabase =====
   const loadShop = useCallback(async () => {
     setLoading(true);
@@ -102,8 +187,22 @@ export default function ShopPage() {
   // ===== Derived =====
   const isOwned = (item: ShopItem) => owned.has(item.id);
   const isEquipped = (item: ShopItem) => equippedId === item.id;
-  const isLocked = (item: ShopItem) =>
+  const getSpecialLock = (item: ShopItem): { locked: boolean; hint?: string } => {
+    const rule = SPECIAL_UNLOCK[item.skin_key];
+    if (!rule) return { locked: false };
+    if (rule.check(specialCtx)) return { locked: false };
+    return { locked: true, hint: rule.hint };
+  };
+  const isLevelLocked = (item: ShopItem) =>
     item.unlock_level > 0 && currentLevel < item.unlock_level;
+  const isLocked = (item: ShopItem) =>
+    isLevelLocked(item) || getSpecialLock(item).locked;
+  const getLockHint = (item: ShopItem): string => {
+    const sp = getSpecialLock(item);
+    if (sp.locked && sp.hint) return sp.hint;
+    if (isLevelLocked(item)) return `Lv${item.unlock_level}で解放`;
+    return '';
+  };
 
   // ===== Purchase flow =====
   const requestPurchase = (item: ShopItem) => {
@@ -112,7 +211,7 @@ export default function ShopPage() {
       return;
     }
     if (isLocked(item)) {
-      toast.error(`Lv${item.unlock_level}で解放されます`);
+      toast.info(`${getLockHint(item)}`);
       return;
     }
     if (altBalance < item.price_alt) {
@@ -285,11 +384,11 @@ export default function ShopPage() {
                           }} />
                         {/* Locked overlay */}
                         {locked && (
-                          <div className="absolute inset-0 flex flex-col items-center justify-center"
-                            style={{ background: 'rgba(11,17,40,0.55)' }}>
+                          <div className="absolute inset-0 flex flex-col items-center justify-center px-2"
+                            style={{ background: 'rgba(11,17,40,0.62)' }}>
                             <span className="text-2xl mb-1">🔒</span>
-                            <span className="text-[10px] font-bold text-amber-200/80">
-                              Lv{item.unlock_level}で解放
+                            <span className="text-[10px] font-bold text-amber-200/80 text-center leading-tight">
+                              {getLockHint(item)}
                             </span>
                           </div>
                         )}
@@ -316,9 +415,9 @@ export default function ShopPage() {
                         <p className="text-[10px] text-amber-200/35 mb-2 line-clamp-1">{loc.description}</p>
                         {locked ? (
                           <button disabled
-                            className="w-full py-1.5 rounded-lg text-[11px] font-bold opacity-60"
-                            style={{ background: 'rgba(120,120,140,0.12)', color: 'rgba(200,200,220,0.5)', border: '1px solid rgba(120,120,140,0.25)' }}>
-                            🔒 Lv{item.unlock_level}で解放
+                            className="w-full py-1.5 rounded-lg text-[10px] font-bold opacity-70"
+                            style={{ background: 'rgba(120,120,140,0.12)', color: 'rgba(200,200,220,0.6)', border: '1px solid rgba(120,120,140,0.25)' }}>
+                            🔒 {getLockHint(item)}
                           </button>
                         ) : owned_ ? (
                           <button onClick={() => handleEquip(item)}

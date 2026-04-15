@@ -181,7 +181,7 @@ function DeckPicker({
                     {!unlocked && <span className="text-xs">🔒</span>}
                   </div>
                   <p className="text-[10px] text-amber-200/50 truncate">
-                    {unlocked ? deck.description : 'クエストボードでマスターをクリアして解放'}
+                    {unlocked ? deck.description : 'デッキクエストでマスターをクリアして解放'}
                   </p>
                 </div>
               </div>

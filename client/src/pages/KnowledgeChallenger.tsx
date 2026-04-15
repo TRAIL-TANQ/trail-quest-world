@@ -61,10 +61,12 @@ import {
 import { getStage, createStageAIDeck, STARTER_DECKS, buildStarterDeck, npcDeckPhasePick, longSpecialRuleMessages } from '@/lib/stages';
 import type { StarterDeck, StageRules } from '@/lib/stages';
 import { useStageProgressStore } from '@/lib/stageProgressStore';
-import { loadQuestProgress, isDeckUnlocked, getUnlockedSSRCardNames, DECK_KEY_TO_STARTER_ID, type DeckKey } from '@/lib/questProgress';
+import { loadQuestProgress, isDeckUnlocked, getUnlockedSSRCardNames, DECK_KEY_TO_STARTER_ID, QUEST_DIFFICULTIES, DIFFICULTY_INFO, isDifficultyUnlocked, type DeckKey } from '@/lib/questProgress';
 import type { PvPSession } from '@/lib/pvpSession';
 import { clearPvPSession } from '@/lib/pvpSession';
 import { applyRatingChange, applyPvPRatingChange } from '@/lib/ratingService';
+import { playBattleStart, playTap } from '@/lib/sfx';
+import CardPreviewOverlay from '@/components/CardPreviewOverlay';
 import { saveHallOfFame } from '@/lib/hallOfFameService';
 import { toast } from 'sonner';
 
@@ -223,14 +225,20 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
   );
   // Effects that are only optional when a specific bench condition is met.
   // cannon/dynamite: optional only if bench has 火薬 (consumed for +2 attack).
+  // burning_stake: optional only if ジャンヌ・ダルク on bench (transforms to 聖女ジャンヌ).
   const conditionalOptional = useCallback((card: BattleCard): boolean => {
     const effId = card.effect?.id;
-    if (effId !== 'cannon' && effId !== 'dynamite') return false;
     const gs = gameStateRef.current;
     if (!gs) return false;
     const atkSide: 'player' | 'ai' = gs.flagHolder === 'player' ? 'ai' : 'player';
     const sealed = gs.sealedBenchNames[atkSide];
-    return gs[atkSide].bench.some((b) => b.name === '火薬' && !sealed.includes(b.name));
+    if (effId === 'cannon' || effId === 'dynamite') {
+      return gs[atkSide].bench.some((b) => b.name === '火薬' && !sealed.includes(b.name));
+    }
+    if (effId === 'burning_stake') {
+      return gs[atkSide].bench.some((b) => b.name === 'ジャンヌ・ダルク' && !sealed.includes(b.name));
+    }
+    return false;
   }, []);
   const waitAttackPreview = useCallback(
     (card: BattleCard): Promise<{ skipEffect: boolean }> => {
@@ -281,7 +289,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
 
   // ===== Deck phase state =====
   interface DeckOffer {
-    cards: BattleCard[];       // 5 cards offered this round
+    cards: BattleCard[];       // 9 cards offered this round (3回戦仕様)
     blocked: Set<number>;      // indices the player failed the quiz on
     acquired: Set<number>;     // indices already added
     redrawsLeft: number;
@@ -289,11 +297,12 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
   }
   const [deckOffer, setDeckOffer] = useState<DeckOffer | null>(null);
   // Round → max cards the player may keep this deck phase.
-  // R5 is special: only 1 SR/SSR may be acquired. Other rounds: up to 2.
-  const maxPicksForRound = (round: number, totalRounds: number = 5): number => {
-    // 3回戦/7回戦: 各デッキフェイズで最大3枚獲得可
-    if (totalRounds === 3 || totalRounds === 7) return 3;
-    // 5回戦 (現行通り): 最終回戦は1枚、それ以外は2枚
+  const maxPicksForRound = (round: number, totalRounds: number = 3): number => {
+    // 3回戦: 各デッキフェイズで最大2枚獲得可
+    if (totalRounds === 3) return 2;
+    // 7回戦: 最大3枚
+    if (totalRounds === 7) return 3;
+    // 5回戦 (PvP互換): 最終回戦は1枚、それ以外は2枚
     return round >= 5 ? 1 : 2;
   };
   const [activeQuiz, setActiveQuiz] = useState<{
@@ -312,7 +321,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
   const [removedCards, setRemovedCards] = useState<BattleCard[]>([]);
   // Mobile-only collapse toggle for the "current deck" panel in the deck phase.
   // PC (md+) always shows it expanded.
-  const [deckPanelCollapsed, setDeckPanelCollapsed] = useState(false);
+  const [deckPanelCollapsed, setDeckPanelCollapsed] = useState(true);
 
   // ALT/XP
   const userId = useUserStore((s) => s.user.id);
@@ -531,7 +540,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
   }, [gameState?.phase]);
 
   // ===== Deck phase setup (fires at the start of each round) =====
-  // 各ラウンド開始時にデッキフェイズ: 5枚提示→最大2枚取得でバトルへ。
+  // 各ラウンド開始時にデッキフェイズ: 9枚提示→最大2枚取得でバトルへ（3回戦仕様）。
   // NPC also auto-picks cards during this phase (skipped in PvP mode).
   useEffect(() => {
     if (!gameState || gameState.phase !== 'deck_phase' || deckOffer) return;
@@ -571,7 +580,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
       }
     }
 
-    const cardCount = rules?.deckPhaseCards ?? 5;
+    const cardCount = rules?.deckPhaseCards ?? 9;
     // Use active player's unlocked SSRs in PvP mode
     const unlockedSSR = isPvP && pvpSession
       ? (pvpDeckTurn === 'p1' ? pvpSession.player1.unlockedSSRCardNames : pvpSession.player2.unlockedSSRCardNames)
@@ -583,7 +592,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
       cards: offered,
       blocked: new Set(),
       acquired: new Set(),
-      redrawsLeft: 3,
+      redrawsLeft: 1,
       addedCardIds: [],
     });
   }, [gameState?.phase, gameState?.round, deckOffer, isPvP, pvpSession, pvpDeckTurn, pvpActiveSide]);
@@ -1095,6 +1104,21 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
               if (anacondaTemplate) {
                 playSound('evolve');
                 setEvolutionOverlay({ from: anacondaTemplate, to: lastRevealed });
+                await waitMs(3000);
+                if (unmountedRef.current) return;
+                setEvolutionOverlay(null);
+              }
+            }
+          }
+
+          // ===== Check for transformation (火刑 → 聖女ジャンヌ) =====
+          {
+            const lastRevealed = rs.attackRevealed[rs.attackRevealed.length - 1];
+            if (lastRevealed?.name === '聖女ジャンヌ' && lastRevealed.id.startsWith('evolved-saint-jeanne-')) {
+              const burningStakeTemplate = ALL_BATTLE_CARDS.find((c) => c.name === '火刑');
+              if (burningStakeTemplate) {
+                playSound('evolve');
+                setEvolutionOverlay({ from: burningStakeTemplate, to: lastRevealed });
                 await waitMs(3000);
                 if (unmountedRef.current) return;
                 setEvolutionOverlay(null);
@@ -1723,6 +1747,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
 
   const handleStartBattle = useCallback(() => {
     if (!gameState || gameState.phase !== 'deck_phase') return;
+    playBattleStart();
     // In PvP, validate against the active side's deck.
     const activeDeckLen = pvpActiveSide === 'ai' ? gameState.ai.deck.length : gameState.player.deck.length;
     if (activeDeckLen < MIN_DECK_SIZE) {
@@ -1954,21 +1979,6 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
             </div>
           )}
 
-          <div className="flex items-center justify-center gap-5 mb-4">
-            <div className="text-center">
-              <p className="text-[9px] text-amber-200/35 mb-1">ラウンド</p>
-              <span className="text-sm font-bold text-amber-100">{TOTAL_ROUNDS}</span>
-            </div>
-            <div className="text-center">
-              <p className="text-[9px] text-amber-200/35 mb-1">報酬</p>
-              <span className="text-sm font-bold" style={{ color: '#ffd700' }}>+30 ALT</span>
-            </div>
-            <div className="text-center">
-              <p className="text-[9px] text-amber-200/35 mb-1">ベンチ</p>
-              <span className="text-sm font-bold text-amber-100">{BENCH_MAX_SLOTS}枠</span>
-            </div>
-          </div>
-
           {!imagesPreloaded && (
             <div className="mb-3">
               <div className="flex items-center justify-between mb-1">
@@ -1985,15 +1995,17 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
           )}
           <button
             onClick={() => {
+              playTap();
               if (stageId !== null) {
                 // Stage mode: go to deck selection
                 setScreen('deck_select');
               } else {
+                playBattleStart();
                 startGame();
               }
             }}
             disabled={!imagesPreloaded || (stageId === null && !(previewValidation?.valid))}
-            className="rpg-btn rpg-btn-green w-full text-lg py-3.5 mb-2"
+            className="rpg-btn rpg-btn-green tappable pulse-btn w-full text-lg py-3.5 mb-2"
             style={{ opacity: (!imagesPreloaded || (stageId === null && !(previewValidation?.valid))) ? 0.5 : 1 }}
           >
             {!imagesPreloaded
@@ -2019,159 +2031,160 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
   // =================== DECK SELECT SCREEN =====================
   // =============================================================
   if (screen === 'deck_select') {
+    const questProgress = loadQuestProgress();
+
+    const difficultyIcon = (d: typeof QUEST_DIFFICULTIES[number], deckKey: DeckKey): string => {
+      const dp = questProgress[deckKey][d];
+      const unlocked = isDifficultyUnlocked(questProgress, deckKey, d);
+      if (dp.cleared) return '✅';
+      if (!unlocked) return '🔒';
+      if (dp.correctCount > 0) return '▶️';
+      return '⭐';
+    };
+
+    // カード一覧ポップアップ用
+    const popupDeck = expandedStarterId ? STARTER_DECKS.find((d) => d.id === expandedStarterId) : null;
+    const popupCards = popupDeck && popupDeck.id !== 'starter-random' ? (() => {
+      const allNames = [popupDeck.trumpCard, ...popupDeck.themeCards, ...popupDeck.noiseCards];
+      return allNames.map((n) => findCardByName(n)).filter(Boolean) as BattleCard[];
+    })() : null;
+
     return (
       <div className="min-h-screen px-4 py-6" style={{ background: 'linear-gradient(180deg, #0b1128 0%, #151d3b 50%, #0e1430 100%)' }}>
         <h1 className="text-xl font-bold text-center mb-1" style={{ color: '#ffd700', textShadow: '0 0 15px rgba(255,215,0,0.3)' }}>
           デッキ選択
         </h1>
-        <p className="text-center text-amber-200/50 text-xs mb-5">初期デッキを選んでバトルに挑め！</p>
+        <p className="text-center text-amber-200/50 text-xs mb-5">解放済みデッキで出撃、未解放はクエストで解放しよう！</p>
 
-        <div className="space-y-3 max-w-md mx-auto">
+        <div className="space-y-2.5 max-w-md mx-auto">
           {STARTER_DECKS.map((deck) => {
-            // Check deck unlock: random always unlocked, others need quest master clear
-            const questProgress = loadQuestProgress();
-            const deckKeyEntry = Object.entries(DECK_KEY_TO_STARTER_ID).find(([, sid]) => sid === deck.id);
-            const isRandomDeck = deck.id === 'starter-random';
-            const isUnlocked = isRandomDeck || !deckKeyEntry || isDeckUnlocked(questProgress, deckKeyEntry[0] as any);
-
             const isSelected = selectedStarter?.id === deck.id;
-            const isExpanded = expandedStarterId === deck.id;
             const trumpCard = deck.trumpCard ? findCardByName(deck.trumpCard) : null;
-            // Build preview for stats
-            const previewCards = deck.id === 'starter-random' ? null : (() => {
-              const allNames = [deck.trumpCard, ...deck.themeCards, ...deck.noiseCards];
-              return allNames.map((n) => findCardByName(n)).filter(Boolean) as BattleCard[];
-            })();
-            const avgAtk = previewCards
-              ? (previewCards.reduce((s, c) => s + (c.attackPower ?? c.power), 0) / previewCards.length).toFixed(1)
-              : '?';
-            const avgDef = previewCards
-              ? (previewCards.reduce((s, c) => s + (c.defensePower ?? c.power), 0) / previewCards.length).toFixed(1)
-              : '?';
+            const deckKeyEntry = Object.entries(DECK_KEY_TO_STARTER_ID).find(([, sid]) => sid === deck.id);
+            const deckKey = deckKeyEntry?.[0] as DeckKey | undefined;
+            const isRandom = deck.id === 'starter-random';
+            const isUnlocked = isRandom || !deckKey || isDeckUnlocked(questProgress, deckKey);
 
             return (
               <div
                 key={deck.id}
-                className="rounded-xl overflow-hidden transition-all"
+                className="rounded-xl overflow-hidden relative transition-all"
                 style={{
                   background: isSelected
-                    ? 'linear-gradient(135deg, rgba(255,215,0,0.12), rgba(255,215,0,0.03))'
+                    ? 'linear-gradient(135deg, rgba(255,215,0,0.18), rgba(255,215,0,0.03))'
                     : 'linear-gradient(135deg, rgba(21,29,59,0.95), rgba(14,20,45,0.95))',
-                  border: isSelected ? '2px solid rgba(255,215,0,0.6)' : '1.5px solid rgba(255,215,0,0.15)',
-                  boxShadow: isSelected ? '0 0 16px rgba(255,215,0,0.15)' : '0 2px 12px rgba(0,0,0,0.3)',
+                  border: isSelected
+                    ? '2px solid rgba(255,215,0,0.7)'
+                    : isUnlocked
+                      ? '1.5px solid rgba(255,215,0,0.25)'
+                      : '1.5px solid rgba(120,120,140,0.25)',
+                  boxShadow: isSelected ? '0 0 18px rgba(255,215,0,0.3)' : '0 2px 10px rgba(0,0,0,0.3)',
                 }}
               >
-                <div
-                  className="p-3 transition-transform cursor-pointer active:scale-[0.99] relative"
-                  onClick={() => {
-                    setSelectedStarter(deck);
-                    setExpandedStarterId(isExpanded ? null : deck.id);
-                  }}
-                >
-                  <div className="flex items-center gap-3" style={{ opacity: isUnlocked ? 1 : 0.5, filter: isUnlocked ? 'none' : 'grayscale(1)' }}>
-                    <span className="text-2xl">{deck.icon}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <p className="text-sm font-bold text-amber-100">{deck.name}</p>
-                      </div>
-                      <p className="text-[10px] text-amber-200/50">{isUnlocked ? deck.description : 'クエストボードでマスターをクリアして解放'}</p>
+                <div className="px-3 pt-2.5 pb-2 flex items-center gap-3">
+                  {/* Trump thumbnail or icon */}
+                  {trumpCard ? (
+                    <div className="w-11 h-14 rounded-md overflow-hidden shrink-0"
+                      style={{ border: `1px solid ${isUnlocked ? 'rgba(255,215,0,0.3)' : 'rgba(120,120,140,0.25)'}`, filter: isUnlocked ? 'none' : 'grayscale(0.6)' }}>
+                      <img src={trumpCard.imageUrl} alt={trumpCard.name} className="w-full h-full object-cover" />
                     </div>
-                    {trumpCard && (
-                      <div className="w-12 h-16 rounded-lg overflow-hidden flex-shrink-0" style={{ border: '1.5px solid rgba(255,215,0,0.4)' }}>
-                        <img src={trumpCard.imageUrl} alt={trumpCard.name} className="w-full h-full object-cover" />
-                      </div>
-                    )}
-                    {!trumpCard && deck.id === 'starter-random' && (
-                      <div className="w-12 h-16 rounded-lg flex items-center justify-center flex-shrink-0 text-2xl"
-                        style={{ background: 'rgba(255,215,0,0.1)', border: '1.5px solid rgba(255,215,0,0.3)' }}>?</div>
-                    )}
-                  </div>
-                  {!isUnlocked && (
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <span className="text-4xl" style={{ filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.8))' }}>🔒</span>
+                  ) : (
+                    <div className="w-11 h-14 rounded-md flex items-center justify-center text-2xl shrink-0"
+                      style={{ background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.3)' }}>
+                      {deck.icon}
                     </div>
                   )}
-                  <div className="flex items-center gap-3 mt-2" style={{ opacity: isUnlocked ? 1 : 0.5 }}>
-                    <span className="text-[10px] text-amber-200/60">平均 ⚔️{avgAtk} / 🛡️{avgDef}</span>
-                    {!isUnlocked && deckKeyEntry && (() => {
-                      const dp = questProgress[deckKeyEntry[0] as DeckKey];
-                      const icon = (cleared: boolean, started: boolean) => cleared ? '✅' : started ? '▶️' : '🔒';
-                      return (
-                        <span className="text-[10px] text-amber-200/70 tracking-tight">
-                          ⭐{icon(dp.beginner.cleared, dp.beginner.correctCount > 0)} ⭐⭐{icon(dp.challenger.cleared, dp.challenger.correctCount > 0)} ⭐⭐⭐{icon(dp.master.cleared, dp.master.correctCount > 0)}
-                        </span>
-                      );
-                    })()}
-                    <span className="text-[10px] text-amber-200/40 ml-auto">{isExpanded ? '▲ 閉じる' : '▼ カード一覧'}</span>
+
+                  {/* Title + badges + progress row */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="text-[13px] font-bold text-amber-100 truncate">
+                        {deck.icon} {deck.name.replace('デッキ', '').replace('🎨 ', '')}
+                      </span>
+                      {isRandom ? null : isUnlocked ? (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded font-bold shrink-0"
+                          style={{ background: 'rgba(34,197,94,0.18)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.35)' }}>✅ 解放済</span>
+                      ) : (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded font-bold shrink-0"
+                          style={{ background: 'rgba(120,120,140,0.15)', color: 'rgba(220,220,230,0.65)', border: '1px solid rgba(120,120,140,0.3)' }}>🔒 未解放</span>
+                      )}
+                    </div>
+                    {/* Difficulty progress */}
+                    {deckKey && (
+                      <div className="flex items-center gap-1 text-[10px] text-amber-200/70">
+                        {QUEST_DIFFICULTIES.map((d) => {
+                          const di = DIFFICULTY_INFO[d];
+                          const label = d === 'legend' ? '👑' : '⭐'.repeat(di.stars);
+                          return (
+                            <span key={d} className="flex items-center">
+                              <span className="text-[9px]">{label}</span>
+                              <span className="text-[11px] ml-0.5">{difficultyIcon(d, deckKey)}</span>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
+
+                  {/* Info button (opens popup) */}
+                  {!isRandom && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setExpandedStarterId(deck.id); }}
+                      className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-[11px] active:scale-90 transition-transform"
+                      style={{
+                        background: 'rgba(0,0,0,0.45)',
+                        color: '#ffd700',
+                        border: '1px solid rgba(255,215,0,0.35)',
+                      }}
+                      aria-label="カード一覧"
+                    >
+                      ℹ
+                    </button>
+                  )}
                 </div>
 
-                {/* Expanded card list */}
-                {isExpanded && previewCards && (
-                  <div className="px-3 pb-3 border-t border-amber-200/10">
-                    <div className="grid grid-cols-5 gap-1.5 mt-2">
-                      {previewCards.map((c, ci) => {
-                        const isTrump = ci === 0 && deck.trumpCard;
-                        return (
-                          <div key={ci} className="text-center">
-                            <div
-                              className="rounded-lg overflow-hidden mb-0.5"
-                              style={{
-                                border: isTrump ? '2px solid #ffd700' : '1px solid rgba(255,255,255,0.1)',
-                                boxShadow: isTrump ? '0 0 8px rgba(255,215,0,0.3)' : 'none',
-                              }}
-                            >
-                              <img src={c.imageUrl} alt={c.name} className="w-full aspect-[3/4] object-cover" />
-                            </div>
-                            <p className="text-[8px] text-amber-200/60 leading-tight truncate">{c.name}</p>
-                            <p className="text-[7px]" style={{ color: RARITY_INFO[c.rarity].color }}>{c.rarity}</p>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-                {/* Inline 出撃 button — appears directly under the selected deck */}
-                {isSelected && isUnlocked && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); startGame(deck); }}
-                    className="kc-sortie-slide w-full flex items-center justify-center gap-2 font-black active:scale-[0.98] transition-transform"
-                    style={{
-                      height: '48px',
-                      background: 'linear-gradient(135deg, #ef4444, #b91c1c)',
-                      color: '#ffffff',
-                      borderTop: '1.5px solid rgba(255,255,255,0.15)',
-                      borderRadius: '0 0 12px 12px',
-                      fontSize: '15px',
-                      boxShadow: '0 2px 12px rgba(239,68,68,0.35)',
-                      letterSpacing: '0.05em',
-                    }}
-                  >
-                    ⚔️ 出撃する
-                  </button>
-                )}
-                {/* Inline 解放 button — appears when a locked deck is selected */}
-                {isSelected && !isUnlocked && deckKeyEntry && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      try { sessionStorage.setItem('questBoardFocus', `deck-${deckKeyEntry[0]}`); } catch {}
-                      navigate('/games/quest-board');
-                    }}
-                    className="w-full flex flex-col items-center justify-center gap-0.5 font-black active:scale-[0.98] transition-transform py-2"
-                    style={{
-                      background: 'linear-gradient(135deg, #fbbf24, #f59e0b)',
-                      color: '#1a1a2e',
-                      borderTop: '1.5px solid rgba(0,0,0,0.15)',
-                      borderRadius: '0 0 12px 12px',
-                      boxShadow: '0 2px 12px rgba(251,191,36,0.35)',
-                      letterSpacing: '0.05em',
-                    }}
-                  >
-                    <span style={{ fontSize: '15px' }}>🔓 クエストでデッキを解放する</span>
-                    <span className="font-bold" style={{ fontSize: '10px', opacity: 0.75 }}>⭐⭐⭐ マスターをクリアで解放！</span>
-                  </button>
-                )}
+                {/* Action row */}
+                <div className="px-3 pb-2.5">
+                  {isUnlocked ? (
+                    isSelected ? (
+                      <button
+                        onClick={() => startGame(deck)}
+                        className="w-full rounded-lg py-2 font-black text-[13px] active:scale-[0.98] transition-transform"
+                        style={{
+                          background: 'linear-gradient(135deg, #ef4444, #b91c1c)',
+                          color: '#fff',
+                          boxShadow: '0 2px 10px rgba(239,68,68,0.4)',
+                        }}
+                      >
+                        ⚔️ 出撃する
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => setSelectedStarter(deck)}
+                        className="w-full rounded-lg py-1.5 font-bold text-[11px] active:scale-[0.98] transition-transform"
+                        style={{
+                          background: 'rgba(255,215,0,0.08)',
+                          color: '#ffd700',
+                          border: '1px solid rgba(255,215,0,0.25)',
+                        }}
+                      >
+                        タップで選択
+                      </button>
+                    )
+                  ) : (
+                    <button
+                      onClick={() => deckKey && navigate(`/quest/${deckKey}`)}
+                      className="w-full rounded-lg py-2 font-black text-[13px] active:scale-[0.98] transition-transform"
+                      style={{
+                        background: 'linear-gradient(135deg, #8b5cf6, #3b82f6)',
+                        color: '#fff',
+                        boxShadow: '0 2px 10px rgba(139,92,246,0.4)',
+                      }}
+                    >
+                      📖 クエストに挑戦 →
+                    </button>
+                  )}
+                </div>
               </div>
             );
           })}
@@ -2185,6 +2198,59 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
             ← 戻る
           </button>
         </div>
+
+        {/* カード一覧ポップアップ */}
+        {popupDeck && popupCards && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{ background: 'rgba(0,0,0,0.78)' }}
+            onClick={() => setExpandedStarterId(null)}
+          >
+            <div
+              className="w-full max-w-sm rounded-2xl overflow-hidden flex flex-col max-h-[85vh]"
+              style={{
+                background: 'linear-gradient(135deg, rgba(21,29,59,0.98), rgba(14,20,45,0.98))',
+                border: '2px solid rgba(255,215,0,0.5)',
+                boxShadow: '0 10px 40px rgba(0,0,0,0.6)',
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="px-4 py-3 flex items-center justify-between shrink-0"
+                style={{ background: 'rgba(255,215,0,0.15)', borderBottom: '1.5px solid rgba(255,215,0,0.35)' }}>
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">{popupDeck.icon}</span>
+                  <h3 className="text-base font-black text-amber-100">{popupDeck.name}</h3>
+                </div>
+                <button onClick={() => setExpandedStarterId(null)} className="text-white/70 text-base">✕</button>
+              </div>
+              <div className="px-3 py-2 text-[11px] text-amber-200/60 shrink-0">
+                {popupDeck.description}
+              </div>
+              <div className="flex-1 overflow-auto p-3">
+                <div className="grid grid-cols-4 gap-2">
+                  {popupCards.map((c, ci) => {
+                    const isTrump = ci === 0 && popupDeck.trumpCard;
+                    return (
+                      <div key={ci} className="text-center">
+                        <div
+                          className="rounded-md overflow-hidden mb-0.5"
+                          style={{
+                            border: isTrump ? '2px solid #ffd700' : '1px solid rgba(255,255,255,0.1)',
+                            boxShadow: isTrump ? '0 0 8px rgba(255,215,0,0.35)' : 'none',
+                          }}
+                        >
+                          <img src={c.imageUrl} alt={c.name} className="w-full aspect-[3/4] object-cover" />
+                        </div>
+                        <p className="text-[8px] text-amber-200/70 leading-tight truncate">{c.name}</p>
+                        <p className="text-[7px]" style={{ color: RARITY_INFO[c.rarity].color }}>{c.rarity}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -3000,83 +3066,55 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
           );
         })()}
 
-        {/* ====== Attack Preview Overlay (step 2 of 3-step play) ====== */}
+        {/* ====== Attack Preview Overlay — 3D tilt + swipe-up to play ====== */}
         {attackPreview && (() => {
           const card = attackPreview.card;
           const hasAutoEffect = !!card.effect && !attackPreview.optionalEffect;
           const effectText = card.effect?.description ?? null;
           const effectName = card.effect?.name ?? null;
-          return (
-            <div
-              className="fixed inset-0 z-[250] flex flex-col items-center justify-center p-4"
-              style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)' }}
-            >
-              <div className="kc-preview-card mb-4" style={{ animation: 'previewDraw 0.4s ease-out' }}>
-                <CardDisplay card={card} size="md" />
-              </div>
+          const optional = attackPreview.optionalEffect;
+          const playLabel = optional ? '⬆️ 上にスワイプで発動 / ボタンで選択' : '⬆️ 上にスワイプで出す';
+
+          const subActions = (
+            <div className="flex flex-col items-center gap-2 mt-2 max-w-xs">
               {effectText && (
                 <div
-                  className="rounded-lg px-3 py-2 md:px-6 md:py-4 mb-4 max-w-xs md:max-w-xl text-center"
-                  style={{
-                    background: 'rgba(255,215,0,0.1)',
-                    border: '1px solid rgba(255,215,0,0.35)',
-                  }}
+                  className="rounded-lg px-3 py-2 text-center w-full"
+                  style={{ background: 'rgba(255,215,0,0.1)', border: '1px solid rgba(255,215,0,0.35)' }}
                 >
-                  <p className="text-[10px] md:text-lg font-bold mb-0.5 md:mb-2" style={{ color: '#ffd700' }}>
-                    ✨ {attackPreview.optionalEffect ? '任意発動効果' : hasAutoEffect ? '自動発動効果' : '効果'}
+                  <p className="text-[10px] font-bold mb-0.5" style={{ color: '#ffd700' }}>
+                    ✨ {optional ? '任意発動効果' : hasAutoEffect ? '自動発動効果' : '効果'}
                     {effectName ? ` — ${effectName}` : ''}
                   </p>
-                  <p className="text-xs md:text-lg text-amber-100/90 leading-tight md:leading-relaxed">{effectText}</p>
+                  <p className="text-[11px] text-amber-100/90 leading-tight">{effectText}</p>
                 </div>
               )}
-              <div className="flex gap-2 md:gap-4 w-full max-w-xs md:max-w-xl">
-                {attackPreview.optionalEffect ? (
-                  <>
-                    <button
-                      onClick={() => handlePreviewChoice(false)}
-                      className="flex-1 py-3 md:py-5 rounded-xl text-sm md:text-lg font-black active:scale-95 transition-transform"
-                      style={{
-                        background: 'linear-gradient(135deg, #ffd700, #d4a500)',
-                        color: '#0b1128',
-                        boxShadow: '0 4px 16px rgba(255,215,0,0.4)',
-                      }}
-                    >
-                      ✨ 発動する
-                    </button>
-                    <button
-                      onClick={() => handlePreviewChoice(true)}
-                      className="flex-1 py-3 md:py-5 rounded-xl text-sm md:text-lg font-bold active:scale-95 transition-transform"
-                      style={{
-                        background: 'rgba(255,255,255,0.08)',
-                        border: '1.5px solid rgba(255,255,255,0.3)',
-                        color: 'rgba(255,255,255,0.85)',
-                      }}
-                    >
-                      効果なしで出す
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    onClick={() => handlePreviewChoice(false)}
-                    className="w-full py-3 md:py-5 rounded-xl text-sm md:text-lg font-black active:scale-95 transition-transform"
-                    style={{
-                      background: 'linear-gradient(135deg, #ffd700, #d4a500)',
-                      color: '#0b1128',
-                      boxShadow: '0 4px 16px rgba(255,215,0,0.4)',
-                    }}
-                  >
-                    ⚔️ 出す
-                  </button>
-                )}
-              </div>
-              <style>{`
-                @keyframes previewDraw {
-                  0% { opacity: 0; transform: translateY(40px) scale(0.7); }
-                  60% { opacity: 1; transform: translateY(0) scale(1.08); }
-                  100% { opacity: 1; transform: translateY(0) scale(1); }
-                }
-              `}</style>
+              {optional && (
+                <button
+                  onClick={() => { playTap(); handlePreviewChoice(true); }}
+                  className="tappable px-4 py-2 rounded-lg text-xs font-bold"
+                  style={{
+                    background: 'rgba(255,255,255,0.08)',
+                    border: '1.5px solid rgba(255,255,255,0.3)',
+                    color: 'rgba(255,255,255,0.85)',
+                  }}
+                >
+                  効果なしで出す
+                </button>
+              )}
             </div>
+          );
+
+          return (
+            <CardPreviewOverlay
+              onPlay={() => handlePreviewChoice(false)}
+              playLabel={playLabel}
+              subActions={subActions}
+            >
+              <div className="w-full h-full flex items-center justify-center">
+                <CardDisplay card={card} size="md" />
+              </div>
+            </CardPreviewOverlay>
           );
         })()}
 
@@ -3586,30 +3624,37 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
       )}
 
       {/* ===== Evolution Overlay ===== */}
-      {evolutionOverlay && (
+      {evolutionOverlay && (() => {
+        const isSaint = evolutionOverlay.to.name === '聖女ジャンヌ';
+        const accentColor = isSaint ? '#ffffff' : '#ffd700';
+        const particleColors = isSaint ? ['#ffffff', '#ffd700', '#fff7cc'] : ['#ffd700'];
+        const label = isSaint ? 'SAINT!' : 'EVOLVE!';
+        return (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.85)' }}>
           {/* Phase 1: From card glowing */}
           <div className="kc-evolve-sequence">
             <div className="kc-evolve-from-card" style={{ position: 'absolute' }}>
               <img src={evolutionOverlay.from.imageUrl} alt={evolutionOverlay.from.name}
                 className="rounded-xl"
-                style={{ width: 180, height: 250, objectFit: 'cover', boxShadow: 'inset 0 0 30px white, 0 0 40px rgba(255,255,255,0.5)' }} />
+                style={{ width: 180, height: 250, objectFit: 'cover', boxShadow: `inset 0 0 30px ${accentColor}, 0 0 40px ${isSaint ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.5)'}` }} />
             </div>
             {/* Phase 2: To card appearing */}
             <div className="kc-evolve-to-card" style={{ position: 'absolute' }}>
               <img src={evolutionOverlay.to.imageUrl} alt={evolutionOverlay.to.name}
                 className="rounded-xl"
-                style={{ width: 200, height: 280, objectFit: 'cover', boxShadow: '0 0 40px rgba(255,215,0,0.6)' }} />
+                style={{ width: 200, height: 280, objectFit: 'cover', boxShadow: `0 0 40px ${isSaint ? 'rgba(255,255,255,0.8)' : 'rgba(255,215,0,0.6)'}, 0 0 80px ${isSaint ? 'rgba(255,215,0,0.35)' : 'transparent'}` }} />
             </div>
           </div>
-          {/* EVOLVE text */}
+          {/* EVOLVE / SAINT text */}
           <div className="absolute bottom-[20vh] left-0 right-0 text-center">
             <p className="kc-evolve-text font-black" style={{
-              fontSize: '48px', color: '#ffd700',
-              textShadow: '0 0 30px rgba(255,215,0,0.8), 0 0 60px rgba(255,215,0,0.4)',
+              fontSize: '48px', color: accentColor,
+              textShadow: isSaint
+                ? '0 0 30px rgba(255,255,255,0.9), 0 0 60px rgba(255,215,0,0.5)'
+                : '0 0 30px rgba(255,215,0,0.8), 0 0 60px rgba(255,215,0,0.4)',
               letterSpacing: '8px',
             }}>
-              EVOLVE!
+              {label}
             </p>
             <p className="text-lg text-amber-200/80 mt-2">
               {evolutionOverlay.from.name} → {evolutionOverlay.to.name}
@@ -3621,12 +3666,14 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
               <span key={`evo-p-${i}`} className="kc-confetti-piece"
                 style={{
                   left: `${30 + (i * 2.8) % 40}%`, top: `${30 + (i * 3.2) % 40}%`,
-                  background: '#ffd700', animationDelay: `${i * 0.05}s`, animationDuration: '1.5s',
+                  background: particleColors[i % particleColors.length],
+                  animationDelay: `${i * 0.05}s`, animationDuration: '1.5s',
                 }} />
             ))}
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* ===== Card Detail Modal ===== */}
       {detailCard && <CardDetailModal card={detailCard} onClose={() => setDetailCard(null)} />}
@@ -3695,26 +3742,24 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
         );
 
         const DeckPanelHeader = (
-          <div className="flex items-center justify-between mb-1.5">
-            <button
-              type="button"
-              onClick={() => setDeckPanelCollapsed((v) => !v)}
-              className="text-[12px] font-bold text-amber-100 flex items-center gap-1 md:cursor-default"
-              // md 以上ではクリック無効化 (常に展開)
-              style={{ pointerEvents: 'auto' }}
-            >
-              🃏 現在のデッキ {deckCount}/{MAX_DECK_SIZE}枚
-              <span className="md:hidden text-amber-200/60">
-                {deckPanelCollapsed ? '▶' : '▼'}
+          <button
+            type="button"
+            onClick={() => setDeckPanelCollapsed((v) => !v)}
+            className="w-full flex items-center justify-between mb-1.5 active:opacity-80 transition-opacity"
+          >
+            <span className="text-[13px] font-bold text-amber-100 flex items-center gap-1.5">
+              📋 現在のデッキ {deckCount}/{MAX_DECK_SIZE}枚
+              <span className="text-amber-200/60 text-[11px]">
+                {deckPanelCollapsed ? 'タップで展開 ▼' : '折りたたむ ▲'}
               </span>
-            </button>
+            </span>
             <span
-              className="text-[10px] font-bold"
+              className="text-[10px] font-bold shrink-0"
               style={{ color: deckCount < MIN_DECK_SIZE ? '#ff6b6b' : '#4ade80' }}
             >
               最低{MIN_DECK_SIZE}枚
             </span>
-          </div>
+          </button>
         );
 
         const DeckStatsLine = deckCount > 0 && (
@@ -3822,7 +3867,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
         return (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-3" style={{ background: 'rgba(0,0,0,0.85)' }}>
           <div
-            className="rounded-2xl w-full max-w-md md:max-w-4xl flex flex-col"
+            className="rounded-2xl w-full max-w-md flex flex-col"
             style={{
               background: 'linear-gradient(135deg, rgba(21,29,59,0.98), rgba(14,20,45,0.98))',
               border: '3px solid rgba(255,215,0,0.5)',
@@ -3857,58 +3902,55 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                 );
               })()}
               <p className="text-xs text-amber-200/70 text-center">
-                5 枚の中から{maxPicksForRound(gameState.round, gameState.totalRounds)}枚まで選べる。タップでクイズ出題、正解で追加。
+                {deckOffer.cards.length} 枚の中から{maxPicksForRound(gameState.round, gameState.totalRounds)}枚まで選べる。タップでクイズ出題、正解で追加。
                 <br />
                 獲得 {deckOffer.acquired.size}/{maxPicksForRound(gameState.round, gameState.totalRounds)} ・ デッキ {deckCount}/{MAX_DECK_SIZE} 枚
               </p>
             </div>
 
-            {/* ===== 2-col (md+) / stacked (mobile) ===== */}
-            <div className="flex-1 min-h-0 overflow-y-auto md:overflow-hidden px-4 md:grid md:grid-cols-2 md:gap-4">
-              {/* 左: 提示カード */}
-              <div className="mb-3 md:mb-0 md:flex md:flex-col md:min-h-0">
-                <p className="text-[11px] font-bold text-amber-100 mb-1.5 md:mb-2">
-                  🎴 提示カード（5枚 / 獲得 {deckOffer.acquired.size}/{maxPicksForRound(gameState.round, gameState.totalRounds)}）
+            {/* ===== 単一カラム (モバイル優先) ===== */}
+            <div className="flex-1 min-h-0 overflow-y-auto px-4">
+              {/* 提示カード（メイン） */}
+              <div className="mb-3">
+                <p className="text-[12px] font-bold text-amber-100 mb-2">
+                  🎴 提示カード（{deckOffer.cards.length}枚 / 獲得 {deckOffer.acquired.size}/{maxPicksForRound(gameState.round, gameState.totalRounds)}）
                 </p>
-                <div className="md:flex-1 md:overflow-y-auto md:min-h-0">
-                  {OfferGrid}
-                </div>
+                {OfferGrid}
               </div>
 
-              {/* 右 (md+) / 下 (mobile): 現在のデッキ */}
+              {/* 現在のデッキ（折りたたみ式、デフォルト閉じる） */}
               <div
-                className="rounded-xl p-2 md:p-3 md:flex md:flex-col md:min-h-0"
+                className="rounded-xl p-2.5 mb-2"
                 style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,215,0,0.2)' }}
               >
                 {DeckPanelHeader}
-                {/* モバイル折りたたみ: md+ では常に展開 */}
-                <div className={`${deckPanelCollapsed ? 'hidden' : 'block'} md:block md:flex-1 md:min-h-0 md:flex md:flex-col`}>
-                  {DeckStatsLine}
-                  <div className="md:flex-1 md:min-h-0 md:overflow-y-auto">
+                {!deckPanelCollapsed && (
+                  <div className="mt-2">
+                    {DeckStatsLine}
                     {DeckGrid}
-                  </div>
-                  {/* Excluded cards area */}
-                  {removedCards.length > 0 && (
-                    <div className="mt-2 rounded-lg p-2" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
-                      <p className="text-[10px] font-bold text-red-300/70 mb-1">🚫 除外したカード（タップで戻す）</p>
-                      <div className="flex gap-1.5 flex-wrap">
-                        {removedCards.map((c, i) => (
-                          <button
-                            key={`removed-${i}`}
-                            onClick={() => handleRestoreRemovedCard(i)}
-                            className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold active:scale-95 transition-transform"
-                            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.5)' }}
-                          >
-                            ↩ {c.name}
-                          </button>
-                        ))}
+                    {/* Excluded cards area */}
+                    {removedCards.length > 0 && (
+                      <div className="mt-2 rounded-lg p-2" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                        <p className="text-[10px] font-bold text-red-300/70 mb-1">🚫 除外したカード（タップで戻す）</p>
+                        <div className="flex gap-1.5 flex-wrap">
+                          {removedCards.map((c, i) => (
+                            <button
+                              key={`removed-${i}`}
+                              onClick={() => handleRestoreRemovedCard(i)}
+                              className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold active:scale-95 transition-transform"
+                              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.5)' }}
+                            >
+                              ↩ {c.name}
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                  <p className="text-[10px] text-amber-200/50 mt-1.5 text-center">
-                    💡 デッキ整理のコツ: 攻撃と防御のバランスを考えよう
-                  </p>
-                </div>
+                    )}
+                    <p className="text-[10px] text-amber-200/50 mt-1.5 text-center">
+                      💡 デッキ整理のコツ: 攻撃と防御のバランスを考えよう
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -3950,7 +3992,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                   <button
                     onClick={handleStartBattle}
                     disabled={!startEnabled}
-                    className="w-full rounded-xl font-black active:scale-[0.98] transition-all"
+                    className={`tappable w-full rounded-xl font-black active:scale-[0.98] transition-all ${isPositive ? 'pulse-btn' : ''}`}
                     style={{
                       minHeight: '64px',
                       fontSize: '1.1rem',

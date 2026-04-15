@@ -176,6 +176,8 @@ export const EFFECT_DEFS: Record<string, CardEffect> = {
   prayer_light:     { id: 'prayer_light',     name: '聖なる祈り',       description: '公開時、ベンチにジャンヌがいる場合、ジャンヌをデッキの一番上に戻す（任意発動）。', category: 'bench' },
   lily_shield:      { id: 'lily_shield',      name: '百合の守り',       description: 'From the bench: ジャンヌ・ダルクの防御+2。', category: 'def' },
   holy_banner:      { id: 'holy_banner',      name: '聖女の導き',       description: '公開時、除外されたジャンヌ系カード1枚をデッキに戻す（任意発動）。', category: 'bench' },
+  saint_jeanne:     { id: 'saint_jeanne',     name: '救国の祈り',       description: '公開時、味方の除外カードを全てデッキに戻す。さらに相手の防御-3（任意発動）。', category: 'special' },
+  burning_stake:    { id: 'burning_stake',    name: '殉教の炎',         description: 'ベンチのジャンヌ・ダルクを除外して、火刑自体を聖女ジャンヌに変身させる（任意発動）。', category: 'special' },
   // ===== 紫式部デッキ =====
   murasaki:         { id: 'murasaki',         name: '文化の才媛',       description: 'ベンチの文化系カード1枚につき防御+1。源氏物語ベンチで攻撃+3。', category: 'special' },
   genji:            { id: 'genji',            name: '物語の魔力',       description: '公開時、デッキの紙・筆・和歌1枚をデッキの一番上に置く。', category: 'bench' },
@@ -244,6 +246,8 @@ export const EFFECT_BY_CARD_NAME: Record<string, string> = {
   '聖剣':               'holy_sword',
   '軍旗':               'banner',
   'ジャンヌ・ダルク':   'jeanne',
+  '聖女ジャンヌ':       'saint_jeanne',
+  '火刑':               'burning_stake',
   'ヴェルサイユ宮殿':   'versailles',
   'ケーキ':             'cake',
   'マリー・アントワネット': 'marie',
@@ -481,6 +485,8 @@ export const CARD_STAT_OVERRIDES: Record<string, StatProfile> = {
   '祈りの光':             { attackPower: 1, defensePower: 2 },
   '白百合の盾':           { attackPower: 1, defensePower: 3 },
   '聖女の旗印':           { attackPower: 2, defensePower: 2 },
+  '聖女ジャンヌ':         { attackPower: 3, defensePower: 6 },
+  '火刑':                 { attackPower: 1, defensePower: 1 },
   // ===== 紫式部デッキ =====
   '紫式部':               { attackPower: 2, defensePower: 3 },
   '源氏物語':             { attackPower: 1, defensePower: 2 },
@@ -1459,6 +1465,11 @@ const QUIZ_DATA: Record<string, Quiz[]> = {
     { question: 'ジャンヌ・ダルクの別名は？', choices: ['オルレアンの乙女', 'パリの薔薇', 'フランスの太陽', '百合の騎士'], correctIndex: 0 },
     { question: 'ジャンヌ・ダルクが掲げた旗に描かれていたものは？', choices: ['神と天使', '百合と剣', '十字と王冠', '鷲と星'], correctIndex: 0 },
   ],
+  'card-203': [
+    { question: 'ジャンヌが火刑にされた年は？', choices: ['1431年', '1453年', '1492年', '1400年'], correctIndex: 0 },
+    { question: 'ジャンヌが火刑にされた理由は？', choices: ['魔女として裁かれた', '戦争に負けた', '王に逆らった', '逃げようとした'], correctIndex: 0 },
+    { question: 'ジャンヌが火刑にされた都市は？', choices: ['ルーアン', 'パリ', 'オルレアン', 'ロンドン'], correctIndex: 0 },
+  ],
 };
 
 // Effect descriptions by category
@@ -1580,7 +1591,7 @@ export function uniqueCardId(prefix: string, baseId: string): string {
 export const ALL_BATTLE_CARDS: BattleCard[] = COLLECTION_CARDS.map(toBattleCard);
 
 // Cards that only appear via in-battle evolution (excluded from deck phase, gacha, AI decks)
-export const EVOLUTION_ONLY_CARDS = new Set(['大蛇']);
+export const EVOLUTION_ONLY_CARDS = new Set(['大蛇', '聖女ジャンヌ']);
 
 // Draftable pool: excludes evolution-only cards
 export const DRAFTABLE_BATTLE_CARDS: BattleCard[] = ALL_BATTLE_CARDS.filter((c) => !EVOLUTION_ONLY_CARDS.has(c.name));
@@ -1821,9 +1832,10 @@ export function availableRarities(round: number): RarityWeight[] {
 /** PvP回戦数モード別のレア度分布。totalRounds=5 の場合は availableRarities へ委譲。 */
 export function availableRaritiesForBattle(round: number, totalRounds: number): RarityWeight[] {
   if (totalRounds === 3) {
+    // 新仕様: R1=N+R / R2=N+R+SR+SSR / R3=R+SR+SSR (Nなし)
     if (round <= 1) return [['N', 50], ['R', 50]];
-    if (round === 2) return [['N', 33], ['R', 33], ['SR', 34]];
-    return [['N', 25], ['R', 25], ['SR', 25], ['SSR', 25]];
+    if (round === 2) return [['N', 25], ['R', 25], ['SR', 25], ['SSR', 25]];
+    return [['R', 34], ['SR', 33], ['SSR', 33]];
   }
   if (totalRounds === 7) {
     if (round <= 2) return [['N', 100]];
@@ -1965,12 +1977,14 @@ export const SYNERGY_MAP: Record<string, string[]> = {
   'ひまわり': ['ゴッホ', '星月夜', '糸杉'],
   '星月夜': ['ゴッホ', 'ひまわり', '糸杉'],
   '糸杉': ['ゴッホ', 'ひまわり', '星月夜'],
-  'ジャンヌ・ダルク': ['聖剣', '軍旗', '祈りの光', '白百合の盾', '聖女の旗印'],
-  '聖剣': ['ジャンヌ・ダルク', '軍旗', '祈りの光', '聖女の旗印'],
-  '軍旗': ['ジャンヌ・ダルク', '聖剣', '白百合の盾', '聖女の旗印'],
-  '祈りの光': ['ジャンヌ・ダルク', '聖剣', '白百合の盾', '聖女の旗印'],
-  '白百合の盾': ['ジャンヌ・ダルク', '軍旗', '祈りの光', '聖女の旗印'],
-  '聖女の旗印': ['ジャンヌ・ダルク', '聖剣', '軍旗', '祈りの光', '白百合の盾'],
+  'ジャンヌ・ダルク': ['聖剣', '軍旗', '祈りの光', '白百合の盾', '聖女の旗印', '火刑'],
+  '聖剣': ['ジャンヌ・ダルク', '軍旗', '祈りの光', '聖女の旗印', '聖女ジャンヌ', '火刑'],
+  '軍旗': ['ジャンヌ・ダルク', '聖剣', '白百合の盾', '聖女の旗印', '聖女ジャンヌ', '火刑'],
+  '祈りの光': ['ジャンヌ・ダルク', '聖剣', '白百合の盾', '聖女の旗印', '聖女ジャンヌ', '火刑'],
+  '白百合の盾': ['ジャンヌ・ダルク', '軍旗', '祈りの光', '聖女の旗印', '聖女ジャンヌ', '火刑'],
+  '聖女の旗印': ['ジャンヌ・ダルク', '聖剣', '軍旗', '祈りの光', '白百合の盾', '聖女ジャンヌ', '火刑'],
+  '聖女ジャンヌ': ['聖剣', '軍旗', '祈りの光', '白百合の盾', '聖女の旗印', '火刑'],
+  '火刑': ['ジャンヌ・ダルク', '聖女ジャンヌ', '聖剣', '軍旗', '祈りの光', '白百合の盾', '聖女の旗印'],
   'マリー・アントワネット': ['ヴェルサイユ宮殿', 'ケーキ'],
   'ヴェルサイユ宮殿': ['マリー・アントワネット', 'ケーキ'],
   'ケーキ': ['マリー・アントワネット', 'ヴェルサイユ宮殿'],

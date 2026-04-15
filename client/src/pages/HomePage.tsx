@@ -5,13 +5,12 @@
  * Shows equipped shop avatar full-body image if one is equipped
  * ミッション: 複数ミッション表示・進捗バー・報酬受け取りボタン
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'wouter';
-import { IMAGES, GAME_CATEGORIES, AVATAR_ITEMS } from '@/lib/constants';
+import { IMAGES, AVATAR_ITEMS } from '@/lib/constants';
 import { useUserStore, useMissionStore, useAltStore } from '@/lib/stores';
 import { calculateLevel } from '@/lib/level';
-
-// Quest board categories use color from GAME_CATEGORIES directly
+import { fetchOverallRanking, type RankingEntry } from '@/lib/rankingService';
 
 const categoryEmoji: Record<string, string> = {
   game: '⚔️', gacha: '🎰', collection: '🃏',
@@ -62,6 +61,22 @@ export default function HomePage() {
 
   const [showMissions, setShowMissions] = useState(true);
   const [completedEffect, setCompletedEffect] = useState<{ title: string; reward: number } | null>(null);
+
+  // ランキングプレビュー（総合トップ3 + 自分の順位）
+  const [rankingPreview, setRankingPreview] = useState<RankingEntry[]>([]);
+  const [rankingLoading, setRankingLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    fetchOverallRanking().then((rows) => {
+      if (cancelled) return;
+      setRankingPreview(rows);
+      setRankingLoading(false);
+    }).catch(() => {
+      if (cancelled) return;
+      setRankingLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   // ミッション報酬受け取り
   const handleClaim = (missionId: string) => {
@@ -279,81 +294,53 @@ export default function HomePage() {
           )}
         </div>
 
-        {/* Quest Board - Game Categories */}
-        <div className="mb-5">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center"
-              style={{
-                background: 'linear-gradient(135deg, #ffd700, #f0a500)',
-                boxShadow: '0 0 10px rgba(255,215,0,0.3), 0 2px 4px rgba(0,0,0,0.3)',
-              }}>
-              <span className="text-sm">⚔️</span>
-            </div>
-            <h2 className="text-base font-bold" style={{ color: '#ffd700', textShadow: '0 0 8px rgba(255,215,0,0.2)' }}>クエストボード</h2>
-            <div className="flex-1 h-px" style={{ background: 'linear-gradient(90deg, rgba(255,215,0,0.3), transparent)' }} />
-          </div>
-
-          <div className="grid grid-cols-2 gap-2.5">
-            {GAME_CATEGORIES.map((cat, i) => (
-              <Link key={cat.id} href={cat.href}>
-                <div
-                  className="rounded-xl p-3 transition-all duration-200 hover:scale-[1.02] active:scale-[0.97] card-shine relative overflow-hidden animate-slide-up"
-                  style={{
-                    animationDelay: `${i * 70}ms`,
-                    background: 'linear-gradient(135deg, rgba(21,29,59,0.92), rgba(14,20,45,0.95))',
-                    border: `1.5px solid ${cat.color}44`,
-                    boxShadow: `0 2px 12px rgba(0,0,0,0.3), inset 0 0 20px ${cat.color}08`,
-                  }}>
-                  <div className="absolute top-0 right-0 w-16 h-16 rounded-full blur-2xl opacity-20"
-                    style={{ background: cat.color, transform: 'translate(30%, -30%)' }} />
-                  <div className="flex items-center gap-2.5 mb-2 relative">
-                    <div className="w-10 h-10 rounded-lg flex items-center justify-center"
-                      style={{
-                        background: `linear-gradient(135deg, ${cat.color}33, ${cat.color}22)`,
-                        border: `1px solid ${cat.color}55`, boxShadow: `0 0 8px ${cat.color}22`,
-                      }}>
-                      <span className="text-xl">{cat.emoji}</span>
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-[13px] font-bold text-amber-100">{cat.label}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between relative">
-                    <span className="text-[10px] text-amber-200/40">タップして挑戦</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold"
-                      style={{ background: `${cat.color}22`, color: cat.color, border: `1px solid ${cat.color}33` }}>
-                      +10 ALT
-                    </span>
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-
-        {/* Quest Board entry */}
-        <div className="mb-3">
-          <Link href="/games/quest-board">
+        {/* メインエントリ: バトル / デッキクエスト */}
+        <div className="mb-5 space-y-2.5">
+          <Link href="/games/knowledge-challenger">
             <div
               className="rounded-xl p-4 flex items-center gap-3 transition-all active:scale-[0.98] cursor-pointer relative overflow-hidden"
               style={{
-                background: 'linear-gradient(135deg, rgba(245,158,11,0.18), rgba(139,92,246,0.18))',
-                border: '1.5px solid rgba(255,215,0,0.35)',
-                boxShadow: '0 2px 12px rgba(0,0,0,0.3), inset 0 0 20px rgba(255,215,0,0.04)',
+                background: 'linear-gradient(135deg, rgba(239,68,68,0.2), rgba(245,158,11,0.2))',
+                border: '1.5px solid rgba(255,215,0,0.4)',
+                boxShadow: '0 2px 14px rgba(0,0,0,0.3), inset 0 0 22px rgba(255,215,0,0.05)',
               }}
             >
-              <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
+              <div className="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0"
                 style={{
-                  background: 'linear-gradient(135deg, #f59e0b, #8b5cf6)',
-                  boxShadow: '0 0 12px rgba(255,215,0,0.25)',
+                  background: 'linear-gradient(135deg, #ef4444, #f59e0b)',
+                  boxShadow: '0 0 14px rgba(239,68,68,0.35)',
                 }}>
-                <span className="text-2xl">📋</span>
+                <span className="text-3xl">⚔️</span>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-amber-100">クエストボード</p>
-                <p className="text-[10px] text-amber-200/60">デッキ別クイズで進捗を記録</p>
+                <p className="text-base font-black text-amber-100">バトル</p>
+                <p className="text-[11px] text-amber-200/70">デッキを選んで戦おう</p>
               </div>
-              <span className="text-amber-200/50 text-lg">›</span>
+              <span className="text-amber-200/60 text-xl">›</span>
+            </div>
+          </Link>
+
+          <Link href="/games/knowledge-challenger">
+            <div
+              className="rounded-xl p-4 flex items-center gap-3 transition-all active:scale-[0.98] cursor-pointer relative overflow-hidden"
+              style={{
+                background: 'linear-gradient(135deg, rgba(139,92,246,0.2), rgba(59,130,246,0.2))',
+                border: '1.5px solid rgba(255,215,0,0.4)',
+                boxShadow: '0 2px 14px rgba(0,0,0,0.3), inset 0 0 22px rgba(255,215,0,0.05)',
+              }}
+            >
+              <div className="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{
+                  background: 'linear-gradient(135deg, #8b5cf6, #3b82f6)',
+                  boxShadow: '0 0 14px rgba(139,92,246,0.35)',
+                }}>
+                <span className="text-3xl">📖</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-base font-black text-amber-100">デッキクエスト</p>
+                <p className="text-[11px] text-amber-200/70">学んでデッキを手に入れよう</p>
+              </div>
+              <span className="text-amber-200/60 text-xl">›</span>
             </div>
           </Link>
         </div>
@@ -382,6 +369,68 @@ export default function HomePage() {
               </div>
               <span className="text-amber-200/50 text-lg">›</span>
             </div>
+          </Link>
+        </div>
+
+        {/* Ranking Preview (Top 3 + self) */}
+        <div className="mb-4 rounded-xl p-3"
+          style={{
+            background: 'linear-gradient(135deg, rgba(21,29,59,0.92), rgba(14,20,45,0.95))',
+            border: '1.5px solid rgba(255,215,0,0.25)',
+            boxShadow: '0 2px 12px rgba(0,0,0,0.3), inset 0 0 20px rgba(255,215,0,0.04)',
+          }}>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-base">🏆</span>
+            <h3 className="text-sm font-bold text-amber-100">ランキング</h3>
+            <div className="flex-1 h-px" style={{ background: 'linear-gradient(90deg, rgba(255,215,0,0.2), transparent)' }} />
+          </div>
+          {rankingLoading ? (
+            <p className="text-[11px] text-amber-200/40 text-center py-2">読み込み中…</p>
+          ) : rankingPreview.length === 0 ? (
+            <p className="text-[11px] text-amber-200/40 text-center py-2">まだデータがありません</p>
+          ) : (
+            <div className="space-y-1 mb-2">
+              {rankingPreview.slice(0, 3).map((e, i) => {
+                const medals = ['🥇', '🥈', '🥉'];
+                const isMe = e.childId === user.id;
+                return (
+                  <div key={e.childId} className="flex items-center gap-2 text-[11px]">
+                    <span className="text-sm w-5 text-center">{medals[i]}</span>
+                    <span className="flex-1 text-amber-100 truncate font-bold">
+                      {e.nickname}{isMe && <span className="text-amber-200/50 ml-1">(あなた)</span>}
+                    </span>
+                    <span className="font-bold" style={{ color: '#ffd700' }}>{e.primary}</span>
+                  </div>
+                );
+              })}
+              {(() => {
+                const myRank = rankingPreview.find((e) => e.childId === user.id)?.rank;
+                if (!myRank || myRank <= 3) return null;
+                const myEntry = rankingPreview.find((e) => e.childId === user.id)!;
+                return (
+                  <div className="flex items-center gap-2 text-[11px] pt-1 mt-1"
+                    style={{ borderTop: '1px dashed rgba(255,215,0,0.2)' }}>
+                    <span className="w-5 text-center text-amber-200/60 font-bold">{myRank}</span>
+                    <span className="flex-1 text-amber-100 truncate font-bold">
+                      あなた <span className="text-amber-200/50 ml-1">{myEntry.nickname}</span>
+                    </span>
+                    <span className="font-bold" style={{ color: '#ffd700' }}>{myEntry.primary}</span>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+          <Link href="/ranking">
+            <a
+              className="block rounded-md py-1.5 text-center text-[11px] font-bold transition-all active:scale-[0.98]"
+              style={{
+                background: 'rgba(255,215,0,0.1)',
+                border: '1px solid rgba(255,215,0,0.3)',
+                color: '#ffd700',
+                textDecoration: 'none',
+              }}>
+              📊 もっと見る →
+            </a>
           </Link>
         </div>
 

@@ -297,4 +297,107 @@
   ::-webkit-scrollbar-track { background: oklch(0.15 0.04 260); }
   ::-webkit-scrollbar-thumb { background: oklch(0.30 0.06 260); border-radius: 3px; }
   ::-webkit-scrollbar-thumb:hover { background: oklch(0.40 0.06 260); }
+
+  /* =============================================================
+   * Pokepoke-style touch feedback utilities
+   * =============================================================
+   * Apply `.tappable` to any button/card for instant touch response.
+   * - touch-action: manipulation disables double-tap zoom
+   * - active state gives a quick scale+bounce (0.1s)
+   */
+  .tappable {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    transition: transform 0.1s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .tappable:active {
+    transform: scale(0.95);
+  }
+  /* Disable double-tap zoom on all buttons by default */
+  button { touch-action: manipulation; }
+
+  /* Card bounce — pulse-only (no scale shrink) for subtle attention */
+  .pulse-btn {
+    animation: pulseBtn 1.6s ease-in-out infinite;
+  }
+  @keyframes pulseBtn {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.5); }
+    50% { box-shadow: 0 0 0 12px rgba(255, 215, 0, 0); }
+  }
+
+  /* Ripple effect — attach via JS: set CSS vars --ripple-x/y and apply `.ripple-burst` once */
+  .ripple-host { position: relative; overflow: hidden; }
+  .ripple-burst::after {
+    content: '';
+    position: absolute;
+    left: var(--ripple-x, 50%);
+    top: var(--ripple-y, 50%);
+    width: 10px; height: 10px;
+    margin-left: -5px; margin-top: -5px;
+    border-radius: 9999px;
+    background: conic-gradient(from 0deg, #ff6b6b, #ffd93d, #6bcb77, #4d96ff, #9b5de5, #ff6b6b);
+    opacity: 0.55;
+    transform: scale(0);
+    animation: rippleBurst 0.3s ease-out forwards;
+    pointer-events: none;
+  }
+  @keyframes rippleBurst {
+    0% { transform: scale(0); opacity: 0.7; }
+    100% { transform: scale(14); opacity: 0; }
+  }
+
+  /* Card landing animation: 1.2 → 1.0 bounce + shockwave */
+  .card-land {
+    animation: cardLand 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+  @keyframes cardLand {
+    0%   { transform: scale(1.25); }
+    70%  { transform: scale(0.95); }
+    100% { transform: scale(1); }
+  }
+  .card-shockwave::before {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: inherit;
+    border: 2px solid rgba(255, 215, 0, 0.6);
+    animation: shockwave 0.3s ease-out forwards;
+    pointer-events: none;
+  }
+  @keyframes shockwave {
+    0%   { transform: scale(0.9); opacity: 1; }
+    100% { transform: scale(1.4); opacity: 0; }
+  }
+
+  /* Screen shake on impact */
+  .screen-shake { animation: screenShake 0.12s ease-out; }
+  @keyframes screenShake {
+    0%, 100% { transform: translateX(0); }
+    25%      { transform: translateX(-2px); }
+    75%      { transform: translateX(2px); }
+  }
+
+  /* Holographic sweep — moves with --holo-x (0-100%) */
+  .holo-sheen {
+    position: relative;
+    overflow: hidden;
+  }
+  .holo-sheen::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(
+      105deg,
+      transparent 40%,
+      rgba(255,255,255,0.18) 48%,
+      rgba(180,220,255,0.28) 50%,
+      rgba(255,255,255,0.18) 52%,
+      transparent 60%
+    );
+    background-size: 250% 100%;
+    background-position: calc(100% - var(--holo-x, 50%) * 2) 50%;
+    mix-blend-mode: screen;
+    pointer-events: none;
+    transition: background-position 0.08s linear;
+  }
 }
