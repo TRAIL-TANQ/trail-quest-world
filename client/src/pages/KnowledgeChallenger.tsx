@@ -2190,26 +2190,75 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
             })}
           </div>
 
-          {/* Gift confirm modal */}
-          {giftConfirmDeck && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-6"
+          {/* Gift confirm modal with card list */}
+          {giftConfirmDeck && (() => {
+            const starterId = DECK_KEY_TO_STARTER_ID[giftConfirmDeck.deckKey];
+            const starter = STARTER_DECKS.find((d) => d.id === starterId);
+            const allNames = starter ? [starter.trumpCard, ...starter.themeCards, ...starter.noiseCards] : [];
+            const allCards = allNames.map((n) => findCardByName(n)).filter(Boolean) as BattleCard[];
+            const grouped = new Map<string, { card: BattleCard; count: number }>();
+            for (const c of allCards) {
+              const e = grouped.get(c.name);
+              if (e) e.count++; else grouped.set(c.name, { card: c, count: 1 });
+            }
+            const rarityOrder: Record<string, number> = { SSR: 0, SR: 1, R: 2, N: 3 };
+            const entries = Array.from(grouped.values()).sort((a, b) =>
+              (rarityOrder[a.card.rarity] ?? 9) - (rarityOrder[b.card.rarity] ?? 9)
+            );
+            return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
               style={{ background: 'rgba(0,0,0,0.8)' }}
               onClick={() => setGiftConfirmDeck(null)}>
               <div
-                className="w-full max-w-[400px] text-center"
+                className="w-full flex flex-col"
                 style={{
+                  maxWidth: 500,
+                  maxHeight: '90vh',
                   background: 'rgba(26,31,58,0.95)',
                   backdropFilter: 'blur(20px)',
                   border: '2px solid #ffd700',
                   borderRadius: 20,
-                  padding: 32,
                   boxShadow: '0 16px 48px rgba(0,0,0,0.7), 0 0 40px rgba(255,215,0,0.15)',
                 }}
                 onClick={(e) => e.stopPropagation()}>
-                <p className="text-5xl mb-3">{giftConfirmDeck.icon}</p>
-                <h2 className="text-xl font-black text-amber-100 mb-2">{giftConfirmDeck.name}</h2>
-                <p className="text-sm text-amber-200/70 leading-relaxed mb-6">{giftConfirmDeck.strategy}</p>
-                <div className="flex flex-col items-center gap-3">
+                {/* Header: icon + name + strategy */}
+                <div className="text-center px-6 pt-6 pb-3 shrink-0">
+                  <p className="text-5xl mb-2">{giftConfirmDeck.icon}</p>
+                  <h2 className="text-xl font-black text-amber-100 mb-1">{giftConfirmDeck.name}</h2>
+                  <p className="text-sm text-amber-200/70 leading-relaxed">{giftConfirmDeck.strategy}</p>
+                </div>
+
+                {/* Card list */}
+                <div className="px-4 shrink-0">
+                  <p className="text-[11px] font-bold text-amber-200/50 mb-1">📋 カード一覧（{allCards.length}枚）</p>
+                </div>
+                <div className="flex-1 min-h-0 overflow-y-auto px-4" style={{ maxHeight: '40vh' }}>
+                  <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(255,215,0,0.2)' }}>
+                    <div className="divide-y divide-white/5">
+                      {entries.map(({ card: c, count }) => {
+                        const rc = c.rarity === 'SSR' ? '#ffd700' : c.rarity === 'SR' ? '#a855f7' : c.rarity === 'R' ? '#3b82f6' : '#9ca3af';
+                        return (
+                          <div key={c.name} className="flex items-center gap-2 px-2.5 py-1.5">
+                            <div className="w-7 h-9 rounded overflow-hidden shrink-0" style={{ border: `1px solid ${rc}60` }}>
+                              <img src={c.imageUrl} alt="" className="w-full h-full object-cover" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <span className="text-[11px] font-bold text-amber-100 truncate block">
+                                {c.name}{count > 1 ? ` ×${count}` : ''}
+                              </span>
+                            </div>
+                            <span className="text-[8px] font-black px-1 rounded shrink-0" style={{ background: rc, color: '#fff' }}>{c.rarity}</span>
+                            <span className="text-[10px] font-bold shrink-0" style={{ color: '#ff6b6b' }}>⚔️{c.attackPower ?? c.power}</span>
+                            <span className="text-[10px] font-bold shrink-0" style={{ color: '#60a5fa' }}>🛡️{c.defensePower ?? c.power}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Buttons */}
+                <div className="flex flex-col items-center gap-3 px-6 py-5 shrink-0">
                   <button
                     onClick={() => {
                       claimFirstDeck(giftConfirmDeck.deckKey);
@@ -2241,7 +2290,8 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                 </div>
               </div>
             </div>
-          )}
+            );
+          })()}
         </div>
       );
     }
