@@ -87,6 +87,24 @@ export const QUEST_UNITS: QuestUnit[] = [
     notebookUrl: '',
     deckName: 'ダ・ヴィンチ',
   },
+  {
+    id: 'nobunaga',
+    title: '織田信長と天下統一',
+    icon: '🔥',
+    slideCount: 16,
+    duration: '約4分',
+    notebookUrl: '',
+    deckName: '信長',
+  },
+  {
+    id: 'wolf',
+    title: 'オオカミと群れの絆',
+    icon: '🐺',
+    slideCount: 15,
+    duration: '約4分',
+    notebookUrl: '',
+    deckName: 'オオカミ',
+  },
 ];
 
 export function getQuestUnit(id: string): QuestUnit | undefined {

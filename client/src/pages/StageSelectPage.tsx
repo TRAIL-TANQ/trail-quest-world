@@ -34,7 +34,7 @@ export default function StageSelectPage() {
         </div>
 
         {/* Free play */}
-        <Link href="/games/knowledge-challenger">
+        <Link href="/games/knowledge-challenger?screen=deck_select">
           <div className="mb-4 rounded-xl p-3 flex items-center gap-3 transition-all hover:scale-[1.01] active:scale-[0.99]"
             style={{
               background: 'linear-gradient(135deg, rgba(59,130,246,0.15), rgba(59,130,246,0.05))',
@@ -147,7 +147,7 @@ export default function StageSelectPage() {
 
             if (!unlocked) return <div key={stage.id}>{card}</div>;
             return (
-              <Link key={stage.id} href={`/games/knowledge-challenger/stage/${stage.id}`}>
+              <Link key={stage.id} href={`/games/knowledge-challenger/stage/${stage.id}?screen=deck_select`}>
                 <div className="cursor-pointer active:scale-[0.97] transition-transform h-full">{card}</div>
               </Link>
             );

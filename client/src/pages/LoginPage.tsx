@@ -9,6 +9,8 @@ import { IMAGES } from '@/lib/constants';
 import { createGuestAuth, saveAuth } from '@/lib/auth';
 import { verifyPin, ensureChildStatus, registerChild } from '@/lib/pinService';
 import { saveUserProfile } from '@/lib/userProfileService';
+import { COLLECTION_CARDS } from '@/lib/cardData';
+import { useCollectionStore } from '@/lib/stores';
 
 type Screen = 'choice' | 'pin' | 'register';
 
@@ -71,6 +73,19 @@ export default function LoginPage() {
     }
     setLoading(true);
     setError('');
+
+    // Monitor PIN check (0000)
+    const monitorPin = import.meta.env.VITE_MONITOR_PIN || '0000';
+    if (pin === monitorPin) {
+      saveAuth('monitor', 'モニター', false, true);
+      // Initialize collection with all cards
+      const allIds = COLLECTION_CARDS.map((c) => c.id);
+      useCollectionStore.getState().initOwned(allIds);
+      setUser({ ...user, id: 'monitor', nickname: 'モニター' });
+      navigate('/');
+      setLoading(false);
+      return;
+    }
 
     // Admin PIN check
     const adminPin = import.meta.env.VITE_ADMIN_PIN;
@@ -247,163 +262,36 @@ export default function LoginPage() {
             </p>
           </div>
         ) : screen === 'register' ? (
-          /* ---------- Register screen ---------- */
+          /* ---------- Register screen: 準備中表示 ---------- */
           <div
-            className="rounded-2xl p-5 relative"
+            className="tqw-card-panel rounded-2xl p-8 relative text-center"
             style={{
               background: 'linear-gradient(135deg, rgba(21,29,59,0.95), rgba(14,20,45,0.95))',
               border: '2px solid rgba(255,215,0,0.2)',
               boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+              backdropFilter: 'blur(12px)',
             }}
           >
-            {regSuccess ? (
-              <div className="text-center">
-                <div className="text-5xl mb-2">🎉</div>
-                <h2 className="text-base font-bold mb-3" style={{ color: '#ffd700' }}>
-                  <ruby>登録完了<rt>とうろくかんりょう</rt></ruby>！
-                </h2>
-                <p className="text-sm text-amber-100 mb-1"><strong>{regSuccess.name}</strong>さん</p>
-                <p className="text-[13px] text-amber-200/80 mb-3">PINは</p>
-                <p className="text-3xl font-black mb-3 tracking-[0.4em]" style={{ color: '#ffd700', textShadow: '0 0 14px rgba(255,215,0,0.5)' }}>
-                  {regSuccess.pin}
-                </p>
-                <p className="text-xs text-amber-200/70 mb-5">
-                  <ruby>忘<rt>わす</rt></ruby>れないでね！<br />
-                  <ruby>次回<rt>じかい</rt></ruby>からはこのPINでログインするよ
-                </p>
-                <button
-                  onClick={handleRegisterContinue}
-                  className="w-full py-3 rounded-xl text-base font-bold active:scale-95"
-                  style={{
-                    background: 'linear-gradient(135deg, #ffd700, #d4a500)',
-                    color: '#0b1128',
-                    boxShadow: '0 4px 16px rgba(255,215,0,0.4)',
-                  }}>
-                  <ruby>始<rt>はじ</rt></ruby>める
-                </button>
-              </div>
-            ) : (
-              <>
-                <h2 className="text-center text-base font-bold mb-4" style={{ color: '#ffd700' }}>
-                  <ruby>新規登録<rt>しんきとうろく</rt></ruby>
-                </h2>
-
-                {/* 名前 */}
-                <div className="mb-3">
-                  <label className="block text-[11px] font-bold text-amber-200/80 mb-1">
-                    <ruby>名前<rt>なまえ</rt></ruby>（ニックネーム）
-                  </label>
-                  <input
-                    type="text"
-                    maxLength={10}
-                    value={regName}
-                    onChange={(e) => { setRegName(e.target.value); setError(''); }}
-                    placeholder="たろう"
-                    className="w-full py-2.5 px-3 rounded-lg text-sm outline-none"
-                    style={{
-                      background: 'rgba(255,255,255,0.06)',
-                      color: '#ffd700',
-                      border: '1.5px solid rgba(255,215,0,0.3)',
-                    }}
-                  />
-                  <p className="text-[10px] text-amber-200/40 mt-0.5">2〜10<ruby>文字<rt>もじ</rt></ruby></p>
-                </div>
-
-                {/* 生年月日 */}
-                <div className="mb-3">
-                  <label className="block text-[11px] font-bold text-amber-200/80 mb-1">
-                    <ruby>生年月日<rt>せいねんがっぴ</rt></ruby>
-                  </label>
-                  <div className="flex gap-2">
-                    <select value={regYear} onChange={(e) => setRegYear(Number(e.target.value))}
-                      className="flex-1 py-2 px-2 rounded-lg text-sm"
-                      style={{ background: 'rgba(255,255,255,0.06)', color: '#ffd700', border: '1.5px solid rgba(255,215,0,0.3)' }}>
-                      {Array.from({ length: 11 }, (_, i) => 2010 + i).map((y) => (
-                        <option key={y} value={y} style={{ background: '#0b1128' }}>{y}年</option>
-                      ))}
-                    </select>
-                    <select value={regMonth} onChange={(e) => setRegMonth(Number(e.target.value))}
-                      className="py-2 px-2 rounded-lg text-sm"
-                      style={{ background: 'rgba(255,255,255,0.06)', color: '#ffd700', border: '1.5px solid rgba(255,215,0,0.3)' }}>
-                      {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                        <option key={m} value={m} style={{ background: '#0b1128' }}>{m}月</option>
-                      ))}
-                    </select>
-                    <select value={regDay} onChange={(e) => setRegDay(Number(e.target.value))}
-                      className="py-2 px-2 rounded-lg text-sm"
-                      style={{ background: 'rgba(255,255,255,0.06)', color: '#ffd700', border: '1.5px solid rgba(255,215,0,0.3)' }}>
-                      {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
-                        <option key={d} value={d} style={{ background: '#0b1128' }}>{d}日</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                {/* PIN */}
-                <div className="mb-3">
-                  <label className="block text-[11px] font-bold text-amber-200/80 mb-1">
-                    PIN（4<ruby>桁<rt>けた</rt></ruby>の<ruby>数字<rt>すうじ</rt></ruby>）
-                  </label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={4}
-                    value={regPin}
-                    onChange={(e) => { setRegPin(e.target.value.replace(/\D/g, '').slice(0, 4)); setError(''); }}
-                    placeholder="0000"
-                    className="w-full py-2.5 px-3 rounded-lg text-lg tracking-[0.5em] text-center outline-none"
-                    style={{
-                      background: 'rgba(255,255,255,0.06)',
-                      color: '#ffd700',
-                      border: '1.5px solid rgba(255,215,0,0.3)',
-                    }}
-                  />
-                </div>
-
-                {/* PIN confirm */}
-                <div className="mb-3">
-                  <label className="block text-[11px] font-bold text-amber-200/80 mb-1">
-                    PIN（<ruby>確認<rt>かくにん</rt></ruby>のため、もう<ruby>一度<rt>いちど</rt></ruby>）
-                  </label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={4}
-                    value={regPinConfirm}
-                    onChange={(e) => { setRegPinConfirm(e.target.value.replace(/\D/g, '').slice(0, 4)); setError(''); }}
-                    placeholder="0000"
-                    className="w-full py-2.5 px-3 rounded-lg text-lg tracking-[0.5em] text-center outline-none"
-                    style={{
-                      background: 'rgba(255,255,255,0.06)',
-                      color: '#ffd700',
-                      border: '1.5px solid rgba(255,215,0,0.3)',
-                    }}
-                  />
-                </div>
-
-                {error && (
-                  <p className="text-center text-xs mb-3" style={{ color: '#ef4444' }}>⚠️ {error}</p>
-                )}
-
-                <button
-                  onClick={handleRegister}
-                  disabled={loading}
-                  className="w-full py-3 rounded-xl text-base font-bold mb-2 transition-all active:scale-95 disabled:opacity-50"
-                  style={{
-                    background: 'linear-gradient(135deg, #ffd700, #d4a500)',
-                    color: '#0b1128',
-                    boxShadow: '0 4px 16px rgba(255,215,0,0.3)',
-                  }}>
-                  {loading ? '登録中...' : <><ruby>登録<rt>とうろく</rt></ruby>する</>}
-                </button>
-                <button
-                  onClick={() => { setScreen('choice'); setError(''); }}
-                  className="w-full text-center text-xs py-2"
-                  style={{ color: 'rgba(255,215,0,0.4)' }}>
-                  ← <ruby>戻<rt>もど</rt></ruby>る
-                </button>
-              </>
-            )}
+            <span className="text-6xl block mb-4">🚧</span>
+            <h2 className="text-xl font-black mb-2" style={{ color: 'var(--tqw-gold, #ffd700)' }}>
+              ただいま準備中です
+            </h2>
+            <p className="text-sm mb-6" style={{ color: 'var(--tqw-gold, #ffd700)', opacity: 0.75 }}>
+              もうすこしまってね！
+            </p>
+            <button
+              onClick={() => setScreen('choice')}
+              className="w-full py-3 rounded-xl font-bold text-base"
+              style={{
+                background: 'rgba(255,215,0,0.15)',
+                border: '1.5px solid rgba(255,215,0,0.4)',
+                color: 'var(--tqw-gold, #ffd700)',
+                minHeight: '48px',
+              }}
+            >
+              もどる
+            </button>
+            {/* Register form removed during monitor period. Restore from git commit 9706d0c */}
           </div>
         ) : (
           /* ---------- PIN input screen ---------- */

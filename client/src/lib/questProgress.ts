@@ -40,7 +40,7 @@ export const DECK_KEYS: DeckKey[] = ['napoleon', 'amazon', 'qinshi', 'galileo', 
 
 export const QUEST_DIFFICULTIES: QuestDifficulty[] = ['beginner', 'challenger', 'master', 'legend'];
 
-export const CLEAR_THRESHOLD = 10; // ビギナー10問正解でデッキ解放（他難易度は解放条件なし・ALT稼ぎ用）
+export const CLEAR_THRESHOLD = 5; // ビギナー5問正解でデッキ解放（チャレンジモードは10問でALT稼ぎ用）
 
 /** デッキ key → starter deck id マッピング */
 export const DECK_KEY_TO_STARTER_ID: Record<DeckKey, string> = {

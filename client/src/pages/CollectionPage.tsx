@@ -13,7 +13,7 @@ import { CARD_RARITY_COLORS, CARD_CATEGORY_INFO, CARD_RARITY_IMAGES } from '@/li
 import { useCollectionStore } from '@/lib/stores';
 import { ALL_BATTLE_CARDS } from '@/lib/knowledgeCards';
 import { computeOwnership } from '@/lib/myDecks';
-import { getAuth } from '@/lib/auth';
+import { getAuth, isMonitor, isAdmin } from '@/lib/auth';
 import type { CollectionCard, CollectionRarity } from '@/lib/types';
 
 // Build a lookup from collection card id → {attack, defense} so the collection
@@ -250,6 +250,11 @@ export default function CollectionPage() {
   // 初回マウント時: クエスト進捗 + ガチャ履歴から所持カードを復元
   useEffect(() => {
     if (initialized) return;
+    // Monitor/Admin: all cards owned
+    if (isMonitor() || isAdmin()) {
+      initOwned(COLLECTION_CARDS.map((c) => c.id));
+      return;
+    }
     const auth = getAuth();
     const childId = auth?.childId ?? 'guest';
     computeOwnership(childId).then(({ ownedNames }) => {

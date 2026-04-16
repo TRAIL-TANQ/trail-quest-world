@@ -26,6 +26,11 @@ export interface PvPLoginResult extends PinLookupResult {
  * ログイン中ユーザーのlocalStorageは書き換えないので安全。
  */
 export async function verifyPvPPin(pin: string): Promise<PvPLoginResult> {
+  // Monitor PIN — treat as admin for deck unlock purposes
+  const monitorPin = import.meta.env.VITE_MONITOR_PIN || '0000';
+  if (pin === monitorPin) {
+    return { success: true, childId: 'monitor', childName: 'モニター', isAdmin: true };
+  }
   const adminPin = import.meta.env.VITE_ADMIN_PIN;
   if (adminPin && pin === adminPin) {
     return { success: true, childId: 'admin', childName: '管理者', isAdmin: true };

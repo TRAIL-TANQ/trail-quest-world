@@ -1,119 +1,174 @@
 /*
- * GameListPage: Knowledge Challenger entry point
- * Single game entry - Knowledge Challenger card battle
- * Guild quest board style with ornate game card
+ * GameListPage → ALTゲーム
+ * Mini-game hub for earning ALT points.
+ * 5 game slots: Time Attack (active), Card Quiz (active), 3 coming soon.
  */
+import { useState } from 'react';
 import { Link } from 'wouter';
-import { IMAGES } from '@/lib/constants';
+import { useUserStore } from '@/lib/stores';
+import { calculateLevel } from '@/lib/level';
+
+interface MiniGame {
+  id: string;
+  name: string;
+  icon: string;
+  altRange: string;
+  description: string;
+  href: string | null; // null = 準備中
+  color: string;
+}
+
+const MINI_GAMES: MiniGame[] = [
+  {
+    id: 'time-attack',
+    name: 'タイムアタック',
+    icon: '⏱️',
+    altRange: '+5〜20 ALT',
+    description: '制限時間内にクイズに答えまくれ！',
+    href: '/games/time-attack',
+    color: '#ef4444',
+  },
+  {
+    id: 'card-quiz',
+    name: 'カードクイズ',
+    icon: '🃏',
+    altRange: '+5〜25 ALT',
+    description: 'デッキのカードについてクイズに挑戦',
+    href: '/games/knowledge-challenger?screen=deck_select',
+    color: '#3b82f6',
+  },
+  {
+    id: 'flash-card',
+    name: 'フラッシュカード',
+    icon: '⚡',
+    altRange: '+3〜10 ALT',
+    description: 'カードの知識を素早く暗記！',
+    href: null,
+    color: '#8b5cf6',
+  },
+  {
+    id: 'memory-game',
+    name: '神経衰弱',
+    icon: '🧠',
+    altRange: '+5〜15 ALT',
+    description: 'カードのペアを見つけよう',
+    href: null,
+    color: '#f59e0b',
+  },
+  {
+    id: 'sort-puzzle',
+    name: '並べ替えパズル',
+    icon: '🧩',
+    altRange: '+3〜10 ALT',
+    description: '歴史イベントを正しい順番に並べよう',
+    href: null,
+    color: '#22c55e',
+  },
+];
 
 export default function GameListPage() {
+  const user = useUserStore((s) => s.user);
+  const levelInfo = calculateLevel(user.totalAlt);
+  const [comingSoon, setComingSoon] = useState(false);
+
   return (
     <div className="relative min-h-full">
-      <div className="absolute inset-0 z-0">
-        <img src={IMAGES.GAME_CARDS_BG} alt="" className="w-full h-full object-cover" style={{ filter: 'brightness(0.25) saturate(0.7)' }} />
-        <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(11,17,40,0.7) 0%, rgba(11,17,40,0.95) 100%)' }} />
-      </div>
-
       <div className="relative z-10 px-4 pt-4 pb-4">
+        {/* Header */}
         <div className="flex items-center gap-2 mb-4">
           <div className="w-8 h-8 rounded-lg flex items-center justify-center"
             style={{ background: 'linear-gradient(135deg, #ffd700, #f0a500)', boxShadow: '0 0 10px rgba(255,215,0,0.3)' }}>
-            <span className="text-lg">🎮</span>
+            <span className="text-lg">🌟</span>
           </div>
-          <h1 className="text-lg font-bold" style={{ color: '#ffd700', textShadow: '0 0 10px rgba(255,215,0,0.2)' }}>ゲーム一覧</h1>
+          <h1 className="text-lg font-bold" style={{ color: '#ffd700', textShadow: '0 0 10px rgba(255,215,0,0.2)' }}>ALTゲーム</h1>
           <div className="flex-1 h-px" style={{ background: 'linear-gradient(90deg, rgba(255,215,0,0.3), transparent)' }} />
+          <div className="flex items-center gap-1">
+            <div className="w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold"
+              style={{ background: 'linear-gradient(135deg, #ffd700, #f0a500)', color: '#0b1128' }}>A</div>
+            <span className="text-sm font-bold" style={{ color: '#ffd700' }}>{user.totalAlt.toLocaleString()}</span>
+          </div>
         </div>
 
-        <div className="space-y-2.5">
-          {/* Knowledge Challenger - Main Game (ソロモード) */}
-          <Link href="/games/stages">
-            <div className="rounded-xl overflow-hidden transition-all duration-200 hover:scale-[1.01] active:scale-[0.98] card-shine animate-slide-up relative"
-              style={{
-                background: 'linear-gradient(135deg, rgba(21,29,59,0.95), rgba(14,20,45,0.95))',
-                border: '1.5px solid rgba(255,215,0,0.35)',
-                boxShadow: '0 2px 12px rgba(0,0,0,0.3), inset 0 0 20px rgba(255,215,0,0.05)',
-              }}>
-              <div className="absolute top-0 left-0 w-2 h-2 border-t border-l" style={{ borderColor: 'rgba(255,215,0,0.55)' }} />
-              <div className="absolute top-0 right-0 w-2 h-2 border-t border-r" style={{ borderColor: 'rgba(255,215,0,0.55)' }} />
-              <div className="flex items-center p-3 gap-3">
-                <div className="w-14 h-14 rounded-xl flex items-center justify-center text-2xl flex-shrink-0"
-                  style={{
-                    background: 'linear-gradient(135deg, rgba(255,215,0,0.2), rgba(255,215,0,0.05))',
-                    border: '1.5px solid rgba(255,215,0,0.4)',
-                    boxShadow: '0 0 10px rgba(255,215,0,0.15)',
-                  }}>⚔️</div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-sm font-bold text-amber-100 truncate mb-0.5">ナレッジ・チャレンジャー</h3>
-                  <p className="text-[11px] text-amber-200/45 mb-1.5 line-clamp-2">ソロモード 全10ステージ・レアカード報酬あり</p>
-                  <div className="flex items-center gap-2">
-                    <div className="flex gap-0.5">
-                      {Array.from({ length: 5 }).map((_, si) => (
-                        <span key={si} className="text-[8px]" style={{ color: si < 2 ? '#ffd700' : 'rgba(255,255,255,0.12)' }}>★</span>
-                      ))}
-                    </div>
-                    <span className="text-[10px] text-amber-200/20">|</span>
-                    <span className="text-[10px] text-amber-200/40">約5分</span>
-                    <span className="text-[10px] text-amber-200/20">|</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded font-bold" style={{ background: 'rgba(255,215,0,0.15)', color: '#ffd700' }}>NEW</span>
-                  </div>
+        {/* Mini-game grid */}
+        <div className="grid grid-cols-2 gap-2.5">
+          {MINI_GAMES.map((game) => {
+            const available = game.href !== null;
+            const content = (
+              <div
+                key={game.id}
+                className="rounded-xl p-3 relative overflow-hidden transition-all active:scale-[0.97]"
+                onClick={!available ? () => setComingSoon(true) : undefined}
+                style={{
+                  background: available
+                    ? `linear-gradient(135deg, ${game.color}15, ${game.color}05)`
+                    : 'rgba(11,17,40,0.6)',
+                  border: available
+                    ? `1.5px solid ${game.color}50`
+                    : '1.5px solid rgba(120,120,140,0.15)',
+                  opacity: available ? 1 : 0.55,
+                  cursor: 'pointer',
+                }}
+              >
+                <div className="text-3xl mb-2">{game.icon}</div>
+                <h3 className="text-[13px] font-bold text-amber-100 mb-0.5">{game.name}</h3>
+                <p className="text-[10px] text-amber-200/50 mb-2 line-clamp-2">{game.description}</p>
+                <div className="flex items-center gap-1">
+                  <div className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-[7px] font-bold"
+                    style={{ background: available ? `${game.color}40` : 'rgba(255,255,255,0.1)', color: available ? '#fff' : 'rgba(255,255,255,0.3)' }}>A</div>
+                  <span className="text-[10px] font-bold" style={{ color: available ? game.color : 'rgba(255,255,255,0.3)' }}>{game.altRange}</span>
                 </div>
-                <div className="flex flex-col items-center flex-shrink-0">
-                  <div className="w-9 h-9 rounded-full flex items-center justify-center mb-0.5"
-                    style={{
-                      background: 'linear-gradient(135deg, #ffd700, #d4a500)',
-                      boxShadow: '0 0 10px rgba(255,215,0,0.3), 0 2px 4px rgba(0,0,0,0.3)',
-                    }}>
-                    <span className="text-[11px] font-bold" style={{ color: '#0b1128' }}>A</span>
-                  </div>
-                  <span className="text-[10px] font-bold" style={{ color: '#ffd700' }}>+30</span>
-                </div>
+                {!available && (
+                  <div className="absolute top-2 right-2 text-base">🔒</div>
+                )}
               </div>
-            </div>
-          </Link>
+            );
 
-          {/* Quest Board - Quiz Practice */}
-          <Link href="/games/knowledge-challenger?screen=deck_select">
-            <div className="rounded-xl overflow-hidden transition-all duration-200 hover:scale-[1.01] active:scale-[0.98] card-shine animate-slide-up relative"
-              style={{
-                background: 'linear-gradient(135deg, rgba(21,29,59,0.95), rgba(14,20,45,0.95))',
-                border: '1.5px solid rgba(59,130,246,0.35)',
-                boxShadow: '0 2px 12px rgba(0,0,0,0.3), inset 0 0 20px rgba(59,130,246,0.05)',
-                animationDelay: '0.1s',
-              }}>
-              <div className="absolute top-0 left-0 w-2 h-2 border-t border-l" style={{ borderColor: 'rgba(59,130,246,0.55)' }} />
-              <div className="absolute top-0 right-0 w-2 h-2 border-t border-r" style={{ borderColor: 'rgba(59,130,246,0.55)' }} />
-              <div className="flex items-center p-3 gap-3">
-                <div className="w-14 h-14 rounded-xl flex items-center justify-center text-2xl flex-shrink-0"
-                  style={{
-                    background: 'linear-gradient(135deg, rgba(59,130,246,0.2), rgba(59,130,246,0.05))',
-                    border: '1.5px solid rgba(59,130,246,0.4)',
-                    boxShadow: '0 0 10px rgba(59,130,246,0.15)',
-                  }}>📚</div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-sm font-bold text-amber-100 truncate mb-0.5">デッキクエスト</h3>
-                  <p className="text-[11px] text-amber-200/45 mb-1.5 line-clamp-2">デッキを解放してバトルに挑もう</p>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-amber-200/40">👑偉人</span>
-                    <span className="text-[10px] text-amber-200/40">🐟生き物</span>
-                    <span className="text-[10px] text-amber-200/40">🏛️遺産</span>
-                    <span className="text-[10px] text-amber-200/40">🔬発明</span>
-                  </div>
-                </div>
-                <div className="flex flex-col items-center flex-shrink-0">
-                  <div className="w-9 h-9 rounded-full flex items-center justify-center mb-0.5"
-                    style={{
-                      background: 'linear-gradient(135deg, #3b82f6, #2563eb)',
-                      boxShadow: '0 0 10px rgba(59,130,246,0.3), 0 2px 4px rgba(0,0,0,0.3)',
-                    }}>
-                    <span className="text-[11px] font-bold" style={{ color: '#fff' }}>Q</span>
-                  </div>
-                  <span className="text-[10px] font-bold" style={{ color: '#3b82f6' }}>+ALT</span>
-                </div>
-              </div>
-            </div>
-          </Link>
+            if (available && game.href) {
+              return <Link key={game.id} href={game.href}>{content}</Link>;
+            }
+            return <div key={game.id}>{content}</div>;
+          })}
         </div>
       </div>
+
+      {/* Coming soon modal */}
+      {comingSoon && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-6"
+          style={{ background: 'rgba(0,0,0,0.8)' }}
+          onClick={() => setComingSoon(false)}
+        >
+          <div
+            className="tqw-card-panel rounded-2xl p-8 text-center w-full max-w-xs"
+            style={{
+              background: 'linear-gradient(135deg, rgba(21,29,59,0.98), rgba(14,20,45,0.98))',
+              border: '2px solid rgba(255,215,0,0.2)',
+              backdropFilter: 'blur(12px)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span className="text-5xl block mb-3">🔨</span>
+            <h2 className="text-lg font-black mb-2" style={{ color: 'var(--tqw-gold, #ffd700)' }}>
+              ただいま準備中です
+            </h2>
+            <p className="text-sm mb-5" style={{ color: 'var(--tqw-gold, #ffd700)', opacity: 0.75 }}>
+              もうすこしまってね！
+            </p>
+            <button
+              onClick={() => setComingSoon(false)}
+              className="w-full py-3 rounded-xl font-bold text-base"
+              style={{
+                background: 'rgba(255,215,0,0.15)',
+                border: '1.5px solid rgba(255,215,0,0.4)',
+                color: 'var(--tqw-gold, #ffd700)',
+                minHeight: '48px',
+              }}
+            >
+              とじる
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -12,6 +12,7 @@ export interface AuthData {
   childName: string;
   isGuest: boolean;
   isAdmin?: boolean;
+  isMonitor?: boolean;
 }
 
 export function getAuth(): AuthData {
@@ -34,13 +35,17 @@ export function createGuestAuth(): AuthData {
   return data;
 }
 
-export function saveAuth(childId: string, childName: string, admin = false): void {
-  const data: AuthData = { childId, childName, isGuest: false, isAdmin: admin };
+export function saveAuth(childId: string, childName: string, admin = false, monitor = false): void {
+  const data: AuthData = { childId, childName, isGuest: false, isAdmin: admin, isMonitor: monitor };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 }
 
 export function isAdmin(): boolean {
   return getAuth().isAdmin === true;
+}
+
+export function isMonitor(): boolean {
+  return getAuth().isMonitor === true;
 }
 
 export function clearAuth(): void {

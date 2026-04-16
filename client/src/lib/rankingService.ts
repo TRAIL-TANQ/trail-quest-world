@@ -57,7 +57,7 @@ export function getTitle(rating: number): Title {
 // ============================================================
 
 function isExcluded(childId: string): boolean {
-  return childId.startsWith('user-') || childId.startsWith('guest-') || childId === 'admin';
+  return childId.startsWith('user-') || childId.startsWith('guest-') || childId === 'admin' || childId === 'monitor';
 }
 
 async function fetchNicknameMap(childIds: string[]): Promise<Record<string, string>> {

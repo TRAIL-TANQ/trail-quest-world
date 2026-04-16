@@ -347,9 +347,8 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
   const [pendingRemoveIdx, setPendingRemoveIdx] = useState<number | null>(null);
   const [fadingOutIdx, setFadingOutIdx] = useState<number | null>(null);
   const [removedCards, setRemovedCards] = useState<BattleCard[]>([]);
-  // Mobile-only collapse toggle for the "current deck" panel in the deck phase.
-  // PC (md+) always shows it expanded.
-  const [deckPanelCollapsed, setDeckPanelCollapsed] = useState(true);
+  // Deck panel is always expanded (no more collapse toggle).
+  const [deckPanelCollapsed] = useState(false);
 
   // ALT/XP
   const userId = useUserStore((s) => s.user.id);
@@ -1905,9 +1904,10 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
     const maxPicks = maxPicksForRound(gameState.round, gameState.totalRounds);
     if (deckOffer.acquired.size >= maxPicks) return; // もう選べないなら引き直し不要
 
-    // 未選択カードの数だけ新しく引く
+    // 未選択カードの数だけ新しく引く（提示枚数を維持）
     const remainingPicks = maxPicks - deckOffer.acquired.size;
-    const newCount = 5 - deckOffer.acquired.size;
+    const cardCount = gameState.stageRules?.deckPhaseCards ?? 9;
+    const newCount = cardCount - deckOffer.acquired.size;
     const unlockedSSR2 = isPvP && pvpSession
       ? (pvpDeckTurn === 'p1' ? pvpSession.player1.unlockedSSRCardNames : pvpSession.player2.unlockedSSRCardNames)
       : getUnlockedSSRCardNames(loadQuestProgress());
@@ -4741,16 +4741,9 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
         );
 
         const DeckPanelHeader = (
-          <button
-            type="button"
-            onClick={() => setDeckPanelCollapsed((v) => !v)}
-            className="w-full flex items-center justify-between mb-1.5 active:opacity-80 transition-opacity"
-          >
+          <div className="w-full flex items-center justify-between mb-1.5">
             <span className="text-[13px] font-bold text-amber-100 flex items-center gap-1.5">
               📋 現在のデッキ {deckCount}/{MAX_DECK_SIZE}枚
-              <span className="text-amber-200/60 text-[11px]">
-                {deckPanelCollapsed ? 'タップで展開 ▼' : '折りたたむ ▲'}
-              </span>
             </span>
             <span
               className="text-[10px] font-bold shrink-0"
@@ -4758,7 +4751,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
             >
               最低{MIN_DECK_SIZE}枚
             </span>
-          </button>
+          </div>
         );
 
         const DeckStatsLine = deckCount > 0 && (
@@ -4879,14 +4872,9 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                   className="md:flex-[2] min-w-0 rounded-xl p-2.5 self-start w-full"
                   style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,215,0,0.2)' }}
                 >
-                  <div className="md:hidden">{DeckPanelHeader}</div>
-                  <div className="hidden md:block">
-                    <p className="text-[12px] font-bold text-amber-100 mb-2">
-                      📋 現在のデッキ {deckCount}/{MAX_DECK_SIZE}枚
-                    </p>
-                  </div>
-                  {(!deckPanelCollapsed || typeof window !== 'undefined') && (
-                    <div className={`mt-2 ${deckPanelCollapsed ? 'hidden md:block' : ''}`}>
+                  {DeckPanelHeader}
+                  {(true) && (
+                    <div className="mt-2">
                       {DeckStatsLine}
                       {DeckGrid}
                       {removedCards.length > 0 && (

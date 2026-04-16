@@ -6,7 +6,7 @@ import { useLocation, Link } from 'wouter';
 
 const tabs = [
   { path: '/', label: 'ホーム', icon: '🏠' },
-  { path: '/games', label: 'ゲーム', icon: '🎮' },
+  { path: '/alt-games', label: 'ALTゲーム', icon: '🌟' },
   { path: '/gacha', label: 'ガチャ', icon: '🎰' },
   { path: '/shop', label: 'ショップ', icon: '🛒' },
   { path: '/ranking', label: 'ランキング', icon: '🏆' },
