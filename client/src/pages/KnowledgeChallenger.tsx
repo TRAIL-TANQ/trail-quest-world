@@ -2228,32 +2228,31 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                   <p className="text-sm text-amber-200/70 leading-relaxed">{giftConfirmDeck.strategy}</p>
                 </div>
 
-                {/* Card list */}
+                {/* Card grid (5×3, same style as deck phase) */}
                 <div className="px-4 shrink-0">
                   <p className="text-[11px] font-bold text-amber-200/50 mb-1">📋 カード一覧（{allCards.length}枚）</p>
                 </div>
-                <div className="flex-1 min-h-0 overflow-y-auto px-4" style={{ maxHeight: '40vh' }}>
-                  <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(255,215,0,0.2)' }}>
-                    <div className="divide-y divide-white/5">
-                      {entries.map(({ card: c, count }) => {
-                        const rc = c.rarity === 'SSR' ? '#ffd700' : c.rarity === 'SR' ? '#a855f7' : c.rarity === 'R' ? '#3b82f6' : '#9ca3af';
-                        return (
-                          <div key={c.name} className="flex items-center gap-2 px-2.5 py-1.5">
-                            <div className="w-7 h-9 rounded overflow-hidden shrink-0" style={{ border: `1px solid ${rc}60` }}>
-                              <img src={c.imageUrl} alt="" className="w-full h-full object-cover" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <span className="text-[11px] font-bold text-amber-100 truncate block">
-                                {c.name}{count > 1 ? ` ×${count}` : ''}
-                              </span>
-                            </div>
-                            <span className="text-[8px] font-black px-1 rounded shrink-0" style={{ background: rc, color: '#fff' }}>{c.rarity}</span>
-                            <span className="text-[10px] font-bold shrink-0" style={{ color: '#ff6b6b' }}>⚔️{c.attackPower ?? c.power}</span>
-                            <span className="text-[10px] font-bold shrink-0" style={{ color: '#60a5fa' }}>🛡️{c.defensePower ?? c.power}</span>
+                <div className="flex-1 min-h-0 overflow-y-auto px-4" style={{ maxHeight: '50vh' }}>
+                  <div className="grid grid-cols-5 gap-1 p-2 rounded-xl" style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,215,0,0.15)' }}>
+                    {allCards.map((c, ci) => {
+                      const rc = c.rarity === 'SSR' ? '#ffd700' : c.rarity === 'SR' ? '#a855f7' : c.rarity === 'R' ? '#3b82f6' : '#9ca3af';
+                      return (
+                        <button key={`${c.name}-${ci}`} onClick={() => setDetailCard(c)}
+                          className="relative rounded-lg overflow-hidden active:scale-95 transition-transform"
+                          style={{ aspectRatio: '360/500', border: `1.5px solid ${rc}88`, background: '#0b1128' }}>
+                          {c.imageUrl && <img src={c.imageUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />}
+                          <div className="absolute inset-x-0 bottom-0 px-0.5 py-0.5" style={{ background: 'linear-gradient(transparent, rgba(0,0,0,0.85))' }}>
+                            <p className="text-[7px] font-bold text-white text-center truncate leading-tight" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.9)' }}>
+                              {c.name}
+                            </p>
                           </div>
-                        );
-                      })}
-                    </div>
+                          <span className="absolute top-0 left-0 text-[6px] font-black px-0.5 rounded-br"
+                            style={{ background: rc, color: c.rarity === 'N' ? '#e5e7eb' : '#fff' }}>
+                            {c.rarity}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
