@@ -16,6 +16,8 @@ import { calculateLevel } from '@/lib/level';
 import { fetchPity, savePity, spendAltForGacha, recordPulls } from '@/lib/gachaService';
 import { fetchChildStatus } from '@/lib/quizService';
 import { spendAlt } from '@/lib/altGuard';
+import { computeOwnership } from '@/lib/myDecks';
+import { getAuth } from '@/lib/auth';
 import { toast } from 'sonner';
 
 // --- Constants ---
@@ -98,6 +100,8 @@ export default function GachaPage() {
   const addCards = useCollectionStore((s) => s.addCards);
   const addCard = useCollectionStore((s) => s.addCard);
   const ownedCardIds = useCollectionStore((s) => s.ownedCardIds);
+  const collectionInitialized = useCollectionStore((s) => s.initialized);
+  const initOwned = useCollectionStore((s) => s.initOwned);
   const updateMissionProgress = useMissionStore((s) => s.updateProgress);
 
   const [phase, setPhase] = useState<GachaPhase>('idle');
@@ -139,6 +143,19 @@ export default function GachaPage() {
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user.id]);
+
+  // コレクション初期化（まだ未初期化の場合）
+  useEffect(() => {
+    if (collectionInitialized) return;
+    const auth = getAuth();
+    const childId = auth?.childId ?? 'guest';
+    computeOwnership(childId).then(({ ownedNames }) => {
+      const ids = COLLECTION_CARDS
+        .filter((c) => ownedNames.has(c.name))
+        .map((c) => c.id);
+      initOwned(ids);
+    });
+  }, [collectionInitialized, initOwned]);
 
   const burstParticles = useMemo(() =>
     Array.from({ length: 20 }, (_, i) => {

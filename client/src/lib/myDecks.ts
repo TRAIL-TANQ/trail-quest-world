@@ -14,11 +14,15 @@ import {
 } from './knowledgeCards';
 import {
   loadQuestProgress,
+  isDeckUnlocked,
   isSSRUnlocked,
   DECK_SSR_CARDS,
   DECK_KEYS,
+  DECK_KEY_TO_STARTER_ID,
   type QuestProgressData,
+  type DeckKey,
 } from './questProgress';
+import { STARTER_DECKS, type StarterDeck } from './stages';
 
 // ===== Rules =====
 
@@ -97,11 +101,11 @@ async function syncToSupabase(childId: string, decks: MyDeck[]): Promise<void> {
 
 /**
  * Owned card set.
- * v1 rules:
- *   - All N cards: always owned
- *   - All R cards: always owned (common pool)
- *   - SR: from gacha_pulls only (legend unlock adds SSRs, not SRs in current design)
- *   - SSR: from gacha_pulls + DECK_SSR_CARDS of legend-cleared decks
+ * v2 rules:
+ *   - 初期状態は0枚
+ *   - 解放済みデッキ(beginner cleared)のカードは所持扱い
+ *   - ガチャで引いたカード
+ *   - SSR: DECK_SSR_CARDS of legend-cleared decks
  *   - EVOLUTION_ONLY cards: never draftable
  */
 export interface OwnershipResult {
@@ -109,17 +113,29 @@ export interface OwnershipResult {
   ownedByRarity: Record<CardRarity, string[]>;
 }
 
+/** スターターデッキのユニークカード名一覧を返す */
+export function getStarterDeckCardNames(deckKey: DeckKey): string[] {
+  const starterId = DECK_KEY_TO_STARTER_ID[deckKey];
+  const starter = STARTER_DECKS.find((d: StarterDeck) => d.id === starterId);
+  if (!starter) return [];
+  const allNames = [starter.trumpCard, ...starter.themeCards, ...starter.noiseCards];
+  return Array.from(new Set(allNames.filter(Boolean)));
+}
+
 export async function computeOwnership(childId: string): Promise<OwnershipResult> {
   const ownedNames = new Set<string>();
 
-  // 1) All N + R cards baseline
-  for (const c of ALL_BATTLE_CARDS) {
-    if (EVOLUTION_ONLY_CARDS.has(c.name)) continue;
-    if (c.rarity === 'N' || c.rarity === 'R') ownedNames.add(c.name);
+  // 1) 解放済みデッキのカードを所持扱い（初回プレゼント + クエストクリア）
+  const progress: QuestProgressData = loadQuestProgress();
+  for (const deckKey of DECK_KEYS) {
+    if (isDeckUnlocked(progress, deckKey)) {
+      for (const name of getStarterDeckCardNames(deckKey)) {
+        if (!EVOLUTION_ONLY_CARDS.has(name)) ownedNames.add(name);
+      }
+    }
   }
 
   // 2) SSR from legend-cleared decks
-  const progress: QuestProgressData = loadQuestProgress();
   for (const deckKey of DECK_KEYS) {
     if (isSSRUnlocked(progress, deckKey)) {
       for (const ssrName of DECK_SSR_CARDS[deckKey] ?? []) {

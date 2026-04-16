@@ -114,8 +114,11 @@ interface CollectionState {
   ownedCardIds: Set<string>;
   newCardIds: Set<string>;      // 未確認のNEWカード
   acquiredOrder: string[];      // 取得順リスト
+  initialized: boolean;         // 初期化済みフラグ
   addCard: (cardId: string) => void;
   addCards: (cardIds: string[]) => void;
+  /** 永続データから復元（NEWバッジなし） */
+  initOwned: (cardIds: string[]) => void;
   hasCard: (cardId: string) => boolean;
   ownedCount: () => number;
   clearNew: (cardId: string) => void;
@@ -123,10 +126,11 @@ interface CollectionState {
 }
 
 export const useCollectionStore = create<CollectionState>((set, get) => ({
-  // デモ用: 最初の5枚を初期所持
-  ownedCardIds: new Set(['card-001', 'card-002', 'card-003', 'card-011', 'card-016']),
+  // 初期状態: 0枚（ガチャ・クエスト・プレゼントで入手）
+  ownedCardIds: new Set<string>(),
   newCardIds: new Set<string>(),
-  acquiredOrder: ['card-001', 'card-002', 'card-003', 'card-011', 'card-016'],
+  acquiredOrder: [],
+  initialized: false,
   addCard: (cardId) =>
     set((state) => {
       const alreadyOwned = state.ownedCardIds.has(cardId);
@@ -150,6 +154,18 @@ export const useCollectionStore = create<CollectionState>((set, get) => ({
         ownedCardIds: new Set(Array.from(state.ownedCardIds).concat(cardIds)),
         newCardIds: new Set(Array.from(state.newCardIds).concat(newIds)),
         acquiredOrder: [...state.acquiredOrder, ...newOrder],
+      };
+    }),
+  initOwned: (cardIds) =>
+    set((state) => {
+      if (state.initialized) return state; // 二重初期化防止
+      // セッション中に addCard で追加されたカードも保持
+      const merged = new Set([...cardIds, ...Array.from(state.ownedCardIds)]);
+      const existingExtra = state.acquiredOrder.filter((id) => !new Set(cardIds).has(id));
+      return {
+        ownedCardIds: merged,
+        acquiredOrder: [...cardIds, ...existingExtra],
+        initialized: true,
       };
     }),
   hasCard: (cardId) => get().ownedCardIds.has(cardId),

@@ -5,8 +5,10 @@
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation, useRoute } from 'wouter';
-import { useUserStore, useAltStore } from '@/lib/stores';
+import { useUserStore, useAltStore, useCollectionStore } from '@/lib/stores';
 import { processQuizResult, fetchChildStatus } from '@/lib/quizService';
+import { getStarterDeckCardNames } from '@/lib/myDecks';
+import { COLLECTION_CARDS } from '@/lib/cardData';
 import {
   type DeckKey,
   type QuestDifficulty,
@@ -46,6 +48,7 @@ export default function QuizPracticePage() {
 
   const addTotalAlt = useUserStore((s) => s.addTotalAlt);
   const userId = useUserStore((s) => s.user.id);
+  const addCollectionCards = useCollectionStore((s) => s.addCards);
 
   const [phase, setPhase] = useState<Phase>('playing');
   const [questions, setQuestions] = useState<QuestQuiz[]>([]);
@@ -205,6 +208,12 @@ export default function QuizPracticePage() {
 
         if (!wasDeckUnlocked && isDeckUnlocked(newProgress, deckKey)) {
           setDeckJustUnlocked(true);
+          // デッキ解放時: そのデッキのカードをコレクションに追加
+          const deckCardNames = getStarterDeckCardNames(deckKey);
+          const deckCardIds = COLLECTION_CARDS
+            .filter((c) => deckCardNames.includes(c.name))
+            .map((c) => c.id);
+          addCollectionCards(deckCardIds);
         }
         if (!wasSSRUnlocked && isSSRUnlocked(newProgress, deckKey)) {
           setSsrJustUnlocked(true);

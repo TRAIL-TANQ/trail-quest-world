@@ -67,7 +67,8 @@ import { clearPvPSession } from '@/lib/pvpSession';
 import { applyRatingChange, applyPvPRatingChange } from '@/lib/ratingService';
 import { playBattleStart, playTap, playDefeat } from '@/lib/sfx';
 import CardPreviewOverlay from '@/components/CardPreviewOverlay';
-import { loadMyDecks, buildMyDeckCards, MY_DECK_MAX_DECKS } from '@/lib/myDecks';
+import { loadMyDecks, buildMyDeckCards, MY_DECK_MAX_DECKS, getStarterDeckCardNames } from '@/lib/myDecks';
+import { COLLECTION_CARDS } from '@/lib/cardData';
 import { saveHallOfFame } from '@/lib/hallOfFameService';
 import { toast } from 'sonner';
 import { loadEquippedBg, getBg } from '@/lib/backgrounds';
@@ -111,6 +112,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
   const addTotalAlt = useUserStore((s) => s.addTotalAlt);
   const userStoreSet = useUserStore;  // 称号更新に直接触りたい
   const addCollectionCard = useCollectionStore((s) => s.addCard);
+  const addCollectionCards = useCollectionStore((s) => s.addCards);
   const setLastResult = useGameStore((s) => s.setLastResult);
   const triggerEarnEffect = useAltStore((s) => s.triggerEarnEffect);
 
@@ -2261,6 +2263,12 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                   <button
                     onClick={() => {
                       claimFirstDeck(giftConfirmDeck.deckKey);
+                      // デッキのカードをコレクションに追加
+                      const deckCardNames = getStarterDeckCardNames(giftConfirmDeck.deckKey);
+                      const deckCardIds = COLLECTION_CARDS
+                        .filter((c) => deckCardNames.includes(c.name))
+                        .map((c) => c.id);
+                      addCollectionCards(deckCardIds);
                       setGiftConfirmDeck(null);
                       window.location.reload();
                     }}

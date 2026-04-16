@@ -12,6 +12,8 @@ import { COLLECTION_CARDS } from '@/lib/cardData';
 import { CARD_RARITY_COLORS, CARD_CATEGORY_INFO, CARD_RARITY_IMAGES } from '@/lib/constants';
 import { useCollectionStore } from '@/lib/stores';
 import { ALL_BATTLE_CARDS } from '@/lib/knowledgeCards';
+import { computeOwnership } from '@/lib/myDecks';
+import { getAuth } from '@/lib/auth';
 import type { CollectionCard, CollectionRarity } from '@/lib/types';
 
 // Build a lookup from collection card id → {attack, defense} so the collection
@@ -241,7 +243,23 @@ export default function CollectionPage() {
   const ownedCardIds = useCollectionStore((s) => s.ownedCardIds);
   const newCardIds = useCollectionStore((s) => s.newCardIds);
   const acquiredOrder = useCollectionStore((s) => s.acquiredOrder);
+  const initialized = useCollectionStore((s) => s.initialized);
+  const initOwned = useCollectionStore((s) => s.initOwned);
   const ownedCount = ownedCardIds.size;
+
+  // 初回マウント時: クエスト進捗 + ガチャ履歴から所持カードを復元
+  useEffect(() => {
+    if (initialized) return;
+    const auth = getAuth();
+    const childId = auth?.childId ?? 'guest';
+    computeOwnership(childId).then(({ ownedNames }) => {
+      // カード名 → CollectionCard ID に変換
+      const ids = COLLECTION_CARDS
+        .filter((c) => ownedNames.has(c.name))
+        .map((c) => c.id);
+      initOwned(ids);
+    });
+  }, [initialized, initOwned]);
 
   const filteredCards = useMemo(() => {
     let cards = COLLECTION_CARDS.filter((c) => {

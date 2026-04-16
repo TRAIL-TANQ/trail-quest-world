@@ -25,7 +25,9 @@ import {
 } from '@/lib/questProgress';
 import { QUEST_QUIZ_DATA, type QuestQuiz } from '@/lib/questQuizData';
 import { processQuizResult, fetchChildStatus } from '@/lib/quizService';
-import { useUserStore } from '@/lib/stores';
+import { useUserStore, useCollectionStore } from '@/lib/stores';
+import { getStarterDeckCardNames } from '@/lib/myDecks';
+import { COLLECTION_CARDS } from '@/lib/cardData';
 import { supabase } from '@/lib/supabase';
 
 const DIFFICULTY_INT: Record<QuestDifficulty, number> = {
@@ -79,6 +81,7 @@ export default function QuestLearningUnitPage() {
 
   const userId = useUserStore((s) => s.user.id);
   const addTotalAlt = useUserStore((s) => s.addTotalAlt);
+  const addCollectionCards = useCollectionStore((s) => s.addCards);
 
   const [progress, setProgress] = useState<QuestProgressData>(loadQuestProgress);
   const [difficulty, setDifficulty] = useState<QuestDifficulty>('beginner');
@@ -145,7 +148,15 @@ export default function QuestLearningUnitPage() {
     const next = recordQuizResult(old, deckKey, difficulty, CLEAR_THRESHOLD);
     saveQuestProgress(next);
     setProgress(next);
-    if (!wasDeck && isDeckUnlocked(next, deckKey)) setDeckJustUnlocked(true);
+    if (!wasDeck && isDeckUnlocked(next, deckKey)) {
+      setDeckJustUnlocked(true);
+      // デッキ解放時: そのデッキのカードをコレクションに追加
+      const deckCardNames = getStarterDeckCardNames(deckKey);
+      const deckCardIds = COLLECTION_CARDS
+        .filter((c) => deckCardNames.includes(c.name))
+        .map((c) => c.id);
+      addCollectionCards(deckCardIds);
+    }
     if (!wasSSR && isSSRUnlocked(next, deckKey)) setSsrJustUnlocked(true);
   }, [cleared, deckKey, difficulty, unit]);
 
