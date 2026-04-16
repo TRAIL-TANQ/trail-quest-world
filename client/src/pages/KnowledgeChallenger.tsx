@@ -242,7 +242,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
       'prayer_light', 'holy_banner',
       'imperial_decree', 'rainbow_nation', 'nobel_peace',
       'book_burning', 'anatomy', 'mirror_writing',
-      'honnoji', 'moonlit_howl',
+      'honnoji', 'moonlit_howl', 'mikka_tenka',
     ]),
     [],
   );

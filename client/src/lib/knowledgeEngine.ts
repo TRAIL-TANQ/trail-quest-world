@@ -1465,28 +1465,22 @@ export function applyRevealEffect(
     }
     case 'honnoji': {
       // 本能寺の変（任意発動・ベンチに織田信長が必要）
-      // 1. 自分ベンチから織田信長1枚を除外
-      // 2. 両陣営のベンチを全て除外へ送る
-      // 3. 自分のデッキを 明智光秀・愛宕百韻・天王山・三日天下 の4枚に再構成
+      // 1. 自分ベンチから織田信長を除外
+      // 2. 自分のベンチのみ全除外（相手ベンチは触らない）
+      // 3. 自分のデッキを全削除 → 明智光秀・愛宕百韻・天王山・三日天下の4枚に再構成
       const my = side === 'player' ? next.player : next.ai;
       const nobunagaSlot = my.bench.find((b) => b.name === '織田信長' && !next.sealedBenchNames[side].includes(b.name));
       if (!nobunagaSlot) {
         telop = { text: '本能寺の変（ベンチに織田信長がいません）', color };
         break;
       }
-      // Step 1: remove 織田信長 from bench → exile
-      const newMyBench = removeOneFromBench(my.bench, '織田信長');
-      let newExileSelf = [...next.exile[side], nobunagaSlot.card];
-      // Step 2: exile all remaining bench of both sides
-      for (const slot of newMyBench) {
+      // Step 1+2: remove 織田信長 from bench + exile ALL own bench
+      const newExileSelf = [...next.exile[side], nobunagaSlot.card];
+      const benchAfterNobunaga = removeOneFromBench(my.bench, '織田信長');
+      for (const slot of benchAfterNobunaga) {
         for (let i = 0; i < slot.count; i++) newExileSelf.push(slot.card);
       }
-      const oppState = opp === 'player' ? next.player : next.ai;
-      let newExileOpp = [...next.exile[opp]];
-      for (const slot of oppState.bench) {
-        for (let i = 0; i < slot.count; i++) newExileOpp.push(slot.card);
-      }
-      // Step 3: rebuild own deck with the four 明智ルート cards
+      // Step 3: rebuild own deck with 4 明智ルート cards (old deck discarded)
       const akechiNames = ['明智光秀', '愛宕百韻', '天王山', '三日天下'];
       const newDeck: BattleCard[] = [];
       const stamp = Date.now();
@@ -1494,14 +1488,71 @@ export function applyRevealEffect(
         const tmpl = ALL_BATTLE_CARDS.find((c) => c.name === name);
         if (tmpl) newDeck.push({ ...tmpl, id: `evolved-akechi-${tmpl.id}-${stamp}-${newDeck.length}` });
       }
-      next = {
-        ...next,
-        exile: { ...next.exile, [side]: newExileSelf, [opp]: newExileOpp },
-      };
+      next = { ...next, exile: { ...next.exile, [side]: newExileSelf } };
       next = applySide(next, side, { ...my, bench: [], deck: newDeck });
-      next = applySide(next, opp, { ...oppState, bench: [] });
       telop = { text: '⚡ 灰からの継承！本能寺で信長が散り、明智の時代が始まる！', color: '#ffd700' };
-      console.log('[特殊効果] 本能寺の変: 信長と両陣営ベンチを全除外、デッキを明智ルート4枚に再構成');
+      console.log('[特殊効果] 本能寺の変: 信長+自ベンチ全除外、デッキを明智ルート4枚に再構成');
+      break;
+    }
+    case 'akechi_mitsuhide': {
+      // 明智光秀: 相手ベンチ2枚除外 + ベンチに三日天下で攻防+3
+      const my = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      const hasMikka = my.bench.some((b) => b.name === '三日天下' && !sealed.includes(b.name));
+      // ベンチバフ: 愛宕百韻(+3atk) + 天王山(+2atk,+2def) + 三日天下(+3atk,+3def)
+      const atagoCount = my.bench.find((b) => b.name === '愛宕百韻' && !sealed.includes(b.name))?.count ?? 0;
+      const tennouzanCount = my.bench.find((b) => b.name === '天王山' && !sealed.includes(b.name))?.count ?? 0;
+      const glowNames: string[] = [];
+      let atkBuff = 0; let defBuff = 0;
+      if (atagoCount > 0) { atkBuff += 3; glowNames.push('愛宕百韻'); }
+      if (tennouzanCount > 0) { atkBuff += 2; defBuff += 2; glowNames.push('天王山'); }
+      if (hasMikka) { atkBuff += 3; defBuff += 3; glowNames.push('三日天下'); }
+      if (glowNames.length > 0) next = withBenchGlow(next, side, glowNames);
+      if (role === 'attacker') bonusAttack += atkBuff;
+      else next = { ...next, defenderBonus: next.defenderBonus + defBuff };
+      // 相手ベンチから最大2枚除外
+      const oppState = opp === 'player' ? next.player : next.ai;
+      const removable = oppState.bench.slice(0, 2);
+      let removedCount = 0;
+      let oppBench = [...oppState.bench];
+      const oppExile = [...next.exile[opp]];
+      for (const slot of removable) {
+        const newB = removeOneFromBench(oppBench, slot.name);
+        if (newB.length < oppBench.length || newB.some((b) => b.name === slot.name && b.count < (oppBench.find((ob) => ob.name === slot.name)?.count ?? 0))) {
+          oppExile.push(slot.card);
+          oppBench = newB;
+          removedCount++;
+        }
+      }
+      next = { ...next, exile: { ...next.exile, [opp]: oppExile } };
+      next = applySide(next, opp, { ...oppState, bench: oppBench });
+      telop = { text: `⚔️ 明智光秀！攻+${atkBuff}/防+${defBuff}${removedCount > 0 ? ` 相手ベンチ${removedCount}枚除外` : ''}`, color: '#ffd700' };
+      console.log(`[特殊効果] 明智光秀: 攻+${atkBuff}/防+${defBuff}, 相手ベンチ${removedCount}枚除外`);
+      break;
+    }
+    case 'atago_hyakuin': {
+      telop = { text: '📜 愛宕百韻！ベンチで明智光秀の攻撃+3', color };
+      break;
+    }
+    case 'tennouzan': {
+      telop = { text: '⛰️ 天王山！ベンチで明智光秀の攻防+2', color };
+      break;
+    }
+    case 'mikka_tenka': {
+      // 三日天下: ベンチの明智光秀をデッキトップに戻す（任意発動）
+      const my = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      const akechiSlot = my.bench.find((b) => b.name === '明智光秀' && !sealed.includes(b.name));
+      if (akechiSlot) {
+        const newBench = removeOneFromBench(my.bench, '明智光秀');
+        const newDeck = [akechiSlot.card, ...my.deck];
+        next = applySide(next, side, { ...my, bench: newBench, deck: newDeck });
+        next = withBenchGlow(next, side, ['明智光秀']);
+        telop = { text: '👑 三日天下！明智光秀をデッキトップに回収', color };
+      } else {
+        telop = { text: '👑 三日天下（ベンチに明智光秀がいません）', color };
+      }
+      console.log('[特殊効果] 三日天下: 明智光秀をデッキトップに回収');
       break;
     }
     case 'austerlitz_sun': {
