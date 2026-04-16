@@ -70,7 +70,7 @@ export const COLLECTION_CARDS: CollectionCard[] = [
   { id: 'card-054', name: 'マリー・アントワネット', category: 'great_people', rarity: 'R', description: 'フランス王妃。豪華な生活で知られ、フランス革命で処刑された。', imageUrl: '/images/cards/card-054.webp' },
   { id: 'card-055', name: '孔子', category: 'great_people', rarity: 'R', description: '中国の思想家。儒教の祖として東アジア文化に大きな影響を与えた。', imageUrl: '/images/cards/card-055.webp' },
   { id: 'card-056', name: 'マルコ・ポーロ', category: 'great_people', rarity: 'R', description: 'ヴェネツィアの冒険家。シルクロードを旅し東方見聞録を残した。', imageUrl: '/images/cards/card-056.webp' },
-  { id: 'card-057', name: 'ジャンヌ・ダルク', category: 'great_people', rarity: 'R', description: 'フランスの英雄。神の声を聞き、百年戦争でフランスを救った少女。', imageUrl: '/images/cards/card-057.webp' },
+  { id: 'card-057', name: 'ジャンヌ・ダルク', category: 'great_people', rarity: 'SR', description: 'フランスの英雄。神の声を聞き、百年戦争でフランスを救った少女。', imageUrl: '/images/cards/card-057.webp' },
   { id: 'card-058', name: 'アレクサンダー大王', category: 'great_people', rarity: 'R', description: 'マケドニアの征服者。東方遠征で史上最大の帝国を築いた。', imageUrl: '/images/cards/card-058.webp' },
   { id: 'card-059', name: '豊臣秀吉', category: 'great_people', rarity: 'R', description: '天下統一を果たした武将。農民から関白にまで上り詰めた。', imageUrl: '/images/cards/hideyoshi.png' },
   { id: 'card-060', name: 'フロレンス・ナイチンゲール', category: 'great_people', rarity: 'N', description: '近代看護の母。クリミア戦争で傷病兵の看護に尽力した。', imageUrl: '/images/cards/card-060.webp' },
@@ -78,7 +78,7 @@ export const COLLECTION_CARDS: CollectionCard[] = [
   { id: 'card-062', name: 'ヘレン・ケラー', category: 'great_people', rarity: 'N', description: '三重苦を克服した女性。サリバン先生と共に障害者教育に貢献した。', imageUrl: '/images/cards/card-062.webp' },
   { id: 'card-063', name: 'アルキメデス', category: 'great_people', rarity: 'N', description: '古代ギリシャの数学者。浮力の原理やてこの原理を発見した。', imageUrl: '/images/cards/card-063.webp' },
   { id: 'card-064', name: 'ヒポクラテス', category: 'great_people', rarity: 'N', description: '医学の父。医師の倫理を説き、ヒポクラテスの誓いを残した。', imageUrl: '/images/cards/card-064.webp' },
-  { id: 'card-065', name: '紫式部', category: 'great_people', rarity: 'R', description: '源氏物語の作者。世界最古の長編小説を書いた平安時代の女性文学者。', imageUrl: '/images/cards/murasaki-shikibu.png' },
+  { id: 'card-065', name: '紫式部', category: 'great_people', rarity: 'SR', description: '源氏物語の作者。世界最古の長編小説を書いた平安時代の女性文学者。', imageUrl: '/images/cards/murasaki-shikibu.png' },
   { id: 'card-066', name: 'プテラノドン', category: 'creatures', rarity: 'SR', description: '白亜紀の翼竜。翼を広げると7メートル以上にもなる空の支配者。', imageUrl: '/images/cards/card-066.webp' },
   { id: 'card-067', name: 'サーベルタイガー', category: 'creatures', rarity: 'SR', description: '氷河期の猛獣。20センチもの長い犬歯を持つ大型ネコ科動物。', imageUrl: '/images/cards/card-067.webp' },
   { id: 'card-068', name: 'オオカミ', category: 'creatures', rarity: 'R', description: '群れで狩りをする社会性の高い動物。月に向かって遠吠えする。', imageUrl: '/images/cards/wolf.png' },
@@ -113,7 +113,7 @@ export const COLLECTION_CARDS: CollectionCard[] = [
   { id: 'card-097', name: '量子力学', category: 'discovery', rarity: 'SR', description: 'ミクロの物理法則。原子や電子の振る舞いを記述する革命的理論。', imageUrl: '/images/cards/card-097.webp' },
   { id: 'card-098', name: '万有引力', category: 'discovery', rarity: 'R', description: 'リンゴと月を結ぶ力。ニュートンが発見した宇宙の基本法則。', imageUrl: '/images/cards/gravity.png' },
   { id: 'card-099', name: '原子核の構造', category: 'discovery', rarity: 'R', description: '物質の核心。陽子と中性子からなる原子の中心構造。', imageUrl: '/images/cards/card-099.webp' },
-  { id: 'card-100', name: '光合成', category: 'creatures', rarity: 'SSR', description: '密林の生命力。太陽の光がアマゾンの仲間を蘇らせる。', imageUrl: '/images/cards/photosynthesis.png' },
+  { id: 'card-100', name: '光合成', category: 'creatures', rarity: 'SR', description: '密林の生命力。太陽の光が植物の仲間を蘇らせる。', imageUrl: '/images/cards/photosynthesis.png' },
 
   // ===== コンボカード: 原爆コンボ (3枚) =====
   { id: 'card-101', name: 'マンハッタン計画', category: 'inventions', rarity: 'R', description: '第二次世界大戦中の極秘プロジェクト。世界中の科学者を集めて原子爆弾を開発した。【コンボ素材】', imageUrl: '/images/cards/card-101.webp' },
@@ -136,7 +136,7 @@ export const COLLECTION_CARDS: CollectionCard[] = [
   { id: 'card-114', name: '始皇帝', category: 'great_people', rarity: 'SR', description: '中国を初めて統一した秦の皇帝。万里の長城や兵馬俑を築いた絶対君主。', imageUrl: '/images/cards/emperor-qin.png' },
   { id: 'card-115', name: 'アマゾン川', category: 'world_heritage', rarity: 'SR', description: 'アマゾン流域の生命の源。密林の仲間を呼び寄せる大河。', imageUrl: '/images/cards/amazon-river.png' },
   { id: 'card-116', name: 'アナコンダ', category: 'creatures', rarity: 'R', description: 'アマゾンに棲む世界最大級のヘビ。獲物を締め上げて捕食する。', imageUrl: '/images/cards/anaconda.png' },
-  { id: 'card-117', name: '毒矢カエル', category: 'creatures', rarity: 'N', description: '鮮やかな色をしたアマゾンのカエル。先住民が矢毒に使う猛毒を持つ。', imageUrl: '/images/cards/poison-frog.png' },
+  { id: 'card-117', name: '毒矢カエル', category: 'creatures', rarity: 'R', description: '鮮やかな色をしたアマゾンのカエル。先住民が矢毒に使う猛毒を持つ。', imageUrl: '/images/cards/poison-frog.png' },
   { id: 'card-118', name: 'リンゴ', category: 'inventions', rarity: 'N', description: 'ニュートンが万有引力を思いつくきっかけになったとされる果実。', imageUrl: '/images/cards/apple.png' },
   { id: 'card-119', name: 'プリズム', category: 'inventions', rarity: 'N', description: '光を虹色に分ける三角柱。ニュートンが光の性質を解き明かした。', imageUrl: '/images/cards/prism.png' },
   { id: 'card-120', name: '活版印刷機', category: 'inventions', rarity: 'N', description: 'グーテンベルクの発明。聖書を広め、宗教改革のきっかけになった。', imageUrl: '/images/cards/printing-press.png' },
@@ -146,8 +146,8 @@ export const COLLECTION_CARDS: CollectionCard[] = [
   { id: 'card-124', name: 'ひまわり', category: 'inventions', rarity: 'N', description: 'ゴッホの代表作。黄色の花が燃えるように描かれた油彩画。', imageUrl: '/images/cards/sunflower.png' },
   { id: 'card-125', name: '星月夜', category: 'inventions', rarity: 'N', description: '渦を巻く夜空を描いたゴッホの傑作。精神病院から見た風景とされる。', imageUrl: '/images/cards/starry-night.png' },
   { id: 'card-126', name: '糸杉', category: 'inventions', rarity: 'N', description: '天へ伸びるように描かれたゴッホの樹木。炎のような筆致が特徴。', imageUrl: '/images/cards/cypress.png' },
-  { id: 'card-127', name: '聖剣', category: 'inventions', rarity: 'N', description: 'ジャンヌ・ダルクが神の啓示で見つけたとされる剣。フランス救国の象徴。', imageUrl: '/images/cards/holy-sword.png' },
-  { id: 'card-128', name: '軍旗', category: 'inventions', rarity: 'N', description: 'ジャンヌ・ダルクが先頭で掲げた白い旗。兵士の士気を奮い立たせた。', imageUrl: '/images/cards/war-banner.png' },
+  { id: 'card-127', name: '聖剣', category: 'inventions', rarity: 'R', description: 'ジャンヌ・ダルクが神の啓示で見つけたとされる剣。フランス救国の象徴。', imageUrl: '/images/cards/holy-sword.png' },
+  { id: 'card-128', name: '軍旗', category: 'inventions', rarity: 'R', description: 'ジャンヌ・ダルクが先頭で掲げた白い旗。兵士の士気を奮い立たせた。', imageUrl: '/images/cards/war-banner.png' },
   { id: 'card-129', name: 'ケーキ', category: 'inventions', rarity: 'N', description: '「パンがなければお菓子を食べればいい」と言ったとされるマリーの象徴。', imageUrl: '/images/cards/cake.png' },
 
   // ===== コンボカード: ナポレオン (3枚) =====
@@ -214,14 +214,14 @@ export const COLLECTION_CARDS: CollectionCard[] = [
 
   // ===== ジャンヌダルクデッキ用追加カード =====
   { id: 'card-170', name: '祈りの光', category: 'inventions', rarity: 'SR', description: '教会から差す聖なる光。除外されたジャンヌを聖女として蘇らせる。', imageUrl: '/images/cards/prayer-light.png' },
-  { id: 'card-171', name: '白百合の盾', category: 'inventions', rarity: 'N', description: 'フランス王家の百合が刻まれた聖なる盾。', imageUrl: '/images/cards/lily-shield.png' },
+  { id: 'card-171', name: '白百合の盾', category: 'inventions', rarity: 'R', description: 'フランス王家の百合が刻まれた聖なる盾。', imageUrl: '/images/cards/lily-shield.png' },
   { id: 'card-172', name: '聖女の旗印', category: 'inventions', rarity: 'SR', description: '聖女が掲げた旗。失われた仲間を呼び戻す力を持つ。', imageUrl: '/images/cards/holy-banner.png' },
 
   // ===== 紫式部デッキ追加 (4枚) =====
-  { id: 'card-177', name: '源氏物語', category: 'inventions', rarity: 'SR', description: '紫式部が書いた世界最古の長編小説。光源氏の恋と運命を描いた平安文学の傑作。', imageUrl: '/images/cards/tale-of-genji.png' },
-  { id: 'card-178', name: '筆', category: 'inventions', rarity: 'N', description: '和紙に墨で文字を綴る平安の筆記具。紫式部が物語を書き残した道具。', imageUrl: '/images/cards/fude.png' },
+  { id: 'card-177', name: '源氏物語', category: 'inventions', rarity: 'SSR', description: '紫式部が書いた世界最古の長編小説。光源氏の恋と運命を描いた平安文学の傑作。', imageUrl: '/images/cards/tale-of-genji.png' },
+  { id: 'card-178', name: '筆', category: 'inventions', rarity: 'N', description: '和紙に墨で文字を綴る平安の筆記具。清少納言が随筆を書き残した道具。', imageUrl: '/images/cards/fude.png' },
   { id: 'card-179', name: '和歌', category: 'inventions', rarity: 'N', description: '五七五七七の日本古来の詩歌。平安貴族の心を伝える言葉の花。', imageUrl: '/images/cards/waka.png' },
-  { id: 'card-180', name: '十二単', category: 'inventions', rarity: 'N', description: '平安時代の女官が着用した豪華な重ね着装束。宮廷文化の象徴。', imageUrl: '/images/cards/junihitoe.png' },
+  { id: 'card-180', name: '十二単', category: 'inventions', rarity: 'R', description: '平安時代の女官が着用した豪華な重ね着装束。宮廷文化の象徴。', imageUrl: '/images/cards/junihitoe.png' },
 
   // ===== 信長デッキ拡張 (11枚) =====
   { id: 'card-181', name: '敦盛の舞', category: 'inventions', rarity: 'N', description: '信長が愛した幸若舞。「人間五十年」の一節を舞い、出陣の前に気を奮い立たせた。', imageUrl: '/images/cards/atsumori.png' },
@@ -263,6 +263,14 @@ export const COLLECTION_CARDS: CollectionCard[] = [
   { id: 'card-207', name: 'アウステルリッツの太陽', category: 'discovery', rarity: 'SSR', description: '1805年、三帝会戦の朝に霧が晴れナポレオンに勝利の予兆をもたらした伝説の陽光。', imageUrl: '/images/cards/austerlitz.png' },
   { id: 'card-208', name: '月下の遠吠え', category: 'creatures', rarity: 'SSR', description: '満月の夜、群れを呼び戻す祖先の咆哮。失われた仲間を集わせる原初の声。', imageUrl: '/images/cards/moonlight-howl.png' },
   { id: 'card-209', name: '地球は動いている', category: 'discovery', rarity: 'SSR', description: 'ガリレオが裁判の後に呟いたとされる一言。真理は何人にも止められない。', imageUrl: '/images/cards/earth-moves.png' },
+
+  // ===== 紫式部・清少納言デッキ追加 (2枚) =====
+  { id: 'card-210', name: '清少納言', category: 'great_people', rarity: 'SR', description: '枕草子の作者。鋭い観察眼と機知に富んだ随筆で平安文学に輝きを添えた女性文学者。', imageUrl: '/images/cards/sei-shonagon.png' },
+  { id: 'card-211', name: '枕草子', category: 'inventions', rarity: 'SSR', description: '清少納言が書いた日本最古の随筆。「春はあけぼの」で始まる鮮やかな感性の結晶。', imageUrl: '/images/cards/makura-no-soshi.png' },
+
+  // ===== アマゾンデッキ追加 (2枚) =====
+  { id: 'card-212', name: 'ジャガー', category: 'creatures', rarity: 'SR', description: 'アマゾンの密林に君臨する斑点模様の大型ネコ科動物。強靭な顎で獲物を一撃で仕留める。', imageUrl: '/images/cards/jaguar.png' },
+  { id: 'card-213', name: 'ピンクイルカ', category: 'creatures', rarity: 'R', description: 'アマゾン川に棲む淡水イルカ。ピンク色の体を持ち、現地では聖なる存在とされる。', imageUrl: '/images/cards/pink-dolphin.png' },
 ];
 
 // ガチャ排出率

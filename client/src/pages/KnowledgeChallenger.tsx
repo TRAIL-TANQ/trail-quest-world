@@ -240,11 +240,14 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
   // Card effect IDs that present choice UIs — these are the "任意発動" cards.
   const OPTIONAL_EFFECT_IDS = useMemo(
     () => new Set<string>([
-      'photosynthesis', 'poison_frog', 'paper',
+      'photosynthesis', 'paper',
       'prayer_light', 'holy_banner', 'burning_stake', 'saint_jeanne',
       'imperial_decree', 'rainbow_nation', 'nobel_peace',
       'book_burning', 'anatomy', 'mirror_writing',
       'honnoji', 'moonlit_howl', 'mikka_tenka',
+      'terracotta', 'banner',
+      'genji', 'makura_no_soshi',
+      'anaconda_hunter', 'pink_dolphin',
     ]),
     [],
   );
@@ -289,7 +292,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
   const playSound = useCallback((soundId: string) => {
     console.log('[SFX]', soundId);
   }, []);
-  // Card selection overlay (used by 毒矢カエル, 光合成, 紙, アマゾン川 effects)
+  // Card selection overlay (used by 毒矢カエル, ピンクイルカ, 紙, 源氏物語, 枕草子 effects)
   const [cardSelectOverlay, setCardSelectOverlay] = useState<{
     title: string;
     cards: BattleCard[];
@@ -644,6 +647,9 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
   const gameStateRef = useRef<GameState | null>(null);
   useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
 
+  // Track the last card the player played (attack or defense) for finisher display
+  const lastPlayerCardRef = useRef<BattleCard | null>(null);
+
   // Waits until the player clicks the manual-reveal button, with a 30s safety timeout.
   // Used only when the PLAYER is the attacker (AI turns remain automatic).
   const waitForPlayerAction = useCallback((): Promise<void> => {
@@ -927,6 +933,15 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
 
           const rs = resultState as GameState;
 
+          // Track finisher card: update when the player reveals an attack card
+          {
+            const attackerSide: Side = rs.flagHolder === 'player' ? 'ai' : 'player';
+            if (attackerSide === 'player' || isPvP) {
+              const lastRevealed = rs.attackRevealed[rs.attackRevealed.length - 1];
+              if (lastRevealed) lastPlayerCardRef.current = lastRevealed;
+            }
+          }
+
           // ===== Effect cutin for SR+ cards =====
           {
             const lastRevealed = rs.attackRevealed[rs.attackRevealed.length - 1];
@@ -953,47 +968,45 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
             const lastRevealed = rs.attackRevealed[rs.attackRevealed.length - 1];
             const effId = lastRevealed?.effect?.id;
 
-            // 光合成: select amazon creature from bench to put on deck top
-            if (effId === 'photosynthesis') {
-              const gs = gameStateRef.current ?? rs;
-              const amazonTargets = ['ピラニア', 'アナコンダ', '毒矢カエル', '大蛇'];
-              const sealed = gs.sealedBenchNames[mySide];
-              const candidates = gs[mySide].bench
-                .filter((b) => amazonTargets.includes(b.name) && !sealed.includes(b.name))
-                .map((b) => b.card);
-              if (candidates.length > 0) {
-                const chosen = await waitCardSelect('🌿 デッキトップに戻すカードを選んでください', candidates);
-                if (chosen && !unmountedRef.current) {
-                  setGameState((prev) => {
-                    if (!prev) return prev;
-                    const newBench = removeOneFromBench(prev[mySide].bench, chosen.name);
-                    return { ...prev, [mySide]: { ...prev[mySide], bench: newBench, deck: [chosen, ...prev[mySide].deck] } };
-                  });
-                }
-              }
-            }
+            // 光合成: デッキから植物カード1枚をデッキトップに置く（現在対象なし、先行実装）
+            // 将来の植物デッキ用 — 現在は対象カードが存在しないため実質no-op
 
-            // 毒矢カエル: select opponent bench card to exile
-            if (effId === 'poison_frog') {
+            // ピンクイルカ: ベンチまたは除外の大蛇の巫師をデッキトップに戻す
+            if (effId === 'pink_dolphin') {
               const gs = gameStateRef.current ?? rs;
-              // Filter out マンデラ if ロベン島 protects on opponent side
-              const oppSealed = gs.sealedBenchNames[oppSide];
-              const hasRobben = gs[oppSide].bench.some((b) => b.name === 'ロベン島' && !oppSealed.includes(b.name));
-              const oppBench = gs[oppSide].bench
-                .filter((b) => !(hasRobben && b.name === 'ネルソン・マンデラ'))
-                .map((b) => b.card);
-              if (oppBench.length > 0) {
-                const chosen = await waitCardSelect('🐸 除外する相手のカードを選んでください', oppBench);
+              const sealed = gs.sealedBenchNames[mySide];
+              const benchHunter = gs[mySide].bench.find((b) => b.name === '大蛇の巫師' && !sealed.includes(b.name));
+              const exileHunter = gs.exile[mySide].find((c) => c.name === '大蛇の巫師');
+              // Build selection candidates
+              const candidates: BattleCard[] = [];
+              if (benchHunter) candidates.push({ ...benchHunter.card, id: `bench-${benchHunter.card.id}` });
+              if (exileHunter) candidates.push({ ...exileHunter, id: `exile-${exileHunter.id}` });
+              if (candidates.length > 0) {
+                const chosen = candidates.length === 1 ? candidates[0] : await waitCardSelect('🐬 回収する大蛇の巫師を選んでください', candidates);
                 if (chosen && !unmountedRef.current) {
+                  const fromBench = chosen.id.startsWith('bench-');
                   setGameState((prev) => {
                     if (!prev) return prev;
-                    const newBench = removeOneFromBench(prev[oppSide].bench, chosen.name);
-                    return {
-                      ...prev,
-                      [oppSide]: { ...prev[oppSide], bench: newBench },
-                      exile: { ...prev.exile, [oppSide]: [...prev.exile[oppSide], chosen] },
-                      effectTelop: { text: `🐸 猛毒！相手の${chosen.name}を除外！`, color: '#a855f7', key: Date.now() },
-                    };
+                    const hunterTemplate = fromBench
+                      ? prev[mySide].bench.find((b) => b.name === '大蛇の巫師')?.card
+                      : prev.exile[mySide].find((c) => c.name === '大蛇の巫師');
+                    if (!hunterTemplate) return prev;
+                    if (fromBench) {
+                      const newBench = removeOneFromBench(prev[mySide].bench, '大蛇の巫師');
+                      return {
+                        ...prev,
+                        [mySide]: { ...prev[mySide], bench: newBench, deck: [hunterTemplate, ...prev[mySide].deck] },
+                        effectTelop: { text: '🐬 ピンクイルカ！大蛇の巫師をベンチからデッキトップへ！', color: '#ffd700', key: Date.now() },
+                      };
+                    } else {
+                      const newExile = prev.exile[mySide].filter((c) => c.name !== '大蛇の巫師');
+                      return {
+                        ...prev,
+                        [mySide]: { ...prev[mySide], deck: [hunterTemplate, ...prev[mySide].deck] },
+                        exile: { ...prev.exile, [mySide]: newExile },
+                        effectTelop: { text: '🐬 ピンクイルカ！大蛇の巫師を除外からデッキトップへ！', color: '#ffd700', key: Date.now() },
+                      };
+                    }
                   });
                 }
               }
@@ -1016,6 +1029,75 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                       effectTelop: { text: `📜 記録の復元！${chosen.name}をデッキトップへ！`, color: '#ffd700', key: Date.now() },
                     };
                   });
+                }
+              }
+            }
+
+            // 源氏物語: ベンチの和歌の枚数まで自分のベンチからデッキボトムに戻す
+            if (effId === 'genji') {
+              const gs = gameStateRef.current ?? rs;
+              const sealed = gs.sealedBenchNames[mySide];
+              const wakaSlot = gs[mySide].bench.find((b) => b.name === '和歌' && !sealed.includes(b.name));
+              const wakaCount = wakaSlot?.count ?? 0;
+              if (wakaCount > 0 && gs[mySide].bench.length > 0) {
+                let remaining = wakaCount;
+                while (remaining > 0) {
+                  const currentGs = gameStateRef.current ?? gs;
+                  const currentBench = currentGs[mySide].bench
+                    .filter((b) => !sealed.includes(b.name))
+                    .map((b) => b.card);
+                  if (currentBench.length === 0) break;
+                  const chosen = await waitCardSelect(
+                    `📖 デッキに戻すカードを選んでください（残り${remaining}枚）`,
+                    currentBench,
+                  );
+                  if (!chosen || unmountedRef.current) break;
+                  setGameState((prev) => {
+                    if (!prev) return prev;
+                    const newBench = removeOneFromBench(prev[mySide].bench, chosen.name);
+                    return {
+                      ...prev,
+                      [mySide]: { ...prev[mySide], bench: newBench, deck: [...prev[mySide].deck, chosen] },
+                      effectTelop: { text: `📖 ${chosen.name}をデッキに戻した！`, color: '#ffd700', key: Date.now() },
+                    };
+                  });
+                  remaining--;
+                }
+              }
+            }
+
+            // 枕草子: ベンチの筆の枚数まで相手ベンチから除外
+            if (effId === 'makura_no_soshi') {
+              const gs = gameStateRef.current ?? rs;
+              const sealed = gs.sealedBenchNames[mySide];
+              const fudeSlot = gs[mySide].bench.find((b) => b.name === '筆' && !sealed.includes(b.name));
+              const fudeCount = fudeSlot?.count ?? 0;
+              if (fudeCount > 0 && gs[oppSide].bench.length > 0) {
+                let remaining = fudeCount;
+                while (remaining > 0) {
+                  const currentGs = gameStateRef.current ?? gs;
+                  const oppSealed = currentGs.sealedBenchNames[oppSide];
+                  const hasRobben = currentGs[oppSide].bench.some((b) => b.name === 'ロベン島' && !oppSealed.includes(b.name));
+                  const oppBench = currentGs[oppSide].bench
+                    .filter((b) => !(hasRobben && b.name === 'ネルソン・マンデラ'))
+                    .map((b) => b.card);
+                  if (oppBench.length === 0) break;
+                  const chosen = await waitCardSelect(
+                    `📝 除外する相手のカードを選んでください（残り${remaining}枚）`,
+                    oppBench,
+                  );
+                  if (!chosen || unmountedRef.current) break;
+                  setGameState((prev) => {
+                    if (!prev) return prev;
+                    const newBench = removeOneFromBench(prev[oppSide].bench, chosen.name);
+                    return {
+                      ...prev,
+                      [oppSide]: { ...prev[oppSide], bench: newBench },
+                      exile: { ...prev.exile, [oppSide]: [...prev.exile[oppSide], chosen] },
+                      effectTelop: { text: `📝 枕草子！${chosen.name}を除外！`, color: '#a855f7', key: Date.now() },
+                    };
+                  });
+                  remaining--;
                 }
               }
             }
@@ -1072,7 +1154,58 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
             }
           }
 
-          // ===== 始皇帝の勅令: attacker arranges 紙+焚書坑儒 in own deck =====
+          // ===== 軍旗: デッキ内のジャンヌ・ダルクをデッキトップに移動 =====
+          if (canShowChoice) {
+            const lastRevealed = rs.attackRevealed[rs.attackRevealed.length - 1];
+            if (lastRevealed?.effect?.id === 'banner') {
+              const gs = gameStateRef.current ?? rs;
+              const jeanneInDeck = gs[mySide].deck.filter((c) => c.name === 'ジャンヌ・ダルク');
+              if (jeanneInDeck.length > 0) {
+                // Auto-apply: move first Jeanne to deck top (no selection needed)
+                setGameState((prev) => {
+                  if (!prev) return prev;
+                  const idx = prev[mySide].deck.findIndex((c) => c.name === 'ジャンヌ・ダルク');
+                  if (idx < 0) return prev;
+                  const jeanneCard = prev[mySide].deck[idx];
+                  const newDeck = [jeanneCard, ...prev[mySide].deck.slice(0, idx), ...prev[mySide].deck.slice(idx + 1)];
+                  return {
+                    ...prev,
+                    [mySide]: { ...prev[mySide], deck: newDeck },
+                    effectTelop: { text: '🚩 進軍の号令！ジャンヌ・ダルクをデッキトップへ！', color: '#ffd700', key: Date.now() },
+                  };
+                });
+              }
+            }
+          }
+
+          // ===== 兵馬俑: ベンチの秦の兵士をデッキトップに戻す =====
+          if (canShowChoice) {
+            const lastRevealed = rs.attackRevealed[rs.attackRevealed.length - 1];
+            if (lastRevealed?.effect?.id === 'terracotta') {
+              const gs = gameStateRef.current ?? rs;
+              const sealed = gs.sealedBenchNames[mySide];
+              const soldierSlots = gs[mySide].bench.filter(
+                (b) => b.name === '秦の兵士' && !sealed.includes(b.name),
+              );
+              if (soldierSlots.length > 0) {
+                const candidates = soldierSlots.map((b) => b.card);
+                const chosen = await waitCardSelect('🗿 デッキトップに戻す秦の兵士を選んでください', candidates);
+                if (chosen && !unmountedRef.current) {
+                  setGameState((prev) => {
+                    if (!prev) return prev;
+                    const newBench = removeOneFromBench(prev[mySide].bench, '秦の兵士');
+                    return {
+                      ...prev,
+                      [mySide]: { ...prev[mySide], bench: newBench, deck: [chosen, ...prev[mySide].deck] },
+                      effectTelop: { text: '🗿 兵馬俑！秦の兵士をデッキトップへ！', color: '#ffd700', key: Date.now() },
+                    };
+                  });
+                }
+              }
+            }
+          }
+
+          // ===== 始皇帝の勅令: デッキの紙または焚書坑儒を選んでデッキトップへ =====
           if (canShowChoice) {
             const lastRevealed = rs.attackRevealed[rs.attackRevealed.length - 1];
             if (lastRevealed?.effect?.id === 'imperial_decree') {
@@ -1080,25 +1213,27 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
               const hasPaper = gs[mySide].deck.some((c) => c.name === '紙');
               const hasBurn = gs[mySide].deck.some((c) => c.name === '焚書坑儒');
               if (hasPaper || hasBurn) {
-                const candidates = gs[mySide].deck.filter((c) => c.name === '紙' || c.name === '焚書坑儒');
-                const chosen = await waitCardSelect('📜 天子の命を発動しますか？（対象カードを確認）', candidates);
+                // 候補カードを構築: 紙（代表1枚）と焚書坑儒
+                const candidates: typeof rs.attackRevealed = [];
+                const paperCard = gs[mySide].deck.find((c) => c.name === '紙');
+                const burnCard = gs[mySide].deck.find((c) => c.name === '焚書坑儒');
+                if (paperCard) candidates.push(paperCard);
+                if (burnCard) candidates.push(burnCard);
+                const chosen = await waitCardSelect('📜 デッキトップに置くカードを選んでください', candidates);
                 if (chosen && !unmountedRef.current) {
                   setGameState((prev) => {
                     if (!prev) return prev;
                     let newDeck = [...prev[mySide].deck];
-                    const bIdx = newDeck.findIndex((c) => c.name === '焚書坑儒');
-                    if (bIdx >= 0) {
-                      const [burn] = newDeck.splice(bIdx, 1);
-                      newDeck.push(burn);
+                    const idx = newDeck.findIndex((c) => c.name === chosen.name);
+                    if (idx >= 0) {
+                      const [card] = newDeck.splice(idx, 1);
+                      newDeck.unshift(card);
                     }
-                    const pIdx = newDeck.findIndex((c) => c.name === '紙');
-                    if (pIdx >= 0) {
-                      const [paper] = newDeck.splice(pIdx, 1);
-                      newDeck.unshift(paper);
-                    }
-                    const parts = [hasPaper ? '紙をデッキトップ' : '', hasBurn ? '焚書坑儒をデッキボトム' : ''].filter(Boolean).join('、');
-                    return { ...prev, [mySide]: { ...prev[mySide], deck: newDeck },
-                      effectTelop: { text: `📜 天子の命！${parts}へ！`, color: '#ffd700', key: Date.now() } };
+                    return {
+                      ...prev,
+                      [mySide]: { ...prev[mySide], deck: newDeck },
+                      effectTelop: { text: `📜 天子の命！${chosen.name}をデッキトップへ！`, color: '#ffd700', key: Date.now() },
+                    };
                   });
                 }
               }
@@ -1518,6 +1653,42 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
             await waitMs(16);
             if (unmountedRef.current) return;
 
+            // Track finisher card: defense card when player is defending (sub-battle continuation)
+            {
+              const gs = gameStateRef.current;
+              if (gs && gs.flagHolder === 'player' && gs.defenseCard) {
+                lastPlayerCardRef.current = gs.defenseCard;
+              }
+            }
+
+            // 毒矢カエル: 防御時のみ任意発動（continueAfterResolve後の新防御カード）
+            {
+              const gs = gameStateRef.current;
+              if (gs && gs.flagHolder === 'player' && gs.defenseCard?.effect?.id === 'poison_frog') {
+                const oppSide: 'player' | 'ai' = 'ai';
+                const oppSealed = gs.sealedBenchNames[oppSide];
+                const hasRobben = gs[oppSide].bench.some((b) => b.name === 'ロベン島' && !oppSealed.includes(b.name));
+                const oppBench = gs[oppSide].bench
+                  .filter((b) => !(hasRobben && b.name === 'ネルソン・マンデラ'))
+                  .map((b) => b.card);
+                if (oppBench.length > 0) {
+                  const chosen = await waitCardSelect('🐸 除外する相手のカードを選んでください', oppBench);
+                  if (chosen && !unmountedRef.current) {
+                    setGameState((prev) => {
+                      if (!prev) return prev;
+                      const newBench = removeOneFromBench(prev[oppSide].bench, chosen.name);
+                      return {
+                        ...prev,
+                        [oppSide]: { ...prev[oppSide], bench: newBench },
+                        exile: { ...prev.exile, [oppSide]: [...prev.exile[oppSide], chosen] },
+                        effectTelop: { text: `🐸 猛毒！相手の${chosen.name}を除外！`, color: '#a855f7', key: Date.now() },
+                      };
+                    });
+                  }
+                }
+              }
+            }
+
             // Turn transition banner — "🔄 相手のターン！" / "🔄 あなたのターン！"
             setCineStep('turn_transition');
             if (manualModeRef.current) {
@@ -1819,7 +1990,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
   const handleConfirmRemoveCard = useCallback(() => {}, []);
   const handleCancelRemoveCard = useCallback(() => setPendingRemoveIdx(null), []);
 
-  const handleStartBattle = useCallback(() => {
+  const handleStartBattle = useCallback(async () => {
     if (!gameState || gameState.phase !== 'deck_phase') return;
     playBattleStart();
     // In PvP, validate against the active side's deck.
@@ -1845,6 +2016,36 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
     console.log('[KC] handleStartBattle: phase =', next.phase, 'defenseCard =', next.defenseCard?.name);
     setGameState(next);
 
+    // Track finisher card: defense card when player is defending
+    if (next.flagHolder === 'player' && next.defenseCard) {
+      lastPlayerCardRef.current = next.defenseCard;
+    }
+
+    // 毒矢カエル: 防御時のみ任意発動 — プレイヤーが防御中で毒矢カエルが防御カードの場合
+    if (next.phase === 'battle_intro' && next.flagHolder === 'player' && next.defenseCard?.effect?.id === 'poison_frog') {
+      const oppSide: 'player' | 'ai' = 'ai';
+      const oppSealed = next.sealedBenchNames[oppSide];
+      const hasRobben = next[oppSide].bench.some((b) => b.name === 'ロベン島' && !oppSealed.includes(b.name));
+      const oppBench = next[oppSide].bench
+        .filter((b) => !(hasRobben && b.name === 'ネルソン・マンデラ'))
+        .map((b) => b.card);
+      if (oppBench.length > 0) {
+        const chosen = await waitCardSelect('🐸 除外する相手のカードを選んでください', oppBench);
+        if (chosen && !unmountedRef.current) {
+          setGameState((prev) => {
+            if (!prev) return prev;
+            const newBench = removeOneFromBench(prev[oppSide].bench, chosen.name);
+            return {
+              ...prev,
+              [oppSide]: { ...prev[oppSide], bench: newBench },
+              exile: { ...prev.exile, [oppSide]: [...prev.exile[oppSide], chosen] },
+              effectTelop: { text: `🐸 猛毒！相手の${chosen.name}を除外！`, color: '#a855f7', key: Date.now() },
+            };
+          });
+        }
+      }
+    }
+
     if (next.phase === 'round_end') {
       // Deck was empty at battle start → handle round_end immediately
       setCineStep('round_end');
@@ -1860,7 +2061,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
       setCineStep('idle');
     }
     advanceLatchRef.current = null;
-  }, [gameState, isPvP, pvpDeckTurn, pvpActiveSide]);
+  }, [gameState, isPvP, pvpDeckTurn, pvpActiveSide, waitCardSelect]);
 
   // ===== Swap resolution =====
   const handleSwapPick = useCallback((removeIndex: number) => {
@@ -2127,7 +2328,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
     // デッキ戦略説明
     const DECK_STRATEGY: Record<string, string> = {
       'starter-napoleon': '大砲と法典でナポレオンを強化。アウステルリッツで効果2倍',
-      'starter-amazon': 'ピラニアの群れで攻撃。3種揃えてアナコンダを大蛇に進化',
+      'starter-amazon': '巫師で大蛇を召喚し、イルカで巫師を回収するループデッキ',
       'starter-heritage': '紙を集めて焚書坑儒で大量除外。勅令でセットアップ',
       'starter-nobunaga': '鉄砲と足軽の物量。本能寺の変で明智ルートへ',
       'starter-jeanne': '聖剣+軍旗でフルバフ。火刑で聖女ジャンヌに変身',
@@ -3942,9 +4143,10 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
           );
         })()}
 
-        {/* ====== game_over: stamp + confetti (minimal text) ====== */}
+        {/* ====== game_over: stamp + confetti + finisher card ====== */}
         {gameState.phase === 'game_over' && (() => {
           const won = gameState.winner === 'player';
+          const finisher = won ? lastPlayerCardRef.current : null;
           return (
             <>
               <div
@@ -3971,10 +4173,10 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                 </div>
               )}
               <div className="absolute inset-0 flex items-center justify-center z-50 kc-final-reveal">
-                <div className="text-center px-6">
-                  <span className="text-7xl block mb-3 kc-final-icon">{won ? '🎉' : '💀'}</span>
+                <div className="text-center px-4">
+                  {/* YOU WIN / DEFEAT title */}
                   <p className="kc-stamp-in" style={{
-                    fontSize: won ? '56px' : '42px',
+                    fontSize: won ? '48px' : '42px',
                     fontWeight: 900,
                     color: won ? '#ffd700' : '#9ca3af',
                     textShadow: won
@@ -3982,10 +4184,97 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                       : '0 0 28px rgba(156,163,175,0.7), 0 4px 12px rgba(0,0,0,0.9)',
                     letterSpacing: '6px',
                   }}>
-                    {won ? 'VICTORY!' : 'DEFEAT'}
+                    {won ? 'YOU WIN!' : 'DEFEAT'}
                   </p>
+
+                  {/* Finisher card (victory only) */}
+                  {won && finisher && (
+                    <div className="mt-3 flex flex-col items-center">
+                      <div
+                        className="relative holo-sheen"
+                        style={{
+                          width: '150px',
+                          height: '200px',
+                          perspective: '700px',
+                          animation: 'finisherEntrance 0.6s ease-out both',
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            borderRadius: '12px',
+                            overflow: 'hidden',
+                            position: 'relative',
+                            transform: 'rotateY(-4deg) rotateX(2deg)',
+                            boxShadow: '0 0 40px rgba(255,215,0,0.5), 0 8px 32px rgba(0,0,0,0.6)',
+                          }}
+                        >
+                          {/* Card image (always face up) */}
+                          {finisher.imageUrl ? (
+                            <img
+                              src={finisher.imageUrl}
+                              alt={finisher.name}
+                              className="absolute inset-0 w-full h-full object-cover"
+                              style={{ zIndex: 1 }}
+                            />
+                          ) : (
+                            <div className="absolute inset-0 bg-gray-800" style={{ zIndex: 1 }} />
+                          )}
+                          {/* Rarity frame overlay */}
+                          <img
+                            src={CARD_RARITY_IMAGES[finisher.rarity] || CARD_RARITY_IMAGES['N']}
+                            alt=""
+                            className="absolute inset-0 w-full h-full pointer-events-none"
+                            style={{ objectFit: 'fill', zIndex: 2 }}
+                          />
+                          {/* Card name */}
+                          <span
+                            className="absolute left-0 right-0 text-center font-bold text-white truncate px-1"
+                            style={{ bottom: '12px', fontSize: '11px', textShadow: '0 1px 4px rgba(0,0,0,0.95)', zIndex: 3 }}
+                          >
+                            {finisher.name}
+                          </span>
+                          {/* Stats */}
+                          <span
+                            className="absolute font-bold text-white"
+                            style={{ bottom: '28px', left: '8px', fontSize: '10px', textShadow: '0 1px 3px rgba(0,0,0,0.9)', zIndex: 3 }}
+                          >
+                            {'⚔️'}{finisher.attackPower ?? finisher.power}
+                          </span>
+                          <span
+                            className="absolute font-bold text-white"
+                            style={{ bottom: '28px', right: '8px', fontSize: '10px', textShadow: '0 1px 3px rgba(0,0,0,0.9)', zIndex: 3 }}
+                          >
+                            {'🛡️'}{finisher.defensePower ?? finisher.power}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* "フィニッシャー!" telop */}
+                      <p style={{
+                        marginTop: '10px',
+                        fontSize: '22px',
+                        fontWeight: 900,
+                        background: 'linear-gradient(90deg, #ffd700, #fff4a3, #ffd700)',
+                        WebkitBackgroundClip: 'text',
+                        WebkitTextFillColor: 'transparent',
+                        textShadow: 'none',
+                        filter: 'drop-shadow(0 2px 6px rgba(255,215,0,0.6))',
+                        letterSpacing: '4px',
+                        animation: 'finisherTextFadeIn 0.8s 0.4s ease-out both',
+                      }}>
+                        {'フィニッシャー!'}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Defeat icon */}
+                  {!won && <span className="text-7xl block mt-3 kc-final-icon">{'💀'}</span>}
+
+                  {/* Trophy + Fan display */}
                   <p className="mt-2 font-black" style={{
-                    fontSize: '18px',
+                    fontSize: '16px',
                     color: won ? '#fde047' : '#d1d5db',
                     textShadow: '0 2px 8px rgba(0,0,0,0.85)',
                   }}>
@@ -4930,6 +5219,16 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
           100% { transform: scale(1) rotate(0deg); opacity: 1; }
         }
         .kc-stamp-in { animation: kcStampIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        /* Finisher card entrance */
+        @keyframes finisherEntrance {
+          0%   { opacity: 0; transform: scale(0.4) rotateY(-20deg) translateY(40px); }
+          60%  { opacity: 1; transform: scale(1.08) rotateY(2deg) translateY(-5px); }
+          100% { opacity: 1; transform: scale(1) rotateY(-4deg) rotateX(2deg) translateY(0); }
+        }
+        @keyframes finisherTextFadeIn {
+          0%   { opacity: 0; transform: translateY(12px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
         /* Shockwave on break */
         @keyframes kcShockwave {
           0%   { transform: scale(0); opacity: 0.8; border: 3px solid rgba(255,215,0,0.9); }

@@ -284,12 +284,7 @@ function hasRobbenIslandProtection(state: GameState, protectedSide: Side): boole
   return my.bench.some((b) => b.name === 'ロベン島' && !sealed.includes(b.name));
 }
 
-/** Check if 十二単 is protecting 紫式部 from exile on the given side */
-function hasJunihitoeProtection(state: GameState, protectedSide: Side): boolean {
-  const my = protectedSide === 'player' ? state.player : state.ai;
-  const sealed = state.sealedBenchNames[protectedSide];
-  return my.bench.some((b) => b.name === '十二単' && !sealed.includes(b.name));
-}
+/** (removed) 十二単 no longer provides exile protection — now serves as defense buff reference */
 
 /** Check if 安土城 is protecting 織田信長 from exile on the given side */
 function hasAzuchiProtection(state: GameState, protectedSide: Side): boolean {
@@ -298,19 +293,17 @@ function hasAzuchiProtection(state: GameState, protectedSide: Side): boolean {
   return my.bench.some((b) => b.name === '安土城' && !sealed.includes(b.name));
 }
 
-/** Filter out protected cards from exile list (ロベン島 → マンデラ, 十二単 → 紫式部, 安土城 → 信長) */
+/** Filter out protected cards from exile list (ロベン島 → マンデラ, 安土城 → 信長) */
 function filterExileWithRobbenIsland(cards: BattleCard[], state: GameState, targetSide: Side): { exiled: BattleCard[]; protected: BattleCard[] } {
   const robben = hasRobbenIslandProtection(state, targetSide);
-  const junihitoe = hasJunihitoeProtection(state, targetSide);
   const azuchi = hasAzuchiProtection(state, targetSide);
-  if (!robben && !junihitoe && !azuchi) {
+  if (!robben && !azuchi) {
     return { exiled: cards, protected: [] };
   }
   const exiled: BattleCard[] = [];
   const saved: BattleCard[] = [];
   for (const c of cards) {
     if (robben && c.name === 'ネルソン・マンデラ') saved.push(c);
-    else if (junihitoe && c.name === '紫式部') saved.push(c);
     else if (azuchi && c.name === '織田信長') saved.push(c);
     else exiled.push(c);
   }
@@ -766,18 +759,17 @@ export function applyRevealEffect(
       break;
     }
     case 'photosynthesis': {
-      // 光合成「密林の再生」: ベンチのアマゾン種族1枚をデッキ一番上に戻す
-      const amazonNames = new Set(['ピラニア', 'アナコンダ', '毒矢カエル', '大蛇']);
+      // 光合成「密林の再生」: デッキから植物カード1枚をデッキトップに置く（現在対象なし）
+      // 将来の植物デッキ用に先行実装
+      const plantNames = new Set<string>(); // 植物カード未定義
       const my = side === 'player' ? next.player : next.ai;
-      const sealed = next.sealedBenchNames[side];
-      const amazonSlot = my.bench.find((b) => amazonNames.has(b.name) && !sealed.includes(b.name));
-      if (amazonSlot) {
-        // Remove one copy from bench, put on top of deck
-        const newBench = removeOneFromBench(my.bench, amazonSlot.name);
-        const newDeck = [amazonSlot.card, ...my.deck];
-        next = applySide(next, side, { ...my, bench: newBench, deck: newDeck });
-        next = withBenchGlow(next, side, [amazonSlot.name]);
-        telop = { text: `🌿 密林の再生！${amazonSlot.name}をデッキ上に回収`, color };
+      const idx = my.deck.findIndex((c) => plantNames.has(c.name));
+      if (idx > 0) {
+        const newDeck = [...my.deck];
+        const [moved] = newDeck.splice(idx, 1);
+        newDeck.unshift(moved);
+        next = applySide(next, side, { ...my, deck: newDeck });
+        telop = { text: `🌿 密林の再生！${moved.name}をデッキトップへ`, color };
       } else {
         telop = { text: '🌿 密林の再生（対象なし）', color };
       }
@@ -1053,73 +1045,59 @@ export function applyRevealEffect(
       break;
     }
     case 'terracotta': {
-      telop = { text: '🗿兵馬俑！始皇帝を守護', color };
+      // 兵馬俑: 公開時（任意発動）、ベンチの秦の兵士1枚をデッキトップに戻す
+      const myState = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      const hasSoldier = myState.bench.some((b) => b.name === '秦の兵士' && !sealed.includes(b.name));
+      if (hasSoldier && side === 'ai') {
+        // AI: 自動で秦の兵士1枚をデッキトップへ
+        const soldierSlot = myState.bench.find((b) => b.name === '秦の兵士' && !sealed.includes(b.name));
+        if (soldierSlot) {
+          const newBench = removeOneFromBench(myState.bench, '秦の兵士');
+          const newDeck = [soldierSlot.card, ...myState.deck];
+          next = applySide(next, side, { ...myState, bench: newBench, deck: newDeck });
+          telop = { text: '🗿兵馬俑！秦の兵士をデッキトップへ！', color };
+          console.log(`[Engine] 兵馬俑: 秦の兵士をベンチ→デッキトップへ`);
+        }
+      } else if (hasSoldier) {
+        // Player: UI側で waitCardSelect 処理
+        telop = { text: '🗿兵馬俑！秦の兵士をサーチ中...', color };
+      } else {
+        telop = { text: '🗿兵馬俑（ベンチに秦の兵士なし）', color };
+      }
       break;
     }
     case 'qinshi': {
-      const my = side === 'player' ? next.player : next.ai;
-      const sealed = next.sealedBenchNames[side];
-      const heritageCount = my.bench
-        .filter((b) => !sealed.includes(b.name) && b.card.category === 'heritage')
-        .reduce((s, b) => s + b.count, 0);
-      if (role === 'attacker') {
-        bonusAttack += heritageCount * 2;
-        telop = { text: `👑始皇帝天下統一！攻撃+${heritageCount * 2}`, color };
+      // 始皇帝: 防御時、ベンチに万里の長城があれば防御+2
+      if (role === 'defender') {
+        const my = side === 'player' ? next.player : next.ai;
+        const sealed = next.sealedBenchNames[side];
+        const hasWall = my.bench.some((b) => b.name === '万里の長城' && !sealed.includes(b.name));
+        if (hasWall) {
+          next = { ...next, defenderBonus: next.defenderBonus + 2 };
+          next = withBenchGlow(next, side, ['万里の長城']);
+          telop = { text: '👑始皇帝天下統一！万里の長城の守りで防御+2！', color };
+        } else {
+          telop = { text: '👑始皇帝（万里の長城なし）', color };
+        }
       } else {
-        next = { ...next, defenderBonus: next.defenderBonus + heritageCount };
-        telop = { text: `👑始皇帝天下統一！防御+${heritageCount}`, color };
+        telop = { text: '👑始皇帝', color };
       }
+      break;
+    }
+    case 'great_wall': {
+      // 万里の長城: ベンチ常駐効果のテロップのみ（実処理はcomputeAttackerAura）
+      telop = { text: '🏯万里の長城！鉄壁の防壁', color };
       break;
     }
     case 'amazon_river': {
-      // 密林の大河: デッキ内のピラニア・アナコンダ・毒矢カエルを1枚デッキトップに置く
-      const amazonTargets = new Set(['ピラニア', 'アナコンダ', '毒矢カエル']);
-      const myState = side === 'player' ? next.player : next.ai;
-      const targetIdx = myState.deck.findIndex((c) => amazonTargets.has(c.name));
-      if (targetIdx >= 0) {
-        const target = myState.deck[targetIdx];
-        const newDeck = [...myState.deck];
-        newDeck.splice(targetIdx, 1);
-        newDeck.unshift(target); // place on top
-        next = applySide(next, side, { ...myState, deck: newDeck });
-        telop = { text: `🏞️ 密林の大河！${target.name}をデッキトップへ！`, color: '#ffd700' };
-      } else {
-        telop = { text: '🏞️ 密林の大河（対象カードがありません）', color };
-      }
+      // 密林の大河: ベンチ常駐（アマゾン生物の防御+1）— テロップのみ、実効果はapplyDefenderAura
+      telop = { text: '🏞️ 密林の大河！アマゾン生物の防御を強化', color };
       break;
     }
     case 'anaconda': {
-      if (role === 'attacker') {
-        next = { ...next, defenderBonus: next.defenderBonus - 2 };
-        // Check evolution: ベンチに毒矢カエル+ピラニアの両方がいれば大蛇に進化
-        const my = side === 'player' ? next.player : next.ai;
-        const sealed = next.sealedBenchNames[side];
-        const benchNames = new Set(my.bench.filter((b) => !sealed.includes(b.name)).map((b) => b.name));
-        if (benchNames.has('毒矢カエル') && benchNames.has('ピラニア')) {
-          // Evolve: replace アナコンダ in attackRevealed with 大蛇
-          const giantSnakeTemplate = ALL_BATTLE_CARDS.find((c) => c.name === '大蛇');
-          if (giantSnakeTemplate) {
-            const evolved: BattleCard = { ...giantSnakeTemplate, id: `evolved-giant-snake-${Date.now()}` };
-            const newRevealed = next.attackRevealed.map((c) => c.id === card.id ? evolved : c);
-            // Recalculate power: remove anaconda's attack, add giant snake's attack
-            const oldAtk = getBaseAttack(card);
-            const newAtk = getBaseAttack(evolved);
-            next = {
-              ...next,
-              attackRevealed: newRevealed,
-              attackCurrentPower: next.attackCurrentPower - oldAtk + newAtk,
-            };
-            // Glow the bench cards that triggered evolution
-            next = withBenchGlow(next, side, ['毒矢カエル', 'ピラニア']);
-            telop = { text: '🐍 進化！アナコンダ → 大蛇！', color: '#ffd700' };
-            console.log('[Engine] アナコンダ → 大蛇に進化！');
-          } else {
-            telop = { text: '🐍アナコンダ締めつけ！敵防御-2', color };
-          }
-        } else {
-          telop = { text: '🐍アナコンダ締めつけ！敵防御-2', color };
-        }
-      }
+      // 締めつけ: ベンチ常駐（相手防御バフ-2）— テロップのみ、実効果はapplyDefenderAura
+      telop = { text: '🐍 アナコンダ！ベンチで相手の防御バフを打ち消す', color };
       break;
     }
     case 'giant_snake': {
@@ -1130,7 +1108,7 @@ export function applyRevealEffect(
       for (const slot of myState.bench) {
         if (sealed.includes(slot.name)) continue;
         const slotAtk = slot.card.attackPower ?? slot.card.power;
-        if (slotAtk === 2) atk2Count += slot.count; // count stacked copies individually
+        if (slotAtk === 2) atk2Count += slot.count;
       }
       if (atk2Count > 0) {
         if (role === 'attacker') {
@@ -1145,23 +1123,69 @@ export function applyRevealEffect(
       break;
     }
     case 'anaconda_hunter': {
-      // 蛇使い: ベンチのアナコンダ1枚をデッキの一番上に戻す
+      // 大蛇の巫師: ベンチにアマゾン川+アナコンダがあれば、アナコンダ除外→大蛇をデッキトップに召喚
       const my = side === 'player' ? next.player : next.ai;
       const sealed = next.sealedBenchNames[side];
-      const anacondaSlot = my.bench.find((b) => b.name === 'アナコンダ' && !sealed.includes(b.name));
-      if (anacondaSlot) {
-        const newBench = removeOneFromBench(my.bench, 'アナコンダ');
-        const newDeck = [anacondaSlot.card, ...my.deck];
-        next = applySide(next, side, { ...my, bench: newBench, deck: newDeck });
-        next = withBenchGlow(next, side, ['アナコンダ']);
-        telop = { text: '🐍 蛇使い！アナコンダをデッキトップへ！', color: '#ffd700' };
+      const hasRiver = my.bench.some((b) => b.name === 'アマゾン川' && !sealed.includes(b.name));
+      const hasAnaconda = my.bench.some((b) => b.name === 'アナコンダ' && !sealed.includes(b.name));
+      if (hasRiver && hasAnaconda) {
+        const giantSnakeTemplate = ALL_BATTLE_CARDS.find((c) => c.name === '大蛇');
+        if (giantSnakeTemplate) {
+          // Exile one アナコンダ from bench
+          const newBench = removeOneFromBench(my.bench, 'アナコンダ');
+          const anacondaCard = my.bench.find((b) => b.name === 'アナコンダ')!.card;
+          // Summon 大蛇 to deck top
+          const summoned: BattleCard = { ...giantSnakeTemplate, id: `summoned-giant-snake-${Date.now()}` };
+          const newDeck = [summoned, ...my.deck];
+          next = applySide(next, side, { ...my, bench: newBench, deck: newDeck });
+          next = { ...next, exile: { ...next.exile, [side]: [...next.exile[side], anacondaCard] } };
+          next = withBenchGlow(next, side, ['アマゾン川', 'アナコンダ']);
+          telop = { text: '🐍 大蛇の巫師！アナコンダを捧げ、大蛇を召喚！', color: '#ffd700' };
+          console.log('[Engine] 大蛇の巫師 → アナコンダ除外、大蛇をデッキトップに召喚');
+        }
       } else {
-        telop = { text: '🐍 蛇使い（ベンチにアナコンダがいません）', color };
+        const missing = !hasRiver && !hasAnaconda ? 'アマゾン川とアナコンダ' : !hasRiver ? 'アマゾン川' : 'アナコンダ';
+        telop = { text: `🐍 大蛇の巫師（ベンチに${missing}がいません）`, color };
+      }
+      break;
+    }
+    case 'pink_dolphin': {
+      // ピンクイルカ: ベンチまたは除外の大蛇の巫師をデッキトップに戻す
+      const my = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      const benchHunter = my.bench.find((b) => b.name === '大蛇の巫師' && !sealed.includes(b.name));
+      const exileHunter = next.exile[side].find((c) => c.name === '大蛇の巫師');
+      if (benchHunter || exileHunter) {
+        if (side === 'ai') {
+          // AI: prefer bench (free), then exile
+          if (benchHunter) {
+            const newBench = removeOneFromBench(my.bench, '大蛇の巫師');
+            const newDeck = [benchHunter.card, ...my.deck];
+            next = applySide(next, side, { ...my, bench: newBench, deck: newDeck });
+            next = withBenchGlow(next, side, ['大蛇の巫師']);
+            telop = { text: '🐬 ピンクイルカ！大蛇の巫師をベンチからデッキトップへ！', color: '#ffd700' };
+          } else if (exileHunter) {
+            const newExile = next.exile[side].filter((c) => c.id !== exileHunter.id);
+            const newDeck = [exileHunter, ...my.deck];
+            next = applySide(next, side, { ...my, deck: newDeck });
+            next = { ...next, exile: { ...next.exile, [side]: newExile } };
+            telop = { text: '🐬 ピンクイルカ！大蛇の巫師を除外からデッキトップへ！', color: '#ffd700' };
+          }
+        } else {
+          // Player: UI handles selection
+          telop = { text: '🐬 ピンクイルカ！大蛇の巫師を回収...', color: '#ffd700' };
+        }
+      } else {
+        telop = { text: '🐬 ピンクイルカ（大蛇の巫師がいません）', color };
       }
       break;
     }
     case 'poison_frog': {
-      // 毒矢カエル: 相手ベンチ1枚を除外（プレイヤー側はUI選択、AI側は自動選択）
+      // 毒矢カエル: 防御時のみ、相手ベンチ1枚を除外（任意発動）
+      if (role !== 'defender') {
+        telop = { text: '🐸 毒矢カエル（防御時のみ効果発動）', color };
+        break;
+      }
       const oppState = opp === 'player' ? next.player : next.ai;
       if (oppState.bench.length > 0) {
         if (side === 'ai') {
@@ -1354,54 +1378,43 @@ export function applyRevealEffect(
       }
       break;
     }
-    case 'holy_sword': case 'banner': {
-      telop = { text: '⚔️ジャンヌの装備', color };
-      break;
-    }
-    case 'lily_shield': {
-      telop = { text: '🛡️百合の守り', color };
+    case 'banner': {
+      // 軍旗: 公開時（任意発動）、デッキのジャンヌ・ダルクをデッキトップに置く
+      const my = side === 'player' ? next.player : next.ai;
+      const jeanneIdx = my.deck.findIndex((c) => c.name === 'ジャンヌ・ダルク');
+      if (jeanneIdx >= 0) {
+        if (side === 'ai') {
+          const jeanneCard = my.deck[jeanneIdx];
+          const newDeck = [jeanneCard, ...my.deck.slice(0, jeanneIdx), ...my.deck.slice(jeanneIdx + 1)];
+          next = applySide(next, side, { ...my, deck: newDeck });
+          telop = { text: '🚩進軍の号令！ジャンヌをデッキトップへ！', color: '#ffd700' };
+        } else {
+          telop = { text: '🚩進軍の号令！ジャンヌをサーチ中...', color: '#ffd700' };
+        }
+      } else {
+        telop = { text: '🚩軍旗（デッキにジャンヌがいません）', color };
+      }
       break;
     }
     case 'jeanne': {
+      // ジャンヌ・ダルク: 攻撃時+聖剣ベンチ→攻撃+2、防御時+白百合の盾ベンチ→防御+3
       const my = side === 'player' ? next.player : next.ai;
       const sealed = next.sealedBenchNames[side];
       const hasSword = my.bench.some((b) => b.name === '聖剣' && !sealed.includes(b.name));
-      const hasBanner = my.bench.some((b) => b.name === '軍旗' && !sealed.includes(b.name));
-      const hasLilyShield = my.bench.some((b) => b.name === '白百合の盾' && !sealed.includes(b.name));
-      const jeanneGlow: string[] = [];
-      if (hasSword) jeanneGlow.push('聖剣');
-      if (hasBanner) jeanneGlow.push('軍旗');
-      if (hasLilyShield) jeanneGlow.push('白百合の盾');
-      if (jeanneGlow.length > 0) next = withBenchGlow(next, side, jeanneGlow);
-      const lilyDefBonus = hasLilyShield ? 2 : 0;
-      if (hasSword && hasBanner) {
-        if (role === 'attacker') {
-          bonusAttack += 4;
-          const oppState = opp === 'player' ? next.player : next.ai;
-          if (oppState.bench.length > 0) {
-            next = {
-              ...next,
-              sealedBenchNames: {
-                ...next.sealedBenchNames,
-                [opp]: [...next.sealedBenchNames[opp], oppState.bench[0].name],
-              },
-            };
-          }
-        } else {
-          next = { ...next, defenderBonus: next.defenderBonus + 4 + lilyDefBonus };
-        }
-        telop = { text: hasLilyShield ? `⚜️オルレアンの乙女！攻防+4＋百合の守り防御+${lilyDefBonus}` : '⚜️オルレアンの乙女！攻防+4', color };
-      } else if (hasSword) {
-        if (role === 'attacker') bonusAttack += 3;
-        else if (lilyDefBonus > 0) next = { ...next, defenderBonus: next.defenderBonus + lilyDefBonus };
-        telop = { text: '⚔️聖剣の加護！攻撃+3', color };
-      } else if (hasBanner) {
-        if (role === 'defender') next = { ...next, defenderBonus: next.defenderBonus + 3 + lilyDefBonus };
-        telop = { text: hasLilyShield ? `🚩軍旗の加護！防御+3＋百合の守り防御+${lilyDefBonus}` : '🚩軍旗の加護！防御+3', color };
+      const hasLily = my.bench.some((b) => b.name === '白百合の盾' && !sealed.includes(b.name));
+      const glowNames: string[] = [];
+      if (role === 'attacker' && hasSword) {
+        bonusAttack += 2;
+        glowNames.push('聖剣');
+        telop = { text: '⚔️聖剣の加護！ジャンヌ攻撃+2！', color };
+      } else if (role === 'defender' && hasLily) {
+        next = { ...next, defenderBonus: next.defenderBonus + 3 };
+        glowNames.push('白百合の盾');
+        telop = { text: '🛡️百合の守り！ジャンヌ防御+3！', color };
       } else {
-        if (role === 'defender' && lilyDefBonus > 0) next = { ...next, defenderBonus: next.defenderBonus + lilyDefBonus };
-        telop = { text: hasLilyShield ? `🛡️百合の守り！ジャンヌの防御+${lilyDefBonus}` : '⚜️ジャンヌ・ダルク！', color };
+        telop = { text: '⚜️ジャンヌ・ダルク！', color };
       }
+      if (glowNames.length > 0) next = withBenchGlow(next, side, glowNames);
       break;
     }
     case 'burning_stake': {
@@ -1445,42 +1458,20 @@ export function applyRevealEffect(
           },
         };
       }
-      // ベンチの聖剣・軍旗による強化（ジャンヌと同じ条件）
+      // ベンチの聖剣・白百合の盾による強化（ジャンヌと同じ条件）
       const mySJ = side === 'player' ? next.player : next.ai;
       const sealedSJ = next.sealedBenchNames[side];
       const hasSwordSJ = mySJ.bench.some((b) => b.name === '聖剣' && !sealedSJ.includes(b.name));
-      const hasBannerSJ = mySJ.bench.some((b) => b.name === '軍旗' && !sealedSJ.includes(b.name));
-      const hasLilyShieldSJ = mySJ.bench.some((b) => b.name === '白百合の盾' && !sealedSJ.includes(b.name));
+      const hasLilySJ = mySJ.bench.some((b) => b.name === '白百合の盾' && !sealedSJ.includes(b.name));
       const sjGlow: string[] = [];
-      if (hasSwordSJ) sjGlow.push('聖剣');
-      if (hasBannerSJ) sjGlow.push('軍旗');
-      if (hasLilyShieldSJ) sjGlow.push('白百合の盾');
-      if (sjGlow.length > 0) next = withBenchGlow(next, side, sjGlow);
-      const lilyDefBonusSJ = hasLilyShieldSJ ? 2 : 0;
-      if (hasSwordSJ && hasBannerSJ) {
-        if (role === 'attacker') {
-          bonusAttack += 4;
-          const oppState = opp === 'player' ? next.player : next.ai;
-          if (oppState.bench.length > 0) {
-            next = {
-              ...next,
-              sealedBenchNames: {
-                ...next.sealedBenchNames,
-                [opp]: [...next.sealedBenchNames[opp], oppState.bench[0].name],
-              },
-            };
-          }
-        } else {
-          next = { ...next, defenderBonus: next.defenderBonus + 4 + lilyDefBonusSJ };
-        }
-      } else if (hasSwordSJ) {
-        if (role === 'attacker') bonusAttack += 3;
-        else if (lilyDefBonusSJ > 0) next = { ...next, defenderBonus: next.defenderBonus + lilyDefBonusSJ };
-      } else if (hasBannerSJ) {
-        if (role === 'defender') next = { ...next, defenderBonus: next.defenderBonus + 3 + lilyDefBonusSJ };
-      } else {
-        if (role === 'defender' && lilyDefBonusSJ > 0) next = { ...next, defenderBonus: next.defenderBonus + lilyDefBonusSJ };
+      if (role === 'attacker' && hasSwordSJ) {
+        bonusAttack += 2;
+        sjGlow.push('聖剣');
+      } else if (role === 'defender' && hasLilySJ) {
+        next = { ...next, defenderBonus: next.defenderBonus + 3 };
+        sjGlow.push('白百合の盾');
       }
+      if (sjGlow.length > 0) next = withBenchGlow(next, side, sjGlow);
       telop = { text: `✨ 救国の祈り！除外${recoveredCount}枚回収＋相手防御-3`, color: '#ffd700' };
       console.log(`[Engine] 聖女ジャンヌ → 除外回収=${recoveredCount}枚, 相手防御-3`);
       break;
@@ -1759,15 +1750,15 @@ export function applyRevealEffect(
       break;
     }
     case 'qin_soldier': {
-      // 秦の兵士: ベンチに万里の長城がある時、攻撃+2
-      if (role === 'attacker') {
+      // 秦の兵士: 防御時、ベンチに万里の長城があれば防御+2
+      if (role === 'defender') {
         const my = side === 'player' ? next.player : next.ai;
         const sealed = next.sealedBenchNames[side];
         const hasWall = my.bench.some((b) => b.name === '万里の長城' && !sealed.includes(b.name));
         if (hasWall) {
-          bonusAttack += 2;
+          next = { ...next, defenderBonus: next.defenderBonus + 2 };
           next = withBenchGlow(next, side, ['万里の長城']);
-          telop = { text: '⚔️ 皇帝の尖兵！万里の長城の守りのもと攻撃+2！', color };
+          telop = { text: '⚔️ 皇帝の尖兵！万里の長城の守りで防御+2！', color };
         } else {
           telop = { text: '⚔️ 秦の兵士（万里の長城なし）', color };
         }
@@ -1775,30 +1766,21 @@ export function applyRevealEffect(
       break;
     }
     case 'imperial_decree': {
-      // 始皇帝の勅令: 紙をデッキトップ、焚書坑儒をデッキボトムに配置（任意発動）
+      // 始皇帝の勅令: デッキの紙または焚書坑儒を選んでデッキトップに配置（任意発動）
       const my = side === 'player' ? next.player : next.ai;
-      const paperIdx = my.deck.findIndex((c) => c.name === '紙');
-      const burnIdx = my.deck.findIndex((c) => c.name === '焚書坑儒');
-      const hasPaper = paperIdx >= 0;
-      const hasBurn = burnIdx >= 0;
+      const hasPaper = my.deck.some((c) => c.name === '紙');
+      const hasBurn = my.deck.some((c) => c.name === '焚書坑儒');
       if ((hasPaper || hasBurn) && side === 'ai') {
+        // AI: 焚書坑儒を優先、なければ紙をデッキトップへ
+        const targetName = hasBurn ? '焚書坑儒' : '紙';
         let newDeck = [...my.deck];
-        // Move 焚書坑儒 to bottom first (indices shift if paper is before burn)
-        if (hasBurn) {
-          const bIdx = newDeck.findIndex((c) => c.name === '焚書坑儒');
-          const [burn] = newDeck.splice(bIdx, 1);
-          newDeck.push(burn);
-        }
-        // Move 紙 to top
-        if (hasPaper) {
-          const pIdx = newDeck.findIndex((c) => c.name === '紙');
-          const [paper] = newDeck.splice(pIdx, 1);
-          newDeck.unshift(paper);
-        }
+        const idx = newDeck.findIndex((c) => c.name === targetName);
+        const [card] = newDeck.splice(idx, 1);
+        newDeck.unshift(card);
         next = applySide(next, side, { ...my, deck: newDeck });
-        const parts = [hasPaper ? '紙をデッキトップ' : '', hasBurn ? '焚書坑儒をデッキボトム' : ''].filter(Boolean).join('、');
-        telop = { text: `📜 天子の命！${parts}へ！`, color: '#ffd700' };
+        telop = { text: `📜 天子の命！${targetName}をデッキトップへ！`, color: '#ffd700' };
       } else if (hasPaper || hasBurn) {
+        // Player: UI側で waitCardSelect 処理
         telop = { text: '📜 天子の命！サーチ中...', color: '#ffd700' };
       } else {
         telop = { text: '📜 天子の命（対象カードがありません）', color };
@@ -2158,66 +2140,116 @@ export function applyRevealEffect(
       }
       break;
     }
-    // ===== 紫式部デッキ =====
-    case 'murasaki': {
-      // ベンチの文化系1枚につき防御+1。源氏物語で攻撃+3。和歌は重複可能で攻撃+1ずつ。
-      const cultureNames = new Set(['紫式部', '源氏物語', '筆', '和歌', '十二単', '紙']);
+    // ===== 紫式部・清少納言デッキ =====
+    case 'murasaki':
+    case 'sei_shonagon': {
+      // 交戦中、ベンチの十二単の枚数だけ防御+1
+      const heroName = effId === 'murasaki' ? '紫式部' : '清少納言';
       const my = side === 'player' ? next.player : next.ai;
       const sealed = next.sealedBenchNames[side];
-      const cultureSlots = my.bench.filter((b) => !sealed.includes(b.name) && cultureNames.has(b.name));
-      const cultureCount = cultureSlots.reduce((s, b) => s + b.count, 0);
-      const hasGenji = my.bench.some((b) => b.name === '源氏物語' && !sealed.includes(b.name));
-      const wakaSlot = my.bench.find((b) => b.name === '和歌' && !sealed.includes(b.name));
-      const wakaCount = wakaSlot?.count ?? 0;
-      const glow = cultureSlots.map((b) => b.name);
-      if (glow.length > 0) next = withBenchGlow(next, side, glow);
-      if (role === 'attacker') {
-        const atkBonus = (hasGenji ? 3 : 0) + wakaCount;
-        bonusAttack += atkBonus;
-        telop = { text: `📜紫式部 文化の才媛！攻撃+${atkBonus}`, color };
+      const junihitoeSlot = my.bench.find((b) => b.name === '十二単' && !sealed.includes(b.name));
+      const jCount = junihitoeSlot?.count ?? 0;
+      if (junihitoeSlot) next = withBenchGlow(next, side, ['十二単']);
+      if (role === 'defender' && jCount > 0) {
+        next = { ...next, defenderBonus: next.defenderBonus + jCount };
+        telop = { text: `👘${heroName} 十二単の加護！防御+${jCount}`, color };
+      } else if (jCount > 0) {
+        telop = { text: `👘${heroName} 十二単${jCount}枚（防御時に効果発動）`, color };
       } else {
-        const defBonus = cultureCount;
-        next = { ...next, defenderBonus: next.defenderBonus + defBonus };
-        telop = { text: `📜紫式部 文化の才媛！防御+${defBonus}`, color };
+        telop = { text: `📖${heroName}（十二単なし）`, color };
       }
       break;
     }
     case 'genji': {
-      // 公開時: デッキ内の紙・筆・和歌から1枚をデッキトップへ
+      // 公開時（任意発動）: ベンチの和歌の枚数をX、自分のベンチからX枚までデッキボトムに戻す
       const myState = side === 'player' ? next.player : next.ai;
-      const targets = new Set(['紙', '筆', '和歌']);
-      const idx = myState.deck.findIndex((c) => targets.has(c.name));
-      if (idx > 0) {
-        const newDeck = [...myState.deck];
-        const [moved] = newDeck.splice(idx, 1);
-        newDeck.unshift(moved);
-        next = applySide(next, side, { ...myState, deck: newDeck });
-        telop = { text: `📖源氏物語！${moved.name}をデッキトップへ`, color };
-      } else if (idx === 0) {
-        telop = { text: '📖源氏物語！既にトップにあり', color };
+      const sealed = next.sealedBenchNames[side];
+      const wakaSlot = myState.bench.find((b) => b.name === '和歌' && !sealed.includes(b.name));
+      const wakaCount = wakaSlot?.count ?? 0;
+      if (wakaCount > 0 && myState.bench.length > 0) {
+        if (side === 'ai') {
+          // AI: 弱いカードからX枚まで自動選択してデッキボトムへ
+          const candidates = myState.bench.filter((b) => !sealed.includes(b.name));
+          const sorted = [...candidates].sort((a, b) => {
+            const aPow = (a.card.attackPower ?? a.card.power) + (a.card.defensePower ?? a.card.power);
+            const bPow = (b.card.attackPower ?? b.card.power) + (b.card.defensePower ?? b.card.power);
+            return aPow - bPow;
+          });
+          let remaining = wakaCount;
+          let newBench = [...myState.bench];
+          const newDeck = [...myState.deck];
+          const returned: string[] = [];
+          for (const slot of sorted) {
+            if (remaining <= 0) break;
+            const toReturn = Math.min(slot.count, remaining);
+            for (let i = 0; i < toReturn; i++) {
+              newBench = removeOneFromBench(newBench, slot.name);
+              newDeck.push(slot.card);
+              returned.push(slot.name);
+              remaining--;
+            }
+          }
+          if (returned.length > 0) {
+            next = applySide(next, side, { ...myState, bench: newBench, deck: newDeck });
+            telop = { text: `📖源氏物語！${returned.length}枚をデッキに戻した`, color };
+          } else {
+            telop = { text: '📖源氏物語（対象なし）', color };
+          }
+        } else {
+          // Player: UI側で複数選択ハンドリング
+          telop = { text: `📖源氏物語！和歌${wakaCount}枚分、ベンチからデッキに戻せる`, color };
+        }
       } else {
-        telop = { text: '📖源氏物語（対象なし）', color };
+        telop = { text: '📖源氏物語（和歌なし）', color };
       }
       break;
     }
-    case 'fude': {
-      // 公開時: 相手の次に出すカードの攻撃-1
-      next = {
-        ...next,
-        pendingAttackBonus: {
-          ...next.pendingAttackBonus,
-          [opp]: next.pendingAttackBonus[opp] - 1,
-        },
-      };
-      telop = { text: '🖌️筆 墨の一閃！相手次攻撃-1', color };
-      break;
-    }
-    case 'waka': {
-      telop = { text: '🎴和歌！ベンチで紫式部を強化', color };
-      break;
-    }
-    case 'junihitoe': {
-      telop = { text: '👘十二単！紫式部を除外から守る', color };
+    case 'makura_no_soshi': {
+      // 公開時（任意発動）: ベンチの筆の枚数をX、相手ベンチからX枚まで除外
+      const myState = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      const fudeSlot = myState.bench.find((b) => b.name === '筆' && !sealed.includes(b.name));
+      const fudeCount = fudeSlot?.count ?? 0;
+      const oppState = opp === 'player' ? next.player : next.ai;
+      if (fudeCount > 0 && oppState.bench.length > 0) {
+        if (fudeSlot) next = withBenchGlow(next, side, ['筆']);
+        if (side === 'ai') {
+          // AI: 相手ベンチから強いカード順にX枚まで除外
+          let candidates = [...oppState.bench];
+          if (hasRobbenIslandProtection(next, opp)) {
+            candidates = candidates.filter((b) => b.name !== 'ネルソン・マンデラ');
+          }
+          const sorted = candidates.sort((a, b) => {
+            const aPow = (a.card.attackPower ?? a.card.power) + (a.card.defensePower ?? a.card.power);
+            const bPow = (b.card.attackPower ?? b.card.power) + (b.card.defensePower ?? b.card.power);
+            return bPow - aPow;
+          });
+          let remaining = fudeCount;
+          let newOppBench = [...oppState.bench];
+          const exiled: BattleCard[] = [];
+          for (const slot of sorted) {
+            if (remaining <= 0) break;
+            const toExile = Math.min(slot.count, remaining);
+            for (let i = 0; i < toExile; i++) {
+              newOppBench = removeOneFromBench(newOppBench, slot.name);
+              exiled.push(slot.card);
+              remaining--;
+            }
+          }
+          if (exiled.length > 0) {
+            next = applySide(next, opp, { ...oppState, bench: newOppBench });
+            next = { ...next, exile: { ...next.exile, [opp]: [...next.exile[opp], ...exiled] } };
+            telop = { text: `📝枕草子！相手${exiled.length}枚を除外！`, color };
+          } else {
+            telop = { text: '📝枕草子（対象なし）', color };
+          }
+        } else {
+          // Player: UI側で複数選択ハンドリング
+          telop = { text: `📝枕草子！筆${fudeCount}枚分、相手ベンチから除外できる`, color };
+        }
+      } else {
+        telop = { text: `📝枕草子（${fudeCount === 0 ? '筆なし' : '相手ベンチなし'}）`, color };
+      }
       break;
     }
     // ===== オオカミデッキ =====
@@ -2325,13 +2357,22 @@ function computeAttackerAura(
   const { names, sunflower } = unsealedBenchNames(state, attackerSide);
   let bonus = 0;
   const details: BenchBoostDetail[] = [];
-  if (names.has('軍旗')) { bonus += 1; details.push({ benchCardName: '軍旗', atkBonus: 1, defBonus: 0 }); }
+  // 軍旗: ベンチオーラ廃止（公開時任意発動→ジャンヌサーチに変更）
   // アマゾン川: no longer a bench aura (changed to on-reveal deck search)
   if (sunflower >= 2) { bonus += 1; details.push({ benchCardName: 'ひまわり', atkBonus: 1, defBonus: 0 }); }
-  // Opponent 万有引力: 2枚目以降の攻撃 -1
+  // Opponent 万里の長城: 各サブバトルで最初の攻撃カードの攻撃-1（最低1）
   const opp = otherSide(attackerSide);
   const oppMe = opp === 'player' ? state.player : state.ai;
   const oppSealed = state.sealedBenchNames[opp];
+  const oppHasGreatWall = oppMe.bench.some((b) => b.name === '万里の長城' && !oppSealed.includes(b.name));
+  if (oppHasGreatWall && priorRevealCount === 0) {
+    const baseAtk = getBaseAttack(card);
+    if (baseAtk > 1) {
+      bonus -= 1;
+      details.push({ benchCardName: '万里の長城', atkBonus: -1, defBonus: 0 });
+    }
+  }
+  // Opponent 万有引力: 2枚目以降の攻撃 -1
   const oppHasGravity = oppMe.bench.some((b) => b.name === '万有引力' && !oppSealed.includes(b.name));
   if (oppHasGravity && priorRevealCount >= 1) { bonus -= 1; details.push({ benchCardName: '万有引力', atkBonus: -1, defBonus: 0 }); }
   // ルビー aura: 攻撃側全攻撃+1 (2枚以上で+2)
@@ -2371,7 +2412,25 @@ function applyDefenderAura(state: GameState, defenderSide: Side): { state: GameS
   if (names.has('サバンナ') && state.defenseCard?.category === 'creature') { bonus += 1; details.push({ benchCardName: 'サバンナ', atkBonus: 0, defBonus: 1 }); }
   const coalSlot = defMe.bench.find((b) => b.name === '石炭' && !defSealed.includes(b.name));
   if (coalSlot && coalSlot.count >= 2 && state.defenseCard?.category === 'invention') { bonus += 1; details.push({ benchCardName: '石炭', atkBonus: 0, defBonus: 1 }); }
-  if (bonus === 0) return { state, details: [] };
+  // アマゾン川 bench aura: アマゾン生物の防御+1
+  const AMAZON_CREATURES = new Set(['アナコンダ', 'ピラニア', '毒矢カエル', 'ジャガー', 'ピンクイルカ', '大蛇', '大蛇の巫師']);
+  if (names.has('アマゾン川') && state.defenseCard && AMAZON_CREATURES.has(state.defenseCard.name)) {
+    bonus += 1; details.push({ benchCardName: 'アマゾン川', atkBonus: 0, defBonus: 1 });
+  }
+  // アナコンダ bench debuff: 相手側のベンチにアナコンダがあれば防御バフを打ち消す
+  const attackerSide = otherSide(defenderSide);
+  const atkMe = attackerSide === 'player' ? state.player : state.ai;
+  const atkSealed = state.sealedBenchNames[attackerSide];
+  const anacondaSlot = atkMe.bench.find((b) => b.name === 'アナコンダ' && !atkSealed.includes(b.name));
+  if (anacondaSlot && bonus > 0) {
+    const reduction = anacondaSlot.count * 2;
+    const actualReduction = Math.min(bonus, reduction);
+    if (actualReduction > 0) {
+      bonus -= actualReduction;
+      details.push({ benchCardName: 'アナコンダ', atkBonus: 0, defBonus: -actualReduction });
+    }
+  }
+  if (bonus === 0 && details.length === 0) return { state, details: [] };
   return { state: { ...state, defenderBonus: state.defenderBonus + bonus }, details };
 }
 
@@ -2614,7 +2673,6 @@ export function resolveSubBattleWin(state: GameState): GameState {
 
   // ===== Leave-field triggers =====
   // 糸杉: ゴッホが場を離れる時、ベンチではなく隔離へ
-  // 兵馬俑: 始皇帝が場を離れる時、代わりに隔離
   // ケーキ: マリー・アントワネット が場を離れる時、相手デッキ上2枚を隔離
   const defenderState0 = defenderSide === 'player' ? state.player : state.ai;
   const defSealed0 = state.sealedBenchNames[defenderSide];
@@ -2628,14 +2686,11 @@ export function resolveSubBattleWin(state: GameState): GameState {
     reroutedDefender = true;
     leaveQuarantineDefender.push(defenderCard);
   }
-  // 不老不死の薬: 始皇帝をベンチではなくデッキ底に戻す（兵馬俑より優先）
+  // 不老不死の薬: 始皇帝をベンチではなくデッキ底に戻す
   if (defenderCard.name === '始皇帝' && dBenchNamesSet.has('不老不死の薬')) {
     reroutedDefender = true;
     defenderToDeckBottom = true;
     console.log('[Engine] 不老不死の薬発動！始皇帝をデッキ底に戻す');
-  } else if (defenderCard.name === '始皇帝' && dBenchNamesSet.has('兵馬俑')) {
-    reroutedDefender = true;
-    leaveQuarantineDefender.push(defenderCard);
   }
   let attackerDeckTrim = 0;
   const leaveQuarantineOpp: BattleCard[] = [];
@@ -2716,7 +2771,7 @@ export function resolveSubBattleWin(state: GameState): GameState {
   const newAttackerQuarantine = [...state.quarantine[attackerSide], ...otherAttackCards];
   console.log(`[Engine]   quarantine[${attackerSide}]: ${state.quarantine[attackerSide].length} + ${otherAttackCards.length} non-last attack cards = ${newAttackerQuarantine.length}`);
 
-  // Apply leave-trigger quarantine additions (糸杉/兵馬俑 reroute defender, ケーキ quarantines opp deck top).
+  // Apply leave-trigger quarantine additions (糸杉 reroute defender, ケーキ quarantines opp deck top).
   const defenderLeaveQuarantine = [...leaveQuarantineDefender];
   const attackerLeaveQuarantine = [...leaveQuarantineOpp];
   // Update quarantine map: defender's cleared (flushed to bench), attacker's appended.
@@ -2836,13 +2891,11 @@ export function advanceToNextRound(state: GameState): GameState {
   // Advance to next round: collect ALL cards back to deck, reset bench/quarantine.
   // ベンチ + 隔離 + 防御カード + 攻撃中カード → 全てデッキに回収してシャッフル
   // 進化カードはラウンド内限定のため、元のカードに戻す
-  const revertEvolution = (card: BattleCard): BattleCard => {
-    if (card.name === '大蛇' && card.id.startsWith('evolved-giant-snake-')) {
-      const anaconda = ALL_BATTLE_CARDS.find((c) => c.name === 'アナコンダ');
-      if (anaconda) {
-        console.log('[Engine] 大蛇 → アナコンダに戻す (ラウンド終了)');
-        return { ...anaconda, id: `reverted-anaconda-${Date.now()}` };
-      }
+  const revertEvolution = (card: BattleCard): BattleCard | null => {
+    // 召喚された大蛇はデッキ外カードなので回収時に除外する
+    if (card.name === '大蛇' && card.id.startsWith('summoned-giant-snake-')) {
+      console.log('[Engine] 召喚された大蛇をデッキ外に戻す (ラウンド終了)');
+      return null;
     }
     if (card.name === '万能の天才' && card.id.startsWith('evolved-genius-')) {
       const davinci = ALL_BATTLE_CARDS.find((c) => c.name === 'レオナルド・ダ・ヴィンチ');
@@ -2857,13 +2910,16 @@ export function advanceToNextRound(state: GameState): GameState {
   };
 
   const collectCards = (ps: PlayerState, side: Side): BattleCard[] => {
-    const cards: BattleCard[] = ps.deck.map(revertEvolution);
+    const cards: BattleCard[] = [];
+    for (const c of ps.deck) { const r = revertEvolution(c); if (r) cards.push(r); }
     for (const slot of ps.bench) {
-      for (let i = 0; i < slot.count; i++) cards.push(revertEvolution(slot.card));
+      for (let i = 0; i < slot.count; i++) { const r = revertEvolution(slot.card); if (r) cards.push(r); }
     }
-    cards.push(...state.quarantine[side].map(revertEvolution));
-    if (state.defenseCard && state.flagHolder === side) cards.push(revertEvolution(state.defenseCard));
-    if (otherSide(state.flagHolder) === side) cards.push(...state.attackRevealed.map(revertEvolution));
+    for (const c of state.quarantine[side]) { const r = revertEvolution(c); if (r) cards.push(r); }
+    if (state.defenseCard && state.flagHolder === side) { const r = revertEvolution(state.defenseCard); if (r) cards.push(r); }
+    if (otherSide(state.flagHolder) === side) {
+      for (const c of state.attackRevealed) { const r = revertEvolution(c); if (r) cards.push(r); }
+    }
     return cards;
   };
 
