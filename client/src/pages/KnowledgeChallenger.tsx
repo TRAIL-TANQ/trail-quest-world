@@ -419,18 +419,23 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
       const p2Starter = STARTER_DECKS.find((d) => d.id === pvpSession.player2.starterDeckId);
       playerDeck = p1Starter ? buildStarterDeck(p1Starter) : createInitialDeck();
       aiDeckCards = p2Starter ? buildStarterDeck(p2Starter) : createInitialDeck();
+      console.log('[KC] startGame path=PvP, p1Starter=', p1Starter?.id, 'p2Starter=', p2Starter?.id);
     } else if (myDeckCards && myDeckCards.length > 0) {
       playerDeck = myDeckCards;
       aiDeckCards = stageId !== null ? createStageAIDeck(stageId) : createAIDeck();
+      console.log('[KC] startGame path=MyDeck, cards=', myDeckCards.length);
     } else if (starterOverride) {
       playerDeck = buildStarterDeck(starterOverride);
       aiDeckCards = stageId !== null ? createStageAIDeck(stageId) : createAIDeck();
+      console.log('[KC] startGame path=Starter, id=', starterOverride.id);
     } else if (previewDeck && validateDeck(previewDeck).valid) {
       playerDeck = previewDeck;
       aiDeckCards = stageId !== null ? createStageAIDeck(stageId) : createAIDeck();
+      console.log('[KC] startGame path=PreviewDeck (fallback), size=', previewDeck.length);
     } else {
       playerDeck = createInitialDeck();
       aiDeckCards = stageId !== null ? createStageAIDeck(stageId) : createAIDeck();
+      console.log('[KC] startGame path=createInitialDeck (default fallback!)');
     }
     const stage = stageId !== null ? getStage(stageId) : null;
     const rules = stage?.rules ?? undefined;

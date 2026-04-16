@@ -1785,26 +1785,27 @@ function buildValidDeck(pool: BattleCard[], prefix: string, targetSize: number):
     }
   };
 
-  // ---------- N cards (7 total) ----------
-  // 1 世界遺産 N (atk1/def3) — defensive slot
+  // Scale rarity counts to targetSize (was hardcoded 7+2+1=10). For 15 → 11N + 3R + 1SR.
+  const nCount = Math.max(1, targetSize - 4);
+  const rCount = targetSize >= 10 ? 3 : 2;
+  const srCount = 1;
+
+  // ---------- N cards ----------
   drawFrom((c) => c.rarity === 'N' && c.category === 'heritage', 1);
-  // 4 N with 1/1 (non-heritage)
   drawFrom(
     (c) => c.rarity === 'N' && c.category !== 'heritage' && sig(c) === '1/1',
-    4,
+    Math.max(0, Math.floor(nCount * 0.5)),
   );
-  // 2 N with 2/2 (from 発明/発見) as the "heavier" N
-  drawFrom((c) => c.rarity === 'N' && sig(c) === '2/2', 2);
-  // Fill any remaining N slots with any N
-  drawFrom((c) => c.rarity === 'N', 7 - deck.filter((c) => c.rarity === 'N').length);
+  drawFrom((c) => c.rarity === 'N' && sig(c) === '2/2', Math.max(0, Math.floor(nCount * 0.25)));
+  drawFrom((c) => c.rarity === 'N', nCount - deck.filter((c) => c.rarity === 'N').length);
 
-  // ---------- R cards (2 total) ----------
+  // ---------- R cards ----------
   drawFrom((c) => c.rarity === 'R' && sig(c) === '2/2', 1);
   drawFrom((c) => c.rarity === 'R' && sig(c) === '3/3', 1);
-  drawFrom((c) => c.rarity === 'R', 2 - deck.filter((c) => c.rarity === 'R').length);
+  drawFrom((c) => c.rarity === 'R', rCount - deck.filter((c) => c.rarity === 'R').length);
 
-  // ---------- SR (1 total) ----------
-  drawFrom((c) => c.rarity === 'SR', 1);
+  // ---------- SR ----------
+  drawFrom((c) => c.rarity === 'SR', srCount);
 
   // ---------- Safety top-up with any N ----------
   drawFrom((c) => c.rarity === 'N', targetSize - deck.length);
