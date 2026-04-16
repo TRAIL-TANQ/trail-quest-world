@@ -4342,7 +4342,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
         return (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-3" style={{ background: 'rgba(0,0,0,0.85)' }}>
           <div
-            className="rounded-2xl w-full max-w-md flex flex-col"
+            className="rounded-2xl w-full max-w-md md:max-w-5xl flex flex-col"
             style={{
               background: 'linear-gradient(135deg, rgba(21,29,59,0.98), rgba(14,20,45,0.98))',
               border: '3px solid rgba(255,215,0,0.5)',
