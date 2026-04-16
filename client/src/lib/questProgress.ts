@@ -187,10 +187,14 @@ export function getFirstDeckGift(): DeckKey | null {
 }
 
 export function claimFirstDeck(deckKey: DeckKey): void {
+  console.log('[デッキプレゼント] 選択:', deckKey);
   try { localStorage.setItem(LS_FIRST_DECK, deckKey); } catch { /* */ }
   const progress = loadQuestProgress();
   progress[deckKey].beginner.cleared = true;
+  // ゲストでもlocalStorageに直接書き込み（リロードで失われないように）
+  try { localStorage.setItem(LS_KEY, JSON.stringify(progress)); } catch { /* */ }
   saveQuestProgress(progress);
+  console.log('[デッキプレゼント] questProgress書き込み:', JSON.stringify(progress[deckKey]));
 }
 
 export function isFirstDeckClaimed(): boolean {
@@ -200,6 +204,8 @@ export function isFirstDeckClaimed(): boolean {
 /** デッキが使用可能か（ビギナー10問正解で解放 / 初回プレゼント / モニターモード or 管理者なら常にtrue） */
 export function isDeckUnlocked(progress: QuestProgressData, deckKey: DeckKey): boolean {
   if (MONITOR_MODE || isAdminMode()) return true;
+  // 初回プレゼントで選んだデッキは常に解放済み（ゲスト時のリロードでも失われない）
+  if (getFirstDeckGift() === deckKey) return true;
   return progress[deckKey].beginner.cleared;
 }
 

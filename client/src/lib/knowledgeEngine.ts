@@ -2557,7 +2557,9 @@ export function revealNextAttackCard(
  */
 export function hasAttackSucceeded(state: GameState): boolean {
   if (!state.defenseCard) return false;
-  const effectiveDefense = Math.max(0, getBaseDefense(state.defenseCard) + state.defenderBonus);
+  const baseDef = getBaseDefense(state.defenseCard);
+  const effectiveDefense = Math.max(0, baseDef + state.defenderBonus);
+  console.log(`[防御計算] ${state.defenseCard.name} 基本防御:${baseDef} + ベンチバフ:${state.defenderBonus} = 最終防御:${effectiveDefense} (攻撃力:${state.attackCurrentPower})`);
   return state.attackCurrentPower >= effectiveDefense;
 }
 
@@ -2887,9 +2889,23 @@ export function continueAfterResolve(state: GameState): GameState {
     // Shouldn't happen; draw from flag holder's deck as fallback
     return startBattle({ ...state, phase: 'deck_phase' });
   }
-  return {
+  let next: GameState = {
     ...state,
     phase: 'battle_intro',
     message: state.flagHolder === 'player' ? 'あなたが防御中！' : 'あなたの攻撃！',
   };
+  // 新しい防御カード（前回の最後の攻撃カード）に対してベンチ効果を適用
+  const defender = next.defenseCard!;
+  console.log(`[Engine] continueAfterResolve: defender="${defender.name}" (effect=${defender.effect?.id ?? 'none'}) | flagHolder=${state.flagHolder}`);
+  if (defender.effect) {
+    const eff = applyRevealEffect(next, defender, state.flagHolder, 'defender');
+    next = withTelop(eff.state, eff.telop);
+    console.log(`[Engine]   defender effect "${defender.effect.id}" applied (sub-battle transition)`);
+  }
+  const defAura = applyDefenderAura(next, state.flagHolder);
+  next = defAura.state;
+  if (defAura.details.length > 0) {
+    next = { ...next, benchBoostDetails: defAura.details };
+  }
+  return next;
 }

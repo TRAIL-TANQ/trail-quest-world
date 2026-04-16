@@ -2414,6 +2414,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
             const deckKey = deckKeyEntry?.[0] as DeckKey | undefined;
             const isRandom = deck.id === 'starter-random';
             const isUnlocked = isRandom || !deckKey || isDeckUnlocked(questProgress, deckKey);
+            if (deckKey) console.log('[デッキ選択] 解放済み判定:', deckKey, isUnlocked);
 
             return (
               <div
