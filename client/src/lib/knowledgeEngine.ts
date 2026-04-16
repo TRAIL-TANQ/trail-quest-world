@@ -1405,49 +1405,35 @@ export function applyRevealEffect(
       break;
     }
     case 'burning_stake': {
-      // 殉教の炎: ベンチのジャンヌ・ダルクを除外して、火刑自体を聖女ジャンヌに変身させる。
+      // 殉教の炎: ベンチにジャンヌ・ダルクがいる時、そのジャンヌを除外する（任意発動）
       const my = side === 'player' ? next.player : next.ai;
       const sealed = next.sealedBenchNames[side];
       const jeanneSlot = my.bench.find((b) => b.name === 'ジャンヌ・ダルク' && !sealed.includes(b.name));
       if (!jeanneSlot) {
-        telop = { text: 'ベンチにジャンヌがいません', color };
+        telop = { text: '🔥 火刑（ベンチにジャンヌがいません）', color };
         break;
       }
-      const saintTemplate = ALL_BATTLE_CARDS.find((c) => c.name === '聖女ジャンヌ');
-      if (!saintTemplate) {
-        telop = { text: 'ベンチにジャンヌがいません', color };
-        break;
-      }
-      // 1. ベンチからジャンヌを1枚除外
+      // ベンチからジャンヌを1枚除外
       const newBench = removeOneFromBench(my.bench, 'ジャンヌ・ダルク');
       next = applySide(
         { ...next, exile: { ...next.exile, [side]: [...next.exile[side], jeanneSlot.card] } },
         side,
         { ...my, bench: newBench },
       );
-      // 2. 火刑自体を聖女ジャンヌに変身させる（attackRevealed 内で差し替え）
-      const transformed: BattleCard = { ...saintTemplate, id: `evolved-saint-jeanne-${Date.now()}` };
-      const newRevealed = next.attackRevealed.map((c) => c.id === card.id ? transformed : c);
-      const oldAtk = getBaseAttack(card);
-      const newAtk = getBaseAttack(transformed);
-      next = {
-        ...next,
-        attackRevealed: newRevealed,
-        attackCurrentPower: role === 'attacker' ? next.attackCurrentPower - oldAtk + newAtk : next.attackCurrentPower,
-      };
-      // 3. 聖女ジャンヌの効果「救国の祈り」を即座に適用
-      // 3a. 味方除外カードを全てデッキに戻す
+      telop = { text: '🔥 殉教の炎！ジャンヌが炎に包まれた…', color: '#ff6600' };
+      console.log(`[Engine] 火刑 → ベンチのジャンヌ・ダルクを除外`);
+      break;
+    }
+    case 'saint_jeanne': {
+      // 救国の祈り: 味方の除外カードを全てデッキに戻す。さらに相手の防御-3（任意発動）。
       const exiledForSide = next.exile[side];
       const recoveredCount = exiledForSide.length;
       if (recoveredCount > 0) {
-        next = {
-          ...next,
-          exile: { ...next.exile, [side]: [] },
-        };
+        next = { ...next, exile: { ...next.exile, [side]: [] } };
         const mySideNow = side === 'player' ? next.player : next.ai;
         next = applySide(next, side, { ...mySideNow, deck: [...mySideNow.deck, ...exiledForSide] });
       }
-      // 3b. 相手防御-3
+      // 相手防御-3
       if (role === 'attacker') {
         next = { ...next, defenderBonus: next.defenderBonus - 3 };
       } else {
@@ -1459,8 +1445,44 @@ export function applyRevealEffect(
           },
         };
       }
-      telop = { text: '🔥 殉教の炎！ジャンヌが炎に包まれ…聖女として蘇る！', color: '#ffffff' };
-      console.log(`[Engine] 火刑 → 聖女ジャンヌに変身！ジャンヌを除外、除外回収=${recoveredCount}枚`);
+      // ベンチの聖剣・軍旗による強化（ジャンヌと同じ条件）
+      const mySJ = side === 'player' ? next.player : next.ai;
+      const sealedSJ = next.sealedBenchNames[side];
+      const hasSwordSJ = mySJ.bench.some((b) => b.name === '聖剣' && !sealedSJ.includes(b.name));
+      const hasBannerSJ = mySJ.bench.some((b) => b.name === '軍旗' && !sealedSJ.includes(b.name));
+      const hasLilyShieldSJ = mySJ.bench.some((b) => b.name === '白百合の盾' && !sealedSJ.includes(b.name));
+      const sjGlow: string[] = [];
+      if (hasSwordSJ) sjGlow.push('聖剣');
+      if (hasBannerSJ) sjGlow.push('軍旗');
+      if (hasLilyShieldSJ) sjGlow.push('白百合の盾');
+      if (sjGlow.length > 0) next = withBenchGlow(next, side, sjGlow);
+      const lilyDefBonusSJ = hasLilyShieldSJ ? 2 : 0;
+      if (hasSwordSJ && hasBannerSJ) {
+        if (role === 'attacker') {
+          bonusAttack += 4;
+          const oppState = opp === 'player' ? next.player : next.ai;
+          if (oppState.bench.length > 0) {
+            next = {
+              ...next,
+              sealedBenchNames: {
+                ...next.sealedBenchNames,
+                [opp]: [...next.sealedBenchNames[opp], oppState.bench[0].name],
+              },
+            };
+          }
+        } else {
+          next = { ...next, defenderBonus: next.defenderBonus + 4 + lilyDefBonusSJ };
+        }
+      } else if (hasSwordSJ) {
+        if (role === 'attacker') bonusAttack += 3;
+        else if (lilyDefBonusSJ > 0) next = { ...next, defenderBonus: next.defenderBonus + lilyDefBonusSJ };
+      } else if (hasBannerSJ) {
+        if (role === 'defender') next = { ...next, defenderBonus: next.defenderBonus + 3 + lilyDefBonusSJ };
+      } else {
+        if (role === 'defender' && lilyDefBonusSJ > 0) next = { ...next, defenderBonus: next.defenderBonus + lilyDefBonusSJ };
+      }
+      telop = { text: `✨ 救国の祈り！除外${recoveredCount}枚回収＋相手防御-3`, color: '#ffd700' };
+      console.log(`[Engine] 聖女ジャンヌ → 除外回収=${recoveredCount}枚, 相手防御-3`);
       break;
     }
     case 'honnoji': {
@@ -1784,50 +1806,51 @@ export function applyRevealEffect(
       break;
     }
     case 'prayer_light': {
-      // 祈りの光: ベンチにジャンヌがいる場合、ジャンヌをデッキの一番上に戻す（任意発動）
-      const my = side === 'player' ? next.player : next.ai;
-      const sealed = next.sealedBenchNames[side];
-      const jeanneSlot = my.bench.find((b) => b.name === 'ジャンヌ・ダルク' && !sealed.includes(b.name));
-      if (jeanneSlot) {
-        if (side === 'ai') {
-          const newBench = removeOneFromBench(my.bench, 'ジャンヌ・ダルク');
-          const newDeck = [jeanneSlot.card, ...my.deck];
-          next = applySide(next, side, { ...my, bench: newBench, deck: newDeck });
-          next = withBenchGlow(next, side, ['ジャンヌ・ダルク']);
-          telop = { text: '✨ 聖なる祈り！ジャンヌをデッキトップへ！', color: '#ffd700' };
+      // 祈りの光: 除外されたジャンヌ・ダルクを聖女ジャンヌとしてデッキの一番上に置く（任意発動）
+      const exiledJeanne = next.exile[side].find((c) => c.name === 'ジャンヌ・ダルク');
+      if (exiledJeanne) {
+        const saintTemplate = ALL_BATTLE_CARDS.find((c) => c.name === '聖女ジャンヌ');
+        if (saintTemplate) {
+          if (side === 'ai') {
+            // 除外からジャンヌを取り除く
+            const newExile = next.exile[side].filter((c) => c.id !== exiledJeanne.id);
+            // 聖女ジャンヌに変換してデッキトップに
+            const saintCard: BattleCard = { ...saintTemplate, id: `saint-jeanne-prayer-${Date.now()}` };
+            const my = next.ai;
+            next = applySide(
+              { ...next, exile: { ...next.exile, [side]: newExile } },
+              side,
+              { ...my, deck: [saintCard, ...my.deck] },
+            );
+            telop = { text: '✨ 聖なる祈り！ジャンヌが聖女として蘇る！', color: '#ffd700' };
+            console.log(`[Engine] 祈りの光 → 除外のジャンヌ・ダルクを聖女ジャンヌとしてデッキトップへ`);
+          } else {
+            telop = { text: '✨ 聖なる祈り！ジャンヌが聖女として蘇る...', color: '#ffd700' };
+          }
         } else {
-          telop = { text: '✨ 聖なる祈り！ジャンヌをサーチ中...', color: '#ffd700' };
+          telop = { text: '✨ 聖なる祈り（聖女ジャンヌが見つかりません）', color };
         }
       } else {
-        telop = { text: '✨ 聖なる祈り（ベンチにジャンヌがいません）', color };
+        telop = { text: '✨ 聖なる祈り（除外にジャンヌがいません）', color };
       }
       break;
     }
     case 'holy_banner': {
-      // 聖女の旗印: 除外されたジャンヌ系カード1枚をデッキに戻す（任意発動）
-      const jeanneFamily = ['ジャンヌ・ダルク', '聖剣', '軍旗', '祈りの光', '白百合の盾'];
-      const exiled = next.exile[side].filter((c) => jeanneFamily.includes(c.name));
-      if (exiled.length > 0) {
+      // 聖女の旗印: デッキにあるジャンヌ・ダルクをデッキの1番上に戻す（任意発動）
+      const my = side === 'player' ? next.player : next.ai;
+      const jeanneIdx = my.deck.findIndex((c) => c.name === 'ジャンヌ・ダルク');
+      if (jeanneIdx >= 0) {
         if (side === 'ai') {
-          // AI: auto-select strongest exiled jeanne-family card
-          const target = exiled.reduce((a, b) => {
-            const aPow = (a.attackPower ?? a.power) + (a.defensePower ?? a.power);
-            const bPow = (b.attackPower ?? b.power) + (b.defensePower ?? b.power);
-            return aPow >= bPow ? a : b;
-          });
-          const newExile = next.exile[side].filter((c) => c.id !== target.id);
-          const my = next.ai;
-          const newDeck = [...my.deck, target];
-          next = applySide(
-            { ...next, exile: { ...next.exile, [side]: newExile } },
-            side, { ...my, deck: newDeck },
-          );
-          telop = { text: `🏳️ 聖女の導き！${target.name}をデッキへ！`, color: '#ffd700' };
+          const jeanneCard = my.deck[jeanneIdx];
+          const newDeck = [jeanneCard, ...my.deck.slice(0, jeanneIdx), ...my.deck.slice(jeanneIdx + 1)];
+          next = applySide(next, side, { ...my, deck: newDeck });
+          telop = { text: '🏳️ 聖女の導き！ジャンヌ・ダルクをデッキトップへ！', color: '#ffd700' };
+          console.log(`[Engine] 聖女の旗印 → デッキ内のジャンヌ・ダルクをデッキトップに移動`);
         } else {
-          telop = { text: '🏳️ 聖女の導き！除外カードをサーチ中...', color: '#ffd700' };
+          telop = { text: '🏳️ 聖女の導き！ジャンヌをサーチ中...', color: '#ffd700' };
         }
       } else {
-        telop = { text: '🏳️ 聖女の導き（対象カードがありません）', color };
+        telop = { text: '🏳️ 聖女の導き（デッキにジャンヌがいません）', color };
       }
       break;
     }
@@ -2421,16 +2444,20 @@ export function startBattle(state: GameState): GameState {
   };
 
   // Defender reveal triggers effect
-  console.log(`[Engine] startBattle: defender="${defender.name}" (effect=${defender.effect?.id ?? 'none'}) | flagHolder=${state.flagHolder}`);
+  const baseDef = getBaseDefense(defender);
+  console.log(`[Engine] startBattle: defender="${defender.name}" (effect=${defender.effect?.id ?? 'none'}) | flagHolder=${state.flagHolder} | baseDef=${baseDef}`);
   if (defender.effect) {
     const eff = applyRevealEffect(next, defender, state.flagHolder, 'defender');
     next = withTelop(eff.state, eff.telop);
-    console.log(`[Engine]   defender effect "${defender.effect.id}" applied`);
+    console.log(`[Engine]   defender effect "${defender.effect.id}" applied → defenderBonus=${next.defenderBonus}`);
   }
   const defAura = applyDefenderAura(next, state.flagHolder);
   next = defAura.state;
   if (defAura.details.length > 0) {
     next = { ...next, benchBoostDetails: defAura.details };
+    for (const d of defAura.details) {
+      console.log(`[ベンチ効果-防御] ${d.benchCardName} → ${defender.name} 防御+${d.defBonus}`);
+    }
   }
 
   // NPC stage bonus (defense)
@@ -2445,6 +2472,7 @@ export function startBattle(state: GameState): GameState {
     }
   }
 
+  console.log(`[防御計算] ${defender.name} 基本:${baseDef} + ベンチ:${next.defenderBonus} = 最終:${baseDef + next.defenderBonus}`);
   return next;
 }
 
@@ -2896,16 +2924,21 @@ export function continueAfterResolve(state: GameState): GameState {
   };
   // 新しい防御カード（前回の最後の攻撃カード）に対してベンチ効果を適用
   const defender = next.defenseCard!;
-  console.log(`[Engine] continueAfterResolve: defender="${defender.name}" (effect=${defender.effect?.id ?? 'none'}) | flagHolder=${state.flagHolder}`);
+  const baseDef = getBaseDefense(defender);
+  console.log(`[Engine] continueAfterResolve: defender="${defender.name}" (effect=${defender.effect?.id ?? 'none'}) | flagHolder=${state.flagHolder} | baseDef=${baseDef}`);
   if (defender.effect) {
     const eff = applyRevealEffect(next, defender, state.flagHolder, 'defender');
     next = withTelop(eff.state, eff.telop);
-    console.log(`[Engine]   defender effect "${defender.effect.id}" applied (sub-battle transition)`);
+    console.log(`[Engine]   defender effect "${defender.effect.id}" applied (sub-battle transition) → defenderBonus=${next.defenderBonus}`);
   }
   const defAura = applyDefenderAura(next, state.flagHolder);
   next = defAura.state;
   if (defAura.details.length > 0) {
     next = { ...next, benchBoostDetails: defAura.details };
+    for (const d of defAura.details) {
+      console.log(`[ベンチ効果-防御] ${d.benchCardName} → ${defender.name} 防御+${d.defBonus}`);
+    }
   }
+  console.log(`[防御計算] ${defender.name} 基本:${baseDef} + ベンチ:${next.defenderBonus} = 最終:${baseDef + next.defenderBonus}`);
   return next;
 }

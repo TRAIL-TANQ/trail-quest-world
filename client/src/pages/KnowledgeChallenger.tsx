@@ -80,15 +80,15 @@ function findCardByName(name: string): BattleCard | undefined {
 }
 
 // Timing constants (ms) for the battle cinematic. fast mode scales by 0.3.
-// Tightened 2026-04 for snappier tempo (~20% shorter across the board).
-const TURN_BANNER_MS      = 800;   // attacker-turn vignette (no text)
-const DEFENDER_SHOW_MS    = 300;   // near-instant defender auto-reveal
-const ATTACK_CARD_REVEAL_MS = 800;
-const RESOLVE_BANNER_MS   = 1800;
-const TURN_TRANSITION_MS  = 800;   // between sub-battles
-const FINAL_REVEAL_MS     = 2000;  // hold final game_over overlay (unchanged)
-const POWER_ADD_PAUSE_MS  = 400;   // after reveal, before power-add animation
-const POWER_COMPARE_MS    = 500;   // pause for power comparison display
+// Tightened 2026-04-16: aggressive tempo cut — halved most waits for snappy feel.
+const TURN_BANNER_MS      = 500;   // attacker-turn vignette (was 800)
+const DEFENDER_SHOW_MS    = 200;   // near-instant defender auto-reveal (was 300)
+const ATTACK_CARD_REVEAL_MS = 500; // (was 800)
+const RESOLVE_BANNER_MS   = 900;   // outcome banner (was 1800)
+const TURN_TRANSITION_MS  = 500;   // between sub-battles (was 800)
+const FINAL_REVEAL_MS     = 1500;  // hold final game_over overlay (was 2000)
+const POWER_ADD_PAUSE_MS  = 200;   // after reveal, before power-add animation (was 400)
+const POWER_COMPARE_MS    = 300;   // pause for power comparison display (was 500)
 
 export interface KnowledgeChallengerProps {
   /** When set, this component runs in 2-player local mode instead of vs-AI. */
@@ -241,7 +241,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
   const OPTIONAL_EFFECT_IDS = useMemo(
     () => new Set<string>([
       'photosynthesis', 'poison_frog', 'paper',
-      'prayer_light', 'holy_banner',
+      'prayer_light', 'holy_banner', 'burning_stake', 'saint_jeanne',
       'imperial_decree', 'rainbow_nation', 'nobel_peace',
       'book_burning', 'anatomy', 'mirror_writing',
       'honnoji', 'moonlit_howl', 'mikka_tenka',
@@ -250,7 +250,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
   );
   // Effects that are only optional when a specific bench condition is met.
   // cannon/dynamite: optional only if bench has 火薬 (consumed for +2 attack).
-  // burning_stake: optional only if ジャンヌ・ダルク on bench (transforms to 聖女ジャンヌ).
+  // cannon/dynamite: optional only if bench has 火薬 (consumed for +2 attack).
   const conditionalOptional = useCallback((card: BattleCard): boolean => {
     const effId = card.effect?.id;
     const gs = gameStateRef.current;
@@ -259,9 +259,6 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
     const sealed = gs.sealedBenchNames[atkSide];
     if (effId === 'cannon' || effId === 'dynamite') {
       return gs[atkSide].bench.some((b) => b.name === '火薬' && !sealed.includes(b.name));
-    }
-    if (effId === 'burning_stake') {
-      return gs[atkSide].bench.some((b) => b.name === 'ジャンヌ・ダルク' && !sealed.includes(b.name));
     }
     if (effId === 'honnoji') {
       return gs[atkSide].bench.some((b) => b.name === '織田信長' && !sealed.includes(b.name));
@@ -449,7 +446,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
     const ruleMsgs = rules ? longSpecialRuleMessages(rules) : [];
     if (ruleMsgs.length > 0) {
       setSpecialRuleBanner(ruleMsgs);
-      window.setTimeout(() => setSpecialRuleBanner(null), 2000);
+      window.setTimeout(() => setSpecialRuleBanner(null), 1200);
     } else {
       setSpecialRuleBanner(null);
     }
@@ -816,7 +813,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
               if (d.defBonus > 0) parts.push(`🛡️+${d.defBonus}`);
               if (d.atkBonus !== 0) parts.push(`⚔️${d.atkBonus > 0 ? '+' : ''}${d.atkBonus}`);
               setBenchBoostTelop({ text: `📋 ${d.benchCardName} → ${parts.join(' ')}！`, key: Date.now() + i });
-              await waitStep(500);
+              await waitStep(300);
               if (unmountedRef.current) return;
             }
             if (details.length > 1) {
@@ -826,7 +823,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
               if (totalAtk !== 0) comboParts.push(`攻撃${totalAtk > 0 ? '+' : ''}${totalAtk}`);
               if (totalDef !== 0) comboParts.push(`防御${totalDef > 0 ? '+' : ''}${totalDef}`);
               setBenchBoostTelop({ text: `🔥 コンボ！合計 ${comboParts.join(' ')}！`, key: Date.now() + 999 });
-              await waitStep(700);
+              await waitStep(400);
               if (unmountedRef.current) return;
             }
             setBenchBoostTelop(null);
@@ -874,20 +871,20 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
               if (npcTopCard) {
                 // phase 1: draw (card lifts off deck)
                 setNpcRevealAnim({ phase: 'draw', card: npcTopCard });
-                await waitStep(300);
+                await waitStep(200);
                 if (unmountedRef.current) { setNpcRevealAnim(null); return; }
                 // phase 2: flip (back → face)
                 setNpcRevealAnim({ phase: 'flip', card: npcTopCard });
-                await waitStep(300);
+                await waitStep(200);
                 if (unmountedRef.current) { setNpcRevealAnim(null); return; }
                 // phase 3: place (slide toward field)
                 setNpcRevealAnim({ phase: 'place', card: npcTopCard });
-                await waitStep(300);
+                await waitStep(200);
                 if (unmountedRef.current) { setNpcRevealAnim(null); return; }
                 // phase 4: clear overlay; actual reveal happens in the setGameState below
                 setNpcRevealAnim(null);
               } else {
-                await waitStep(1000);
+                await waitStep(600);
               }
             }
           }
@@ -935,7 +932,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
             const lastRevealed = rs.attackRevealed[rs.attackRevealed.length - 1];
             if (lastRevealed?.effect && (lastRevealed.rarity === 'SR' || lastRevealed.rarity === 'SSR')) {
               setCutinCard(lastRevealed);
-              await waitMs(1200);
+              await waitMs(600);
               if (unmountedRef.current) return;
               setCutinCard(null);
             } else if (lastRevealed?.effect && lastRevealed.rarity === 'R') {
@@ -1024,25 +1021,26 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
             }
           }
 
-          // ===== 祈りの光: select ジャンヌ from attacker's bench =====
+          // ===== 祈りの光: 除外されたジャンヌ・ダルクを聖女ジャンヌとしてデッキトップに =====
           if (canShowChoice) {
             const lastRevealed = rs.attackRevealed[rs.attackRevealed.length - 1];
             if (lastRevealed?.effect?.id === 'prayer_light') {
               const gs = gameStateRef.current ?? rs;
-              const sealed = gs.sealedBenchNames[mySide];
-              const jeanneCards = gs[mySide].bench
-                .filter((b) => b.name === 'ジャンヌ・ダルク' && !sealed.includes(b.name))
-                .map((b) => b.card);
-              if (jeanneCards.length > 0) {
-                const chosen = await waitCardSelect('✨ デッキトップに戻すジャンヌを選んでください', jeanneCards);
+              const exiledJeanne = gs.exile[mySide].filter((c) => c.name === 'ジャンヌ・ダルク');
+              if (exiledJeanne.length > 0) {
+                const chosen = await waitCardSelect('✨ 聖女ジャンヌとして蘇らせるジャンヌを選んでください', exiledJeanne);
                 if (chosen && !unmountedRef.current) {
                   setGameState((prev) => {
                     if (!prev) return prev;
-                    const newBench = removeOneFromBench(prev[mySide].bench, chosen.name);
+                    const saintTemplate = ALL_BATTLE_CARDS.find((c) => c.name === '聖女ジャンヌ');
+                    if (!saintTemplate) return prev;
+                    const saintCard = { ...saintTemplate, id: `saint-jeanne-prayer-${Date.now()}` };
+                    const newExile = prev.exile[mySide].filter((c) => c.id !== chosen.id);
                     return {
                       ...prev,
-                      [mySide]: { ...prev[mySide], bench: newBench, deck: [chosen, ...prev[mySide].deck] },
-                      effectTelop: { text: '✨ 聖なる祈り！ジャンヌをデッキトップへ！', color: '#ffd700', key: Date.now() },
+                      [mySide]: { ...prev[mySide], deck: [saintCard, ...prev[mySide].deck] },
+                      exile: { ...prev.exile, [mySide]: newExile },
+                      effectTelop: { text: '✨ 聖なる祈り！ジャンヌが聖女として蘇る！', color: '#ffd700', key: Date.now() },
                     };
                   });
                 }
@@ -1050,27 +1048,26 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
             }
           }
 
-          // ===== 聖女の旗印: attacker selects exiled jeanne-family card =====
+          // ===== 聖女の旗印: デッキ内のジャンヌ・ダルクをデッキトップに移動 =====
           if (canShowChoice) {
             const lastRevealed = rs.attackRevealed[rs.attackRevealed.length - 1];
             if (lastRevealed?.effect?.id === 'holy_banner') {
               const gs = gameStateRef.current ?? rs;
-              const jeanneFamily = ['ジャンヌ・ダルク', '聖剣', '軍旗', '祈りの光', '白百合の盾'];
-              const exiledJeanne = gs.exile[mySide].filter((c) => jeanneFamily.includes(c.name));
-              if (exiledJeanne.length > 0) {
-                const chosen = await waitCardSelect('🏳️ デッキに戻すカードを選んでください', exiledJeanne);
-                if (chosen && !unmountedRef.current) {
-                  setGameState((prev) => {
-                    if (!prev) return prev;
-                    const newExile = prev.exile[mySide].filter((c) => c.id !== chosen.id);
-                    return {
-                      ...prev,
-                      [mySide]: { ...prev[mySide], deck: [...prev[mySide].deck, chosen] },
-                      exile: { ...prev.exile, [mySide]: newExile },
-                      effectTelop: { text: `🏳️ 聖女の導き！${chosen.name}をデッキへ！`, color: '#ffd700', key: Date.now() },
-                    };
-                  });
-                }
+              const jeanneInDeck = gs[mySide].deck.filter((c) => c.name === 'ジャンヌ・ダルク');
+              if (jeanneInDeck.length > 0) {
+                // Auto-apply: move first Jeanne to deck top (no selection needed)
+                setGameState((prev) => {
+                  if (!prev) return prev;
+                  const idx = prev[mySide].deck.findIndex((c) => c.name === 'ジャンヌ・ダルク');
+                  if (idx < 0) return prev;
+                  const jeanneCard = prev[mySide].deck[idx];
+                  const newDeck = [jeanneCard, ...prev[mySide].deck.slice(0, idx), ...prev[mySide].deck.slice(idx + 1)];
+                  return {
+                    ...prev,
+                    [mySide]: { ...prev[mySide], deck: newDeck },
+                    effectTelop: { text: '🏳️ 聖女の導き！ジャンヌ・ダルクをデッキトップへ！', color: '#ffd700', key: Date.now() },
+                  };
+                });
               }
             }
           }
@@ -1162,7 +1159,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
               if (anacondaTemplate) {
                 playSound('evolve');
                 setEvolutionOverlay({ from: anacondaTemplate, to: lastRevealed });
-                await waitMs(3000);
+                await waitMs(1500);
                 if (unmountedRef.current) return;
                 setEvolutionOverlay(null);
               }
@@ -1177,7 +1174,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
               if (burningStakeTemplate) {
                 playSound('evolve');
                 setEvolutionOverlay({ from: burningStakeTemplate, to: lastRevealed });
-                await waitMs(3000);
+                await waitMs(1500);
                 if (unmountedRef.current) return;
                 setEvolutionOverlay(null);
               }
@@ -1192,7 +1189,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
               if (davinciTemplate) {
                 playSound('evolve');
                 setEvolutionOverlay({ from: davinciTemplate, to: lastRevealed });
-                await waitMs(3000);
+                await waitMs(1500);
                 if (unmountedRef.current) return;
                 setEvolutionOverlay(null);
               }
@@ -1227,7 +1224,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                   if (combo.needs.every((n) => myBenchNames.has(n))) {
                     playSound('combo');
                     setComboName(combo.name);
-                    await waitMs(1500);
+                    await waitMs(800);
                     if (unmountedRef.current) return;
                     setComboName(null);
                     break;
@@ -1257,7 +1254,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
               if (d.atkBonus < 0) parts.push(`⚔️${d.atkBonus}`);
               if (d.defBonus > 0) parts.push(`🛡️+${d.defBonus}`);
               setBenchBoostTelop({ text: `📋 ${d.benchCardName} → ${parts.join(' ')}！`, key: Date.now() + i });
-              await waitStep(500);
+              await waitStep(300);
               if (unmountedRef.current) return;
             }
             // Combo telop if multiple boosts
@@ -1268,7 +1265,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
               if (totalAtk !== 0) comboParts.push(`攻撃${totalAtk > 0 ? '+' : ''}${totalAtk}`);
               if (totalDef !== 0) comboParts.push(`防御${totalDef > 0 ? '+' : ''}${totalDef}`);
               setBenchBoostTelop({ text: `🔥 コンボ！合計 ${comboParts.join(' ')}！`, key: Date.now() + 999 });
-              await waitStep(700);
+              await waitStep(400);
               if (unmountedRef.current) return;
             }
             setBenchBoostTelop(null);
@@ -1283,9 +1280,9 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
             playSound(isPlayerRoundWin ? 'round-clear' : 'round-lost');
             const trophyFanBonus = rs.trophyFans[rs.round - 1] ?? 0;
 
-            // Phase 0: Explicit reason banner (2s) — tells the player WHY the round ended.
+            // Phase 0: Explicit reason banner — tells the player WHY the round ended.
             setCineStep('round_end');
-            await waitMs(300);
+            await waitMs(150);
             if (unmountedRef.current) return;
             const loserSide: 'player' | 'ai' = rs.roundWinner === 'player' ? 'ai' : 'player';
             const loserName = isPvP && pvpSession
@@ -1302,24 +1299,24 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
               // Distinct defeat演出 for bench overflow
               playDefeat();
               setBenchOverflowBanner({ loserSide });
-              window.setTimeout(() => setBenchOverflowBanner(null), 2000);
+              window.setTimeout(() => setBenchOverflowBanner(null), 1200);
             } else if (msg.includes('諦めた')) { reasonIcon = '🏳️'; reasonText = '攻撃を諦めた'; }
             else if (msg.includes('ブロック')) { reasonIcon = '🛡️'; reasonText = 'ブロック'; }
             setRoundVictoryTelop(`${reasonIcon} ${reasonText}！${loserName}の敗北`);
             pushLog(`${reasonIcon} ${reasonText}！${loserName}の敗北`);
-            await waitStep(2000);
+            await waitStep(1200);
             if (unmountedRef.current) return;
 
-            // Phase 1: Victory/defeat banner with fan info (3s)
+            // Phase 1: Victory/defeat banner with fan info
             setRoundVictoryTelop(isPlayerRoundWin
               ? `🏆 トロフィー獲得！ +${trophyFanBonus}ファン！`
               : `💀 第${rs.round}回戦 敗北… 相手に+${trophyFanBonus}ファン`);
-            await waitMs(500);
+            await waitMs(250);
             if (unmountedRef.current) return;
             if (manualModeRef.current) {
               await waitManualAdvance();
             } else {
-              await waitStep(3000);
+              await waitStep(1800);
             }
             if (unmountedRef.current) return;
             setRoundVictoryTelop(null);
@@ -1349,16 +1346,16 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                   : `💀 敗北… 🏆×${advs.playerTrophies} ⭐${advs.playerFans}ファン`);
               }
               setCineStep('game_over');
-              await waitStep(FINAL_REVEAL_MS + 1000);
+              await waitStep(FINAL_REVEAL_MS + 500);
               if (unmountedRef.current) return;
               setRoundVictoryTelop(null);
-              if (!unmountedRef.current) window.setTimeout(() => setScreen('result'), 500);
+              if (!unmountedRef.current) window.setTimeout(() => setScreen('result'), 300);
               return;
             }
 
-            // Phase 2: Transition banner (2s)
+            // Phase 2: Transition banner
             setRoundVictoryTelop(`第${rs.round}回戦 → 第${advs.round}回戦へ`);
-            await waitStep(2000);
+            await waitStep(1200);
             if (unmountedRef.current) return;
             setRoundVictoryTelop(null);
 
@@ -1432,25 +1429,25 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
               const m2 = msg2.match(/ベンチ満杯「([^」]+)」/);
               const reasonText2 = m2 ? `ベンチ満杯「${m2[1]}」` : 'ベンチ崩壊';
 
-              // Phase 0: Reason banner (2s)
+              // Phase 0: Reason banner
               setCineStep('round_end');
-              await waitMs(300);
+              await waitMs(150);
               if (unmountedRef.current) return;
               setRoundVictoryTelop(`💀 ${reasonText2}！${loserName2}の敗北`);
               pushLog(`💀 ${reasonText2}！${loserName2}の敗北`);
-              await waitStep(2000);
+              await waitStep(1200);
               if (unmountedRef.current) return;
 
-              // Phase 1: Victory/defeat banner (3s)
+              // Phase 1: Victory/defeat banner
               setRoundVictoryTelop(isPlayerRoundWin2
                 ? `🏆 トロフィー獲得！ +${trophyFanBonus2}ファン！`
                 : `💀 第${rzs.round}回戦 敗北… 相手に+${trophyFanBonus2}ファン`);
-              await waitMs(500);
+              await waitMs(250);
               if (unmountedRef.current) return;
               if (manualModeRef.current) {
                 await waitManualAdvance();
               } else {
-                await waitStep(3000);
+                await waitStep(1800);
               }
               if (unmountedRef.current) return;
               setRoundVictoryTelop(null);
@@ -1479,16 +1476,16 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                     : `💀 敗北… 🏆×${advs.playerTrophies} ⭐${advs.playerFans}ファン`);
                 }
                 setCineStep('game_over');
-                await waitStep(FINAL_REVEAL_MS + 1000);
+                await waitStep(FINAL_REVEAL_MS + 500);
                 if (unmountedRef.current) return;
                 setRoundVictoryTelop(null);
-                if (!unmountedRef.current) window.setTimeout(() => setScreen('result'), 500);
+                if (!unmountedRef.current) window.setTimeout(() => setScreen('result'), 300);
                 return;
               }
 
               // Phase 2: Transition banner
               setRoundVictoryTelop(`第${rzs.round}回戦 → 第${advs.round}回戦へ`);
-              await waitStep(2000);
+              await waitStep(1200);
               if (unmountedRef.current) return;
               setRoundVictoryTelop(null);
 
@@ -1502,7 +1499,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
               // Safety fallback (shouldn't happen from resolveSubBattleWin anymore)
               await waitStep(FINAL_REVEAL_MS);
               if (!unmountedRef.current) setCineStep('game_over');
-              if (!unmountedRef.current) window.setTimeout(() => setScreen('result'), 900);
+              if (!unmountedRef.current) window.setTimeout(() => setScreen('result'), 300);
               return;
             }
             if (manualModeRef.current) {
@@ -1512,8 +1509,8 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
             }
             if (unmountedRef.current) return;
 
-            // Short pause after the resolve banner before kicking off the next sub-battle.
-            await waitMs(300);
+            // Brief pause after the resolve banner before kicking off the next sub-battle.
+            await waitMs(150);
             if (unmountedRef.current) return;
 
             console.log('[KC] → continueAfterResolve (next sub-battle)');
@@ -1683,7 +1680,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
           addTotalAlt(reward.altEarned);
           altPopupKey.current++;
           setAltRewardPopup({ alt: reward.altEarned, xp: reward.xpEarned, key: altPopupKey.current });
-          setTimeout(() => setAltRewardPopup(null), 2500);
+          setTimeout(() => setAltRewardPopup(null), 1500);
         }
       }
     });
@@ -1858,7 +1855,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
           return advanceToNextRound(prev);
         });
         setCineStep('idle');
-      }, 2000);
+      }, 1200);
     } else {
       setCineStep('idle');
     }

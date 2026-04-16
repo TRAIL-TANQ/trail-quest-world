@@ -741,12 +741,12 @@
 
   /* Small fade-out turn banner */
   .turn-banner {
-    animation: turnBanner 1.2s ease-out forwards;
+    animation: turnBanner 0.6s ease-out forwards;
   }
   @keyframes turnBanner {
     0%   { opacity: 0; transform: translateY(-10px); }
-    20%  { opacity: 1; transform: translateY(0); }
-    80%  { opacity: 1; transform: translateY(0); }
+    25%  { opacity: 1; transform: translateY(0); }
+    75%  { opacity: 1; transform: translateY(0); }
     100% { opacity: 0; transform: translateY(-10px); }
   }
 }

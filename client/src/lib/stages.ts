@@ -317,7 +317,7 @@ export const STARTER_DECKS: StarterDeck[] = [
     icon: '🗡️',
     trumpCard: 'ジャンヌ・ダルク',
     themeCards: [
-      'ジャンヌ・ダルク',
+      'ジャンヌ・ダルク', 'ジャンヌ・ダルク',
       '聖剣', '聖剣', '聖剣',
       '軍旗', '軍旗', '軍旗',
       '祈りの光', '祈りの光',
@@ -326,7 +326,7 @@ export const STARTER_DECKS: StarterDeck[] = [
       '火刑',
     ],
     noiseCards: ['紙'],
-    description: '聖剣と軍旗でジャンヌを覚醒。火刑の炎から聖女ジャンヌが蘇る',
+    description: '聖剣と軍旗でジャンヌを覚醒。祈りの光で聖女ジャンヌが蘇る',
   },
   {
     id: 'starter-mandela',

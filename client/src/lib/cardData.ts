@@ -213,7 +213,7 @@ export const COLLECTION_CARDS: CollectionCard[] = [
   { id: 'card-169', name: '始皇帝の勅令', category: 'inventions', rarity: 'N', description: '始皇帝が発した命令書。紙を集める力を持つ。', imageUrl: '/images/cards/imperial-decree.png' },
 
   // ===== ジャンヌダルクデッキ用追加カード =====
-  { id: 'card-170', name: '祈りの光', category: 'inventions', rarity: 'N', description: '教会から差す聖なる光。ジャンヌを戦場に呼び戻す。', imageUrl: '/images/cards/prayer-light.png' },
+  { id: 'card-170', name: '祈りの光', category: 'inventions', rarity: 'SR', description: '教会から差す聖なる光。除外されたジャンヌを聖女として蘇らせる。', imageUrl: '/images/cards/prayer-light.png' },
   { id: 'card-171', name: '白百合の盾', category: 'inventions', rarity: 'N', description: 'フランス王家の百合が刻まれた聖なる盾。', imageUrl: '/images/cards/lily-shield.png' },
   { id: 'card-172', name: '聖女の旗印', category: 'inventions', rarity: 'SR', description: '聖女が掲げた旗。失われた仲間を呼び戻す力を持つ。', imageUrl: '/images/cards/holy-banner.png' },
 
@@ -257,7 +257,7 @@ export const COLLECTION_CARDS: CollectionCard[] = [
   { id: 'card-202', name: '聖女ジャンヌ', category: 'great_people', rarity: 'SSR', description: 'カトリック教会に聖人として認められた救国の乙女。聖女の祈りが全てを守り、失われた仲間を呼び戻す。', imageUrl: '/images/cards/saint-jeanne.png' },
 
   // ===== 変身トリガーカード =====
-  { id: 'card-203', name: '火刑', category: 'inventions', rarity: 'SR', description: '1431年、ジャンヌは「魔女」として火刑に処された。しかしその炎の中から聖女が生まれる。', imageUrl: '/images/cards/burning-stake.png' },
+  { id: 'card-203', name: '火刑', category: 'inventions', rarity: 'N', description: '1431年、ジャンヌは「魔女」として火刑に処された。ベンチのジャンヌを除外する。', imageUrl: '/images/cards/burning-stake.png' },
 
   // ===== デッキ別 SSR (2026-04) =====
   { id: 'card-207', name: 'アウステルリッツの太陽', category: 'discovery', rarity: 'SSR', description: '1805年、三帝会戦の朝に霧が晴れナポレオンに勝利の予兆をもたらした伝説の陽光。', imageUrl: '/images/cards/austerlitz.png' },

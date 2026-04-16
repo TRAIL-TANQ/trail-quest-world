@@ -184,11 +184,11 @@ export const EFFECT_DEFS: Record<string, CardEffect> = {
   qin_soldier:      { id: 'qin_soldier',      name: '皇帝の尖兵',       description: 'ベンチに万里の長城がある時、攻撃+2。', category: 'atk' },
   imperial_decree:  { id: 'imperial_decree',  name: '天子の命',         description: '公開時、デッキの紙を一番上に、焚書坑儒を一番下に配置する（任意発動）。', category: 'bench' },
   // ===== ジャンヌダルクデッキ =====
-  prayer_light:     { id: 'prayer_light',     name: '聖なる祈り',       description: '公開時、ベンチにジャンヌがいる場合、ジャンヌをデッキの一番上に戻す（任意発動）。', category: 'bench' },
+  prayer_light:     { id: 'prayer_light',     name: '聖なる祈り',       description: '公開時、除外されたジャンヌ・ダルクを聖女ジャンヌとしてデッキの一番上に置く（任意発動）。', category: 'bench' },
   lily_shield:      { id: 'lily_shield',      name: '百合の守り',       description: 'From the bench: ジャンヌ・ダルクの防御+2。', category: 'def' },
-  holy_banner:      { id: 'holy_banner',      name: '聖女の導き',       description: '公開時、除外されたジャンヌ系カード1枚をデッキに戻す（任意発動）。', category: 'bench' },
+  holy_banner:      { id: 'holy_banner',      name: '聖女の導き',       description: '公開時、デッキにあるジャンヌ・ダルクをデッキの一番上に戻す（任意発動）。', category: 'bench' },
   saint_jeanne:     { id: 'saint_jeanne',     name: '救国の祈り',       description: '公開時、味方の除外カードを全てデッキに戻す。さらに相手の防御-3（任意発動）。', category: 'special' },
-  burning_stake:    { id: 'burning_stake',    name: '殉教の炎',         description: 'ベンチのジャンヌ・ダルクを除外して、火刑自体を聖女ジャンヌに変身させる（任意発動）。', category: 'special' },
+  burning_stake:    { id: 'burning_stake',    name: '殉教の炎',         description: '公開時、ベンチにジャンヌ・ダルクがいる時、そのジャンヌを除外することができる（任意発動）。', category: 'special' },
   // ===== 紫式部デッキ =====
   murasaki:         { id: 'murasaki',         name: '文化の才媛',       description: 'ベンチの文化系カード1枚につき防御+1。源氏物語ベンチで攻撃+3。', category: 'special' },
   genji:            { id: 'genji',            name: '物語の魔力',       description: '公開時、デッキの紙・筆・和歌1枚をデッキの一番上に置く。', category: 'bench' },
@@ -2017,7 +2017,7 @@ export const SYNERGY_MAP: Record<string, string[]> = {
   'ジャンヌ・ダルク': ['聖剣', '軍旗', '祈りの光', '白百合の盾', '聖女の旗印', '火刑'],
   '聖剣': ['ジャンヌ・ダルク', '軍旗', '祈りの光', '聖女の旗印', '聖女ジャンヌ', '火刑'],
   '軍旗': ['ジャンヌ・ダルク', '聖剣', '白百合の盾', '聖女の旗印', '聖女ジャンヌ', '火刑'],
-  '祈りの光': ['ジャンヌ・ダルク', '聖剣', '白百合の盾', '聖女の旗印', '聖女ジャンヌ', '火刑'],
+  '祈りの光': ['ジャンヌ・ダルク', '聖女ジャンヌ', '聖剣', '白百合の盾', '聖女の旗印', '火刑'],
   '白百合の盾': ['ジャンヌ・ダルク', '軍旗', '祈りの光', '聖女の旗印', '聖女ジャンヌ', '火刑'],
   '聖女の旗印': ['ジャンヌ・ダルク', '聖剣', '軍旗', '祈りの光', '白百合の盾', '聖女ジャンヌ', '火刑'],
   '聖女ジャンヌ': ['聖剣', '軍旗', '祈りの光', '白百合の盾', '聖女の旗印', '火刑'],
