@@ -26,6 +26,7 @@ import QuestLearningUnitPage from "./pages/QuestLearningUnitPage";
 import DeckBuilderPage from "./pages/DeckBuilderPage";
 import PvPSetupPage from "./pages/PvPSetupPage";
 import PvPBattlePage from "./pages/PvPBattlePage";
+import TimeAttackPage from "./pages/TimeAttackPage";
 
 function Router() {
   return (
@@ -37,6 +38,8 @@ function Router() {
       <Route path="/games/knowledge-challenger"><KnowledgeChallenger /></Route>
       <Route path="/games/quiz/:deck/:difficulty" component={QuizPracticePage} />
       <Route path="/quest/:deckKey" component={QuestLearningUnitPage} />
+      <Route path="/games/time-attack/play/:difficulty" component={TimeAttackPage} />
+      <Route path="/games/time-attack" component={TimeAttackPage} />
       <Route path="/deck-builder" component={DeckBuilderPage} />
       <Route path="/result" component={ResultPage} />
       <Route>

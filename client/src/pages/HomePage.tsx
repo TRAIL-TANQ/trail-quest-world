@@ -389,6 +389,34 @@ export default function HomePage() {
           </Link>
         </div>
 
+        {/* ⚡ タイムアタック */}
+        <div className="mb-6">
+          <Link href="/games/time-attack">
+            <div
+              className="tappable relative overflow-hidden cursor-pointer rounded-xl"
+              style={{
+                padding: '12px 16px',
+                background: 'linear-gradient(135deg, #c2410c 0%, #ea580c 50%, #f97316 100%)',
+                border: '2px solid #c5a03f',
+                boxShadow: '0 4px 15px rgba(0,0,0,0.5), inset 0 0 28px rgba(255,215,0,0.08)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 14,
+              }}
+            >
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ background: 'rgba(0,0,0,0.35)', border: '1.5px solid rgba(255,215,0,0.5)' }}>
+                <span className="text-2xl">⚡</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-lg font-black text-white" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.6)' }}>タイムアタック</p>
+                <p className="text-[11px] text-amber-100/85" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.6)' }}>60秒で何問解ける？</p>
+              </div>
+              <span className="text-amber-100 text-xl">›</span>
+            </div>
+          </Link>
+        </div>
+
         {/* Ranking Preview (Top 3 + self) */}
         <div className="mb-6 rounded-xl p-3"
           style={{
