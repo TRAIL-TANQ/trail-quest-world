@@ -2295,12 +2295,47 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
       );
     }
 
+    // 解放済みデッキが0個（ランダム除く）ならプレゼントバナー表示
+    const unlockedCount = STARTER_DECKS.filter((d) => {
+      if (d.id === 'starter-random') return false;
+      const dke = Object.entries(DECK_KEY_TO_STARTER_ID).find(([, sid]) => sid === d.id);
+      const dk = dke?.[0] as DeckKey | undefined;
+      return dk && isDeckUnlocked(questProgress, dk);
+    }).length;
+    const showGiftBanner = !isFirstDeckClaimed() || unlockedCount === 0;
+
     return (
       <div className="min-h-screen px-4 py-6" style={{ background: 'linear-gradient(180deg, #0b1128 0%, #151d3b 50%, #0e1430 100%)' }}>
         <h1 className="text-xl font-bold text-center mb-1" style={{ color: '#ffd700', textShadow: '0 0 15px rgba(255,215,0,0.3)' }}>
           デッキ選択
         </h1>
         <p className="text-center text-amber-200/50 text-xs mb-4">解放済みデッキで出撃、未解放はクエストで解放しよう！</p>
+
+        {/* ===== 初回プレゼントバナー ===== */}
+        {showGiftBanner && (
+          <div className="max-w-md mx-auto mb-4">
+            <button
+              onClick={() => {
+                // showGift を強制的にトリガー: first_deck_claimed を消してリロード
+                try { localStorage.removeItem('first_deck_claimed'); } catch { /* */ }
+                window.location.reload();
+              }}
+              className="w-full rounded-xl p-3 flex items-center gap-3 active:scale-[0.98] transition-transform"
+              style={{
+                background: 'linear-gradient(135deg, rgba(255,215,0,0.15), rgba(255,215,0,0.05))',
+                border: '2px solid rgba(255,215,0,0.5)',
+                boxShadow: '0 0 20px rgba(255,215,0,0.12)',
+              }}
+            >
+              <span className="text-3xl">🎁</span>
+              <div className="flex-1 min-w-0 text-left">
+                <p className="text-sm font-black" style={{ color: '#ffd700' }}>初回デッキプレゼント</p>
+                <p className="text-[11px] text-amber-200/70">好きなデッキを1つ無料でもらえます！</p>
+              </div>
+              <span className="text-sm font-bold" style={{ color: '#ffd700' }}>選ぶ →</span>
+            </button>
+          </div>
+        )}
 
         {/* ===== My Decks セクション ===== */}
         <div className="max-w-md mx-auto mb-4">
