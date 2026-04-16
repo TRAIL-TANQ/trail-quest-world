@@ -61,7 +61,7 @@ import {
 import { getStage, createStageAIDeck, STARTER_DECKS, buildStarterDeck, npcDeckPhasePick, longSpecialRuleMessages } from '@/lib/stages';
 import type { StarterDeck, StageRules } from '@/lib/stages';
 import { useStageProgressStore } from '@/lib/stageProgressStore';
-import { loadQuestProgress, isDeckUnlocked, getUnlockedSSRCardNames, DECK_KEY_TO_STARTER_ID, QUEST_DIFFICULTIES, DIFFICULTY_INFO, isDifficultyUnlocked, type DeckKey } from '@/lib/questProgress';
+import { loadQuestProgress, isDeckUnlocked, getUnlockedSSRCardNames, DECK_KEY_TO_STARTER_ID, QUEST_DIFFICULTIES, DIFFICULTY_INFO, isDifficultyUnlocked, DECK_QUEST_INFO, isFirstDeckClaimed, claimFirstDeck, type DeckKey } from '@/lib/questProgress';
 import type { PvPSession } from '@/lib/pvpSession';
 import { clearPvPSession } from '@/lib/pvpSession';
 import { applyRatingChange, applyPvPRatingChange } from '@/lib/ratingService';
@@ -2124,6 +2124,72 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
       return allNames.map((n) => findCardByName(n)).filter(Boolean) as BattleCard[];
     })() : null;
 
+    // デッキ戦略説明
+    const DECK_STRATEGY: Record<string, string> = {
+      'starter-napoleon': '大砲と法典でナポレオンを強化。アウステルリッツで効果2倍',
+      'starter-amazon': 'ピラニアの群れで攻撃。3種揃えてアナコンダを大蛇に進化',
+      'starter-heritage': '紙を集めて焚書坑儒で大量除外。勅令でセットアップ',
+      'starter-nobunaga': '鉄砲と足軽の物量。本能寺の変で明智ルートへ',
+      'starter-jeanne': '聖剣+軍旗でフルバフ。火刑で聖女ジャンヌに変身',
+      'starter-murasaki': '和歌と筆で堅実に強化。十二単で除外耐性',
+      'starter-mandela': '自由憲章を積んで攻撃力UP。虹の国で除外全回収',
+      'starter-wolf': '群れの掟で防御鉄壁。遠吠えでサーチ。一匹狼で奇襲',
+      'starter-galileo': '望遠鏡+地動説でバフ。地球は動いているで相手無効化',
+      'starter-davinci': 'モナリザ+最後の晩餐をベンチに揃えて万能の天才に進化',
+    };
+
+    // 初回デッキプレゼント判定
+    const showGift = !isFirstDeckClaimed();
+
+    // Gift overlay: 初回プレゼント画面
+    if (showGift) {
+      const themedDecks = STARTER_DECKS.filter((d) => d.id !== 'starter-random');
+      return (
+        <div className="min-h-screen px-4 py-6 flex flex-col" style={{ background: 'linear-gradient(180deg, #0b1128 0%, #151d3b 50%, #0e1430 100%)' }}>
+          <div className="text-center mb-4">
+            <p className="text-3xl mb-2">🎁</p>
+            <h1 className="text-xl font-black" style={{ color: '#ffd700' }}>デッキプレゼント！</h1>
+            <p className="text-sm text-amber-200/70 mt-1">好きなデッキを1つ選ぼう</p>
+          </div>
+          <div className="flex-1 overflow-y-auto space-y-2 max-w-md mx-auto w-full">
+            {themedDecks.map((deck) => {
+              const deckKeyEntry = Object.entries(DECK_KEY_TO_STARTER_ID).find(([, sid]) => sid === deck.id);
+              const deckKey = deckKeyEntry?.[0] as DeckKey | undefined;
+              const info = deckKey ? DECK_QUEST_INFO[deckKey] : null;
+              return (
+                <button
+                  key={deck.id}
+                  onClick={() => {
+                    if (!deckKey) return;
+                    if (confirm(`${deck.icon} ${deck.name}をもらう？`)) {
+                      claimFirstDeck(deckKey);
+                      window.location.reload();
+                    }
+                  }}
+                  className="w-full rounded-xl p-3 flex items-center gap-3 active:scale-[0.98] transition-transform text-left"
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(21,29,59,0.95), rgba(14,20,45,0.95))',
+                    border: `1.5px solid ${info?.color ?? 'rgba(255,215,0,0.25)'}50`,
+                    boxShadow: '0 2px 10px rgba(0,0,0,0.3)',
+                  }}
+                >
+                  <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl shrink-0"
+                    style={{ background: `${info?.color ?? '#ffd700'}22`, border: `1px solid ${info?.color ?? '#ffd700'}44` }}>
+                    {deck.icon}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-amber-100">{deck.name}</p>
+                    <p className="text-[11px] text-amber-200/60 truncate">{DECK_STRATEGY[deck.id] ?? deck.description}</p>
+                  </div>
+                  <span className="text-amber-200/40 text-lg">›</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen px-4 py-6" style={{ background: 'linear-gradient(180deg, #0b1128 0%, #151d3b 50%, #0e1430 100%)' }}>
         <h1 className="text-xl font-bold text-center mb-1" style={{ color: '#ffd700', textShadow: '0 0 15px rgba(255,215,0,0.3)' }}>
@@ -2343,8 +2409,20 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
           </button>
         </div>
 
-        {/* カード一覧ポップアップ */}
-        {popupDeck && popupCards && (
+        {/* カード一覧ポップアップ（グループ表示+戦略説明） */}
+        {popupDeck && popupCards && (() => {
+          const grouped = new Map<string, { card: BattleCard; count: number }>();
+          for (const c of popupCards) {
+            const e = grouped.get(c.name);
+            if (e) e.count++;
+            else grouped.set(c.name, { card: c, count: 1 });
+          }
+          const rarityOrder: Record<string, number> = { SSR: 0, SR: 1, R: 2, N: 3 };
+          const entries = Array.from(grouped.values()).sort((a, b) =>
+            (rarityOrder[a.card.rarity] ?? 9) - (rarityOrder[b.card.rarity] ?? 9)
+          );
+          const strategy = DECK_STRATEGY[popupDeck.id] ?? popupDeck.description;
+          return (
           <div
             className="fixed inset-0 z-50 flex items-center justify-center p-4"
             style={{ background: 'rgba(0,0,0,0.78)' }}
@@ -2364,37 +2442,48 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                 <div className="flex items-center gap-2">
                   <span className="text-xl">{popupDeck.icon}</span>
                   <h3 className="text-base font-black text-amber-100">{popupDeck.name}</h3>
+                  <span className="text-[11px] text-amber-200/50">{popupCards.length}枚</span>
                 </div>
                 <button onClick={() => setExpandedStarterId(null)} className="text-white/70 text-base">✕</button>
               </div>
-              <div className="px-3 py-2 text-[11px] text-amber-200/60 shrink-0">
-                {popupDeck.description}
-              </div>
-              <div className="flex-1 overflow-auto p-3">
-                <div className="grid grid-cols-4 gap-2">
-                  {popupCards.map((c, ci) => {
-                    const isTrump = ci === 0 && popupDeck.trumpCard;
+              <div className="flex-1 overflow-auto">
+                <div className="divide-y divide-white/5">
+                  {entries.map(({ card: c, count }) => {
+                    const rc = c.rarity === 'SSR' ? '#ffd700' : c.rarity === 'SR' ? '#a855f7' : c.rarity === 'R' ? '#3b82f6' : '#9ca3af';
                     return (
-                      <div key={ci} className="text-center">
-                        <div
-                          className="rounded-md overflow-hidden mb-0.5"
-                          style={{
-                            border: isTrump ? '2px solid #ffd700' : '1px solid rgba(255,255,255,0.1)',
-                            boxShadow: isTrump ? '0 0 8px rgba(255,215,0,0.35)' : 'none',
-                          }}
-                        >
-                          <img src={c.imageUrl} alt={c.name} className="w-full aspect-[3/4] object-cover" />
+                      <button key={c.name} onClick={() => setDetailCard(c)}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 active:bg-white/5 transition-colors text-left">
+                        <div className="w-9 h-12 rounded-md overflow-hidden shrink-0"
+                          style={{ border: `1.5px solid ${rc}80` }}>
+                          <img src={c.imageUrl} alt="" className="w-full h-full object-cover" />
                         </div>
-                        <p className="text-[8px] text-amber-200/70 leading-tight truncate">{c.name}</p>
-                        <p className="text-[7px]" style={{ color: RARITY_INFO[c.rarity].color }}>{c.rarity}</p>
-                      </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[12px] font-bold text-amber-100 truncate">
+                              {c.name}{count > 1 ? ` ×${count}` : ''}
+                            </span>
+                            <span className="text-[9px] font-black px-1 rounded shrink-0" style={{ background: rc, color: '#fff' }}>
+                              {c.rarity}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-amber-200/50 truncate">{c.effect?.name ?? c.effectDescription}</p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-[10px] font-bold" style={{ color: '#ff6b6b' }}>⚔️{c.attackPower ?? c.power}</p>
+                          <p className="text-[10px] font-bold" style={{ color: '#60a5fa' }}>🛡️{c.defensePower ?? c.power}</p>
+                        </div>
+                      </button>
                     );
                   })}
                 </div>
               </div>
+              <div className="px-3 py-2.5 shrink-0" style={{ borderTop: '1px solid rgba(255,215,0,0.2)', background: 'rgba(0,0,0,0.3)' }}>
+                <p className="text-[11px] text-amber-200/70 text-center leading-snug">💡 {strategy}</p>
+              </div>
             </div>
           </div>
-        )}
+          );
+        })()}
       </div>
     );
   }

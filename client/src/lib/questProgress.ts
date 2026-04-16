@@ -7,7 +7,7 @@ import { getAuth, isAdmin, isGuest } from './auth';
 
 // ===== Types =====
 
-export type DeckKey = 'napoleon' | 'amazon' | 'qinshi' | 'galileo' | 'jeanne' | 'murasaki' | 'mandela' | 'davinci';
+export type DeckKey = 'napoleon' | 'amazon' | 'qinshi' | 'galileo' | 'jeanne' | 'murasaki' | 'mandela' | 'davinci' | 'nobunaga' | 'wolf';
 export type QuestDifficulty = 'beginner' | 'challenger' | 'master' | 'legend';
 
 export interface QuestDifficultyProgress {
@@ -36,7 +36,7 @@ export function isAdminMode(): boolean {
 
 // ===== Constants =====
 
-export const DECK_KEYS: DeckKey[] = ['napoleon', 'amazon', 'qinshi', 'galileo', 'jeanne', 'murasaki', 'mandela', 'davinci'];
+export const DECK_KEYS: DeckKey[] = ['napoleon', 'amazon', 'qinshi', 'galileo', 'jeanne', 'murasaki', 'mandela', 'davinci', 'nobunaga', 'wolf'];
 
 export const QUEST_DIFFICULTIES: QuestDifficulty[] = ['beginner', 'challenger', 'master', 'legend'];
 
@@ -52,6 +52,8 @@ export const DECK_KEY_TO_STARTER_ID: Record<DeckKey, string> = {
   murasaki: 'starter-murasaki',
   mandela:  'starter-mandela',
   davinci:  'starter-davinci',
+  nobunaga: 'starter-nobunaga',
+  wolf:     'starter-wolf',
 };
 
 /** デッキ表示情報 */
@@ -64,6 +66,8 @@ export const DECK_QUEST_INFO: Record<DeckKey, { icon: string; name: string; colo
   murasaki: { icon: '📖', name: '紫式部',     color: '#ec4899' },
   mandela:  { icon: '🌍', name: 'マンデラ',   color: '#f97316' },
   davinci:  { icon: '🎨', name: 'ダ・ヴィンチ', color: '#eab308' },
+  nobunaga: { icon: '🔥', name: '信長',       color: '#dc2626' },
+  wolf:     { icon: '🐺', name: 'オオカミ',   color: '#6b7280' },
 };
 
 /** 難易度表示情報 */
@@ -87,6 +91,8 @@ export const DECK_SSR_CARDS: Record<DeckKey, string[]> = {
   murasaki: [],                   // SSR なし
   mandela:  ['虹の国'],           // レジェンドクリアで虹の国(SR)解放
   davinci:  [],                   // SSR なし（今後追加可能）
+  nobunaga: [],                   // 本能寺の変は進化トリガー、SSR枠なし
+  wolf:     [],                   // 月下の遠吠えは通常SSR
 };
 
 // ===== Default Progress =====
@@ -168,7 +174,30 @@ export function isDifficultyUnlocked(
   return true;
 }
 
-/** デッキが使用可能か（ビギナー10問正解で解放 / モニターモード or 管理者なら常にtrue） */
+// ===== First Deck Gift =====
+
+const LS_FIRST_DECK = 'first_deck_claimed';
+
+export function getFirstDeckGift(): DeckKey | null {
+  try {
+    const v = localStorage.getItem(LS_FIRST_DECK);
+    if (v && DECK_KEYS.includes(v as DeckKey)) return v as DeckKey;
+  } catch { /* */ }
+  return null;
+}
+
+export function claimFirstDeck(deckKey: DeckKey): void {
+  try { localStorage.setItem(LS_FIRST_DECK, deckKey); } catch { /* */ }
+  const progress = loadQuestProgress();
+  progress[deckKey].beginner.cleared = true;
+  saveQuestProgress(progress);
+}
+
+export function isFirstDeckClaimed(): boolean {
+  return getFirstDeckGift() !== null;
+}
+
+/** デッキが使用可能か（ビギナー10問正解で解放 / 初回プレゼント / モニターモード or 管理者なら常にtrue） */
 export function isDeckUnlocked(progress: QuestProgressData, deckKey: DeckKey): boolean {
   if (MONITOR_MODE || isAdminMode()) return true;
   return progress[deckKey].beginner.cleared;
