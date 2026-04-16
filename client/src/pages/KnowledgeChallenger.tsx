@@ -4245,95 +4245,51 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
           </div>
         );
 
-        // Sort deck cards by name for grouped display, preserving original indices
+        // Flatten deck cards sorted by name for clean 5×3 grid (no stacking)
         const sortedDeckEntries = deckCards
           .map((c, i) => ({ card: c, origIdx: i }))
           .sort((a, b) => a.card.name.localeCompare(b.card.name, 'ja'));
 
-        // Compute group info: is this card a duplicate of the previous one?
-        const groupedEntries = sortedDeckEntries.map((entry, si) => {
-          const prev = si > 0 ? sortedDeckEntries[si - 1] : null;
-          const next = si < sortedDeckEntries.length - 1 ? sortedDeckEntries[si + 1] : null;
-          const isStackedDup = prev !== null && prev.card.name === entry.card.name;
-          // Count: only on the last card of a same-name group
-          const isLastInGroup = next === null || next.card.name !== entry.card.name;
-          let groupCount = 0;
-          if (isLastInGroup) {
-            // Count backwards
-            let k = si;
-            while (k >= 0 && sortedDeckEntries[k].card.name === entry.card.name) { k--; groupCount++; }
-          }
-          return { ...entry, isStackedDup, isLastInGroup, groupCount };
-        });
+        const rarityBorderColor = (r: string) =>
+          r === 'SSR' ? 'rgba(255,215,0,0.7)' : r === 'SR' ? 'rgba(168,85,247,0.6)' : r === 'R' ? 'rgba(59,130,246,0.6)' : 'rgba(156,163,175,0.4)';
 
         const DeckGrid = (
-          <div className="grid grid-cols-5 md:grid-cols-4 gap-1 overflow-y-auto" style={{ maxHeight: '100%' }}>
-            {groupedEntries.map((entry) => {
-              const { card: c, origIdx, isStackedDup, isLastInGroup, groupCount } = entry;
-              const canRemove = deckCount > MIN_DECK_SIZE;
+          <div className="grid grid-cols-5 gap-1">
+            {sortedDeckEntries.map((entry) => {
+              const { card: c, origIdx } = entry;
               const isFading = fadingOutIdx === origIdx;
               return (
-                <div
+                <button
                   key={c.id + '-' + origIdx}
-                  className="relative rounded-md p-0.5"
+                  onClick={() => handleRequestRemoveCard(origIdx)}
+                  className="relative rounded-lg overflow-hidden active:scale-95 transition-all"
                   style={{
-                    background: 'rgba(255,255,255,0.04)',
-                    border: '1px solid rgba(255,255,255,0.1)',
+                    aspectRatio: '3/4',
+                    border: `1.5px solid ${rarityBorderColor(c.rarity)}`,
+                    background: 'rgba(11,17,40,0.8)',
                     opacity: isFading ? 0 : 1,
-                    transform: isFading ? 'scale(0.85)' : 'scale(1)',
+                    transform: isFading ? 'scale(0.85)' : undefined,
                     transition: 'opacity 0.28s ease, transform 0.28s ease',
-                    marginLeft: isStackedDup ? '-8px' : undefined,
-                    zIndex: isStackedDup ? 1 : 0,
                   }}
                 >
-                  <CardDisplay card={c} size="sm" onTap={() => setDetailCard(c)} />
-                  {/* Info button */}
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setDetailCard(c); }}
-                    className="absolute bottom-0 right-0 w-4 h-4 rounded-full flex items-center justify-center z-[6] active:scale-90 transition-transform"
+                  {c.imageUrl && (
+                    <img src={c.imageUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                  )}
+                  <div className="absolute inset-x-0 bottom-0 px-0.5 py-0.5" style={{ background: 'linear-gradient(transparent, rgba(0,0,0,0.85))' }}>
+                    <p className="text-[7px] font-bold text-white text-center truncate leading-tight" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.9)' }}>
+                      {c.name}
+                    </p>
+                  </div>
+                  <span
+                    className="absolute top-0 left-0 text-[6px] font-black px-0.5 rounded-br"
                     style={{
-                      background: 'rgba(255,215,0,0.8)',
-                      color: '#0b1128',
-                      fontSize: '9px',
-                      fontWeight: 900,
-                      boxShadow: '0 1px 3px rgba(0,0,0,0.4)',
+                      background: c.rarity === 'SSR' ? '#ffd700' : c.rarity === 'SR' ? '#a855f7' : c.rarity === 'R' ? '#3b82f6' : '#6b7280',
+                      color: c.rarity === 'SSR' || c.rarity === 'SR' ? '#fff' : '#e5e7eb',
                     }}
                   >
-                    i
-                  </button>
-                  {isLastInGroup && groupCount >= 2 && (
-                    <span
-                      className="absolute top-0 left-0 text-[10px] font-black rounded-br-md px-1"
-                      style={{
-                        background: 'rgba(255,215,0,0.85)',
-                        color: '#1a1a2e',
-                        lineHeight: '16px',
-                        zIndex: 5,
-                      }}
-                    >
-                      ×{groupCount}
-                    </span>
-                  )}
-                  {canRemove && !isFading && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleRequestRemoveCard(origIdx); }}
-                      aria-label="このカードを外す"
-                      className="absolute -top-2 -right-2 w-8 h-8 rounded-full flex items-center justify-center active:scale-90 transition-transform z-10"
-                      style={{
-                        background: '#ef4444',
-                        color: '#fff',
-                        fontSize: '14px',
-                        fontWeight: 900,
-                        boxShadow: '0 2px 8px rgba(239,68,68,0.5)',
-                        border: '2px solid rgba(255,255,255,0.9)',
-                        minWidth: '32px',
-                        minHeight: '32px',
-                      }}
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
+                    {c.rarity}
+                  </span>
+                </button>
               );
             })}
           </div>
