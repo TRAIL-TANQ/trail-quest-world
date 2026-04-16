@@ -17,7 +17,7 @@ export interface StageRules {
   npcDefenseBonus?: number;       // flat defense bonus for NPC cards matching condition
   npcDefenseBonusFilter?: string; // category filter for npcDefenseBonus
   skipDeckPhase?: boolean;        // player skips deck phase (default false)
-  npcDeckSize?: number;           // NPC initial deck size (default 10)
+  npcDeckSize?: number;           // NPC initial deck size (default INITIAL_DECK_SIZE = 15)
   npcBenchSlots?: number;         // NPC bench max (default 6)
   npcDeckPhasePickCount?: number; // cards NPC picks per deck phase (default 2)
   npcSynergyRate?: number;        // 0..1 chance NPC picks synergy card (default 0)
@@ -147,7 +147,7 @@ export function shortSpecialRuleTags(rules: StageRules): string[] {
   if (rules.skipDeckPhase) {
     tags.push('⚠️ デッキフェイズなし');
   }
-  if (rules.npcDeckSize !== undefined && rules.npcDeckSize !== 10) {
+  if (rules.npcDeckSize !== undefined && rules.npcDeckSize !== INITIAL_DECK_SIZE) {
     tags.push(`⚠️ 相手デッキ${rules.npcDeckSize}枚`);
   }
   if (rules.npcDoubleBenchEffect) {
@@ -174,8 +174,8 @@ export function longSpecialRuleMessages(rules: StageRules): string[] {
   if (rules.skipDeckPhase) {
     msgs.push('デッキフェイズなし');
   }
-  if (rules.npcDeckSize !== undefined && rules.npcDeckSize !== 10) {
-    msgs.push(`相手の初期デッキが${rules.npcDeckSize}枚です（通常10枚）`);
+  if (rules.npcDeckSize !== undefined && rules.npcDeckSize !== INITIAL_DECK_SIZE) {
+    msgs.push(`相手の初期デッキが${rules.npcDeckSize}枚です（通常${INITIAL_DECK_SIZE}枚）`);
   }
   if (rules.npcDoubleBenchEffect) {
     msgs.push('相手のベンチ効果が2回発動');
@@ -415,6 +415,7 @@ function buildNamedDeck(
   const stamp = Date.now();
   const deck: BattleCard[] = [];
   const usedNames = new Set<string>();
+  const missedNames: string[] = [];
 
   // Add named cards
   for (const name of cardNames) {
@@ -422,8 +423,13 @@ function buildNamedDeck(
     if (card) {
       deck.push({ ...card, id: `${prefix}-${card.id}-${deck.length}-${stamp}` });
       usedNames.add(name);
+    } else if (name) {
+      missedNames.push(name);
+      console.warn(`[デッキ構築] マッチしないカード名: '${name}' (prefix=${prefix})`);
     }
   }
+
+  const filledFromNames = deck.length;
 
   // Fill remaining with random N cards (noise)
   if (deck.length < deckSize) {
@@ -436,6 +442,12 @@ function buildNamedDeck(
       deck.push({ ...c, id: `${prefix}-${c.id}-${deck.length}-${stamp}` });
     }
   }
+
+  console.log(`[デッキ構築] prefix=${prefix} 要求${cardNames.length}名 → 名前一致${filledFromNames}枚 + 補填${deck.length - filledFromNames}枚 = 合計${deck.length}枚 (deckSize=${deckSize})`);
+  if (missedNames.length > 0) {
+    console.warn(`[デッキ構築] 不一致カード: ${missedNames.join(', ')}`);
+  }
+  console.log(`[デッキ構築] 構築結果:`, deck.map((c) => c.name));
 
   return shuffled(deck);
 }
