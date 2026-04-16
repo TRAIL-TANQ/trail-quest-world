@@ -404,6 +404,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
   // ===== Starter deck selection (stage mode) =====
   const [selectedStarter, setSelectedStarter] = useState<StarterDeck | null>(null);
   const [expandedStarterId, setExpandedStarterId] = useState<string | null>(null);
+  const [giftConfirmDeck, setGiftConfirmDeck] = useState<{ deckKey: DeckKey; icon: string; name: string; strategy: string } | null>(null);
 
   // ===== Special rule banner (shown briefly at battle start) =====
   const [specialRuleBanner, setSpecialRuleBanner] = useState<string[] | null>(null);
@@ -2161,10 +2162,12 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                   key={deck.id}
                   onClick={() => {
                     if (!deckKey) return;
-                    if (confirm(`${deck.icon} ${deck.name}をもらう？`)) {
-                      claimFirstDeck(deckKey);
-                      window.location.reload();
-                    }
+                    setGiftConfirmDeck({
+                      deckKey,
+                      icon: deck.icon,
+                      name: deck.name,
+                      strategy: DECK_STRATEGY[deck.id] ?? deck.description,
+                    });
                   }}
                   className="w-full rounded-xl p-3 flex items-center gap-3 active:scale-[0.98] transition-transform text-left"
                   style={{
@@ -2186,6 +2189,59 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
               );
             })}
           </div>
+
+          {/* Gift confirm modal */}
+          {giftConfirmDeck && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-6"
+              style={{ background: 'rgba(0,0,0,0.8)' }}
+              onClick={() => setGiftConfirmDeck(null)}>
+              <div
+                className="w-full max-w-[400px] text-center"
+                style={{
+                  background: 'rgba(26,31,58,0.95)',
+                  backdropFilter: 'blur(20px)',
+                  border: '2px solid #ffd700',
+                  borderRadius: 20,
+                  padding: 32,
+                  boxShadow: '0 16px 48px rgba(0,0,0,0.7), 0 0 40px rgba(255,215,0,0.15)',
+                }}
+                onClick={(e) => e.stopPropagation()}>
+                <p className="text-5xl mb-3">{giftConfirmDeck.icon}</p>
+                <h2 className="text-xl font-black text-amber-100 mb-2">{giftConfirmDeck.name}</h2>
+                <p className="text-sm text-amber-200/70 leading-relaxed mb-6">{giftConfirmDeck.strategy}</p>
+                <div className="flex flex-col items-center gap-3">
+                  <button
+                    onClick={() => {
+                      claimFirstDeck(giftConfirmDeck.deckKey);
+                      setGiftConfirmDeck(null);
+                      window.location.reload();
+                    }}
+                    className="tappable pulse-btn rounded-xl font-black text-base active:scale-[0.97] transition-transform"
+                    style={{
+                      width: '75%',
+                      minHeight: 52,
+                      background: 'linear-gradient(135deg, #ffd700, #c5a03f)',
+                      color: '#0b1128',
+                      boxShadow: '0 4px 16px rgba(255,215,0,0.45)',
+                    }}>
+                    🎁 もらう！
+                  </button>
+                  <button
+                    onClick={() => setGiftConfirmDeck(null)}
+                    className="rounded-lg font-bold text-sm active:scale-[0.97] transition-transform"
+                    style={{
+                      width: '55%',
+                      minHeight: 40,
+                      background: 'rgba(255,255,255,0.08)',
+                      border: '1px solid rgba(255,255,255,0.2)',
+                      color: 'rgba(255,255,255,0.6)',
+                    }}>
+                    キャンセル
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       );
     }
