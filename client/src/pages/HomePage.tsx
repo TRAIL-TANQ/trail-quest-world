@@ -298,13 +298,13 @@ export default function HomePage() {
         </div>
 
         {/* メインエントリ: バトル / デッキクエスト / 2人対戦 */}
-        <div className="mb-6 flex flex-col" style={{ gap: 20 }}>
+        <div className="mb-4 flex flex-col" style={{ gap: 10 }}>
           <Link href="/games/knowledge-challenger?screen=deck_select">
             <div
               className="tappable relative overflow-hidden cursor-pointer"
               style={{
                 borderRadius: 16,
-                padding: '16px 18px',
+                padding: '12px 16px',
                 background: 'linear-gradient(135deg, #8b1a1a 0%, #c0392b 50%, #e74c3c 100%)',
                 border: '2px solid #c5a03f',
                 boxShadow: '0 4px 15px rgba(0,0,0,0.5), inset 0 0 28px rgba(255,215,0,0.08)',
@@ -313,13 +313,13 @@ export default function HomePage() {
                 gap: 14,
               }}
             >
-              <div className="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0 relative overflow-hidden"
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 relative overflow-hidden"
                 style={{
                   background: 'rgba(0,0,0,0.35)',
                   border: '1.5px solid rgba(255,215,0,0.5)',
                   boxShadow: 'inset 0 0 10px rgba(0,0,0,0.5)',
                 }}>
-                <img src="/images/ui/icon-sword.png" alt="" className="w-10 h-10 object-contain"
+                <img src="/images/ui/icon-sword.png" alt="" className="w-8 h-8 object-contain"
                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                 <span className="absolute text-3xl" style={{ zIndex: 0, opacity: 0.4 }}>⚔️</span>
               </div>
@@ -336,7 +336,7 @@ export default function HomePage() {
               className="tappable relative overflow-hidden cursor-pointer"
               style={{
                 borderRadius: 16,
-                padding: '16px 18px',
+                padding: '12px 16px',
                 background: 'linear-gradient(135deg, #1a3a5c 0%, #2980b9 50%, #3498db 100%)',
                 border: '2px solid #c5a03f',
                 boxShadow: '0 4px 15px rgba(0,0,0,0.5), inset 0 0 28px rgba(255,215,0,0.08)',
@@ -345,13 +345,13 @@ export default function HomePage() {
                 gap: 14,
               }}
             >
-              <div className="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0 relative overflow-hidden"
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 relative overflow-hidden"
                 style={{
                   background: 'rgba(0,0,0,0.35)',
                   border: '1.5px solid rgba(255,215,0,0.5)',
                   boxShadow: 'inset 0 0 10px rgba(0,0,0,0.5)',
                 }}>
-                <img src="/images/ui/icon-book.png" alt="" className="w-10 h-10 object-contain"
+                <img src="/images/ui/icon-book.png" alt="" className="w-8 h-8 object-contain"
                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                 <span className="absolute text-3xl" style={{ zIndex: 0, opacity: 0.4 }}>📖</span>
               </div>
@@ -365,19 +365,20 @@ export default function HomePage() {
 
           <Link href="/games/knowledge-challenger/pvp">
             <div
-              className="rounded-xl p-4 flex items-center gap-3 transition-all active:scale-[0.98] cursor-pointer relative overflow-hidden"
+              className="rounded-xl flex items-center gap-3 transition-all active:scale-[0.98] cursor-pointer relative overflow-hidden"
               style={{
+                padding: '10px 14px',
                 background: 'linear-gradient(135deg, rgba(239,68,68,0.18), rgba(59,130,246,0.18))',
                 border: '1.5px solid rgba(255,215,0,0.35)',
                 boxShadow: '0 2px 12px rgba(0,0,0,0.3), inset 0 0 20px rgba(255,215,0,0.04)',
               }}
             >
-              <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
                 style={{
                   background: 'linear-gradient(135deg, #ef4444, #3b82f6)',
                   boxShadow: '0 0 12px rgba(255,215,0,0.25)',
                 }}>
-                <span className="text-2xl">⚔️</span>
+                <span className="text-xl">⚔️</span>
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-bold text-amber-100">2人対戦</p>
