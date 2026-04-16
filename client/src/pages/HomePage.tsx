@@ -298,7 +298,7 @@ export default function HomePage() {
         </div>
 
         {/* メインエントリ: バトル / デッキクエスト / 2人対戦 */}
-        <div className="mb-4 flex flex-col" style={{ gap: 10 }}>
+        <div className="mb-6 flex flex-col" style={{ gap: 10 }}>
           <Link href="/games/knowledge-challenger?screen=deck_select">
             <div
               className="tappable relative overflow-hidden cursor-pointer"
