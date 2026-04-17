@@ -61,7 +61,7 @@ import {
 import { getStage, createStageAIDeck, STARTER_DECKS, buildStarterDeck, npcDeckPhasePick, longSpecialRuleMessages } from '@/lib/stages';
 import type { StarterDeck, StageRules } from '@/lib/stages';
 import { useStageProgressStore } from '@/lib/stageProgressStore';
-import { loadQuestProgress, isDeckUnlocked, getUnlockedSSRCardNames, DECK_KEY_TO_STARTER_ID, QUEST_DIFFICULTIES, DIFFICULTY_INFO, isDifficultyUnlocked, DECK_QUEST_INFO, isFirstDeckClaimed, claimFirstDeck, type DeckKey } from '@/lib/questProgress';
+import { loadQuestProgress, isDeckUnlocked, isDeckAvailable, getUnlockedSSRCardNames, DECK_KEY_TO_STARTER_ID, QUEST_DIFFICULTIES, DIFFICULTY_INFO, isDifficultyUnlocked, DECK_QUEST_INFO, isFirstDeckClaimed, claimFirstDeck, type DeckKey } from '@/lib/questProgress';
 import type { PvPSession } from '@/lib/pvpSession';
 import { clearPvPSession } from '@/lib/pvpSession';
 import { applyRatingChange, applyPvPRatingChange } from '@/lib/ratingService';
@@ -2344,7 +2344,12 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
 
     // Gift overlay: 初回プレゼント画面
     if (showGift) {
-      const themedDecks = STARTER_DECKS.filter((d) => d.id !== 'starter-random');
+      const themedDecks = STARTER_DECKS.filter((d) => d.id !== 'starter-random').filter((d) => {
+        // 準備中のデッキはプレゼント対象から除外
+        const entry = Object.entries(DECK_KEY_TO_STARTER_ID).find(([, sid]) => sid === d.id);
+        const dk = entry?.[0] as DeckKey | undefined;
+        return !dk || isDeckAvailable(dk);
+      });
       return (
         <div className="min-h-screen px-4 py-6 flex flex-col" style={{ background: 'linear-gradient(180deg, #0b1128 0%, #151d3b 50%, #0e1430 100%)' }}>
           <div className="text-center mb-4">
@@ -2619,8 +2624,9 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
             const deckKeyEntry = Object.entries(DECK_KEY_TO_STARTER_ID).find(([, sid]) => sid === deck.id);
             const deckKey = deckKeyEntry?.[0] as DeckKey | undefined;
             const isRandom = deck.id === 'starter-random';
-            const isUnlocked = isRandom || !deckKey || isDeckUnlocked(questProgress, deckKey);
-            if (deckKey) console.log('[デッキ選択] 解放済み判定:', deckKey, isUnlocked);
+            const isAvailable = isRandom || !deckKey || isDeckAvailable(deckKey);
+            const isUnlocked = isAvailable && (isRandom || !deckKey || isDeckUnlocked(questProgress, deckKey));
+            if (deckKey) console.log('[デッキ選択] 解放済み判定:', deckKey, isUnlocked, 'available=', isAvailable);
 
             return (
               <div
@@ -2658,7 +2664,10 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                       <span className="text-[13px] font-bold text-amber-100 truncate">
                         {deck.icon} {deck.name.replace('デッキ', '').replace('🎨 ', '')}
                       </span>
-                      {isRandom ? null : isUnlocked ? (
+                      {isRandom ? null : !isAvailable ? (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded font-bold shrink-0"
+                          style={{ background: 'rgba(255,215,0,0.15)', color: 'var(--tqw-gold, #ffd700)', border: '1px solid rgba(255,215,0,0.4)' }}>🔨 準備中</span>
+                      ) : isUnlocked ? (
                         <span className="text-[9px] px-1.5 py-0.5 rounded font-bold shrink-0"
                           style={{ background: 'rgba(34,197,94,0.18)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.35)' }}>✅ 解放済</span>
                       ) : (
@@ -2702,7 +2711,20 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
 
                 {/* Action row */}
                 <div className="px-3 pb-2.5">
-                  {isUnlocked ? (
+                  {!isAvailable ? (
+                    <button
+                      onClick={() => toast.info('🔨 もうすこしまってね！', { duration: 1800 })}
+                      className="w-full rounded-lg py-2 font-black text-[13px]"
+                      style={{
+                        background: 'rgba(255,215,0,0.08)',
+                        color: 'var(--tqw-gold, #ffd700)',
+                        border: '1px solid rgba(255,215,0,0.25)',
+                        opacity: 0.75,
+                      }}
+                    >
+                      🔨 準備中
+                    </button>
+                  ) : isUnlocked ? (
                     isSelected ? (
                       <button
                         onClick={() => startGame(deck)}

@@ -146,8 +146,8 @@ export const COLLECTION_CARDS: CollectionCard[] = [
   { id: 'card-124', name: 'ひまわり', category: 'inventions', rarity: 'N', description: 'ゴッホの代表作。黄色の花が燃えるように描かれた油彩画。', imageUrl: '/images/cards/sunflower.png' },
   { id: 'card-125', name: '星月夜', category: 'inventions', rarity: 'N', description: '渦を巻く夜空を描いたゴッホの傑作。精神病院から見た風景とされる。', imageUrl: '/images/cards/starry-night.png' },
   { id: 'card-126', name: '糸杉', category: 'inventions', rarity: 'N', description: '天へ伸びるように描かれたゴッホの樹木。炎のような筆致が特徴。', imageUrl: '/images/cards/cypress.png' },
-  { id: 'card-127', name: '聖剣', category: 'inventions', rarity: 'R', description: 'ジャンヌ・ダルクが神の啓示で見つけたとされる剣。フランス救国の象徴。', imageUrl: '/images/cards/holy-sword.png' },
-  { id: 'card-128', name: '軍旗', category: 'inventions', rarity: 'R', description: 'ジャンヌ・ダルクが先頭で掲げた白い旗。兵士の士気を奮い立たせた。', imageUrl: '/images/cards/war-banner.png' },
+  { id: 'card-127', name: '聖剣', category: 'inventions', rarity: 'N', description: 'ジャンヌ・ダルクが神の啓示で見つけたとされる剣。フランス救国の象徴。', imageUrl: '/images/cards/holy-sword.png' },
+  { id: 'card-128', name: '軍旗', category: 'inventions', rarity: 'N', description: 'ジャンヌ・ダルクが先頭で掲げた白い旗。兵士の士気を奮い立たせた。', imageUrl: '/images/cards/war-banner.png' },
   { id: 'card-129', name: 'ケーキ', category: 'inventions', rarity: 'N', description: '「パンがなければお菓子を食べればいい」と言ったとされるマリーの象徴。', imageUrl: '/images/cards/cake.png' },
 
   // ===== コンボカード: ナポレオン (3枚) =====
@@ -214,7 +214,7 @@ export const COLLECTION_CARDS: CollectionCard[] = [
 
   // ===== ジャンヌダルクデッキ用追加カード =====
   { id: 'card-170', name: '祈りの光', category: 'inventions', rarity: 'SR', description: '教会から差す聖なる光。除外されたジャンヌを聖女として蘇らせる。', imageUrl: '/images/cards/prayer-light.png' },
-  { id: 'card-171', name: '白百合の盾', category: 'inventions', rarity: 'R', description: 'フランス王家の百合が刻まれた聖なる盾。', imageUrl: '/images/cards/lily-shield.png' },
+  { id: 'card-171', name: '白百合の盾', category: 'inventions', rarity: 'N', description: 'フランス王家の百合が刻まれた聖なる盾。', imageUrl: '/images/cards/lily-shield.png' },
   { id: 'card-172', name: '聖女の旗印', category: 'inventions', rarity: 'SR', description: '聖女が掲げた旗。失われた仲間を呼び戻す力を持つ。', imageUrl: '/images/cards/holy-banner.png' },
 
   // ===== 紫式部デッキ追加 (4枚) =====

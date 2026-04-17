@@ -10,6 +10,7 @@ import {
   DECK_KEYS,
   DECK_KEY_TO_STARTER_ID,
   DECK_SSR_CARDS,
+  DECK_AVAILABILITY,
   QUEST_DIFFICULTIES,
   createDefaultProgress,
   type DeckKey,
@@ -107,4 +108,17 @@ export function isStarterDeckUnlockedFor(
   if (!entry) return true; // unmapped starter — default open
   const deckKey = entry[0] as DeckKey;
   return progress[deckKey].master.cleared;
+}
+
+/** starterDeckId が「準備中」でないか。PvP用: 管理者以外は準備中デッキをそもそも非表示。 */
+export function isStarterDeckAvailableFor(
+  starterDeckId: string,
+  isAdmin: boolean,
+): boolean {
+  if (isAdmin) return true;
+  if (starterDeckId === 'starter-random') return true;
+  const entry = Object.entries(DECK_KEY_TO_STARTER_ID).find(([, sid]) => sid === starterDeckId);
+  if (!entry) return true;
+  const deckKey = entry[0] as DeckKey;
+  return DECK_AVAILABILITY[deckKey];
 }

@@ -8,9 +8,10 @@ import { useState } from 'react';
 import { useUserStore, useAltStore } from '@/lib/stores';
 import { calculateLevel } from '@/lib/level';
 import { IMAGES, CLASS_LIST, AVATAR_ITEMS } from '@/lib/constants';
-import { Link } from 'wouter';
 import LevelUpModal from '@/components/effects/LevelUpModal';
+import MenuButton from '@/components/ui/MenuButton';
 import { saveUserProfile } from '@/lib/userProfileService';
+import { isAdmin } from '@/lib/auth';
 import { toast } from 'sonner';
 import type { AvatarType } from '@/lib/types';
 
@@ -181,40 +182,45 @@ export default function MyPage() {
       </div>
 
       {/* Quick Links */}
-      <div className="space-y-2 mb-4">
-        <Link href="/collection">
-          <div className="rounded-xl p-3 flex items-center justify-between transition-all hover:scale-[1.01] active:scale-[0.99]"
-            style={{ background: 'linear-gradient(135deg, rgba(168,85,247,0.08), rgba(168,85,247,0.03))', border: '1px solid rgba(168,85,247,0.2)' }}>
-            <div className="flex items-center gap-2"><span>🃏</span><span className="text-sm text-amber-100">カードコレクション</span></div>
-            <span className="text-amber-200/25 text-sm">→</span>
-          </div>
-        </Link>
-        <Link href="/hall-of-fame">
-          <div className="rounded-xl p-3 flex items-center justify-between transition-all hover:scale-[1.01] active:scale-[0.99]"
-            style={{ background: 'linear-gradient(135deg, rgba(255,215,0,0.1), rgba(255,215,0,0.03))', border: '1px solid rgba(255,215,0,0.25)' }}>
-            <div className="flex items-center gap-2"><span>🏆</span><span className="text-sm text-amber-100">殿堂入りデッキ</span></div>
-            <span className="text-amber-200/25 text-sm">→</span>
-          </div>
-        </Link>
-        <Link href="/shop">
-          <div className="rounded-xl p-3 flex items-center justify-between transition-all hover:scale-[1.01] active:scale-[0.99]"
-            style={{ background: 'linear-gradient(135deg, rgba(255,215,0,0.06), rgba(255,215,0,0.02))', border: '1px solid rgba(255,215,0,0.15)' }}>
-            <div className="flex items-center gap-2"><span>🛒</span><span className="text-sm text-amber-100">ショップ</span></div>
-            <span className="text-amber-200/25 text-sm">→</span>
-          </div>
-        </Link>
-        <Link href="/admin">
-          <div className="rounded-xl p-3 flex items-center justify-between transition-all hover:scale-[1.01] active:scale-[0.99]"
-            style={{ background: 'linear-gradient(135deg, rgba(245,158,11,0.08), rgba(245,158,11,0.03))', border: '1px solid rgba(245,158,11,0.2)' }}>
-            <div className="flex items-center gap-2"><span>⚙️</span><span className="text-sm text-amber-100">管理者ダッシュボード</span></div>
-            <span className="text-amber-200/25 text-sm">→</span>
-          </div>
-        </Link>
-        <div className="rounded-xl p-3 flex items-center justify-between opacity-40"
-          style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
-          <div className="flex items-center gap-2"><span>🔧</span><span className="text-sm text-amber-100">設定</span></div>
-          <span className="text-[10px] text-amber-200/25">Coming Soon</span>
-        </div>
+      <div className="mb-4 flex flex-col" style={{ gap: 10 }}>
+        <MenuButton
+          href="/collection"
+          icon="🃏"
+          title="カードコレクション"
+          subtitle="集めたカードを見よう"
+          gradient="linear-gradient(135deg, #4c1d95 0%, #7c3aed 55%, #a855f7 100%)"
+        />
+        <MenuButton
+          href="/hall-of-fame"
+          icon="🏆"
+          title="殿堂入りデッキ"
+          subtitle="最強デッキを記録"
+          gradient="linear-gradient(135deg, #78530b 0%, #d4a500 55%, #ffd700 100%)"
+        />
+        <MenuButton
+          href="/shop"
+          icon="🛍️"
+          title="ALTショップ"
+          subtitle="ALTでアイテムをゲット"
+          gradient="linear-gradient(135deg, #1a3a5c 0%, #2980b9 55%, #3498db 100%)"
+        />
+        {isAdmin() && (
+          <MenuButton
+            href="/admin"
+            icon="⚙️"
+            title="管理者ダッシュボード"
+            subtitle="データを確認"
+            gradient="linear-gradient(135deg, #1f2937 0%, #4b5563 55%, #6b7280 100%)"
+          />
+        )}
+        <MenuButton
+          disabled
+          icon="🔧"
+          title="設定"
+          subtitle="Coming Soon"
+          gradient="linear-gradient(135deg, #0f172a 0%, #1e293b 55%, #334155 100%)"
+          badge="Coming Soon"
+        />
       </div>
 
       {/* Test Buttons */}

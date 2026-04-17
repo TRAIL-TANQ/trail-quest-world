@@ -1397,7 +1397,7 @@ export function applyRevealEffect(
       break;
     }
     case 'jeanne': {
-      // ジャンヌ・ダルク: 攻撃時+聖剣ベンチ→攻撃+2、防御時+白百合の盾ベンチ→防御+3
+      // ジャンヌ・ダルク: 攻撃時+聖剣ベンチ→攻撃+2、防御時+白百合の盾ベンチ→防御+2
       const my = side === 'player' ? next.player : next.ai;
       const sealed = next.sealedBenchNames[side];
       const hasSword = my.bench.some((b) => b.name === '聖剣' && !sealed.includes(b.name));
@@ -1408,9 +1408,9 @@ export function applyRevealEffect(
         glowNames.push('聖剣');
         telop = { text: '⚔️聖剣の加護！ジャンヌ攻撃+2！', color };
       } else if (role === 'defender' && hasLily) {
-        next = { ...next, defenderBonus: next.defenderBonus + 3 };
+        next = { ...next, defenderBonus: next.defenderBonus + 2 };
         glowNames.push('白百合の盾');
-        telop = { text: '🛡️百合の守り！ジャンヌ防御+3！', color };
+        telop = { text: '🛡️百合の守り！ジャンヌ防御+2！', color };
       } else {
         telop = { text: '⚜️ジャンヌ・ダルク！', color };
       }

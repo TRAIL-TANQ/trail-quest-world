@@ -28,22 +28,22 @@ const TABS: Array<{ id: TabId; label: string; icon: string }> = [
 
 const GAMES: Record<TabId, AltGameCard[]> = {
   math: [
-    { id: 'keisan-battle',  name: '計算バトル',       icon: '🔢', altRange: '+5〜30 ALT', description: '制限時間で連続正解！', href: '/alt-games/keisan-battle' },
-    { id: 'hikaku-battle',  name: '比較バトル',       icon: '⚡', altRange: '+5〜15 ALT', description: '大きい方をはやくタップ', href: '/alt-games/hikaku-battle' },
-    { id: 'number-target',  name: 'ナンバーターゲット', icon: '🎯', altRange: '—',          description: '準備中', href: null },
-    { id: 'flash-ansan',    name: 'フラッシュ暗算',    icon: '⚡', altRange: '—',          description: '準備中', href: null },
+    { id: 'keisan-battle',   name: '計算バトル',   icon: '🔢', altRange: '+1〜30 ALT', description: '制限時間で連続正解！',         href: '/alt-games/keisan-battle' },
+    { id: 'hikaku-battle',   name: '比較バトル',   icon: '⚡', altRange: '+1〜15 ALT', description: '大きい方をはやくタップ',       href: '/alt-games/hikaku-battle' },
+    { id: 'bunsu-battle',    name: '分数バトル',   icon: '🔵', altRange: '+1〜25 ALT', description: '分数の足し引き掛け割り',       href: '/alt-games/bunsu-battle' },
+    { id: 'shousuu-battle',  name: '小数バトル',   icon: '🟢', altRange: '+1〜25 ALT', description: '小数の計算をすばやく',         href: '/alt-games/shousuu-battle' },
   ],
   kokugo: [
-    { id: 'kanji-flash',    name: '漢字フラッシュ',    icon: '📝', altRange: '—',          description: '準備中', href: null },
-    { id: 'yojijukugo',     name: '四字熟語クイズ',    icon: '🎌', altRange: '—',          description: '準備中', href: null },
-    { id: 'kotowaza',       name: 'ことわざパズル',    icon: '🔀', altRange: '—',          description: '準備中', href: null },
-    { id: 'bunsho-narabe',  name: '文章並べ替え',      icon: '📖', altRange: '—',          description: '準備中', href: null },
+    { id: 'kanji-flash',    name: '漢字フラッシュ',   icon: '📝', altRange: '+1〜25 ALT', description: '漢字の読みを4択',       href: '/alt-games/kanji-flash' },
+    { id: 'yojijukugo',     name: '四字熟語クイズ',   icon: '🎌', altRange: '+1〜25 ALT', description: '□に入る漢字を4択',       href: '/alt-games/yojijukugo' },
+    { id: 'kotowaza',       name: 'ことわざパズル',   icon: '🔀', altRange: '—',          description: '準備中',                  href: null },
+    { id: 'bunsho-narabe',  name: '文章並べ替え',     icon: '📖', altRange: '—',          description: '準備中',                  href: null },
   ],
   chiri: [
-    { id: 'todofuken',      name: '都道府県タッチ',    icon: '🗾', altRange: '—',          description: '準備中', href: null },
-    { id: 'kencho',         name: '県庁所在地クイズ',  icon: '🏙️', altRange: '—',          description: '準備中', href: null },
-    { id: 'kokki',          name: '国旗フラッシュ',    icon: '🌍', altRange: '—',          description: '準備中', href: null },
-    { id: 'nihonichi',      name: '日本一クイズ',      icon: '🏔️', altRange: '—',          description: '準備中', href: null },
+    { id: 'todofuken',      name: '都道府県タッチ',   icon: '🗾', altRange: '+1〜75 ALT', description: '地図でタップ！',          href: '/alt-games/todofuken' },
+    { id: 'kencho',         name: '県庁所在地クイズ', icon: '🏙️', altRange: '+1〜25 ALT', description: '県庁所在地を4択',          href: '/alt-games/kenchou' },
+    { id: 'kokki',          name: '国旗フラッシュ',   icon: '🌍', altRange: '—',          description: '準備中',                  href: null },
+    { id: 'nihonichi',      name: '日本一クイズ',     icon: '🏔️', altRange: '—',          description: '準備中',                  href: null },
   ],
 };
 

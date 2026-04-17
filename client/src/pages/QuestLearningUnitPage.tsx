@@ -15,6 +15,7 @@ import {
   isSSRUnlocked,
   isDifficultyUnlocked,
   DECK_QUEST_INFO,
+  isDeckAvailable,
   DIFFICULTY_INFO,
   DECK_SSR_CARDS,
   QUEST_DIFFICULTIES,
@@ -268,6 +269,28 @@ export default function QuestLearningUnitPage() {
         <div className="text-5xl mb-3">🔍</div>
         <h2 className="text-amber-100 text-base font-bold mb-2">デッキが見つかりません</h2>
         <Link href="/games/knowledge-challenger?screen=deck_select"><a style={{ color: '#ffd700' }} className="text-sm">← デッキ選択に戻る</a></Link>
+      </div>
+    );
+  }
+
+  // 準備中デッキは管理者以外アクセス不可
+  if (!isDeckAvailable(deckKey)) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center"
+        style={{ background: 'linear-gradient(180deg, #0b1128, #151d3b)' }}>
+        <div className="text-6xl mb-4">🔨</div>
+        <h2 className="text-lg font-black mb-2" style={{ color: 'var(--tqw-gold, #ffd700)' }}>
+          もうすこしまってね！
+        </h2>
+        <p className="text-sm text-amber-200/70 mb-6">
+          「{info.name}」デッキは準備中だよ
+        </p>
+        <Link href="/games/knowledge-challenger?screen=deck_select">
+          <a className="inline-block px-4 py-2 rounded-lg text-sm font-bold"
+            style={{ background: 'rgba(255,215,0,0.1)', color: '#ffd700', border: '1px solid rgba(255,215,0,0.3)' }}>
+            ← デッキ選択に戻る
+          </a>
+        </Link>
       </div>
     );
   }

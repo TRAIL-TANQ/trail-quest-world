@@ -8,6 +8,7 @@ import { useUserStore } from '@/lib/stores';
 import { calculateLevel } from '@/lib/level';
 import { IMAGES, AVATAR_ITEMS } from '@/lib/constants';
 import { isGuest, isAdmin, isMonitor, clearAuth } from '@/lib/auth';
+import { findStudentByChildId } from '@/data/students';
 
 export default function Header() {
   const [, navigate] = useLocation();
@@ -16,6 +17,7 @@ export default function Header() {
   const guestMode = isGuest();
   const adminMode = isAdmin();
   const monitorMode = isMonitor();
+  const student = !guestMode && !adminMode && !monitorMode ? findStudentByChildId(user.id) : null;
 
   // Determine which avatar icon to show
   const getAvatarIcon = () => {
@@ -88,6 +90,12 @@ export default function Header() {
               <span className="text-[9px] font-bold px-1.5 py-0.5 rounded"
                 style={{ background: 'rgba(96,165,250,0.2)', color: '#60a5fa', border: '1px solid rgba(96,165,250,0.4)' }}>
                 🎮 MONITOR
+              </span>
+            )}
+            {student && (
+              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded"
+                style={{ background: 'rgba(255,215,0,0.12)', color: '#ffd700', border: '1px solid rgba(255,215,0,0.3)' }}>
+                {student.emoji} {student.name}
               </span>
             )}
           </div>

@@ -4,6 +4,7 @@
  * Includes AltEarnEffect and LevelUpModal global overlays.
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useLocation } from 'wouter';
 import Header from './Header';
 import BottomNav from './BottomNav';
 import AltEarnEffect from '@/components/effects/AltEarnEffect';
@@ -12,8 +13,10 @@ import { useUserStore } from '@/lib/stores';
 import { fetchEquippedItemId, fetchShopItems } from '@/lib/shopService';
 import { fetchUserProfile } from '@/lib/userProfileService';
 import { calculateLevel } from '@/lib/level';
+import { isGuest } from '@/lib/auth';
 
 export default function PageShell({ children }: { children: ReactNode }) {
+  const [, navigate] = useLocation();
   const userId = useUserStore((s) => s.user.id);
   const equipAvatar = useUserStore((s) => s.equipAvatar);
   const setNickname = useUserStore((s) => s.setNickname);
@@ -21,6 +24,14 @@ export default function PageShell({ children }: { children: ReactNode }) {
   const initialNickname = useUserStore((s) => s.user.nickname);
   const initialAvatarType = useUserStore((s) => s.user.avatarType);
   const totalAlt = useUserStore((s) => s.user.totalAlt);
+
+  // 未ログイン（ゲスト）は /login へ誘導。
+  // auth.ts の isGuest は localStorage を直接見るので、リロード後も安定して動く。
+  useEffect(() => {
+    if (isGuest()) {
+      navigate('/login');
+    }
+  }, [navigate]);
 
   // ===== Level-up detection (変更15) =====
   // totalAlt 変動時に前後のレベルを比較し、上がった瞬間にモーダルを出す。

@@ -12,6 +12,12 @@ import HomePage from "./pages/HomePage";
 import AltGamesPage from "./pages/AltGamesPage";
 import KeisanBattlePage from "./pages/KeisanBattlePage";
 import HikakuBattlePage from "./pages/HikakuBattlePage";
+import BunsuBattlePage from "./pages/BunsuBattlePage";
+import ShousuuBattlePage from "./pages/ShousuuBattlePage";
+import KanjiFlashPage from "./pages/KanjiFlashPage";
+import YojijukugoPage from "./pages/YojijukugoPage";
+import TodofukenTouchPage from "./pages/TodofukenTouchPage";
+import KenchouQuizPage from "./pages/KenchouQuizPage";
 import KnowledgeChallenger from "./pages/KnowledgeChallenger";
 import StageSelectPage from "./pages/StageSelectPage";
 import HallOfFamePage from "./pages/HallOfFamePage";
@@ -47,6 +53,12 @@ function Router() {
             <Route path="/" component={HomePage} />
             <Route path="/alt-games/keisan-battle" component={KeisanBattlePage} />
             <Route path="/alt-games/hikaku-battle" component={HikakuBattlePage} />
+            <Route path="/alt-games/bunsu-battle" component={BunsuBattlePage} />
+            <Route path="/alt-games/shousuu-battle" component={ShousuuBattlePage} />
+            <Route path="/alt-games/kanji-flash" component={KanjiFlashPage} />
+            <Route path="/alt-games/yojijukugo" component={YojijukugoPage} />
+            <Route path="/alt-games/todofuken" component={TodofukenTouchPage} />
+            <Route path="/alt-games/kenchou" component={KenchouQuizPage} />
             <Route path="/alt-games" component={AltGamesPage} />
             <Route path="/games/stages" component={StageSelectPage} />
             <Route path="/games/quiz/:deck/:difficulty" component={QuizPracticePage} />

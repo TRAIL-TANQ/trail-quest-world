@@ -11,6 +11,7 @@ import { IMAGES, AVATAR_ITEMS } from '@/lib/constants';
 import { useUserStore, useMissionStore, useAltStore } from '@/lib/stores';
 import { calculateLevel } from '@/lib/level';
 import { fetchOverallRanking, type RankingEntry } from '@/lib/rankingService';
+import MenuButton from '@/components/ui/MenuButton';
 
 const categoryEmoji: Record<string, string> = {
   game: '⚔️', gacha: '🎰', collection: '🃏',
@@ -297,124 +298,36 @@ export default function HomePage() {
           )}
         </div>
 
-        {/* メインエントリ: バトル / デッキクエスト / 2人対戦 */}
+        {/* メインエントリ: バトル / デッキクエスト / 2人対戦 / タイムアタック */}
         <div className="mb-6 flex flex-col" style={{ gap: 10 }}>
-          <Link href="/games/stages">
-            <div
-              className="tappable relative overflow-hidden cursor-pointer"
-              style={{
-                borderRadius: 16,
-                padding: '12px 16px',
-                background: 'linear-gradient(135deg, #8b1a1a 0%, #c0392b 50%, #e74c3c 100%)',
-                border: '2px solid #c5a03f',
-                boxShadow: '0 4px 15px rgba(0,0,0,0.5), inset 0 0 28px rgba(255,215,0,0.08)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 14,
-              }}
-            >
-              <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 relative overflow-hidden"
-                style={{
-                  background: 'rgba(0,0,0,0.35)',
-                  border: '1.5px solid rgba(255,215,0,0.5)',
-                  boxShadow: 'inset 0 0 10px rgba(0,0,0,0.5)',
-                }}>
-                <img src="/images/ui/icon-sword.png" alt="" className="w-8 h-8 object-contain"
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                <span className="absolute text-3xl" style={{ zIndex: 0, opacity: 0.4 }}>⚔️</span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-lg font-black text-white" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.6)' }}>バトル</p>
-                <p className="text-[11px] text-amber-100/85" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.6)' }}>デッキを選んで戦おう</p>
-              </div>
-              <span className="text-amber-100 text-xl">›</span>
-            </div>
-          </Link>
-
-          <Link href="/games/knowledge-challenger?screen=deck_select">
-            <div
-              className="tappable relative overflow-hidden cursor-pointer"
-              style={{
-                borderRadius: 16,
-                padding: '12px 16px',
-                background: 'linear-gradient(135deg, #1a3a5c 0%, #2980b9 50%, #3498db 100%)',
-                border: '2px solid #c5a03f',
-                boxShadow: '0 4px 15px rgba(0,0,0,0.5), inset 0 0 28px rgba(255,215,0,0.08)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 14,
-              }}
-            >
-              <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 relative overflow-hidden"
-                style={{
-                  background: 'rgba(0,0,0,0.35)',
-                  border: '1.5px solid rgba(255,215,0,0.5)',
-                  boxShadow: 'inset 0 0 10px rgba(0,0,0,0.5)',
-                }}>
-                <img src="/images/ui/icon-book.png" alt="" className="w-8 h-8 object-contain"
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                <span className="absolute text-3xl" style={{ zIndex: 0, opacity: 0.4 }}>📖</span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-lg font-black text-white" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.6)' }}>デッキクエスト</p>
-                <p className="text-[11px] text-amber-100/85" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.6)' }}>学んでデッキを手に入れよう</p>
-              </div>
-              <span className="text-amber-100 text-xl">›</span>
-            </div>
-          </Link>
-
-          <Link href="/games/knowledge-challenger/pvp">
-            <div
-              className="rounded-xl flex items-center gap-3 transition-all active:scale-[0.98] cursor-pointer relative overflow-hidden"
-              style={{
-                padding: '10px 14px',
-                background: 'linear-gradient(135deg, rgba(239,68,68,0.18), rgba(59,130,246,0.18))',
-                border: '1.5px solid rgba(255,215,0,0.35)',
-                boxShadow: '0 2px 12px rgba(0,0,0,0.3), inset 0 0 20px rgba(255,215,0,0.04)',
-              }}
-            >
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                style={{
-                  background: 'linear-gradient(135deg, #ef4444, #3b82f6)',
-                  boxShadow: '0 0 12px rgba(255,215,0,0.25)',
-                }}>
-                <span className="text-xl">⚔️</span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-amber-100">2人対戦</p>
-                <p className="text-[10px] text-amber-200/60">友達と対戦しよう</p>
-              </div>
-              <span className="text-amber-200/50 text-lg">›</span>
-            </div>
-          </Link>
-        </div>
-
-        {/* ⚡ タイムアタック */}
-        <div className="mb-6">
-          <Link href="/games/time-attack">
-            <div
-              className="tappable relative overflow-hidden cursor-pointer rounded-xl"
-              style={{
-                padding: '12px 16px',
-                background: 'linear-gradient(135deg, #c2410c 0%, #ea580c 50%, #f97316 100%)',
-                border: '2px solid #c5a03f',
-                boxShadow: '0 4px 15px rgba(0,0,0,0.5), inset 0 0 28px rgba(255,215,0,0.08)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 14,
-              }}
-            >
-              <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
-                style={{ background: 'rgba(0,0,0,0.35)', border: '1.5px solid rgba(255,215,0,0.5)' }}>
-                <span className="text-2xl">⚡</span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-lg font-black text-white" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.6)' }}>タイムアタック</p>
-                <p className="text-[11px] text-amber-100/85" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.6)' }}>60秒で何問解ける？</p>
-              </div>
-              <span className="text-amber-100 text-xl">›</span>
-            </div>
-          </Link>
+          <MenuButton
+            href="/games/stages"
+            icon="⚔️"
+            title="バトル"
+            subtitle="デッキを選んで戦おう"
+            gradient="linear-gradient(135deg, #8b1a1a 0%, #c0392b 50%, #e74c3c 100%)"
+          />
+          <MenuButton
+            href="/games/knowledge-challenger?screen=deck_select"
+            icon="📖"
+            title="デッキクエスト"
+            subtitle="学んでデッキを手に入れよう"
+            gradient="linear-gradient(135deg, #1a3a5c 0%, #2980b9 50%, #3498db 100%)"
+          />
+          <MenuButton
+            href="/games/knowledge-challenger/pvp"
+            icon="⚔️"
+            title="2人対戦"
+            subtitle="友達と対戦しよう"
+            gradient="linear-gradient(135deg, #b91c1c 0%, #7c3aed 50%, #1d4ed8 100%)"
+          />
+          <MenuButton
+            href="/games/time-attack"
+            icon="⚡"
+            title="タイムアタック"
+            subtitle="60秒で何問解ける？"
+            gradient="linear-gradient(135deg, #c2410c 0%, #ea580c 50%, #f97316 100%)"
+          />
         </div>
 
         {/* Ranking Preview (Top 3 + self) */}

@@ -1,49 +1,93 @@
 /*
- * LoginPage: Launch screen with Guest play / PIN login choice
- * Dark navy + gold RPG theme. 4-digit PIN input with auto-advance.
+ * LoginPage — 名前ログイン
+ *
+ * 生徒 20名の名簿に対して、ひらがな名前で自己申告ログインする。
+ * 児童向けUXのため PIN なし、ただし管理者/モニターだけは PIN 入力画面を残す。
+ *
+ * childId: 'スターター_はるか' のようにクラス略称+名前で組み立てる
+ * （Supabase child_status は text 型なので INSERT で受け付けられる前提）
  */
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useLocation } from 'wouter';
-import { useUserStore } from '@/lib/stores';
+import { useUserStore, useCollectionStore } from '@/lib/stores';
 import { IMAGES } from '@/lib/constants';
-import { createGuestAuth, saveAuth } from '@/lib/auth';
-import { verifyPin, ensureChildStatus, registerChild } from '@/lib/pinService';
+import { saveAuth, getAuth } from '@/lib/auth';
+import { ensureChildStatus } from '@/lib/pinService';
 import { saveUserProfile } from '@/lib/userProfileService';
 import { COLLECTION_CARDS } from '@/lib/cardData';
-import { useCollectionStore } from '@/lib/stores';
+import {
+  STUDENTS,
+  findStudentByName,
+  kanaToHira,
+  buildStudentChildId,
+  type StudentRecord,
+} from '@/data/students';
 
-type Screen = 'choice' | 'pin' | 'register';
+type Screen = 'name' | 'confirm' | 'admin';
 
 export default function LoginPage() {
   const [, navigate] = useLocation();
   const setUser = useUserStore((s) => s.setUser);
   const user = useUserStore((s) => s.user);
 
-  const [screen, setScreen] = useState<Screen>('choice');
-  const [digits, setDigits] = useState(['', '', '', '']);
+  const [screen, setScreen] = useState<Screen>('name');
+  const [nameInput, setNameInput] = useState('');
+  const [matched, setMatched] = useState<StudentRecord | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Admin PIN
+  const [digits, setDigits] = useState(['', '', '', '']);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  // Register form
-  const [regName, setRegName] = useState('');
-  const [regYear, setRegYear] = useState(2015);
-  const [regMonth, setRegMonth] = useState(4);
-  const [regDay, setRegDay] = useState(1);
-  const [regPin, setRegPin] = useState('');
-  const [regPinConfirm, setRegPinConfirm] = useState('');
-  const [regSuccess, setRegSuccess] = useState<{ pin: string; name: string; childId: string } | null>(null);
+  // 既ログインなら自動で/へ戻す（auth.ts の isGuest 判定に準拠）
+  useEffect(() => {
+    const a = getAuth();
+    if (!a.isGuest) {
+      navigate('/');
+    }
+  }, [navigate]);
 
-  // Guest mode handler
-  const handleGuest = useCallback(() => {
-    const auth = createGuestAuth();
-    setUser({ ...user, id: auth.childId, nickname: auth.childName });
-    navigate('/');
-  }, [user, setUser, navigate]);
+  // ===== Name login =====
+  const handleNameChange = (v: string) => {
+    setError('');
+    // カタカナ→ひらがなに自動変換して格納
+    setNameInput(kanaToHira(v));
+  };
 
-  // PIN digit input handler
+  const handleNameSubmit = useCallback(() => {
+    const s = findStudentByName(nameInput);
+    if (!s) {
+      setError('みつからないよ。もういちどいれてね');
+      return;
+    }
+    setMatched(s);
+    setScreen('confirm');
+  }, [nameInput]);
+
+  const finalizeStudentLogin = useCallback(async () => {
+    if (!matched) return;
+    setLoading(true);
+    const childId = buildStudentChildId(matched);
+    const displayName = matched.name;
+    try {
+      saveAuth(childId, displayName);
+      // Supabase: child_status を ensure（失敗しても catch 内でスルー）
+      await ensureChildStatus(childId);
+      void saveUserProfile(childId, displayName, user.avatarType);
+      setUser({ ...user, id: childId, nickname: displayName });
+      navigate('/');
+    } catch {
+      // 予期せぬ例外時もログインは継続（localStorage にauth済み）
+      setUser({ ...user, id: childId, nickname: displayName });
+      navigate('/');
+    } finally {
+      setLoading(false);
+    }
+  }, [matched, user, setUser, navigate]);
+
+  // ===== Admin PIN =====
   const handleDigitChange = useCallback((index: number, value: string) => {
-    // Only allow single digit
     const digit = value.replace(/\D/g, '').slice(-1);
     setError('');
     setDigits((prev) => {
@@ -51,150 +95,71 @@ export default function LoginPage() {
       next[index] = digit;
       return next;
     });
-    // Auto-advance to next input
-    if (digit && index < 3) {
-      inputRefs.current[index + 1]?.focus();
-    }
+    if (digit && index < 3) inputRefs.current[index + 1]?.focus();
   }, []);
 
-  // Handle backspace to go to previous input
   const handleKeyDown = useCallback((index: number, e: React.KeyboardEvent) => {
     if (e.key === 'Backspace' && !digits[index] && index > 0) {
       inputRefs.current[index - 1]?.focus();
     }
   }, [digits]);
 
-  // Submit PIN
-  const handlePinSubmit = useCallback(async () => {
+  const handlePinSubmit = useCallback(() => {
     const pin = digits.join('');
-    if (pin.length !== 4) {
-      setError('4桁のPINコードを入力してください');
-      return;
-    }
-    setLoading(true);
+    if (pin.length !== 4) { setError('4桁のPINを入力してね'); return; }
     setError('');
-
-    // Monitor PIN check (0000)
     const monitorPin = import.meta.env.VITE_MONITOR_PIN || '0000';
+    const adminPin = import.meta.env.VITE_ADMIN_PIN || '9999';
+
     if (pin === monitorPin) {
       saveAuth('monitor', 'モニター', false, true);
-      // Initialize collection with all cards
       const allIds = COLLECTION_CARDS.map((c) => c.id);
       useCollectionStore.getState().initOwned(allIds);
       setUser({ ...user, id: 'monitor', nickname: 'モニター' });
       navigate('/');
-      setLoading(false);
       return;
     }
-
-    // Admin PIN check
-    const adminPin = import.meta.env.VITE_ADMIN_PIN;
-    if (adminPin && pin === adminPin) {
+    if (pin === adminPin) {
       saveAuth('admin', '管理者', true);
       setUser({ ...user, id: 'admin', nickname: '管理者' });
       navigate('/');
-      setLoading(false);
       return;
     }
-
-    try {
-      const result = await verifyPin(pin);
-      if (!result.success || !result.childId || !result.childName) {
-        setError(result.error ?? 'PINコードが見つかりません');
-        setLoading(false);
-        return;
-      }
-      // Save auth
-      saveAuth(result.childId, result.childName);
-      // Ensure child_status row exists
-      await ensureChildStatus(result.childId);
-      // Save user profile (best effort)
-      void saveUserProfile(result.childId, result.childName, user.avatarType);
-      // Update store
-      setUser({ ...user, id: result.childId, nickname: result.childName });
-      navigate('/');
-    } catch {
-      setError('接続エラーが発生しました');
-    } finally {
-      setLoading(false);
-    }
+    setError('PINが違うよ');
   }, [digits, user, setUser, navigate]);
 
-  // Auto-submit when all 4 digits are filled
-  const allFilled = digits.every((d) => d !== '');
-
-  // ===== Register handler =====
-  const handleRegister = useCallback(async () => {
+  const goToAdmin = () => {
+    setScreen('admin');
+    setDigits(['', '', '', '']);
     setError('');
-    if (regName.trim().length < 2 || regName.trim().length > 10) {
-      setError('名前は2〜10文字で入力してね');
-      return;
-    }
-    if (!/^\d{4}$/.test(regPin)) {
-      setError('PINは4桁の数字にしてね');
-      return;
-    }
-    if (regPin !== regPinConfirm) {
-      setError('PINが一致しないよ。もう一度確認してね');
-      return;
-    }
-    setLoading(true);
-    try {
-      const result = await registerChild({
-        name: regName.trim(),
-        pin: regPin,
-        birthYear: regYear,
-        birthMonth: regMonth,
-        birthDay: regDay,
-      });
-      if (!result.success || !result.childId) {
-        setError(result.error ?? '登録に失敗しました');
-        setLoading(false);
-        return;
-      }
-      // Show success screen briefly, then auto-login
-      setRegSuccess({ pin: regPin, name: regName.trim(), childId: result.childId });
-    } finally {
-      setLoading(false);
-    }
-  }, [regName, regPin, regPinConfirm, regYear, regMonth, regDay]);
-
-  const handleRegisterContinue = useCallback(() => {
-    if (!regSuccess) return;
-    saveAuth(regSuccess.childId, regSuccess.name);
-    void saveUserProfile(regSuccess.childId, regSuccess.name, user.avatarType);
-    setUser({ ...user, id: regSuccess.childId, nickname: regSuccess.name });
-    navigate('/');
-  }, [regSuccess, user, setUser, navigate]);
+  };
 
   return (
     <div
       className="min-h-screen flex flex-col items-center justify-center px-6 relative overflow-hidden"
       style={{ background: 'linear-gradient(180deg, #0b1128 0%, #151d3b 50%, #0b1128 100%)' }}
     >
-      {/* Background image */}
       <div className="absolute inset-0 z-0">
         <img src={IMAGES.HERO_BG} alt="" className="w-full h-full object-cover" style={{ filter: 'brightness(0.15) saturate(0.5)' }} />
         <div className="absolute inset-0" style={{ background: 'radial-gradient(circle at 50% 40%, rgba(255,215,0,0.06), transparent 70%)' }} />
       </div>
 
       <div className="relative z-10 w-full max-w-[340px]">
-        {/* Logo */}
+        {/* Title */}
         <div className="text-center mb-6">
-          <h1
-            className="text-2xl font-bold mb-1"
-            style={{ color: '#ffd700', textShadow: '0 0 20px rgba(255,215,0,0.3)', fontFamily: 'var(--font-cinzel), serif' }}
+          <h1 className="text-2xl font-bold mb-1"
+            style={{ color: '#ffd700', fontFamily: 'var(--font-cinzel), serif', letterSpacing: '0.08em', textShadow: '0 0 15px rgba(255,215,0,0.3)' }}
           >
-            TRAIL QUEST
+            🎮 TRAIL QUEST WORLD
           </h1>
           <p className="text-sm tracking-[0.3em]" style={{ color: 'rgba(255,215,0,0.5)', fontFamily: 'var(--font-cinzel), serif' }}>
-            WORLD
+            トレイル クエスト ワールド
           </p>
-          <p className="text-xs text-amber-200/30 mt-2">進むたびに強くなる 学びのゲームワールド</p>
+          <p className="text-xs text-amber-200/30 mt-2">学びのゲームワールド</p>
         </div>
 
-        {screen === 'choice' ? (
-          /* ---------- Choice screen ---------- */
+        {/* ===== Name screen ===== */}
+        {screen === 'name' && (
           <div
             className="rounded-2xl p-6 relative"
             style={{
@@ -203,179 +168,185 @@ export default function LoginPage() {
               boxShadow: '0 4px 20px rgba(0,0,0,0.4), inset 0 0 20px rgba(255,215,0,0.03)',
             }}
           >
-            {/* Corner decorations */}
             <div className="absolute top-1 left-1 w-3 h-3 border-t-2 border-l-2 rounded-tl-sm" style={{ borderColor: 'rgba(255,215,0,0.3)' }} />
             <div className="absolute top-1 right-1 w-3 h-3 border-t-2 border-r-2 rounded-tr-sm" style={{ borderColor: 'rgba(255,215,0,0.3)' }} />
             <div className="absolute bottom-1 left-1 w-3 h-3 border-b-2 border-l-2 rounded-bl-sm" style={{ borderColor: 'rgba(255,215,0,0.3)' }} />
             <div className="absolute bottom-1 right-1 w-3 h-3 border-b-2 border-r-2 rounded-br-sm" style={{ borderColor: 'rgba(255,215,0,0.3)' }} />
 
-            {/* Guest play button */}
+            <p className="text-center text-base font-bold mb-4" style={{ color: '#ffd700' }}>
+              なまえをいれてね
+            </p>
+
+            <input
+              type="text"
+              autoFocus
+              inputMode="text"
+              value={nameInput}
+              onChange={(e) => handleNameChange(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleNameSubmit(); }}
+              placeholder="ひらがなでにゅうりょく"
+              maxLength={12}
+              className="w-full px-4 py-3 rounded-xl text-center text-lg font-bold mb-3"
+              style={{
+                background: 'rgba(0,0,0,0.4)',
+                border: '2px solid rgba(255,215,0,0.3)',
+                color: '#fff',
+                outline: 'none',
+                letterSpacing: '0.15em',
+                caretColor: '#ffd700',
+              }}
+            />
+
+            {error && (
+              <p className="text-center text-[12px] mb-3" style={{ color: '#f87171' }}>{error}</p>
+            )}
+
             <button
-              onClick={handleGuest}
-              className="w-full py-4 rounded-xl text-base font-bold mb-4 transition-all duration-200 active:scale-95"
+              onClick={handleNameSubmit}
+              disabled={!nameInput.trim() || loading}
+              className="w-full py-3 rounded-xl text-base font-bold transition-all active:scale-95 disabled:opacity-40"
               style={{
                 background: 'linear-gradient(135deg, #ffd700, #d4a500)',
                 color: '#0b1128',
                 boxShadow: '0 4px 16px rgba(255,215,0,0.3), 0 2px 4px rgba(0,0,0,0.3)',
+                minHeight: 48,
               }}
             >
-              <span className="mr-2">&#x1F3AE;</span>
-              ゲストで遊ぶ
+              ログイン
             </button>
 
-            <div className="flex items-center gap-3 mb-4">
-              <div className="flex-1 h-px" style={{ background: 'rgba(255,215,0,0.15)' }} />
-              <span className="text-xs text-amber-200/30">または</span>
-              <div className="flex-1 h-px" style={{ background: 'rgba(255,215,0,0.15)' }} />
-            </div>
-
-            {/* PIN login button */}
-            <button
-              onClick={() => setScreen('pin')}
-              className="w-full py-3 rounded-xl text-sm font-medium transition-all duration-200 active:scale-95 mb-2"
-              style={{
-                background: 'rgba(255,215,0,0.08)',
-                color: '#ffd700',
-                border: '1.5px solid rgba(255,215,0,0.25)',
-              }}
-            >
-              <span className="mr-2">&#x1F511;</span>
-              PINでログイン
-            </button>
-
-            {/* Register button */}
-            <button
-              onClick={() => { setScreen('register'); setError(''); }}
-              className="w-full py-3 rounded-xl text-sm font-medium transition-all duration-200 active:scale-95"
-              style={{
-                background: 'rgba(59,130,246,0.12)',
-                color: '#60a5fa',
-                border: '1.5px solid rgba(59,130,246,0.35)',
-              }}
-            >
-              <span className="mr-2">&#x1F31F;</span>
-              はじめてのひと（<ruby>新規登録<rt>しんきとうろく</rt></ruby>）
-            </button>
-
-            <p className="text-center text-[10px] text-amber-200/20 mt-4">
-              ゲストモードではデータはこの端末にのみ保存されます
+            <p className="text-[10px] text-center mt-3" style={{ color: 'rgba(255,215,0,0.5)' }}>
+              （カタカナ入力も自動でひらがなに変わるよ）
             </p>
+
+            {/* Admin link */}
+            <div className="mt-4 pt-3" style={{ borderTop: '1px solid rgba(255,215,0,0.1)' }}>
+              <button
+                onClick={goToAdmin}
+                className="w-full text-[11px] transition-all active:scale-95"
+                style={{ color: 'rgba(255,215,0,0.4)' }}
+              >
+                🔧 管理者
+              </button>
+            </div>
           </div>
-        ) : screen === 'register' ? (
-          /* ---------- Register screen: 準備中表示 ---------- */
+        )}
+
+        {/* ===== Confirm screen ===== */}
+        {screen === 'confirm' && matched && (
           <div
-            className="tqw-card-panel rounded-2xl p-8 relative text-center"
+            className="rounded-2xl p-6 text-center relative"
             style={{
-              background: 'linear-gradient(135deg, rgba(21,29,59,0.95), rgba(14,20,45,0.95))',
-              border: '2px solid rgba(255,215,0,0.2)',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
-              backdropFilter: 'blur(12px)',
+              background: 'linear-gradient(135deg, rgba(21,29,59,0.98), rgba(14,20,45,0.98))',
+              border: '2px solid rgba(255,215,0,0.35)',
+              boxShadow: '0 4px 24px rgba(255,215,0,0.12)',
             }}
           >
-            <span className="text-6xl block mb-4">🚧</span>
-            <h2 className="text-xl font-black mb-2" style={{ color: 'var(--tqw-gold, #ffd700)' }}>
-              ただいま準備中です
-            </h2>
-            <p className="text-sm mb-6" style={{ color: 'var(--tqw-gold, #ffd700)', opacity: 0.75 }}>
-              もうすこしまってね！
+            <div className="text-5xl mb-2">{matched.emoji}</div>
+            <p className="text-[12px] mb-1" style={{ color: 'rgba(255,215,0,0.6)' }}>{matched.className}</p>
+            <p className="text-xl font-black mb-4" style={{ color: '#ffd700' }}>
+              {matched.name}さん
             </p>
-            <button
-              onClick={() => setScreen('choice')}
-              className="w-full py-3 rounded-xl font-bold text-base"
-              style={{
-                background: 'rgba(255,215,0,0.15)',
-                border: '1.5px solid rgba(255,215,0,0.4)',
-                color: 'var(--tqw-gold, #ffd700)',
-                minHeight: '48px',
-              }}
-            >
-              もどる
-            </button>
-            {/* Register form removed during monitor period. Restore from git commit 9706d0c */}
+            <p className="text-sm mb-5 text-amber-100">でいい？</p>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setScreen('name'); setMatched(null); }}
+                disabled={loading}
+                className="flex-1 py-3 rounded-xl text-sm font-bold transition-all active:scale-95"
+                style={{
+                  background: 'rgba(255,255,255,0.06)',
+                  color: 'rgba(255,215,0,0.65)',
+                  border: '1.5px solid rgba(255,215,0,0.2)',
+                  minHeight: 48,
+                }}
+              >
+                ちがう
+              </button>
+              <button
+                onClick={finalizeStudentLogin}
+                disabled={loading}
+                className="flex-1 py-3 rounded-xl text-sm font-black transition-all active:scale-95 disabled:opacity-40"
+                style={{
+                  background: 'linear-gradient(135deg, #ffd700, #d4a500)',
+                  color: '#0b1128',
+                  boxShadow: '0 4px 16px rgba(255,215,0,0.3)',
+                  minHeight: 48,
+                }}
+              >
+                はい！
+              </button>
+            </div>
           </div>
-        ) : (
-          /* ---------- PIN input screen ---------- */
+        )}
+
+        {/* ===== Admin PIN screen ===== */}
+        {screen === 'admin' && (
           <div
             className="rounded-2xl p-6 relative"
             style={{
               background: 'linear-gradient(135deg, rgba(21,29,59,0.95), rgba(14,20,45,0.95))',
               border: '2px solid rgba(255,215,0,0.2)',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.4), inset 0 0 20px rgba(255,215,0,0.03)',
             }}
           >
-            {/* Corner decorations */}
-            <div className="absolute top-1 left-1 w-3 h-3 border-t-2 border-l-2 rounded-tl-sm" style={{ borderColor: 'rgba(255,215,0,0.3)' }} />
-            <div className="absolute top-1 right-1 w-3 h-3 border-t-2 border-r-2 rounded-tr-sm" style={{ borderColor: 'rgba(255,215,0,0.3)' }} />
-            <div className="absolute bottom-1 left-1 w-3 h-3 border-b-2 border-l-2 rounded-bl-sm" style={{ borderColor: 'rgba(255,215,0,0.3)' }} />
-            <div className="absolute bottom-1 right-1 w-3 h-3 border-b-2 border-r-2 rounded-br-sm" style={{ borderColor: 'rgba(255,215,0,0.3)' }} />
-
-            <h2 className="text-center text-sm font-bold mb-5" style={{ color: '#ffd700' }}>
-              PINコードを入力
-            </h2>
-
-            {/* 4-digit PIN boxes */}
-            <div className="flex justify-center gap-3 mb-5">
-              {digits.map((digit, i) => (
+            <button
+              onClick={() => { setScreen('name'); setError(''); }}
+              className="text-[12px] mb-3"
+              style={{ color: 'rgba(255,215,0,0.5)' }}
+            >
+              ← もどる
+            </button>
+            <p className="text-center text-sm font-bold mb-4" style={{ color: '#ffd700' }}>
+              管理者PIN (4桁)
+            </p>
+            <div className="flex justify-center gap-2 mb-3">
+              {[0, 1, 2, 3].map((i) => (
                 <input
                   key={i}
                   ref={(el) => { inputRefs.current[i] = el; }}
-                  type="text"
+                  type="password"
                   inputMode="numeric"
+                  pattern="\d*"
                   maxLength={1}
-                  value={digit}
+                  value={digits[i]}
                   onChange={(e) => handleDigitChange(i, e.target.value)}
                   onKeyDown={(e) => handleKeyDown(i, e)}
-                  autoFocus={i === 0}
-                  className="w-14 h-16 text-center text-2xl font-bold rounded-xl outline-none transition-all"
+                  className="w-12 h-14 text-center text-2xl font-bold rounded-lg"
                   style={{
-                    background: 'rgba(255,255,255,0.05)',
-                    color: '#ffd700',
-                    border: digit
-                      ? '2px solid rgba(255,215,0,0.5)'
-                      : '2px solid rgba(255,215,0,0.15)',
-                    boxShadow: digit ? '0 0 12px rgba(255,215,0,0.15)' : 'none',
-                    caretColor: '#ffd700',
+                    background: 'rgba(0,0,0,0.4)',
+                    border: '2px solid rgba(255,215,0,0.3)',
+                    color: '#fff',
+                    outline: 'none',
                   }}
                 />
               ))}
             </div>
-
-            {/* Error message */}
             {error && (
-              <p className="text-center text-xs mb-4" style={{ color: '#ef4444' }}>
-                {error}
-              </p>
+              <p className="text-center text-[12px] mb-3" style={{ color: '#f87171' }}>{error}</p>
             )}
-
-            {/* Submit button */}
             <button
               onClick={handlePinSubmit}
-              disabled={!allFilled || loading}
-              className="w-full py-3 rounded-xl text-sm font-bold mb-4 transition-all duration-200 active:scale-95 disabled:opacity-40"
+              className="w-full py-3 rounded-xl text-base font-bold active:scale-95"
               style={{
-                background: allFilled
-                  ? 'linear-gradient(135deg, #ffd700, #d4a500)'
-                  : 'rgba(255,215,0,0.15)',
-                color: allFilled ? '#0b1128' : 'rgba(255,215,0,0.4)',
-                boxShadow: allFilled ? '0 4px 16px rgba(255,215,0,0.3)' : 'none',
+                background: 'rgba(255,215,0,0.12)',
+                color: '#ffd700',
+                border: '1.5px solid rgba(255,215,0,0.3)',
+                minHeight: 48,
               }}
             >
-              {loading ? 'ログイン中...' : 'ログイン'}
+              ログイン
             </button>
-
-            {/* Back to guest */}
-            <button
-              onClick={() => {
-                setScreen('choice');
-                setDigits(['', '', '', '']);
-                setError('');
-              }}
-              className="w-full text-center text-xs py-2 transition-colors"
-              style={{ color: 'rgba(255,215,0,0.4)' }}
-            >
-              &larr; ゲストで遊ぶ
-            </button>
+            <p className="text-[10px] text-center mt-3" style={{ color: 'rgba(255,215,0,0.4)' }}>
+              管理者(9999) / モニター(0000)
+            </p>
           </div>
+        )}
+
+        {/* Student roster hint (small, just to confirm who is registered) */}
+        {screen === 'name' && (
+          <p className="text-[9px] text-center mt-4" style={{ color: 'rgba(255,215,0,0.25)' }}>
+            登録ずみ {STUDENTS.length}めい
+          </p>
         )}
       </div>
     </div>

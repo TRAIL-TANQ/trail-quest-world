@@ -38,6 +38,36 @@ export function isAdminMode(): boolean {
 
 export const DECK_KEYS: DeckKey[] = ['napoleon', 'amazon', 'qinshi', 'galileo', 'jeanne', 'murasaki', 'mandela', 'davinci', 'nobunaga', 'wolf'];
 
+/**
+ * デッキ実装可否フラグ。false は「準備中」で一般ユーザー/モニターには提供しない。
+ * 管理者(9999)のみ全10デッキ使用可能。将来 true に切り替えるだけで解放。
+ */
+export const DECK_AVAILABILITY: Record<DeckKey, boolean> = {
+  amazon:   true,
+  nobunaga: true,
+  jeanne:   true,
+  qinshi:   true,
+  murasaki: true,
+  napoleon: false,
+  mandela:  false,
+  wolf:     false,
+  galileo:  false,
+  davinci:  false,
+};
+
+/** 現時点で一般ユーザーに提供中のデッキ一覧 */
+export const AVAILABLE_DECK_KEYS: DeckKey[] = DECK_KEYS.filter((k) => DECK_AVAILABILITY[k]);
+
+/**
+ * 「準備中」でないか。管理者のみ常に true。
+ * 注意: isDeckUnlocked（進捗ベースの解放判定）とは別軸。
+ *       どのUIでも「表示する前に available をチェック」→「進捗で unlock か判定」の順で使う。
+ */
+export function isDeckAvailable(deckKey: DeckKey): boolean {
+  if (isAdminMode()) return true;
+  return DECK_AVAILABILITY[deckKey];
+}
+
 export const QUEST_DIFFICULTIES: QuestDifficulty[] = ['beginner', 'challenger', 'master', 'legend'];
 
 export const CLEAR_THRESHOLD = 5; // ビギナー5問正解でデッキ解放（チャレンジモードは10問でALT稼ぎ用）

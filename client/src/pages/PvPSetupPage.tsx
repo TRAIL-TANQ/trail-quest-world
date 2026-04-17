@@ -14,7 +14,7 @@ import { useLocation } from 'wouter';
 import { toast } from 'sonner';
 import { STARTER_DECKS } from '@/lib/stages';
 import type { StarterDeck } from '@/lib/stages';
-import { verifyPvPPin, loadQuestProgressFor, isStarterDeckUnlockedFor, getUnlockedSSRCardNamesFor } from '@/lib/pvpAuth';
+import { verifyPvPPin, loadQuestProgressFor, isStarterDeckUnlockedFor, isStarterDeckAvailableFor, getUnlockedSSRCardNamesFor } from '@/lib/pvpAuth';
 import type { QuestProgressData } from '@/lib/questProgress';
 import { savePvPSession, clearPvPSession } from '@/lib/pvpSession';
 import type { PvPPlayer, PvPRoundCount } from '@/lib/pvpSession';
@@ -156,7 +156,7 @@ function DeckPicker({
     <div className="max-w-md mx-auto">
       <h2 className="text-center text-base font-bold mb-4" style={{ color: accentColor }}>{title}</h2>
       <div className="space-y-2">
-        {STARTER_DECKS.map((deck) => {
+        {STARTER_DECKS.filter((deck) => isStarterDeckAvailableFor(deck.id, isAdmin)).map((deck) => {
           const unlocked = isStarterDeckUnlockedFor(deck.id, progress, isAdmin);
           const isSelected = selected?.id === deck.id;
           return (

@@ -43,7 +43,7 @@ import {
 import { fetchChildStatus } from '@/lib/quizService';
 import { spendAlt } from '@/lib/altGuard';
 import { toast } from 'sonner';
-import { loadQuestProgress, isDeckUnlocked, DECK_KEYS } from '@/lib/questProgress';
+import { loadQuestProgress, isDeckUnlocked, isDeckAvailable, DECK_KEYS } from '@/lib/questProgress';
 import { fetchRatingStatus } from '@/lib/ratingService';
 import { COLLECTION_CARDS } from '@/lib/cardData';
 import { supabase } from '@/lib/supabase';
@@ -161,9 +161,10 @@ export default function ShopPage() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      // クエスト: 全デッキが解放（master以上クリア）されているかどうか
+      // クエスト: 提供中デッキが全て解放（master以上クリア）されているかどうか
+      // 準備中デッキはクリア不可能なので判定から除外する
       const qp = loadQuestProgress();
-      const allDecksCleared = DECK_KEYS.every((k) => isDeckUnlocked(qp, k));
+      const allDecksCleared = DECK_KEYS.filter((k) => isDeckAvailable(k)).every((k) => isDeckUnlocked(qp, k));
 
       // レート
       const r = await fetchRatingStatus(user.id);
@@ -341,7 +342,7 @@ export default function ShopPage() {
             style={{ background: 'linear-gradient(135deg, #ffd700, #f0a500)', boxShadow: '0 0 10px rgba(255,215,0,0.3)' }}>
             <span className="text-lg">🛒</span>
           </div>
-          <h1 className="text-lg font-bold" style={{ color: '#ffd700', textShadow: '0 0 10px rgba(255,215,0,0.2)' }}>ショップ</h1>
+          <h1 className="text-lg font-bold" style={{ color: '#ffd700', textShadow: '0 0 10px rgba(255,215,0,0.2)' }}>ALTショップ</h1>
           <div className="flex-1 h-px" style={{ background: 'linear-gradient(90deg, rgba(255,215,0,0.3), transparent)' }} />
           <div className="flex items-center gap-1 px-2 py-1 rounded-lg"
             style={{ background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.2)' }}>
