@@ -12,6 +12,8 @@ import { useUserStore, useMissionStore, useAltStore } from '@/lib/stores';
 import { calculateLevel } from '@/lib/level';
 import { fetchOverallRanking, type RankingEntry } from '@/lib/rankingService';
 import MenuButton from '@/components/ui/MenuButton';
+import { listTournaments, type Tournament } from '@/lib/tournamentService';
+import { findStudentByChildId } from '@/data/students';
 
 const categoryEmoji: Record<string, string> = {
   game: '⚔️', gacha: '🎰', collection: '🃏',
@@ -78,6 +80,20 @@ export default function HomePage() {
     });
     return () => { cancelled = true; };
   }, []);
+
+  // 現在開催中の大会（自分の部門のみ）
+  const [activeTournament, setActiveTournament] = useState<Tournament | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    const student = findStudentByChildId(user.id);
+    if (!student) { return; }
+    listTournaments().then((all) => {
+      if (cancelled) return;
+      const mine = all.find((t) => t.division === student.division && t.phase !== 'finished');
+      setActiveTournament(mine ?? null);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [user.id]);
 
   // ミッション報酬受け取り
   const handleClaim = (missionId: string) => {
@@ -297,6 +313,33 @@ export default function HomePage() {
             </div>
           )}
         </div>
+
+        {/* 🏆 大会開催中バナー（自分の部門にアクティブな大会があれば表示） */}
+        {activeTournament && (
+          <Link href="/tournament/join">
+            <div className="tappable relative overflow-hidden cursor-pointer mb-3"
+              style={{
+                borderRadius: 16,
+                padding: '10px 14px',
+                background: 'linear-gradient(135deg, #78530b 0%, #d4a500 55%, #ffd700 100%)',
+                border: '2px solid #c5a03f',
+                boxShadow: '0 4px 15px rgba(255,215,0,0.25), inset 0 0 24px rgba(255,255,255,0.08)',
+                display: 'flex', alignItems: 'center', gap: 12,
+              }}
+            >
+              <div className="text-3xl">🏆</div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-black" style={{ color: '#0b1128', textShadow: '0 1px 2px rgba(255,215,0,0.4)' }}>
+                  大会開催中！
+                </p>
+                <p className="text-[11px] truncate" style={{ color: 'rgba(11,17,40,0.75)' }}>
+                  {activeTournament.name} — {activeTournament.phase === 'recruiting' ? '参加受付中' : activeTournament.phase === 'round_robin' ? '総当たり中' : '決勝進行中'}
+                </p>
+              </div>
+              <span className="text-xl" style={{ color: '#0b1128' }}>›</span>
+            </div>
+          </Link>
+        )}
 
         {/* メインエントリ: バトル / デッキクエスト / 2人対戦 / タイムアタック */}
         <div className="mb-6 flex flex-col" style={{ gap: 10 }}>

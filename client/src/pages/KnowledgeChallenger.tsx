@@ -70,6 +70,7 @@ import CardPreviewOverlay from '@/components/CardPreviewOverlay';
 import { loadMyDecks, buildMyDeckCards, MY_DECK_MAX_DECKS, getStarterDeckCardNames } from '@/lib/myDecks';
 import { COLLECTION_CARDS } from '@/lib/cardData';
 import { saveHallOfFame } from '@/lib/hallOfFameService';
+import { saveBattleHistory, savePvPBattleHistory, starterIdToDeckKey } from '@/lib/battleHistoryService';
 import { toast } from 'sonner';
 import { loadEquippedBg, getBg } from '@/lib/backgrounds';
 
@@ -421,22 +422,27 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
       const p2Starter = STARTER_DECKS.find((d) => d.id === pvpSession.player2.starterDeckId);
       playerDeck = p1Starter ? buildStarterDeck(p1Starter) : createInitialDeck();
       aiDeckCards = p2Starter ? buildStarterDeck(p2Starter) : createInitialDeck();
+      activeDeckKeyRef.current = null; // PvP は battle_history 対象外
       console.log('[KC] startGame path=PvP, p1Starter=', p1Starter?.id, 'p2Starter=', p2Starter?.id);
     } else if (myDeckCards && myDeckCards.length > 0) {
       playerDeck = myDeckCards;
       aiDeckCards = stageId !== null ? createStageAIDeck(stageId) : createAIDeck();
+      activeDeckKeyRef.current = 'custom';
       console.log('[KC] startGame path=MyDeck, cards=', myDeckCards.length);
     } else if (starterOverride) {
       playerDeck = buildStarterDeck(starterOverride);
       aiDeckCards = stageId !== null ? createStageAIDeck(stageId) : createAIDeck();
+      activeDeckKeyRef.current = starterIdToDeckKey(starterOverride.id);
       console.log('[KC] startGame path=Starter, id=', starterOverride.id);
     } else if (previewDeck && validateDeck(previewDeck).valid) {
       playerDeck = previewDeck;
       aiDeckCards = stageId !== null ? createStageAIDeck(stageId) : createAIDeck();
+      activeDeckKeyRef.current = 'custom';
       console.log('[KC] startGame path=PreviewDeck (fallback), size=', previewDeck.length);
     } else {
       playerDeck = createInitialDeck();
       aiDeckCards = stageId !== null ? createStageAIDeck(stageId) : createAIDeck();
+      activeDeckKeyRef.current = 'custom';
       console.log('[KC] startGame path=createInitialDeck (default fallback!)');
     }
     const stage = stageId !== null ? getStage(stageId) : null;
@@ -648,6 +654,10 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
 
   // Track the last card the player played (attack or defense) for finisher display
   const lastPlayerCardRef = useRef<BattleCard | null>(null);
+
+  // Track which deck the player entered battle with (for battle_history).
+  // 'custom' for マイデッキ、'skip' は PvP で記録しない意図。
+  const activeDeckKeyRef = useRef<string | null>(null);
 
   // Waits until the player clicks the manual-reveal button, with a 30s safety timeout.
   // Used only when the PLAYER is the attacker (AI turns remain automatic).
@@ -2094,6 +2104,22 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
       const winnerName = p1Won ? p1.childName : p2.childName;
       setLastResult({ score: 100, maxScore: 100, timeSeconds: 0, accuracy: 1, isBestScore: false });
       toast.success(`🏆 勝者: ${winnerName}`);
+
+      // battle_history に対人戦として2件記録（管理者/モニターは service 側でスキップ）
+      const winnerId = p1Won ? p1.childId : p2.childId;
+      const loserId = p1Won ? p2.childId : p1.childId;
+      const winnerDeck = starterIdToDeckKey(p1Won ? p1.starterDeckId : p2.starterDeckId);
+      const loserDeck = starterIdToDeckKey(p1Won ? p2.starterDeckId : p1.starterDeckId);
+      const finisher = p1Won ? lastPlayerCardRef.current : null;
+      void savePvPBattleHistory({
+        winnerId, loserId, winnerDeckKey: winnerDeck, loserDeckKey: loserDeck,
+        winnerFinisherId: finisher?.id ?? null,
+        winnerFinisherName: finisher?.name ?? null,
+        winnerFans: p1Won ? gameState.playerFans : gameState.aiFans,
+        loserFans:  p1Won ? gameState.aiFans   : gameState.playerFans,
+        roundsPlayed: gameState.history.length,
+      });
+
       clearPvPSession();
       // Defensive cleanup: clear all in-component battle state so a new battle starts fresh.
       // Engine-level (initGameState) already resets exile/quarantine/sealed, but this guards
@@ -2161,6 +2187,24 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
     addTotalAlt(altReward);
     triggerEarnEffect(altReward);
     setLastResult({ score: won ? 100 : 30, maxScore: 100, timeSeconds: 0, accuracy: won ? 1 : 0.3, isBestScore: won });
+
+    // battle_history に保存（PvP / 管理者 / モニター / ゲスト はサービス内でスキップ）
+    if (activeDeckKeyRef.current !== null) {
+      const finisher = won ? lastPlayerCardRef.current : null;
+      void saveBattleHistory({
+        childId: userId,
+        deckKey: activeDeckKeyRef.current,
+        opponentType: 'npc',
+        stage: currentStage?.id ?? null,
+        result: won ? 'win' : 'lose',
+        totalFans: gameState.playerFans ?? null,
+        opponentFans: gameState.aiFans ?? null,
+        finisherCardId: finisher?.id ?? null,
+        finisherCardName: finisher?.name ?? null,
+        roundsPlayed: gameState.history.length,
+      });
+    }
+
     // Defensive cleanup before leaving: ensure next battle starts with fresh state.
     clearStepTimeouts();
     setGameState(null);

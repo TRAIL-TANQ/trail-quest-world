@@ -11,7 +11,9 @@ export type RankingCategory =
   | 'winrate'
   | 'collection'
   | 'quest'
-  | 'alt';
+  | 'alt'
+  | 'pvp_elementary'
+  | 'pvp_middle';
 
 export interface RankingEntry {
   childId: string;
@@ -254,6 +256,49 @@ export async function fetchAltRanking(): Promise<RankingEntry[]> {
 }
 
 // ============================================================
+// 7. ⚔️ 対人戦績ランキング（部門別）
+// ============================================================
+
+async function fetchPvPRankingByDivision(division: 'elementary' | 'middle'): Promise<RankingEntry[]> {
+  const { STUDENTS } = await import('@/data/students');
+  const divIds = new Set(STUDENTS.filter((s) => s.division === division).map((s) => `${s.classAbbr}_${s.name}`));
+  const { data, error } = await supabase
+    .from('battle_history')
+    .select('child_id, opponent_id, result, played_at')
+    .eq('opponent_type', 'pvp');
+  if (error || !data) return [];
+
+  const stats = new Map<string, { wins: number; losses: number }>();
+  for (const row of data) {
+    const cid = row.child_id as string;
+    if (!divIds.has(cid)) continue;
+    const oppId = row.opponent_id as string | null;
+    if (!oppId || !divIds.has(oppId)) continue;
+    const s = stats.get(cid) ?? { wins: 0, losses: 0 };
+    if (row.result === 'win') s.wins += 1;
+    else s.losses += 1;
+    stats.set(cid, s);
+  }
+
+  const entries = Array.from(stats.entries()).map(([cid, s]) => ({ cid, wins: s.wins, losses: s.losses }));
+  const nicknames = await fetchNicknameMap(entries.map((e) => e.cid));
+  return rank(
+    entries.map((e) => {
+      const total = e.wins + e.losses;
+      const winRate = total > 0 ? Math.round((e.wins / total) * 100) : 0;
+      const nick = nicknames[e.cid] || e.cid.split('_')[1] || e.cid;
+      return {
+        childId: e.cid,
+        nickname: nick,
+        primary: e.wins,
+        secondary: `${e.wins}勝${e.losses}敗 / 勝率${winRate}%`,
+      };
+    }),
+    (x) => x.primary,
+  );
+}
+
+// ============================================================
 // Category meta
 // ============================================================
 
@@ -265,10 +310,12 @@ export const RANKING_CATEGORIES: Array<{
   formatPrimary: (v: number) => string;
   fetch: () => Promise<RankingEntry[]>;
 }> = [
-  { id: 'overall',    label: '総合',       emoji: '🏆', primaryLabel: 'レート', formatPrimary: (v) => `${v}`,          fetch: fetchOverallRanking },
-  { id: 'wins',       label: '勝利数',     emoji: '⚔️', primaryLabel: '勝利',   formatPrimary: (v) => `${v}勝`,        fetch: fetchWinsRanking },
-  { id: 'winrate',    label: '勝率',       emoji: '📊', primaryLabel: '勝率',   formatPrimary: (v) => `${v}%`,         fetch: fetchWinRateRanking },
-  { id: 'collection', label: 'コレクション', emoji: '🃏', primaryLabel: '枚数',   formatPrimary: (v) => `${v}枚`,        fetch: fetchCollectionRanking },
-  { id: 'quest',      label: 'クエスト',    emoji: '📖', primaryLabel: 'クリア', formatPrimary: (v) => `${v}個`,        fetch: fetchQuestClearRanking },
-  { id: 'alt',        label: 'ALT',        emoji: '🌟', primaryLabel: 'ALT',    formatPrimary: (v) => v.toLocaleString(), fetch: fetchAltRanking },
+  { id: 'overall',        label: '総合',       emoji: '🏆', primaryLabel: 'レート', formatPrimary: (v) => `${v}`,             fetch: fetchOverallRanking },
+  { id: 'wins',           label: '勝利数',     emoji: '⚔️', primaryLabel: '勝利',   formatPrimary: (v) => `${v}勝`,           fetch: fetchWinsRanking },
+  { id: 'winrate',        label: '勝率',       emoji: '📊', primaryLabel: '勝率',   formatPrimary: (v) => `${v}%`,            fetch: fetchWinRateRanking },
+  { id: 'collection',     label: 'コレクション', emoji: '🃏', primaryLabel: '枚数',   formatPrimary: (v) => `${v}枚`,           fetch: fetchCollectionRanking },
+  { id: 'quest',          label: 'クエスト',    emoji: '📖', primaryLabel: 'クリア', formatPrimary: (v) => `${v}個`,           fetch: fetchQuestClearRanking },
+  { id: 'alt',            label: 'ALT',         emoji: '🌟', primaryLabel: 'ALT',    formatPrimary: (v) => v.toLocaleString(), fetch: fetchAltRanking },
+  { id: 'pvp_elementary', label: '対人🏫',      emoji: '🆚', primaryLabel: '勝利',   formatPrimary: (v) => `${v}勝`,           fetch: () => fetchPvPRankingByDivision('elementary') },
+  { id: 'pvp_middle',     label: '対人🎓',      emoji: '🆚', primaryLabel: '勝利',   formatPrimary: (v) => `${v}勝`,           fetch: () => fetchPvPRankingByDivision('middle') },
 ];

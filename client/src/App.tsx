@@ -29,6 +29,17 @@ import MyPage from "./pages/MyPage";
 import ResultPage from "./pages/ResultPage";
 import LoginPage from "./pages/LoginPage";
 import AdminPage from "./pages/AdminPage";
+import AdminDashboardPage from "./pages/admin/AdminDashboardPage";
+import AdminStudentsPage from "./pages/admin/AdminStudentsPage";
+import AdminStudentDetailPage from "./pages/admin/AdminStudentDetailPage";
+import AdminDecksPage from "./pages/admin/AdminDecksPage";
+import AdminCardsPage from "./pages/admin/AdminCardsPage";
+import AdminAltGamesPage from "./pages/admin/AdminAltGamesPage";
+import AdminPvPPage from "./pages/admin/AdminPvPPage";
+import AdminTournamentsPage from "./pages/admin/AdminTournamentsPage";
+import AdminTournamentDetailPage from "./pages/admin/AdminTournamentDetailPage";
+import AdminGuard from "./components/admin/AdminGuard";
+import TournamentJoinPage from "./pages/TournamentJoinPage";
 import QuizPracticePage from "./pages/QuizPracticePage";
 import QuestLearningUnitPage from "./pages/QuestLearningUnitPage";
 import DeckBuilderPage from "./pages/DeckBuilderPage";
@@ -77,7 +88,21 @@ function Router() {
             <Route path="/games/quest-board"><Redirect to="/games/knowledge-challenger?screen=deck_select" /></Route>
             <Route path="/quest"><Redirect to="/games/knowledge-challenger?screen=deck_select" /></Route>
             <Route path="/games"><Redirect to="/alt-games" /></Route>
-            <Route path="/admin" component={AdminPage} />
+            {/* 管理者ダッシュボード（isAdmin=trueのみ、非管理者はホームへ） */}
+            <Route path="/admin" component={AdminDashboardPage} />
+            <Route path="/admin/students/:childId" component={AdminStudentDetailPage} />
+            <Route path="/admin/students" component={AdminStudentsPage} />
+            <Route path="/admin/decks" component={AdminDecksPage} />
+            <Route path="/admin/cards" component={AdminCardsPage} />
+            <Route path="/admin/alt-games" component={AdminAltGamesPage} />
+            <Route path="/admin/pvp" component={AdminPvPPage} />
+            <Route path="/admin/tournaments/:id" component={AdminTournamentDetailPage} />
+            <Route path="/admin/tournaments" component={AdminTournamentsPage} />
+            <Route path="/admin/shop-order">
+              <AdminGuard><AdminPage /></AdminGuard>
+            </Route>
+            {/* 生徒: 大会参加 */}
+            <Route path="/tournament/join" component={TournamentJoinPage} />
             <Route>
               <div className="flex items-center justify-center min-h-[60vh]">
                 <p className="text-lg font-bold gold-text">ページが見つかりません</p>

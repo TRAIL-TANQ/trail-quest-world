@@ -12,6 +12,7 @@ import {
   type RankingCategory,
   type RankingEntry,
 } from '@/lib/rankingService';
+import { fetchTournamentBadges, type TournamentBadges } from '@/lib/tournamentService';
 
 const medalEmoji = ['🥇', '🥈', '🥉'];
 const medalColors = ['#ffd700', '#c0c0c0', '#cd7f32'];
@@ -56,6 +57,23 @@ export default function RankingPage() {
 
   const myEntry = entries.find((e) => e.childId === user.id);
   const myTitle = getTitle(myRating);
+
+  // Tournament badges (fetch once on mount)
+  const [badges, setBadges] = useState<Record<string, TournamentBadges>>({});
+  useEffect(() => {
+    let cancelled = false;
+    fetchTournamentBadges().then((b) => { if (!cancelled) setBadges(b); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+  const badgeEmoji = (cid: string): string => {
+    const b = badges[cid];
+    if (!b) return '';
+    const parts: string[] = [];
+    if (b.hasChampion) parts.push('🏆');
+    if (b.hasRunnerUp) parts.push('🥈');
+    if (b.hasSpecialAward) parts.push('🎖️');
+    return parts.join('');
+  };
 
   return (
     <div className="relative min-h-full">
@@ -194,7 +212,11 @@ export default function RankingPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-bold text-amber-100 truncate">
-                      {entry.nickname}{isMe && <span className="text-[10px] text-amber-200/50 ml-1">(あなた)</span>}
+                      {entry.nickname}
+                      {badgeEmoji(entry.childId) && (
+                        <span className="ml-1">{badgeEmoji(entry.childId)}</span>
+                      )}
+                      {isMe && <span className="text-[10px] text-amber-200/50 ml-1">(あなた)</span>}
                     </p>
                     {entry.secondary && (
                       <p className="text-[10px] text-amber-200/40">{entry.secondary}</p>
