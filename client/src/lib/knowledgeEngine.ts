@@ -139,7 +139,7 @@ export interface GameState {
   pendingAttackBonus: { player: number; ai: number };         // one-shot, consumed on next reveal
   // Persistent state
   quarantine: { player: BattleCard[]; ai: BattleCard[] };     // temporarily removed cards (flush to bench on sub-battle resolve)
-  exile: { player: BattleCard[]; ai: BattleCard[] };          // permanently removed from game (persists across rounds)
+  exile: { player: BattleCard[]; ai: BattleCard[] };          // round-scoped removed cards (returned to deck at advanceToNextRound)
   sealedBenchNames: { player: string[]; ai: string[] };       // bench names whose effects are disabled
   altBonus: number;                                           // extra ALT earned this match
   effectTelop: EffectTelop | null;                            // UI consumes & clears after 1.5s
@@ -2968,9 +2968,9 @@ export function advanceToNextRound(state: GameState): GameState {
     };
   }
 
-  // Advance to next round: collect ALL cards back to deck, reset bench/quarantine.
-  // ベンチ + 隔離 + 防御カード + 攻撃中カード → 全てデッキに回収してシャッフル
-  // 進化カードはラウンド内限定のため、元のカードに戻す
+  // Advance to next round: collect ALL cards back to deck, reset bench/quarantine/exile.
+  // ベンチ + 隔離 + 防御カード + 攻撃中カード + 除外 → 全てデッキに回収してシャッフル
+  // 進化/派生カードはラウンド内限定のため、消滅または元のカードに戻す
   const revertEvolution = (card: BattleCard): BattleCard | null => {
     // 召喚された大蛇はデッキ外カードなので回収時に除外する
     if (card.name === '大蛇' && card.id.startsWith('summoned-giant-snake-')) {
@@ -2984,8 +2984,19 @@ export function advanceToNextRound(state: GameState): GameState {
         return { ...davinci, id: `reverted-davinci-${Date.now()}` };
       }
     }
-    // 聖女ジャンヌは火刑により変身したカード。ジャンヌ本体はすでに除外されているため
-    // ラウンド終了時に戻す先がなく、聖女ジャンヌのまま残る。
+    // 聖女ジャンヌ（祈りの光で生成）はラウンド限定の派生カード。
+    // exile round-scoped 化により、元のジャンヌ・ダルクは除外からデッキに戻るため、
+    // 聖女ジャンヌ本体は消滅させる。
+    if (card.name === '聖女ジャンヌ' && card.id.startsWith('saint-jeanne-prayer-')) {
+      console.log('[Engine] 聖女ジャンヌ（祈りの光派生）をデッキ外に戻す (ラウンド終了)');
+      return null;
+    }
+    // 明智ルート（本能寺の変で再構成された 明智光秀/愛宕百韻/天王山/三日天下）も
+    // ラウンド内限定の派生カード。次ラウンドでは消滅する。
+    if (card.id.startsWith('evolved-akechi-')) {
+      console.log(`[Engine] 明智ルート派生 ${card.name} をデッキ外に戻す (ラウンド終了)`);
+      return null;
+    }
     return card;
   };
 
@@ -3000,13 +3011,15 @@ export function advanceToNextRound(state: GameState): GameState {
     if (otherSide(state.flagHolder) === side) {
       for (const c of state.attackRevealed) { const r = revertEvolution(c); if (r) cards.push(r); }
     }
+    // 除外プールも次ラウンドへ戻す（round-scoped 仕様）。派生カードは revertEvolution で消滅
+    for (const c of state.exile[side]) { const r = revertEvolution(c); if (r) cards.push(r); }
     return cards;
   };
 
   const playerDeck = shuffleDeck(collectCards(state.player, 'player'));
   const aiDeck = shuffleDeck(collectCards(state.ai, 'ai'));
 
-  console.log(`[Engine] advanceToNextRound: player deck ${state.player.deck.length} → ${playerDeck.length}, ai deck ${state.ai.deck.length} → ${aiDeck.length}`);
+  console.log(`[Engine] advanceToNextRound: player deck ${state.player.deck.length}→${playerDeck.length} (exile ${state.exile.player.length}→0), ai deck ${state.ai.deck.length}→${aiDeck.length} (exile ${state.exile.ai.length}→0)`);
 
   return {
     ...state,
@@ -3021,7 +3034,7 @@ export function advanceToNextRound(state: GameState): GameState {
     player: { ...state.player, deck: playerDeck, bench: [] },
     ai: { ...state.ai, deck: aiDeck, bench: [] },
     quarantine: { player: [], ai: [] },
-    exile: state.exile, // persist across rounds
+    exile: { player: [], ai: [] }, // round-scoped: contents returned to deck via collectCards
     sealedBenchNames: { player: [], ai: [] },
     flagHolder: state.roundWinner,
     defenseCard: null,
