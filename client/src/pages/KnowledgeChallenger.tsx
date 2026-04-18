@@ -1118,7 +1118,11 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
             if (lastRevealed?.effect?.id === 'prayer_light') {
               const gs = gameStateRef.current ?? rs;
               const exiledJeanne = gs.exile[mySide].filter((c) => c.name === 'ジャンヌ・ダルク');
+              const benchNames = gs[mySide].bench.map((b) => b.name);
+              const exileNames = gs.exile[mySide].map((c) => c.name);
+              console.log(`[UI][prayer_light] mySide=${mySide} canActivate=${exiledJeanne.length > 0} exile=[${exileNames.join(',')}] bench=[${benchNames.join(',')}]`);
               if (exiledJeanne.length > 0) {
+                console.log(`[UI][prayer_light] opening waitCardSelect with ${exiledJeanne.length} jeanne options`);
                 const chosen = await waitCardSelect('✨ 聖女ジャンヌとして蘇らせるジャンヌを選んでください', exiledJeanne);
                 if (chosen && !unmountedRef.current) {
                   setGameState((prev) => {
@@ -1234,6 +1238,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
             if (lastRevealed?.effect?.id === 'rainbow_nation') {
               const gs = gameStateRef.current ?? rs;
               const exiledCards = gs.exile[mySide];
+              console.log(`[UI][rainbow_nation] mySide=${mySide} exileCount=${exiledCards.length} exile=[${exiledCards.map(c => c.name).join(',')}]`);
               if (exiledCards.length > 0) {
                 const chosen = await waitCardSelect(`🌈 除外カード${exiledCards.length}枚を全てデッキに戻しますか？`, exiledCards);
                 if (chosen && !unmountedRef.current) {

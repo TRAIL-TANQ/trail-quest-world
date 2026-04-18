@@ -735,6 +735,7 @@ export function applyRevealEffect(
       const paperCount  = myState.bench.find((b) => b.name === '紙' && !sealed.includes(b.name))?.count ?? 0;
       const decreeCount = myState.bench.find((b) => b.name === '始皇帝の勅令' && !sealed.includes(b.name))?.count ?? 0;
       const X = paperCount + decreeCount;
+      console.log(`[Engine][book_burning] side=${side} role=${role} paper=${paperCount} decree=${decreeCount} X=${X} myBench=[${myState.bench.map(b=>b.name+'x'+b.count).join(',')}] oppDeckTop=${oppState.deck.slice(0,X).map(c=>c.name).join(',')} myDeckTop=${myState.deck.slice(0,X).map(c=>c.name).join(',')}`);
 
       if (X <= 0) {
         telop = { text: '📚 焚書坑儒（ベンチに紙・勅令がありません）', color };
@@ -777,20 +778,26 @@ export function applyRevealEffect(
       // 不老不死の薬 (spec v7):
       // 攻撃時（1バトル1回、ラウンド跨ぎ保持）、除外の始皇帝をデッキトップに戻す。
       // ガード順: role / 使用済み / 除外に始皇帝存在。
+      const myElixirDbg = side === 'player' ? next.player : next.ai;
+      console.log(`[Engine][elixir] side=${side} role=${role} used=${next.usedElixir[side]} exile=[${next.exile[side].map(c=>c.name).join(',')}] bench=[${myElixirDbg.bench.map(b=>b.name).join(',')}]`);
       if (role !== 'attacker') {
+        console.log(`[Engine][elixir] skip: not attacker`);
         telop = { text: '💊 不老不死の薬（攻撃時のみ発動）', color };
         break;
       }
       if (next.usedElixir[side]) {
+        console.log(`[Engine][elixir] skip: already used this battle`);
         telop = { text: '💊 不老不死の薬（このバトルでは使用済み）', color };
         break;
       }
       const exileList = next.exile[side];
       const emperorIdx = exileList.findIndex((c) => c.name === '始皇帝');
       if (emperorIdx < 0) {
+        console.log(`[Engine][elixir] skip: no 始皇帝 in exile`);
         telop = { text: '💊 不老不死の薬（除外に始皇帝なし）', color };
         break;
       }
+      console.log(`[Engine][elixir] FIRE: revive 始皇帝 from exile to deck top`);
       const emperorCard = exileList[emperorIdx];
       const newExile = [...exileList.slice(0, emperorIdx), ...exileList.slice(emperorIdx + 1)];
       const myElixirState = side === 'player' ? next.player : next.ai;
@@ -1096,11 +1103,14 @@ export function applyRevealEffect(
       // 死者の兵を蘇らせるテーマ。発動源が「ベンチ」から「除外」に変わった。
       const myTcState = side === 'player' ? next.player : next.ai;
       const exileList = next.exile[side];
+      console.log(`[Engine][terracotta] side=${side} role=${role} exile=[${exileList.map(c=>c.name).join(',')}] bench=[${myTcState.bench.map(b=>b.name).join(',')}]`);
       const soldierIdx = exileList.findIndex((c) => c.name === '秦の兵士');
       if (soldierIdx < 0) {
+        console.log(`[Engine][terracotta] skip: no 秦の兵士 in exile`);
         telop = { text: '🗿 兵馬俑（除外に秦の兵士なし）', color };
         break;
       }
+      console.log(`[Engine][terracotta] FIRE: 秦の兵士 exile→deck top`);
       const soldierCard = exileList[soldierIdx];
       const newExile = [...exileList.slice(0, soldierIdx), ...exileList.slice(soldierIdx + 1)];
       const newDeck = [soldierCard, ...myTcState.deck];
@@ -1484,11 +1494,14 @@ export function applyRevealEffect(
       // 殉教の炎: ベンチにジャンヌ・ダルクがいる時、そのジャンヌを除外する（任意発動）
       const my = side === 'player' ? next.player : next.ai;
       const sealed = next.sealedBenchNames[side];
+      console.log(`[Engine][burning_stake] side=${side} role=${role} bench=[${my.bench.map(b=>b.name).join(',')}] exile_before=[${next.exile[side].map(c=>c.name).join(',')}]`);
       const jeanneSlot = my.bench.find((b) => b.name === 'ジャンヌ・ダルク' && !sealed.includes(b.name));
       if (!jeanneSlot) {
+        console.log(`[Engine][burning_stake] skip: no ジャンヌ on bench`);
         telop = { text: '🔥 火刑（ベンチにジャンヌがいません）', color };
         break;
       }
+      console.log(`[Engine][burning_stake] FIRE: move ジャンヌ from bench to exile`);
       // ベンチからジャンヌを1枚除外
       const newBench = removeOneFromBench(my.bench, 'ジャンヌ・ダルク');
       next = applySide(
@@ -1852,8 +1865,11 @@ export function applyRevealEffect(
     }
     case 'prayer_light': {
       // 祈りの光: 除外されたジャンヌ・ダルクを聖女ジャンヌとしてデッキの一番上に置く（任意発動）
+      const myPrayerDbg = side === 'player' ? next.player : next.ai;
+      console.log(`[Engine][prayer_light] side=${side} role=${role} exile=[${next.exile[side].map(c=>c.name).join(',')}] bench=[${myPrayerDbg.bench.map(b=>b.name).join(',')}]`);
       const exiledJeanne = next.exile[side].find((c) => c.name === 'ジャンヌ・ダルク');
       if (exiledJeanne) {
+        console.log(`[Engine][prayer_light] found exiled Jeanne, side=${side}, will ${side === 'ai' ? 'FIRE (AI branch)' : 'delegate to UI (player branch)'}`);
         const saintTemplate = ALL_BATTLE_CARDS.find((c) => c.name === '聖女ジャンヌ');
         if (saintTemplate) {
           if (side === 'ai') {
@@ -1876,6 +1892,7 @@ export function applyRevealEffect(
           telop = { text: '✨ 聖なる祈り（聖女ジャンヌが見つかりません）', color };
         }
       } else {
+        console.log(`[Engine][prayer_light] skip: no ジャンヌ・ダルク in exile (side=${side})`);
         telop = { text: '✨ 聖なる祈り（除外にジャンヌがいません）', color };
       }
       break;
