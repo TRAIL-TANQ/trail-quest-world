@@ -66,7 +66,6 @@ import type { PvPSession } from '@/lib/pvpSession';
 import { clearPvPSession } from '@/lib/pvpSession';
 import { applyRatingChange, applyPvPRatingChange } from '@/lib/ratingService';
 import { playBattleStart, playTap, playDefeat } from '@/lib/sfx';
-import { useGameTimer } from '@/hooks/useGameTimer';
 import CardPreviewOverlay from '@/components/CardPreviewOverlay';
 import { loadMyDecks, buildMyDeckCards, MY_DECK_MAX_DECKS, getStarterDeckCardNames } from '@/lib/myDecks';
 import { COLLECTION_CARDS } from '@/lib/cardData';
@@ -462,7 +461,6 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
     console.log('[KC] startGame: initial phase =', state.phase, 'round =', state.round, 'stageRules =', rules);
     console.log('[KC] playerDeck:', playerDeck.map(c => `${c.name}(${c.rarity},effect=${c.effect?.id ?? 'none'})`).join(', '));
     console.log('[KC] aiDeck:', aiDeckCards.map(c => `${c.name}(${c.rarity},effect=${c.effect?.id ?? 'none'})`).join(', '));
-    battleTimer.start();
     setGameState(state);
     setScreen('playing');
     setCineStep('idle');
@@ -660,11 +658,6 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
   // Track which deck the player entered battle with (for battle_history).
   // 'custom' for マイデッキ、'skip' は PvP で記録しない意図。
   const activeDeckKeyRef = useRef<string | null>(null);
-
-  // バトル時間タイマー（保護者ダッシュボードの学習時間集計用）。
-  // initGameState→setGameState の瞬間に start() を呼び、
-  // handleFinish の INSERT で getElapsedSeconds() を duration_seconds に渡す。
-  const battleTimer = useGameTimer();
 
   // Waits until the player clicks the manual-reveal button, with a 30s safety timeout.
   // Used only when the PLAYER is the attacker (AI turns remain automatic).
@@ -1221,30 +1214,6 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
             }
           }
 
-          // ===== 始皇帝: 公開時任意、ベンチの焚書坑儒をデッキトップへ =====
-          if (canShowChoice) {
-            const lastRevealed = rs.attackRevealed[rs.attackRevealed.length - 1];
-            if (lastRevealed?.effect?.id === 'qinshi') {
-              const gs = gameStateRef.current ?? rs;
-              const sealed = gs.sealedBenchNames[mySide];
-              const burnSlot = gs[mySide].bench.find((b) => b.name === '焚書坑儒' && !sealed.includes(b.name));
-              if (burnSlot) {
-                const chosen = await waitCardSelect('👑 焚書坑儒をデッキトップに戻しますか？', [burnSlot.card]);
-                if (chosen && !unmountedRef.current) {
-                  setGameState((prev) => {
-                    if (!prev) return prev;
-                    const newBench = removeOneFromBench(prev[mySide].bench, '焚書坑儒');
-                    return {
-                      ...prev,
-                      [mySide]: { ...prev[mySide], bench: newBench, deck: [chosen, ...prev[mySide].deck] },
-                      effectTelop: { text: '👑 始皇帝！焚書坑儒をデッキトップへ！', color: '#ffd700', key: Date.now() },
-                    };
-                  });
-                }
-              }
-            }
-          }
-
           // ===== 始皇帝の勅令: デッキの紙または焚書坑儒を選んでデッキトップへ =====
           if (canShowChoice) {
             const lastRevealed = rs.attackRevealed[rs.attackRevealed.length - 1];
@@ -1729,30 +1698,6 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
               }
             }
 
-            // 始皇帝: 防御時の公開時任意、ベンチの焚書坑儒をデッキトップへ
-            {
-              const gs = gameStateRef.current;
-              if (gs && gs.flagHolder === 'player' && gs.defenseCard?.effect?.id === 'qinshi') {
-                const mySide: 'player' | 'ai' = 'player';
-                const sealed = gs.sealedBenchNames[mySide];
-                const burnSlot = gs[mySide].bench.find((b) => b.name === '焚書坑儒' && !sealed.includes(b.name));
-                if (burnSlot) {
-                  const chosen = await waitCardSelect('👑 焚書坑儒をデッキトップに戻しますか？', [burnSlot.card]);
-                  if (chosen && !unmountedRef.current) {
-                    setGameState((prev) => {
-                      if (!prev) return prev;
-                      const newBench = removeOneFromBench(prev[mySide].bench, '焚書坑儒');
-                      return {
-                        ...prev,
-                        [mySide]: { ...prev[mySide], bench: newBench, deck: [chosen, ...prev[mySide].deck] },
-                        effectTelop: { text: '👑 始皇帝！焚書坑儒をデッキトップへ！', color: '#ffd700', key: Date.now() },
-                      };
-                    });
-                  }
-                }
-              }
-            }
-
             // Turn transition banner — "🔄 相手のターン！" / "🔄 あなたのターン！"
             setCineStep('turn_transition');
             if (manualModeRef.current) {
@@ -2111,27 +2056,6 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
       }
     }
 
-    // 始皇帝: 防御時の公開時任意、ベンチの焚書坑儒をデッキトップへ（バトル開始時の初回）
-    if (next.phase === 'battle_intro' && next.flagHolder === 'player' && next.defenseCard?.effect?.id === 'qinshi') {
-      const mySide: 'player' | 'ai' = 'player';
-      const sealed = next.sealedBenchNames[mySide];
-      const burnSlot = next[mySide].bench.find((b) => b.name === '焚書坑儒' && !sealed.includes(b.name));
-      if (burnSlot) {
-        const chosen = await waitCardSelect('👑 焚書坑儒をデッキトップに戻しますか？', [burnSlot.card]);
-        if (chosen && !unmountedRef.current) {
-          setGameState((prev) => {
-            if (!prev) return prev;
-            const newBench = removeOneFromBench(prev[mySide].bench, '焚書坑儒');
-            return {
-              ...prev,
-              [mySide]: { ...prev[mySide], bench: newBench, deck: [chosen, ...prev[mySide].deck] },
-              effectTelop: { text: '👑 始皇帝！焚書坑儒をデッキトップへ！', color: '#ffd700', key: Date.now() },
-            };
-          });
-        }
-      }
-    }
-
     if (next.phase === 'round_end') {
       // Deck was empty at battle start → handle round_end immediately
       setCineStep('round_end');
@@ -2194,7 +2118,6 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
         winnerFans: p1Won ? gameState.playerFans : gameState.aiFans,
         loserFans:  p1Won ? gameState.aiFans   : gameState.playerFans,
         roundsPlayed: gameState.history.length,
-        durationSeconds: battleTimer.getElapsedSeconds(),
       });
 
       clearPvPSession();
@@ -2279,7 +2202,6 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
         finisherCardId: finisher?.id ?? null,
         finisherCardName: finisher?.name ?? null,
         roundsPlayed: gameState.history.length,
-        durationSeconds: battleTimer.getElapsedSeconds(),
       });
     }
 
@@ -2740,8 +2662,6 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
         </div>
 
         <div className="space-y-2.5 max-w-md mx-auto">
-          {/* spec v6 §4.3: STARTER_DECKS 自身が解放済み→準備中の順に並んでいるため
-              並べ替えは不要。配列順をそのまま使う（決定性の担保 + 可読性）。 */}
           {STARTER_DECKS.map((deck) => {
             const isSelected = selectedStarter?.id === deck.id;
             const trumpCard = deck.trumpCard ? findCardByName(deck.trumpCard) : null;
@@ -2750,7 +2670,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
             const isRandom = deck.id === 'starter-random';
             const isAvailable = isRandom || !deckKey || isDeckAvailable(deckKey);
             const isUnlocked = isAvailable && (isRandom || !deckKey || isDeckUnlocked(questProgress, deckKey));
-            const beginnerCleared = deckKey ? questProgress[deckKey]?.beginner?.cleared ?? false : false;
+            if (deckKey) console.log('[デッキ選択] 解放済み判定:', deckKey, isUnlocked, 'available=', isAvailable);
 
             return (
               <div
@@ -2791,12 +2711,12 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                       {isRandom ? null : !isAvailable ? (
                         <span className="text-[9px] px-1.5 py-0.5 rounded font-bold shrink-0"
                           style={{ background: 'rgba(255,215,0,0.15)', color: 'var(--tqw-gold, #ffd700)', border: '1px solid rgba(255,215,0,0.4)' }}>🔨 準備中</span>
-                      ) : beginnerCleared ? (
+                      ) : isUnlocked ? (
                         <span className="text-[9px] px-1.5 py-0.5 rounded font-bold shrink-0"
-                          style={{ background: 'rgba(34,197,94,0.18)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.35)' }}>✅ クエスト済み</span>
+                          style={{ background: 'rgba(34,197,94,0.18)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.35)' }}>✅ 解放済</span>
                       ) : (
                         <span className="text-[9px] px-1.5 py-0.5 rounded font-bold shrink-0"
-                          style={{ background: 'rgba(255,215,0,0.08)', color: 'var(--tqw-gold, #ffd700)', border: '1px solid rgba(255,215,0,0.3)' }}>🌟 クエストで+50 ALT</span>
+                          style={{ background: 'rgba(120,120,140,0.15)', color: 'rgba(220,220,230,0.65)', border: '1px solid rgba(120,120,140,0.3)' }}>🔒 未解放</span>
                       )}
                     </div>
                     {/* Difficulty progress */}
@@ -3372,56 +3292,27 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
               {gameState.round}/{gameState.totalRounds}
             </p>
           </div>
-          {/* Trophy + Fan totals per side — v12 で大型化・勝敗フィードバック強化 */}
-          {(() => {
-            const playerLeading = gameState.playerFans > gameState.aiFans;
-            const aiLeading = gameState.aiFans > gameState.playerFans;
-            return (
-              <>
-                <div className="text-center px-2.5 py-1 rounded-lg"
-                  style={{
-                    background: playerLeading ? 'rgba(34,197,94,0.25)' : 'rgba(34,197,94,0.14)',
-                    border: playerLeading ? '2px solid rgba(34,197,94,0.7)' : '1.5px solid rgba(34,197,94,0.45)',
-                    boxShadow: playerLeading ? '0 0 16px rgba(34,197,94,0.5), inset 0 0 8px rgba(34,197,94,0.2)' : 'none',
-                    transition: 'all 0.3s ease',
-                  }}>
-                  <p className="text-[9px] font-bold text-green-200/80">あなた</p>
-                  <p className="text-[10px] font-bold text-amber-300 leading-tight">{'🏆'.repeat(gameState.playerTrophies)}{gameState.playerTrophies === 0 ? '-' : ''}</p>
-                  <p key={`pfan-${gameState.playerFans}`} className="text-lg font-black kc-power-bounce leading-none"
-                    style={{
-                      color: playerLeading ? '#ffd700' : '#4ade80',
-                      textShadow: playerLeading ? '0 0 14px rgba(255,215,0,0.8)' : '0 0 8px rgba(34,197,94,0.6)',
-                    }}>
-                    ⭐{gameState.playerFans}
-                  </p>
-                </div>
-                <div className="flex flex-col items-center gap-0.5">
-                  <span className="text-[10px] font-black text-amber-200/60">vs</span>
-                  <span className="text-[10px]" style={{ color: gameState.flagHolder === 'player' ? '#4ade80' : '#fca5a5' }}>
-                    🚩{gameState.flagHolder === 'player' ? '←' : '→'}
-                  </span>
-                </div>
-                <div className="text-center px-2.5 py-1 rounded-lg"
-                  style={{
-                    background: aiLeading ? 'rgba(239,68,68,0.25)' : 'rgba(239,68,68,0.14)',
-                    border: aiLeading ? '2px solid rgba(239,68,68,0.7)' : '1.5px solid rgba(239,68,68,0.45)',
-                    boxShadow: aiLeading ? '0 0 16px rgba(239,68,68,0.5), inset 0 0 8px rgba(239,68,68,0.2)' : 'none',
-                    animation: aiLeading && gameState.aiFans - gameState.playerFans >= 10 ? 'tqw-losing-pulse 1.6s ease-in-out infinite' : 'none',
-                    transition: 'all 0.3s ease',
-                  }}>
-                  <p className="text-[9px] font-bold text-red-200/80">あいて</p>
-                  <p className="text-[10px] font-bold text-amber-300 leading-tight">{'🏆'.repeat(gameState.aiTrophies)}{gameState.aiTrophies === 0 ? '-' : ''}</p>
-                  <p key={`afan-${gameState.aiFans}`} className="text-lg font-black kc-power-bounce leading-none"
-                    style={{
-                      color: aiLeading ? '#ffd700' : '#fca5a5',
-                      textShadow: aiLeading ? '0 0 14px rgba(255,215,0,0.8)' : '0 0 8px rgba(239,68,68,0.6)',
-                    }}>
-                    ⭐{gameState.aiFans}
-                  </p>
-                </div>
-              </>
-            );
-          })()}
+          {/* Trophy + Fan totals per side */}
+          <div className="text-center px-2 py-1 rounded-lg" style={{ background: 'rgba(34,197,94,0.14)', border: '1.5px solid rgba(34,197,94,0.5)', boxShadow: gameState.playerFans > gameState.aiFans ? '0 0 12px rgba(255,215,0,0.3)' : 'none' }}>
+            <p className="text-[9px] font-bold text-green-200/80">あなた</p>
+            <p className="text-[10px] font-bold text-amber-300">{'🏆'.repeat(gameState.playerTrophies)}{gameState.playerTrophies === 0 ? '-' : ''}</p>
+            <p key={`pfan-${gameState.playerFans}`} className="text-sm font-black kc-power-bounce" style={{ color: gameState.playerFans >= gameState.aiFans ? '#ffd700' : '#4ade80', textShadow: `0 0 8px ${gameState.playerFans >= gameState.aiFans ? 'rgba(255,215,0,0.6)' : 'rgba(34,197,94,0.6)'}` }}>
+              ⭐{gameState.playerFans}
+            </p>
+          </div>
+          <div className="flex flex-col items-center gap-0.5">
+            <span className="text-[10px] font-black text-amber-200/60">vs</span>
+            <span className="text-[10px]" style={{ color: gameState.flagHolder === 'player' ? '#4ade80' : '#fca5a5' }}>
+              🚩{gameState.flagHolder === 'player' ? '←' : '→'}
+            </span>
+          </div>
+          <div className="text-center px-2 py-1 rounded-lg" style={{ background: 'rgba(239,68,68,0.14)', border: '1.5px solid rgba(239,68,68,0.5)', boxShadow: gameState.aiFans > gameState.playerFans ? '0 0 12px rgba(255,215,0,0.3)' : 'none' }}>
+            <p className="text-[9px] font-bold text-red-200/80">相手</p>
+            <p className="text-[10px] font-bold text-amber-300">{'🏆'.repeat(gameState.aiTrophies)}{gameState.aiTrophies === 0 ? '-' : ''}</p>
+            <p key={`afan-${gameState.aiFans}`} className="text-sm font-black kc-power-bounce" style={{ color: gameState.aiFans > gameState.playerFans ? '#ffd700' : '#fca5a5', textShadow: `0 0 8px ${gameState.aiFans > gameState.playerFans ? 'rgba(255,215,0,0.6)' : 'rgba(239,68,68,0.6)'}` }}>
+              ⭐{gameState.aiFans}
+            </p>
+          </div>
         </div>
         <div className="flex items-center gap-1.5">
           <span className="tqw-hud-pill text-[10px]" title="あなたの山札">
@@ -4362,74 +4253,30 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                     {won ? 'YOU WIN!' : 'DEFEAT'}
                   </p>
 
-                  {/* Finisher card (victory only) — v12 で 3倍サイズ・放射光線・暗転+スライドイン */}
+                  {/* Finisher card (victory only) */}
                   {won && finisher && (
-                    <div className="mt-4 flex flex-col items-center relative">
-                      {/* 0.5s 暗転オーバーレイ（カード出現前） */}
-                      <div
-                        className="fixed inset-0 pointer-events-none"
-                        style={{
-                          background: 'rgba(0,0,0,0.85)',
-                          animation: 'finisherBlackout 0.5s ease-out forwards',
-                          zIndex: 45,
-                        }}
-                      />
-                      {/* 放射状の光線エフェクト */}
-                      <div
-                        className="absolute pointer-events-none"
-                        style={{
-                          left: '50%',
-                          top: '50%',
-                          width: '600px',
-                          height: '600px',
-                          transform: 'translate(-50%, -50%)',
-                          background: 'conic-gradient(from 0deg, transparent 0deg, rgba(255,215,0,0.35) 5deg, transparent 15deg, transparent 45deg, rgba(255,215,0,0.35) 50deg, transparent 60deg, transparent 90deg, rgba(255,215,0,0.35) 95deg, transparent 105deg, transparent 135deg, rgba(255,215,0,0.35) 140deg, transparent 150deg, transparent 180deg, rgba(255,215,0,0.35) 185deg, transparent 195deg, transparent 225deg, rgba(255,215,0,0.35) 230deg, transparent 240deg, transparent 270deg, rgba(255,215,0,0.35) 275deg, transparent 285deg, transparent 315deg, rgba(255,215,0,0.35) 320deg, transparent 330deg, transparent 360deg)',
-                          animation: 'finisherRays 8s linear infinite, finisherRaysFadeIn 0.8s 0.3s ease-out both',
-                          opacity: 0,
-                        }}
-                      />
-                      {/* 金色の粒子（20粒） */}
-                      <div className="absolute pointer-events-none" style={{ width: 0, height: 0, left: '50%', top: '50%' }}>
-                        {Array.from({ length: 20 }).map((_, i) => (
-                          <span
-                            key={`finisher-particle-${i}`}
-                            className="block absolute rounded-full"
-                            style={{
-                              width: '5px',
-                              height: '5px',
-                              background: i % 3 === 0 ? '#ffd700' : i % 3 === 1 ? '#fff4a3' : '#ffe88a',
-                              boxShadow: '0 0 8px rgba(255,215,0,0.9)',
-                              left: `${Math.cos((i / 20) * Math.PI * 2) * 180}px`,
-                              top: `${Math.sin((i / 20) * Math.PI * 2) * 180}px`,
-                              animation: `finisherParticleFloat ${2 + (i % 4)}s ${i * 0.1}s ease-in-out infinite`,
-                            }}
-                          />
-                        ))}
-                      </div>
-
-                      {/* カード本体（3倍サイズ、下からスライドイン） */}
+                    <div className="mt-3 flex flex-col items-center">
                       <div
                         className="relative holo-sheen"
                         style={{
-                          width: '270px',
-                          height: '360px',
-                          perspective: '900px',
-                          animation: 'finisherSlideIn 0.5s 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both',
-                          opacity: 0,
-                          zIndex: 50,
+                          width: '150px',
+                          height: '200px',
+                          perspective: '700px',
+                          animation: 'finisherEntrance 0.6s ease-out both',
                         }}
                       >
                         <div
                           style={{
                             width: '100%',
                             height: '100%',
-                            borderRadius: '18px',
+                            borderRadius: '12px',
                             overflow: 'hidden',
                             position: 'relative',
                             transform: 'rotateY(-4deg) rotateX(2deg)',
-                            boxShadow: '0 0 60px rgba(255,215,0,0.75), 0 0 120px rgba(255,215,0,0.35), 0 12px 40px rgba(0,0,0,0.7)',
+                            boxShadow: '0 0 40px rgba(255,215,0,0.5), 0 8px 32px rgba(0,0,0,0.6)',
                           }}
                         >
+                          {/* Card image (always face up) */}
                           {finisher.imageUrl ? (
                             <img
                               src={finisher.imageUrl}
@@ -4440,48 +4287,48 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                           ) : (
                             <div className="absolute inset-0 bg-gray-800" style={{ zIndex: 1 }} />
                           )}
+                          {/* Rarity frame overlay */}
                           <img
                             src={CARD_RARITY_IMAGES[finisher.rarity] || CARD_RARITY_IMAGES['N']}
                             alt=""
                             className="absolute inset-0 w-full h-full pointer-events-none"
                             style={{ objectFit: 'fill', zIndex: 2 }}
                           />
+                          {/* Card name */}
                           <span
-                            className="absolute left-0 right-0 text-center font-bold text-white truncate px-2"
-                            style={{ bottom: '22px', fontSize: '18px', textShadow: '0 2px 6px rgba(0,0,0,0.95)', zIndex: 3 }}
+                            className="absolute left-0 right-0 text-center font-bold text-white truncate px-1"
+                            style={{ bottom: '12px', fontSize: '11px', textShadow: '0 1px 4px rgba(0,0,0,0.95)', zIndex: 3 }}
                           >
                             {finisher.name}
                           </span>
+                          {/* Stats */}
                           <span
                             className="absolute font-bold text-white"
-                            style={{ bottom: '48px', left: '14px', fontSize: '16px', textShadow: '0 1px 4px rgba(0,0,0,0.9)', zIndex: 3 }}
+                            style={{ bottom: '28px', left: '8px', fontSize: '10px', textShadow: '0 1px 3px rgba(0,0,0,0.9)', zIndex: 3 }}
                           >
                             {'⚔️'}{finisher.attackPower ?? finisher.power}
                           </span>
                           <span
                             className="absolute font-bold text-white"
-                            style={{ bottom: '48px', right: '14px', fontSize: '16px', textShadow: '0 1px 4px rgba(0,0,0,0.9)', zIndex: 3 }}
+                            style={{ bottom: '28px', right: '8px', fontSize: '10px', textShadow: '0 1px 3px rgba(0,0,0,0.9)', zIndex: 3 }}
                           >
                             {'🛡️'}{finisher.defensePower ?? finisher.power}
                           </span>
                         </div>
                       </div>
 
-                      {/* "フィニッシャー!" テロップ（32px + 金色脈動） */}
+                      {/* "フィニッシャー!" telop */}
                       <p style={{
-                        marginTop: '18px',
-                        fontSize: '36px',
+                        marginTop: '10px',
+                        fontSize: '22px',
                         fontWeight: 900,
-                        background: 'linear-gradient(90deg, #d4a500, #ffd700, #fff4a3, #ffd700, #d4a500)',
-                        backgroundSize: '200% 100%',
+                        background: 'linear-gradient(90deg, #ffd700, #fff4a3, #ffd700)',
                         WebkitBackgroundClip: 'text',
                         WebkitTextFillColor: 'transparent',
-                        filter: 'drop-shadow(0 3px 12px rgba(255,215,0,0.8))',
-                        letterSpacing: '6px',
-                        animation: 'finisherTextReveal 0.6s 0.6s ease-out both, finisherTextShimmer 2.2s 1.2s ease-in-out infinite',
-                        opacity: 0,
-                        position: 'relative',
-                        zIndex: 50,
+                        textShadow: 'none',
+                        filter: 'drop-shadow(0 2px 6px rgba(255,215,0,0.6))',
+                        letterSpacing: '4px',
+                        animation: 'finisherTextFadeIn 0.8s 0.4s ease-out both',
                       }}>
                         {'フィニッシャー!'}
                       </p>
@@ -5737,51 +5584,6 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
           100% { transform: scale(1); }
         }
         .kc-power-bounce { animation: kcPowerBounce 0.35s ease-out; }
-
-        /* 負けている側のパルス（相手ファンがリードしている時） */
-        @keyframes tqw-losing-pulse {
-          0%, 100% { box-shadow: 0 0 10px rgba(239,68,68,0.35), inset 0 0 6px rgba(239,68,68,0.15); }
-          50%      { box-shadow: 0 0 24px rgba(239,68,68,0.85), inset 0 0 14px rgba(239,68,68,0.35); }
-        }
-
-        /* ===== v12 フィニッシャー演出 ===== */
-        /* 出現前の暗転 */
-        @keyframes finisherBlackout {
-          0%   { opacity: 1; }
-          70%  { opacity: 1; }
-          100% { opacity: 0; }
-        }
-        /* カードが下からスライドイン */
-        @keyframes finisherSlideIn {
-          0%   { opacity: 0; transform: translateY(120px) scale(0.85); }
-          70%  { opacity: 1; transform: translateY(-8px) scale(1.02); }
-          100% { opacity: 1; transform: translateY(0) scale(1); }
-        }
-        /* テロップ出現 */
-        @keyframes finisherTextReveal {
-          0%   { opacity: 0; transform: translateY(16px); }
-          100% { opacity: 1; transform: translateY(0); }
-        }
-        /* テロップの金色シマー */
-        @keyframes finisherTextShimmer {
-          0%, 100% { background-position: 0% 50%; filter: drop-shadow(0 3px 12px rgba(255,215,0,0.6)); }
-          50%      { background-position: 100% 50%; filter: drop-shadow(0 3px 20px rgba(255,215,0,1)); }
-        }
-        /* 放射光線の回転 */
-        @keyframes finisherRays {
-          0%   { transform: translate(-50%, -50%) rotate(0deg); }
-          100% { transform: translate(-50%, -50%) rotate(360deg); }
-        }
-        /* 放射光線のフェードイン（rotate は別アニメなので opacity だけ） */
-        @keyframes finisherRaysFadeIn {
-          0%   { opacity: 0; }
-          100% { opacity: 0.8; }
-        }
-        /* 金粒子の浮遊 */
-        @keyframes finisherParticleFloat {
-          0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.6; }
-          50%      { transform: translate(6px, -10px) scale(1.4); opacity: 1; }
-        }
 
         /* Buff pulse on card power badge */
         @keyframes kcBuffPulse {
