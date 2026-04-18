@@ -3,7 +3,7 @@
  * 基本ステータス + タイムライン + デッキ使用 + ALTゲーム成績 + クエスト進捗 + 直近バトル + フィニッシャーTOP3
  */
 import { useEffect, useState } from 'react';
-import { useRoute } from 'wouter';
+import { Link, useRoute } from 'wouter';
 import AdminGuard from '@/components/admin/AdminGuard';
 import AdminShell, { AdminCard, KpiTile } from '@/components/admin/AdminShell';
 import { fetchStudentDetail, gameLabel, GAME_TYPE_SUBJECT, type StudentDetailPayload } from '@/lib/adminDashboardService';
@@ -69,6 +69,31 @@ function Inner() {
       backHref="/admin/students"
       backLabel="生徒一覧"
     >
+      {/* 保護者招待ショートカット（Phase B1 Step 6）
+          この生徒を対象にした招待コード発行フォームへプリフィル遷移する。
+          teal トーンで Step 9 の /admin ダッシュボード「🎫 招待コード」カードと
+          視覚的に連動。 */}
+      <Link href={`/admin/invite?child=${encodeURIComponent(childId)}`}>
+        <button
+          type="button"
+          className="w-full rounded-lg px-3 py-2 text-[13px] font-bold mb-3 flex items-center justify-between active:scale-[0.99] transition-transform"
+          style={{
+            background: 'linear-gradient(135deg, rgba(19,78,74,0.45), rgba(13,148,136,0.30) 55%, rgba(45,212,191,0.22))',
+            color: '#5eead4',
+            border: '1px solid rgba(45,212,191,0.45)',
+            boxShadow: '0 2px 10px rgba(13,148,136,0.2), inset 0 0 18px rgba(45,212,191,0.05)',
+          }}
+        >
+          <span className="flex items-center gap-1.5">
+            <span className="text-base">🎫</span>
+            <span>保護者を招待</span>
+          </span>
+          <span className="text-[11px]" style={{ color: 'rgba(94,234,212,0.75)' }}>
+            招待コード発行へ ›
+          </span>
+        </button>
+      </Link>
+
       {/* 基本KPI */}
       <div className="grid grid-cols-3 gap-2 mb-3">
         <KpiTile icon="🎯" label="Lv" value={s.level} sub={`XP ${s.xp}`} />
