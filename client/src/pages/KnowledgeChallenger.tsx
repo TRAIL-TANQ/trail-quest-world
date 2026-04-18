@@ -171,6 +171,18 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
   // commit 3 のパーティクル飛翔の到達点として HUD ファン表示位置を保存
   const playerFanAnchorRef = useRef<HTMLDivElement | null>(null);
   const aiFanAnchorRef     = useRef<HTMLDivElement | null>(null);
+  // ファン獲得時に飛翔する +N バッジ。sub-battle 解決時に spawn。
+  type FanFlight = {
+    id: number;
+    originX: number; originY: number;
+    targetX: number; targetY: number;
+    fans: number;
+    rarity: string;
+    role: 'attacker' | 'defender' | 'defender_supporter';
+    delay: number;   // ms delay before flight starts
+  };
+  const [fanFlights, setFanFlights] = useState<FanFlight[]>([]);
+  const lastFanFlightIdxRef = useRef<number>(0);
   const [imagesPreloaded, setImagesPreloaded] = useState(false);
   const [preloadProgress, setPreloadProgress] = useState(0);
   const imageCache = useRef<Map<string, HTMLImageElement>>(new Map());
@@ -665,6 +677,67 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
       pushLog(`🚩 ${winnerName} がフラッグ奪取`);
     }
   }, [gameState?.lastSubBattle, isPvP, pvpSession, pushLog]);
+
+  // commit 3: sub-battle 解決時にファン飛翔バッジを spawn。
+  // breakdown の各エントリ（attacker / defender / defender_supporter）を
+  // それぞれ DOM の data-fan-source 要素から HUD アンカーへ飛翔させる。
+  useEffect(() => {
+    const sb = gameState?.lastSubBattle;
+    if (!sb || !sb.defeatFansBreakdown || sb.defeatFansBreakdown.length === 0) return;
+    if (sb.idx === lastFanFlightIdxRef.current) return;
+    lastFanFlightIdxRef.current = sb.idx;
+
+    const attackerSide = sb.attackerSide;
+    const targetAnchor = attackerSide === 'player' ? playerFanAnchorRef.current : aiFanAnchorRef.current;
+    if (!targetAnchor) return;
+    const tRect = targetAnchor.getBoundingClientRect();
+    const targetX = tRect.left + tRect.width / 2;
+    const targetY = tRect.top + tRect.height / 2;
+
+    // attacker role のインデックスを振り分けるためのカウンタ
+    let attackerI = 0;
+    // supporter は battlefield に独立表示されないので defender カードから飛ばす
+    const defenderEl = document.querySelector<HTMLDivElement>('[data-fan-source="defender"]');
+    const newFlights: FanFlight[] = [];
+    let stagger = 0;
+    const STAGGER_MS = 120;
+
+    for (const b of sb.defeatFansBreakdown) {
+      let srcRect: DOMRect | null = null;
+      if (b.role === 'attacker') {
+        const el = document.querySelector<HTMLDivElement>(`[data-fan-source="attacker-${attackerI}"]`);
+        if (el) srcRect = el.getBoundingClientRect();
+        attackerI += 1;
+      } else if (b.role === 'defender') {
+        if (defenderEl) srcRect = defenderEl.getBoundingClientRect();
+      } else {
+        // defender_supporter: 防御カードの位置から少しオフセットして発射
+        if (defenderEl) srcRect = defenderEl.getBoundingClientRect();
+      }
+      if (!srcRect) continue;
+      const originX = srcRect.left + srcRect.width / 2 + (b.role === 'defender_supporter' ? (Math.random() - 0.5) * 40 : 0);
+      const originY = srcRect.top + srcRect.height / 2 + (b.role === 'defender_supporter' ? (Math.random() - 0.5) * 20 : 0);
+      newFlights.push({
+        id: Date.now() + Math.floor(Math.random() * 100000),
+        originX, originY, targetX, targetY,
+        fans: b.fans,
+        rarity: b.rarity,
+        role: b.role,
+        delay: stagger,
+      });
+      stagger += STAGGER_MS;
+    }
+    if (newFlights.length === 0) return;
+    setFanFlights((prev) => [...prev, ...newFlights]);
+    // 飛翔 900ms + delay 後に pruning（stagger + 1400ms 余裕）。
+    // 並行する複数飛翔バッチでも互いに干渉しないよう cleanup で clearTimeout しない。
+    const ttl = stagger + 1400;
+    const ids = newFlights.map((f) => f.id);
+    window.setTimeout(() => {
+      setFanFlights((prev) => prev.filter((f) => !ids.includes(f.id)));
+    }, ttl);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameState?.lastSubBattle?.idx]);
 
   // ラウンド決着
   const lastRoundRef = useRef(0);
@@ -3505,7 +3578,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
           }
           const shatter = attackerWonSub;
           return (
-            <div className={`relative ${shatter ? 'kc-card-shatter' : 'kc-defender-glow'}`}>
+            <div className={`relative ${shatter ? 'kc-card-shatter' : 'kc-defender-glow'}`} data-fan-source="defender">
               {/* 防御パワー数値: カード上に表示（ボックスなし） */}
               <div className={`absolute left-1/2 -translate-x-1/2 -top-10 whitespace-nowrap z-20 ${cineStep === 'defender_show' ? 'kc-defense-label' : ''}`}>
                 <p style={{
@@ -3552,6 +3625,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                 const delay = attackerWonSub ? (priorCount - 1 - i) * 0.2 : 0;
                 return (
                   <div key={`stack-${i}`} className={`absolute ${attackerWonSub ? 'kc-card-exile' : ''}`}
+                    data-fan-source={`attacker-${i}`}
                     style={{
                       left: i * STEP_X,
                       bottom: i * STEP_Y,
@@ -3566,13 +3640,15 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                 );
               })}
               {/* Latest card on top with kcCardFlip animation on mount; card-hit on win */}
-              <div key={`latest-${attackCards.length}`} className={`absolute ${enterClass} kc-card-float ${attackerWonSub ? 'card-hit' : ''}`} style={{
-                left: lastIdx * STEP_X,
-                bottom: lastIdx * STEP_Y,
-                zIndex: 100,
-                width: 'clamp(110px, 30vw, 180px)',
-                height: 'clamp(154px, 42vw, 250px)',
-              }}>
+              <div key={`latest-${attackCards.length}`} className={`absolute ${enterClass} kc-card-float ${attackerWonSub ? 'card-hit' : ''}`}
+                data-fan-source={`attacker-${lastIdx}`}
+                style={{
+                  left: lastIdx * STEP_X,
+                  bottom: lastIdx * STEP_Y,
+                  zIndex: 100,
+                  width: 'clamp(110px, 30vw, 180px)',
+                  height: 'clamp(154px, 42vw, 250px)',
+                }}>
                 <CardDisplay card={lastCard} size="battle" mode="attack" onTap={() => setDetailCard(lastCard)} />
                 {/* Light ripple on reveal */}
                 <div key={`ripple-${attackCards.length}`} className="absolute inset-0 pointer-events-none z-[105]">
@@ -4305,6 +4381,54 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
             </div>
           );
         })()}
+
+        {/* ====== FanFlight: 発射元カード → HUD ファン表示へ飛翔する +N バッジ ====== */}
+        {fanFlights.length > 0 && (
+          <div className="fixed inset-0 pointer-events-none z-[60]" style={{ position: 'fixed', left: 0, top: 0, right: 0, bottom: 0 }}>
+            {fanFlights.map((f) => {
+              const tx = f.targetX - f.originX;
+              const ty = f.targetY - f.originY;
+              // レア度別の色パレット
+              const palette: Record<string, { bg: string; fg: string; glow: string }> = {
+                N:   { bg: 'rgba(255,255,255,0.95)', fg: '#1a1a2e', glow: 'rgba(255,255,255,0.7)' },
+                R:   { bg: 'rgba(59,130,246,0.95)',  fg: '#ffffff', glow: 'rgba(59,130,246,0.8)' },
+                SR:  { bg: 'rgba(255,215,0,0.95)',   fg: '#5a3a00', glow: 'rgba(255,215,0,0.9)' },
+                SSR: { bg: 'linear-gradient(45deg,#ff4fa3,#ffd700,#4dd0ff,#a855f7)', fg: '#ffffff', glow: 'rgba(255,215,0,0.95)' },
+              };
+              const p = palette[f.rarity] ?? palette.N;
+              const size = f.rarity === 'SSR' ? 34 : f.rarity === 'SR' ? 30 : 26;
+              return (
+                <div
+                  key={f.id}
+                  className="kc-fan-flight"
+                  style={{
+                    position: 'fixed',
+                    left: 0, top: 0,
+                    ['--fan-ox' as any]: `${f.originX}px`,
+                    ['--fan-oy' as any]: `${f.originY}px`,
+                    ['--fan-tx' as any]: `${tx}px`,
+                    ['--fan-ty' as any]: `${ty}px`,
+                    animationDelay: `${f.delay}ms`,
+                  }}
+                >
+                  <div
+                    className={`kc-fan-flight-badge ${f.rarity === 'SSR' ? 'kc-fan-flight-ssr' : ''}`}
+                    style={{
+                      background: p.bg,
+                      color: p.fg,
+                      fontSize: `${size - 6}px`,
+                      boxShadow: `0 0 18px ${p.glow}, 0 2px 8px rgba(0,0,0,0.4)`,
+                      border: f.rarity === 'SSR' ? '2px solid rgba(255,255,255,0.9)' : `2px solid ${p.glow}`,
+                    }}
+                  >
+                    +{f.fans}
+                  </div>
+                  <div className="kc-fan-flight-particle" style={{ background: p.glow }} />
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {/* ====== Turn Transition: vignette color shift (no text) ====== */}
         {cineStep === 'turn_transition' && (
@@ -5724,6 +5848,52 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
           100% { opacity: 0.85; }
         }
         .kc-bench-boost-telop { animation: kcBenchBoostSlideIn 0.45s ease-out forwards; }
+
+        /* ===== commit 3: Fan flight (card → HUD ファン表示へ +N が飛翔) ===== */
+        @keyframes kcFanFlight {
+          0%   { transform: translate(var(--fan-ox), var(--fan-oy)) scale(0.4); opacity: 0; }
+          15%  { transform: translate(var(--fan-ox), calc(var(--fan-oy) - 28px)) scale(1.35); opacity: 1; }
+          35%  { transform: translate(var(--fan-ox), calc(var(--fan-oy) - 24px)) scale(1.1); opacity: 1; }
+          100% { transform: translate(calc(var(--fan-ox) + var(--fan-tx)), calc(var(--fan-oy) + var(--fan-ty))) scale(0.75); opacity: 0; }
+        }
+        .kc-fan-flight {
+          animation: kcFanFlight 900ms cubic-bezier(0.22, 0.68, 0.32, 1) forwards;
+          will-change: transform, opacity;
+          pointer-events: none;
+        }
+        .kc-fan-flight-badge {
+          position: absolute;
+          left: -24px; top: -14px;
+          min-width: 34px;
+          padding: 4px 10px;
+          border-radius: 999px;
+          font-weight: 900;
+          text-align: center;
+          white-space: nowrap;
+          line-height: 1;
+        }
+        @keyframes kcFanSSRRainbow {
+          0%   { filter: hue-rotate(0deg); }
+          100% { filter: hue-rotate(360deg); }
+        }
+        .kc-fan-flight-ssr { animation: kcFanSSRRainbow 0.9s linear infinite; }
+        .kc-fan-flight-particle {
+          position: absolute;
+          left: -6px; top: -6px;
+          width: 12px; height: 12px;
+          border-radius: 999px;
+          opacity: 0.85;
+          filter: blur(2px);
+          animation: kcFanParticleTrail 900ms ease-out forwards;
+        }
+        @keyframes kcFanParticleTrail {
+          0%   { transform: scale(0.4); opacity: 0.9; }
+          60%  { transform: scale(2.2); opacity: 0.55; }
+          100% { transform: scale(3.5); opacity: 0; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .kc-fan-flight, .kc-fan-flight-ssr, .kc-fan-flight-particle { animation-duration: 1ms !important; opacity: 0.2 !important; }
+        }
 
         /* Round victory celebration telop */
         @keyframes kcRoundVictoryZoom {
