@@ -1611,13 +1611,15 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
               );
             }
 
-            // Card defeat fan telop
+            // Card defeat fan telop (β3: use actual total fan from resolved state,
+            // which sums attacker reveals + defender + defender supporter quarantine)
             {
-              const defCard = rs.defenseCard;
-              if (defCard) {
-                const defFans = ({ N: 1, R: 2, SR: 3, SSR: 5 } as Record<string, number>)[defCard.rarity] ?? 1;
-                const whoDefeated = rs.flagHolder === 'player' ? '相手' : 'あなた'; // attacker = otherSide(flagHolder)
-                setBenchBoostTelop({ text: `+${defFans}ファン！（${defCard.rarity}撃破）`, key: Date.now() });
+              const sb = (resolved as GameState).lastSubBattle;
+              if (sb) {
+                setBenchBoostTelop({
+                  text: `+${sb.defeatFans}ファン！（${sb.defenderCard.rarity}撃破）`,
+                  key: Date.now(),
+                });
               }
             }
 

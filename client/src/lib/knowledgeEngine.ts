@@ -85,6 +85,14 @@ export type GamePhase =
   | 'round_end'       // one side lost this round (deck-out or bench-overflow)
   | 'game_over';
 
+export interface DefeatFanContributor {
+  /** どの層のカードか（UI animation での色分け＋発射位置決定に使う） */
+  role: 'attacker' | 'defender' | 'defender_supporter';
+  cardName: string;
+  rarity: string;
+  fans: number;
+}
+
 export interface SubBattleResult {
   idx: number;
   defenderSide: Side;
@@ -92,7 +100,8 @@ export interface SubBattleResult {
   attackerSide: Side;
   attackCards: BattleCard[];
   attackPower: number;
-  defeatFans: number;  // card defeat fans earned by attacker
+  defeatFans: number;  // total card defeat fans earned by attacker (β3: attacker + defender + defender quarantine rarities summed)
+  defeatFansBreakdown: DefeatFanContributor[];  // per-card breakdown for UI animation
   winner: Side;  // always the attacker (defender cannot win a sub-battle, they can only run out the attacker's deck → game over)
 }
 
@@ -2877,8 +2886,24 @@ export function resolveSubBattleWin(state: GameState): GameState {
     return baseDeck;
   };
 
-  // Card defeat fans: attacker earns fans for defeating the defender card
-  let defeatFans = CARD_DEFEAT_FANS[defenderCard.rarity] ?? 1;
+  // Card defeat fans (β3): attacker earns rarity-summed fans for
+  //   (1) all attack cards revealed this sub-battle,
+  //   (2) the defender card that was broken,
+  //   (3) the defender's quarantine cards (supporter layer) flushed through this sub-battle.
+  // 凱旋門ボーナス（ナポレオン攻撃 + 凱旋門ベンチ）は既存通り +2 を上乗せ。
+  const rarityFan = (r: string): number => CARD_DEFEAT_FANS[r] ?? 1;
+  const breakdown: DefeatFanContributor[] = [];
+  // (1) attacker cards
+  for (const c of state.attackRevealed) {
+    breakdown.push({ role: 'attacker', cardName: c.name, rarity: c.rarity, fans: rarityFan(c.rarity) });
+  }
+  // (2) defender card
+  breakdown.push({ role: 'defender', cardName: defenderCard.name, rarity: defenderCard.rarity, fans: rarityFan(defenderCard.rarity) });
+  // (3) defender's supporter quarantine
+  for (const c of state.quarantine[defenderSide]) {
+    breakdown.push({ role: 'defender_supporter', cardName: c.name, rarity: c.rarity, fans: rarityFan(c.rarity) });
+  }
+  let defeatFans = breakdown.reduce((sum, b) => sum + b.fans, 0);
   // 凱旋門ボーナス: ベンチに凱旋門があり攻撃カードにナポレオンがいれば+2
   const atkState = attackerSide === 'player' ? state.player : state.ai;
   const atkSealed = state.sealedBenchNames[attackerSide];
@@ -2890,7 +2915,15 @@ export function resolveSubBattleWin(state: GameState): GameState {
   }
   const newPlayerFans = attackerSide === 'player' ? state.playerFans + defeatFans : state.playerFans;
   const newAiFans = attackerSide === 'ai' ? state.aiFans + defeatFans : state.aiFans;
-  console.log(`[Engine] Card defeat fans: ${attackerSide} earns +${defeatFans} for defeating ${defenderCard.rarity} "${defenderCard.name}"`);
+  console.log(
+    `[Engine] β3 defeat fans: ${attackerSide} earns +${defeatFans} total ` +
+    `(attacker=${breakdown.filter((b) => b.role === 'attacker').reduce((s, b) => s + b.fans, 0)}, ` +
+    `defender=${breakdown.filter((b) => b.role === 'defender').reduce((s, b) => s + b.fans, 0)}, ` +
+    `supporter=${breakdown.filter((b) => b.role === 'defender_supporter').reduce((s, b) => s + b.fans, 0)})`,
+  );
+  for (const b of breakdown) {
+    console.log(`[Engine]   · ${b.role} ${b.rarity} "${b.cardName}" → +${b.fans}`);
+  }
 
   const result: SubBattleResult = {
     idx: state.history.length + 1,
@@ -2900,6 +2933,7 @@ export function resolveSubBattleWin(state: GameState): GameState {
     attackCards,
     attackPower: state.attackCurrentPower,
     defeatFans,
+    defeatFansBreakdown: breakdown,
     winner: attackerSide,
   };
 
