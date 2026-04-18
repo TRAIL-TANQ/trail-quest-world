@@ -3405,6 +3405,8 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
         quarantineCount={gameState.quarantine.ai.length}
         animKey={gameState.history.length}
         glowNames={gameState.benchGlow?.side === 'ai' ? gameState.benchGlow.names : undefined}
+        activeNames={gameState.ai.bench.filter((b) => getBenchActiveStatus(b.name, gameState, 'ai') === 'active').map((b) => b.name)}
+        triggerNames={gameState.ai.bench.filter((b) => getBenchActiveStatus(b.name, gameState, 'ai') === 'trigger').map((b) => b.name)}
         maxSlots={gameState.stageRules?.npcBenchSlots ?? BENCH_MAX_SLOTS}
         onCardTap={setDetailCard}
       />
@@ -4462,6 +4464,8 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
         quarantineCount={gameState.quarantine.player.length}
         animKey={gameState.history.length}
         glowNames={gameState.benchGlow?.side === 'player' ? gameState.benchGlow.names : undefined}
+        activeNames={gameState.player.bench.filter((b) => getBenchActiveStatus(b.name, gameState, 'player') === 'active').map((b) => b.name)}
+        triggerNames={gameState.player.bench.filter((b) => getBenchActiveStatus(b.name, gameState, 'player') === 'trigger').map((b) => b.name)}
         maxSlots={gameState.stageRules?.benchLimit ?? BENCH_MAX_SLOTS}
         onCardTap={setDetailCard}
       />
@@ -5630,6 +5634,26 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
         }
         .kc-bench-glow { animation: kcBenchGlow 1.3s ease-out; border: 2px solid rgba(96,165,250,0.9) !important; }
 
+        /* Continuous active bench effect — soft gold glow, always on while条件成立 */
+        @keyframes kcBenchActiveGlow {
+          0%, 100% { box-shadow: 0 0 6px rgba(255,215,0,0.35), inset 0 0 6px rgba(255,215,0,0.12); }
+          50%      { box-shadow: 0 0 12px rgba(255,215,0,0.55), inset 0 0 10px rgba(255,215,0,0.2); }
+        }
+        .kc-bench-active {
+          animation: kcBenchActiveGlow 2.4s ease-in-out infinite;
+          border: 2px solid rgba(255,215,0,0.65) !important;
+        }
+
+        /* Trigger-ready — stronger pulse, draws attention */
+        @keyframes kcBenchTriggerReady {
+          0%, 100% { box-shadow: 0 0 10px rgba(255,215,0,0.65), 0 0 18px rgba(255,215,0,0.35); transform: scale(1); }
+          50%      { box-shadow: 0 0 22px rgba(255,215,0,0.95), 0 0 36px rgba(255,215,0,0.65); transform: scale(1.03); }
+        }
+        .kc-bench-trigger-ready {
+          animation: kcBenchTriggerReady 1.2s ease-in-out infinite;
+          border: 2px solid #ffd700 !important;
+        }
+
         /* ===== Bench boost power-up telop ===== */
         @keyframes kcBenchBoostSlideIn {
           0%   { opacity: 0; transform: translateY(20px) scale(0.8); }
@@ -5864,10 +5888,90 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
 
 type BenchSlotUI = { name: string; card: BattleCard; count: number };
 
-function BenchDisplay({ side, bench, deckCount, quarantineCount, animKey, glowNames, maxSlots = BENCH_MAX_SLOTS, onCardTap }: {
-  side: 'player' | 'ai'; bench: BenchSlotUI[]; deckCount: number; quarantineCount?: number; animKey?: number; glowNames?: string[]; maxSlots?: number; onCardTap?: (card: BattleCard) => void;
+/**
+ * ベンチ常駐効果の「発動中 / 発動可能」を判定する。
+ *   'active'  : 継続効果が有効に機能している（柔らかい gold glow）
+ *   'trigger' : 任意発動の条件が揃っていて今すぐ撃てる（強い pulse）
+ *   'inactive': 上記のどちらでもない
+ *
+ * 網羅性は MVP。ここに列挙されていないカード名は 'inactive' 扱いで無光。
+ * 追加はこの関数に case を足すだけで反映される。
+ */
+function getBenchActiveStatus(
+  cardName: string,
+  gs: GameState,
+  side: 'player' | 'ai',
+): 'inactive' | 'active' | 'trigger' {
+  const my = gs[side];
+  const sealed = gs.sealedBenchNames[side];
+  const benchHas = (name: string) => my.bench.some((b) => b.name === name && !sealed.includes(b.name));
+  const deckHas  = (name: string) => my.deck.some((c) => c.name === name);
+  const exileHas = (name: string) => gs.exile[side].some((c) => c.name === name);
+
+  switch (cardName) {
+    // ===== 始皇帝デッキ =====
+    case '万里の長城':
+      // 自側の秦の兵士 / 始皇帝 が今後公開されれば防御+2 が発動
+      return (benchHas('秦の兵士') || deckHas('秦の兵士') || benchHas('始皇帝') || deckHas('始皇帝'))
+        ? 'active' : 'inactive';
+    case '不老不死の薬':
+      // spec v7: 攻撃時、除外に始皇帝 && !usedElixir で発動可
+      if (gs.usedElixir?.[side]) return 'inactive';
+      return exileHas('始皇帝') ? 'trigger' : 'inactive';
+
+    // ===== ジャンヌ・ダルクデッキ =====
+    case '聖剣':
+    case '白百合の盾':
+      // ジャンヌ or 聖女ジャンヌ が攻撃 / 防御するときに +2
+      return (benchHas('ジャンヌ・ダルク') || deckHas('ジャンヌ・ダルク') ||
+              benchHas('聖女ジャンヌ')     || deckHas('聖女ジャンヌ'))
+        ? 'active' : 'inactive';
+
+    // ===== アマゾンデッキ =====
+    case 'アマゾン川': {
+      const amazonCreatures = ['アナコンダ', 'ピラニア', 'ジャガー', '毒矢カエル', 'ピンクイルカ', '大蛇'];
+      return amazonCreatures.some((n) => benchHas(n) || deckHas(n)) ? 'active' : 'inactive';
+    }
+    case 'アナコンダ':
+      // ベンチに居るだけで相手防御バフ-2 を常時発動
+      return 'active';
+
+    // ===== ナポレオン =====
+    case '火薬':
+      // 大砲 / ダイナマイト と組合せで +2 attack
+      return (benchHas('大砲') || deckHas('大砲') || benchHas('ダイナマイト') || deckHas('ダイナマイト'))
+        ? 'active' : 'inactive';
+    case '凱旋門':
+      return (benchHas('ナポレオン') || deckHas('ナポレオン')) ? 'active' : 'inactive';
+
+    // ===== 信長デッキ =====
+    case '馬防柵':
+    case '安土城':
+      return (benchHas('織田信長') || deckHas('織田信長')) ? 'active' : 'inactive';
+
+    default:
+      return 'inactive';
+  }
+}
+
+function BenchDisplay({ side, bench, deckCount, quarantineCount, animKey, glowNames, activeNames, triggerNames, maxSlots = BENCH_MAX_SLOTS, onCardTap }: {
+  side: 'player' | 'ai';
+  bench: BenchSlotUI[];
+  deckCount: number;
+  quarantineCount?: number;
+  animKey?: number;
+  /** 一時的な効果発動アニメ対象（1.3s の青 glow） */
+  glowNames?: string[];
+  /** 継続効果が発動中の名前集合（柔らかい gold glow） */
+  activeNames?: string[];
+  /** 任意発動の条件が揃っている名前集合（強いパルス） */
+  triggerNames?: string[];
+  maxSlots?: number;
+  onCardTap?: (card: BattleCard) => void;
 }) {
-  const glowSet = glowNames ? new Set(glowNames) : null;
+  const glowSet    = glowNames    ? new Set(glowNames)    : null;
+  const activeSet  = activeNames  ? new Set(activeNames)  : null;
+  const triggerSet = triggerNames ? new Set(triggerNames) : null;
   // Track which slot names existed last render → newly added (or count-bumped)
   // slots get the kc-bench-pop animation. Reset whenever animKey changes
   // (i.e. on each new sub-battle resolve).
@@ -5946,13 +6050,17 @@ function BenchDisplay({ side, bench, deckCount, quarantineCount, animKey, glowNa
             // Re-mounting via key forces the slot animation to replay each time
             // animKey changes (i.e. each new sub-battle resolution).
             const isGlowing = glowSet?.has(slot.name) ?? false;
-            const slotKey = `${slot.name}-${animKey ?? 0}${isGlowing ? '-glow' : ''}`;
+            // 継続効果 active / 任意発動 trigger-ready 判定。trigger 優先。
+            const isTrigger = triggerSet?.has(slot.name) ?? false;
+            const isActive  = !isTrigger && (activeSet?.has(slot.name) ?? false);
+            const slotKey = `${slot.name}-${animKey ?? 0}${isGlowing ? '-glow' : ''}${isTrigger ? '-trigger' : isActive ? '-active' : ''}`;
             return (
               <button
                 key={slotKey}
                 onClick={() => onCardTap ? onCardTap(slot.card) : (isPlayer && setDetailSlot(slot))}
-                className={`flex-1 rounded-lg relative overflow-hidden transition-all active:scale-95 ${isNew ? 'kc-bench-pop' : ''} ${isGlowing ? 'kc-bench-glow' : ''}`}
+                className={`flex-1 rounded-lg relative overflow-hidden transition-all active:scale-95 ${isNew ? 'kc-bench-pop' : ''} ${isGlowing ? 'kc-bench-glow' : ''} ${isTrigger ? 'kc-bench-trigger-ready' : isActive ? 'kc-bench-active' : ''}`}
                 style={{ background: `${catInfo.color}1a`, border: `2px solid ${catInfo.color}77`, minHeight: '54px', cursor: isPlayer ? 'pointer' : 'default' }}
+                title={isTrigger ? '⚡ 発動条件を満たしています' : isActive ? '✨ ベンチ効果が発動中' : undefined}
               >
                 {slot.card.imageUrl ? (
                   <img src={slot.card.imageUrl} alt={slot.name} className="absolute inset-0 w-full h-full object-cover opacity-70" />
