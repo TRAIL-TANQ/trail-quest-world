@@ -17,7 +17,7 @@
 //       プロンプトを差し替えるときは SYSTEM_PROMPT / buildUserPrompt を編集。
 // ======================================================================
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
-import { createServiceClient, jsonResponse } from '../_shared/supabase-client.ts';
+import { createServiceClient, corsPreflightResponse, jsonResponse } from '../_shared/supabase-client.ts';
 import { callClaude } from '../_shared/anthropic.ts';
 
 // ------------------------ プロンプト（§3 到着まで第一稿） ------------------------
@@ -163,7 +163,9 @@ const STUDENT_DISPLAY: Record<string, { name: string; className: string }> = {
 // ------------------------------------------------------------------------
 
 Deno.serve(async (req) => {
-  if (req.method !== 'POST') return jsonResponse({ error: 'POST only' }, 405);
+  // CORS preflight
+  if (req.method === 'OPTIONS') return corsPreflightResponse();
+  if (req.method !== 'POST')    return jsonResponse({ error: 'POST only' }, 405);
 
   let body: { child_id?: string; week_start?: string } = {};
   try { body = await req.json(); } catch { /* allow empty */ }

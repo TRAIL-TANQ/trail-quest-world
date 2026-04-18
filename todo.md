@@ -51,3 +51,18 @@ All avatar images MUST match initial character style:
   - admin ロールのみ SELECT 可、書込は SECURITY DEFINER 経由のみ
 - [ ] LIFF ID 実値投入（`VITE_LIFF_ID_PARENT`）で LINE 共有の URL が実リンクに切り替わることを確認
   - Render.com 環境変数にも同値を登録
+
+---
+
+# Phase C — 週次レポート 後始末
+
+## 本番公開前に必ず実施
+
+- [ ] Edge Function `generate-weekly-report` の CORS 設定を具体ドメインへ絞る
+  - 現状 `Access-Control-Allow-Origin: '*'`（開発優先）
+  - `supabase/functions/_shared/supabase-client.ts` の `corsHeaders` を
+    `https://trail-quest-world.onrender.com` に置換（または環境変数 ALLOWED_ORIGIN 経由）
+  - プレビュー環境がある場合は allowlist 方式（`req.headers.get('origin')` をホワイトリスト照合）を検討
+- [ ] `admin_generate_weekly_report` / `aggregate_weekly_data` の
+  SECURITY DEFINER を Supabase Auth の role claim で厳格化、anon EXECUTE 剥奪
+- [ ] `weekly_reports` の RLS ポリシー設計（保護者は自分の子のみ読取可、kk は全件可）
