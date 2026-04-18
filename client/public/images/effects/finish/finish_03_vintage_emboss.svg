@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2400 800" width="2400" height="800">
+  <defs>
+    <linearGradient id="gold03a" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0%" stop-color="#fff4a3"/>
+      <stop offset="15%" stop-color="#ffd700"/>
+      <stop offset="35%" stop-color="#c5a03f"/>
+      <stop offset="55%" stop-color="#8b6914"/>
+      <stop offset="75%" stop-color="#c5a03f"/>
+      <stop offset="100%" stop-color="#ffd700"/>
+    </linearGradient>
+    <filter id="emboss03">
+      <feDropShadow dx="-3" dy="-3" stdDeviation="2" flood-color="#fff4a3" flood-opacity="0.6"/>
+      <feDropShadow dx="4" dy="4" stdDeviation="3" flood-color="#3a2000" flood-opacity="0.8"/>
+    </filter>
+  </defs>
+  <text
+    x="1200" y="575"
+    text-anchor="middle"
+    font-family="'Palatino Linotype', Palatino, 'Book Antiqua', serif"
+    font-size="460"
+    font-weight="bold"
+    letter-spacing="15"
+    fill="url(#gold03a)"
+    filter="url(#emboss03)"
+    stroke="#6b4c00"
+    stroke-width="6"
+    style="paint-order: stroke fill;"
+  >FINISH</text>
+</svg>

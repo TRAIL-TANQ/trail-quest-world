@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2400 800" width="2400" height="800">
+  <defs>
+    <linearGradient id="gold05" x1="0.1" y1="0" x2="0.9" y2="1">
+      <stop offset="0%" stop-color="#ffe566"/>
+      <stop offset="25%" stop-color="#c5a03f"/>
+      <stop offset="50%" stop-color="#8b6914"/>
+      <stop offset="75%" stop-color="#c5a03f"/>
+      <stop offset="100%" stop-color="#ffd700"/>
+    </linearGradient>
+    <filter id="rough05">
+      <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="4" seed="2" result="noise"/>
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="8" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </defs>
+  <text
+    x="1200" y="590"
+    text-anchor="middle"
+    font-family="'Hiragino Mincho ProN', 'Yu Mincho', 'MS Mincho', Georgia, serif"
+    font-size="480"
+    font-weight="bold"
+    letter-spacing="10"
+    fill="url(#gold05)"
+    filter="url(#rough05)"
+    stroke="#6b4c00"
+    stroke-width="3"
+    style="paint-order: stroke fill;"
+  >FINISH</text>
+</svg>

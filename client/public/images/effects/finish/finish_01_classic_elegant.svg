@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2400 800" width="2400" height="800">
+  <defs>
+    <linearGradient id="gold01" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fff4a3"/>
+      <stop offset="20%" stop-color="#ffd700"/>
+      <stop offset="50%" stop-color="#c5a03f"/>
+      <stop offset="80%" stop-color="#8b6914"/>
+      <stop offset="100%" stop-color="#c5a03f"/>
+    </linearGradient>
+    <filter id="shadow01">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#4a3000" flood-opacity="0.7"/>
+    </filter>
+  </defs>
+  <text
+    x="1200" y="580"
+    text-anchor="middle"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-size="480"
+    font-weight="bold"
+    letter-spacing="20"
+    fill="url(#gold01)"
+    filter="url(#shadow01)"
+    style="paint-order: stroke fill;"
+    stroke="#8b6914"
+    stroke-width="2"
+  >FINISH</text>
+</svg>
