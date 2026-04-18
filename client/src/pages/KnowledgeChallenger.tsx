@@ -1187,32 +1187,11 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
             }
           }
 
-          // ===== 兵馬俑: ベンチの秦の兵士をデッキトップに戻す =====
-          if (canShowChoice) {
-            const lastRevealed = rs.attackRevealed[rs.attackRevealed.length - 1];
-            if (lastRevealed?.effect?.id === 'terracotta') {
-              const gs = gameStateRef.current ?? rs;
-              const sealed = gs.sealedBenchNames[mySide];
-              const soldierSlots = gs[mySide].bench.filter(
-                (b) => b.name === '秦の兵士' && !sealed.includes(b.name),
-              );
-              if (soldierSlots.length > 0) {
-                const candidates = soldierSlots.map((b) => b.card);
-                const chosen = await waitCardSelect('🗿 デッキトップに戻す秦の兵士を選んでください', candidates);
-                if (chosen && !unmountedRef.current) {
-                  setGameState((prev) => {
-                    if (!prev) return prev;
-                    const newBench = removeOneFromBench(prev[mySide].bench, '秦の兵士');
-                    return {
-                      ...prev,
-                      [mySide]: { ...prev[mySide], bench: newBench, deck: [chosen, ...prev[mySide].deck] },
-                      effectTelop: { text: '🗿 兵馬俑！秦の兵士をデッキトップへ！', color: '#ffd700', key: Date.now() },
-                    };
-                  });
-                }
-              }
-            }
-          }
+          // ===== 兵馬俑 (spec v7): 「除外」の秦の兵士をデッキトップに戻す =====
+          //   ※ UI 側の player 向け intercept は削除。engine の case 'terracotta'
+          //     (knowledgeEngine.ts) が player/AI 両方に対して除外 → デッキトップ
+          //     の処理を自動発動する。以前ここにあった「ベンチの秦の兵士を選ぶ」
+          //     ロジックは spec v6 以前の仕様で、v7 では bench から拾うと誤動作。
 
           // ===== 始皇帝の勅令: デッキの紙または焚書坑儒を選んでデッキトップへ =====
           if (canShowChoice) {
@@ -3619,13 +3598,18 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
             >
               ⏭ スキップ
             </button>
-            {/* Exile zone indicator — always visible during battle */}
+            {/* Exile zone indicator — always visible during battle
+                spec v7: 自/敵の除外数を色分けで常時表示。タップでモーダル展開。 */}
             <button
               onClick={() => setShowExile(true)}
-              className="text-[11px] font-black px-2 py-1.5 rounded-lg"
-              style={{ background: 'rgba(168,85,247,0.2)', border: '1.5px solid rgba(168,85,247,0.5)', color: 'rgba(168,85,247,0.9)' }}
+              className="text-[11px] font-black px-2.5 py-1.5 rounded-lg flex items-center gap-1"
+              style={{ background: 'rgba(168,85,247,0.22)', border: '1.5px solid rgba(168,85,247,0.55)' }}
+              title="除外ゾーン（タップで内容を確認）"
             >
-              🚫 {gameState.exile.player.length + gameState.exile.ai.length}
+              <span>🚫</span>
+              <span style={{ color: '#4ade80' }}>自{gameState.exile.player.length}</span>
+              <span style={{ color: 'rgba(168,85,247,0.5)' }}>/</span>
+              <span style={{ color: '#f87171' }}>敵{gameState.exile.ai.length}</span>
             </button>
           </div>
         )}
