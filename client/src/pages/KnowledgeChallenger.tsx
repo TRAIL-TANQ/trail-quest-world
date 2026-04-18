@@ -96,6 +96,35 @@ export interface KnowledgeChallengerProps {
   pvpSession?: PvPSession | null;
 }
 
+/**
+ * 数値をなめらかにカウントアップ表示するフック。target が変わると、
+ * 現在の表示値から新値まで ease-out cubic で補間（既定 500ms）。
+ */
+function useCountUpValue(target: number, durationMs = 500): number {
+  const [display, setDisplay] = useState(target);
+  const rafRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+    const from = display;
+    const delta = target - from;
+    if (delta === 0) return;
+    const startedAt = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - startedAt) / durationMs);
+      const eased = 1 - Math.pow(1 - t, 3);
+      setDisplay(Math.round(from + delta * eased));
+      if (t < 1) rafRef.current = requestAnimationFrame(tick);
+      else rafRef.current = null;
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target]);
+  return display;
+}
+
 export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChallengerProps = {}) {
   const [, navigate] = useLocation();
   const [, stageMatch] = useRoute<{ id: string }>('/games/knowledge-challenger/stage/:id');
@@ -136,6 +165,12 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
   })();
   const [screen, setScreen] = useState<ScreenPhase>(initialScreen);
   const [gameState, setGameState] = useState<GameState | null>(null);
+  // HUD 表示用のカウントアップ（ファン加算時になめらかに数値が増える）
+  const displayPlayerFans = useCountUpValue(gameState?.playerFans ?? 0);
+  const displayAiFans     = useCountUpValue(gameState?.aiFans ?? 0);
+  // commit 3 のパーティクル飛翔の到達点として HUD ファン表示位置を保存
+  const playerFanAnchorRef = useRef<HTMLDivElement | null>(null);
+  const aiFanAnchorRef     = useRef<HTMLDivElement | null>(null);
   const [imagesPreloaded, setImagesPreloaded] = useState(false);
   const [preloadProgress, setPreloadProgress] = useState(0);
   const imageCache = useRef<Map<string, HTMLImageElement>>(new Map());
@@ -3029,7 +3064,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                 {isPvP && pvpSession ? `🔴 ${pvpSession.player1.childName}` : 'あなた'}
               </p>
               <p className="text-sm font-bold text-amber-300 mb-0.5">{'🏆'.repeat(gameState.playerTrophies)}{gameState.playerTrophies === 0 ? '-' : ''}</p>
-              <span key={`pfan-${gameState.playerFans}`} className="text-3xl font-black kc-power-bounce" style={{ color: gameState.playerFans >= gameState.aiFans ? '#ffd700' : '#22c55e', textShadow: `0 0 12px ${gameState.playerFans >= gameState.aiFans ? 'rgba(255,215,0,0.6)' : 'rgba(34,197,94,0.6)'}` }}>⭐ {gameState.playerFans}</span>
+              <span key={`pfan-${gameState.playerFans}`} className="text-3xl font-black kc-power-bounce" style={{ color: gameState.playerFans >= gameState.aiFans ? '#ffd700' : '#22c55e', textShadow: `0 0 12px ${gameState.playerFans >= gameState.aiFans ? 'rgba(255,215,0,0.6)' : 'rgba(34,197,94,0.6)'}` }}>⭐ {displayPlayerFans}</span>
             </div>
             <span className="text-lg font-black text-amber-200/50">VS</span>
             <div className="text-center px-4 py-2 rounded-lg" style={{ background: 'rgba(239,68,68,0.15)', border: '2px solid rgba(239,68,68,0.4)', boxShadow: gameState.aiFans > gameState.playerFans ? '0 0 12px rgba(255,215,0,0.3)' : 'none' }}>
@@ -3037,7 +3072,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                 {isPvP && pvpSession ? `🔵 ${pvpSession.player2.childName}` : '相手'}
               </p>
               <p className="text-sm font-bold text-amber-300 mb-0.5">{'🏆'.repeat(gameState.aiTrophies)}{gameState.aiTrophies === 0 ? '-' : ''}</p>
-              <span key={`afan-${gameState.aiFans}`} className="text-3xl font-black kc-power-bounce" style={{ color: gameState.aiFans > gameState.playerFans ? '#ffd700' : '#ef4444', textShadow: `0 0 12px ${gameState.aiFans > gameState.playerFans ? 'rgba(255,215,0,0.6)' : 'rgba(239,68,68,0.6)'}` }}>⭐ {gameState.aiFans}</span>
+              <span key={`afan-${gameState.aiFans}`} className="text-3xl font-black kc-power-bounce" style={{ color: gameState.aiFans > gameState.playerFans ? '#ffd700' : '#ef4444', textShadow: `0 0 12px ${gameState.aiFans > gameState.playerFans ? 'rgba(255,215,0,0.6)' : 'rgba(239,68,68,0.6)'}` }}>⭐ {displayAiFans}</span>
             </div>
           </div>
           <div
@@ -3360,11 +3395,16 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
             </p>
           </div>
           {/* Trophy + Fan totals per side */}
-          <div className="text-center px-2 py-1 rounded-lg" style={{ background: 'rgba(34,197,94,0.14)', border: '1.5px solid rgba(34,197,94,0.5)', boxShadow: gameState.playerFans > gameState.aiFans ? '0 0 12px rgba(255,215,0,0.3)' : 'none' }}>
+          <div
+            ref={playerFanAnchorRef}
+            data-fan-anchor="player"
+            className="text-center px-2 py-1 rounded-lg"
+            style={{ background: 'rgba(34,197,94,0.14)', border: '1.5px solid rgba(34,197,94,0.5)', boxShadow: gameState.playerFans > gameState.aiFans ? '0 0 12px rgba(255,215,0,0.3)' : 'none' }}
+          >
             <p className="text-[9px] font-bold text-green-200/80">あなた</p>
             <p className="text-[10px] font-bold text-amber-300">{'🏆'.repeat(gameState.playerTrophies)}{gameState.playerTrophies === 0 ? '-' : ''}</p>
             <p key={`pfan-${gameState.playerFans}`} className="text-sm font-black kc-power-bounce" style={{ color: gameState.playerFans >= gameState.aiFans ? '#ffd700' : '#4ade80', textShadow: `0 0 8px ${gameState.playerFans >= gameState.aiFans ? 'rgba(255,215,0,0.6)' : 'rgba(34,197,94,0.6)'}` }}>
-              ⭐{gameState.playerFans}
+              ⭐{displayPlayerFans}
             </p>
           </div>
           <div className="flex flex-col items-center gap-0.5">
@@ -3373,11 +3413,16 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
               🚩{gameState.flagHolder === 'player' ? '←' : '→'}
             </span>
           </div>
-          <div className="text-center px-2 py-1 rounded-lg" style={{ background: 'rgba(239,68,68,0.14)', border: '1.5px solid rgba(239,68,68,0.5)', boxShadow: gameState.aiFans > gameState.playerFans ? '0 0 12px rgba(255,215,0,0.3)' : 'none' }}>
+          <div
+            ref={aiFanAnchorRef}
+            data-fan-anchor="ai"
+            className="text-center px-2 py-1 rounded-lg"
+            style={{ background: 'rgba(239,68,68,0.14)', border: '1.5px solid rgba(239,68,68,0.5)', boxShadow: gameState.aiFans > gameState.playerFans ? '0 0 12px rgba(255,215,0,0.3)' : 'none' }}
+          >
             <p className="text-[9px] font-bold text-red-200/80">相手</p>
             <p className="text-[10px] font-bold text-amber-300">{'🏆'.repeat(gameState.aiTrophies)}{gameState.aiTrophies === 0 ? '-' : ''}</p>
             <p key={`afan-${gameState.aiFans}`} className="text-sm font-black kc-power-bounce" style={{ color: gameState.aiFans > gameState.playerFans ? '#ffd700' : '#fca5a5', textShadow: `0 0 8px ${gameState.aiFans > gameState.playerFans ? 'rgba(255,215,0,0.6)' : 'rgba(239,68,68,0.6)'}` }}>
-              ⭐{gameState.aiFans}
+              ⭐{displayAiFans}
             </p>
           </div>
         </div>
