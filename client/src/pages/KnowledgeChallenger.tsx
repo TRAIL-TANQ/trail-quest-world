@@ -65,7 +65,7 @@ import { loadQuestProgress, isDeckUnlocked, isDeckAvailable, getUnlockedSSRCardN
 import type { PvPSession } from '@/lib/pvpSession';
 import { clearPvPSession } from '@/lib/pvpSession';
 import { applyRatingChange, applyPvPRatingChange } from '@/lib/ratingService';
-import { playBattleStart, playTap, playDefeat } from '@/lib/sfx';
+import { playBattleStart, playTap, playDefeat, playCardLand, playSuccess } from '@/lib/sfx';
 import CardPreviewOverlay from '@/components/CardPreviewOverlay';
 import { loadMyDecks, buildMyDeckCards, MY_DECK_MAX_DECKS, getStarterDeckCardNames } from '@/lib/myDecks';
 import { COLLECTION_CARDS } from '@/lib/cardData';
@@ -729,6 +729,19 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
     }
     if (newFlights.length === 0) return;
     setFanFlights((prev) => [...prev, ...newFlights]);
+    // commit 4: SE 発火（レア度別）。各飛翔の delay と同期して鳴らす。
+    //   N / R       → playCardLand（軽めの着地音）
+    //   SR          → playCardLand + 0.08s後 playSuccess（二重音で強調）
+    //   SSR         → playCardLand + 0.1s後 playBattleStart（派手に）
+    for (const f of newFlights) {
+      const isSSR = f.rarity === 'SSR';
+      const isSR  = f.rarity === 'SR';
+      window.setTimeout(() => {
+        playCardLand();
+        if (isSSR) window.setTimeout(() => playBattleStart(), 100);
+        else if (isSR) window.setTimeout(() => playSuccess(), 80);
+      }, f.delay);
+    }
     // 飛翔 900ms + delay 後に pruning（stagger + 1400ms 余裕）。
     // 並行する複数飛翔バッチでも互いに干渉しないよう cleanup で clearTimeout しない。
     const ttl = stagger + 1400;
@@ -1628,6 +1641,13 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
             setRoundVictoryTelop(isPlayerRoundWin
               ? `🏆 トロフィー獲得！ +${trophyFanBonus}ファン！`
               : `💀 第${rs.round}回戦 敗北… 相手に+${trophyFanBonus}ファン`);
+            // commit 4: トロフィー獲得 SE（派手め既存 SE を流用）
+            if (isPlayerRoundWin) {
+              playBattleStart();
+              window.setTimeout(() => playSuccess(), 180);
+            } else {
+              playDefeat();
+            }
             await waitMs(250);
             if (unmountedRef.current) return;
             if (manualModeRef.current) {
@@ -1761,6 +1781,13 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
               setRoundVictoryTelop(isPlayerRoundWin2
                 ? `🏆 トロフィー獲得！ +${trophyFanBonus2}ファン！`
                 : `💀 第${rzs.round}回戦 敗北… 相手に+${trophyFanBonus2}ファン`);
+              // commit 4: トロフィー獲得 SE（派手め既存 SE を流用）
+              if (isPlayerRoundWin2) {
+                playBattleStart();
+                window.setTimeout(() => playSuccess(), 180);
+              } else {
+                playDefeat();
+              }
               await waitMs(250);
               if (unmountedRef.current) return;
               if (manualModeRef.current) {
