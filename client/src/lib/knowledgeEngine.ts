@@ -151,6 +151,7 @@ export interface GameState {
   lastRevealPowerAdded: number;
   // ===== Evolution / once-per-round tracking =====
   usedGiantSnake: { player: boolean; ai: boolean }; // 大蛇の呑み込み効果（1回戦1回）
+  usedElixir:     { player: boolean; ai: boolean }; // 不老不死の薬（1バトル=1試合1回、ラウンド跨ぎで保持）
   effectSuppressed: { player: boolean; ai: boolean }; // 聖女ジャンヌ「神の啓示」で相手効果をこのラウンド無効化
   // ===== Stage rules =====
   stageRules: StageRules | null;      // null = free battle (no stage rules)
@@ -246,6 +247,7 @@ export function initGameState(
     benchBoostDetails: null,
     lastRevealPowerAdded: 0,
     usedGiantSnake: { player: false, ai: false },
+    usedElixir:     { player: false, ai: false },
     effectSuppressed: { player: false, ai: false },
     stageRules: stageRules ?? null,
     roundWinner: null,
@@ -724,38 +726,83 @@ export function applyRevealEffect(
       break;
     }
     case 'book_burning': {
-      // 焚書坑儒: ベンチの紙の枚数分だけ相手デッキから除外、始皇帝がベンチにいれば×2
-      const oppState = opp === 'player' ? next.player : next.ai;
-      const myState = side === 'player' ? next.player : next.ai;
+      // 焚書坑儒 (spec v7): X = 自ベンチの紙 + 自ベンチの始皇帝の勅令
+      // 相手デッキトップから X 枚、自デッキトップから X 枚を除外。
+      // 「始皇帝ベンチで×2」条項は撤廃。
+      const oppState = opp  === 'player' ? next.player : next.ai;
+      const myState  = side === 'player' ? next.player : next.ai;
       const sealed = next.sealedBenchNames[side];
-      const paperSlot = myState.bench.find((b) => b.name === '紙' && !sealed.includes(b.name));
-      const paperCount = paperSlot?.count ?? 0;
-      const hasQinshi = myState.bench.some((b) => b.name === '始皇帝' && !sealed.includes(b.name));
-      const exileCount = paperCount * (hasQinshi ? 2 : 1);
-      if (exileCount > 0) {
-        const candidates = oppState.deck.slice(0, exileCount);
-        const remaining = oppState.deck.slice(exileCount);
-        const { exiled: toExile, protected: saved } = filterExileWithRobbenIsland(candidates, next, opp);
-        if (candidates.length > 0) {
-          next = applySide(next, opp, { ...oppState, deck: [...saved, ...remaining] });
-          if (toExile.length > 0) {
-            next = { ...next, exile: { ...next.exile, [opp]: [...next.exile[opp], ...toExile] } };
-          }
-          const glow = ['紙']; if (hasQinshi) glow.push('始皇帝');
-          next = withBenchGlow(next, side, glow);
-          const protectMsg = saved.length > 0 ? `（マンデラはロベン島が守った！）` : '';
-          const multi = hasQinshi ? ` (紙${paperCount}×始皇帝=2倍)` : '';
-          telop = { text: `📚 思想統制！${toExile.length}枚を除外！${multi}${protectMsg}`, color };
-          console.log(`[特殊効果] 焚書坑儒: 紙${paperCount}枚${hasQinshi ? '+始皇帝×2' : ''} → ${toExile.length}枚除外`);
-        }
-      } else {
-        telop = { text: '📚 焚書坑儒（ベンチに紙がありません）', color };
+      const paperCount  = myState.bench.find((b) => b.name === '紙' && !sealed.includes(b.name))?.count ?? 0;
+      const decreeCount = myState.bench.find((b) => b.name === '始皇帝の勅令' && !sealed.includes(b.name))?.count ?? 0;
+      const X = paperCount + decreeCount;
+
+      if (X <= 0) {
+        telop = { text: '📚 焚書坑儒（ベンチに紙・勅令がありません）', color };
+        break;
       }
+
+      // 相手デッキトップから X 枚（ロベン島保護あり）
+      const oppCandidates = oppState.deck.slice(0, X);
+      const oppRemaining  = oppState.deck.slice(X);
+      const { exiled: oppExiled, protected: oppSaved } = filterExileWithRobbenIsland(oppCandidates, next, opp);
+      next = applySide(next, opp, { ...oppState, deck: [...oppSaved, ...oppRemaining] });
+      if (oppExiled.length > 0) {
+        next = { ...next, exile: { ...next.exile, [opp]: [...next.exile[opp], ...oppExiled] } };
+      }
+
+      // 自デッキトップから X 枚（自ベンチにロベン島があれば保護）
+      const myStateNow  = side === 'player' ? next.player : next.ai;
+      const myCandidates = myStateNow.deck.slice(0, X);
+      const myRemaining  = myStateNow.deck.slice(X);
+      const { exiled: myExiled, protected: mySaved } = filterExileWithRobbenIsland(myCandidates, next, side);
+      next = applySide(next, side, { ...myStateNow, deck: [...mySaved, ...myRemaining] });
+      if (myExiled.length > 0) {
+        next = { ...next, exile: { ...next.exile, [side]: [...next.exile[side], ...myExiled] } };
+      }
+
+      const glow: string[] = [];
+      if (paperCount  > 0) glow.push('紙');
+      if (decreeCount > 0) glow.push('始皇帝の勅令');
+      if (glow.length > 0) next = withBenchGlow(next, side, glow);
+
+      const protectMsg = (oppSaved.length + mySaved.length) > 0 ? '（ロベン島が守った！）' : '';
+      telop = {
+        text: `📚 思想統制！紙${paperCount}＋勅令${decreeCount}=${X}枚ずつ除外（相手${oppExiled.length}・自分${myExiled.length}）${protectMsg}`,
+        color,
+      };
+      console.log(`[特殊効果] 焚書坑儒: X=${X} (紙${paperCount}+勅令${decreeCount}) opp=${oppExiled.length} my=${myExiled.length}`);
       break;
     }
     case 'elixir': {
-      // 不老不死の薬: passive bench effect (no reveal action)
-      telop = { text: '💊不老不死の薬！始皇帝の復活を守る', color };
+      // 不老不死の薬 (spec v7):
+      // 攻撃時（1バトル1回、ラウンド跨ぎ保持）、除外の始皇帝をデッキトップに戻す。
+      // ガード順: role / 使用済み / 除外に始皇帝存在。
+      if (role !== 'attacker') {
+        telop = { text: '💊 不老不死の薬（攻撃時のみ発動）', color };
+        break;
+      }
+      if (next.usedElixir[side]) {
+        telop = { text: '💊 不老不死の薬（このバトルでは使用済み）', color };
+        break;
+      }
+      const exileList = next.exile[side];
+      const emperorIdx = exileList.findIndex((c) => c.name === '始皇帝');
+      if (emperorIdx < 0) {
+        telop = { text: '💊 不老不死の薬（除外に始皇帝なし）', color };
+        break;
+      }
+      const emperorCard = exileList[emperorIdx];
+      const newExile = [...exileList.slice(0, emperorIdx), ...exileList.slice(emperorIdx + 1)];
+      const myElixirState = side === 'player' ? next.player : next.ai;
+      const newDeck = [emperorCard, ...myElixirState.deck];
+      next = applySide(next, side, { ...myElixirState, deck: newDeck });
+      next = {
+        ...next,
+        exile:       { ...next.exile,      [side]: newExile },
+        usedElixir:  { ...next.usedElixir, [side]: true },
+      };
+      telop = { text: '💊 不老不死の薬！始皇帝をデッキトップへ復活！', color: '#ffd700' };
+      console.log('[特殊効果] 不老不死の薬: 除外→デッキトップ、usedElixir=true');
       break;
     }
     case 'photosynthesis': {
@@ -1045,43 +1092,59 @@ export function applyRevealEffect(
       break;
     }
     case 'terracotta': {
-      // 兵馬俑: 公開時（任意発動）、ベンチの秦の兵士1枚をデッキトップに戻す
-      const myState = side === 'player' ? next.player : next.ai;
-      const sealed = next.sealedBenchNames[side];
-      const hasSoldier = myState.bench.some((b) => b.name === '秦の兵士' && !sealed.includes(b.name));
-      if (hasSoldier && side === 'ai') {
-        // AI: 自動で秦の兵士1枚をデッキトップへ
-        const soldierSlot = myState.bench.find((b) => b.name === '秦の兵士' && !sealed.includes(b.name));
-        if (soldierSlot) {
-          const newBench = removeOneFromBench(myState.bench, '秦の兵士');
-          const newDeck = [soldierSlot.card, ...myState.deck];
-          next = applySide(next, side, { ...myState, bench: newBench, deck: newDeck });
-          telop = { text: '🗿兵馬俑！秦の兵士をデッキトップへ！', color };
-          console.log(`[Engine] 兵馬俑: 秦の兵士をベンチ→デッキトップへ`);
-        }
-      } else if (hasSoldier) {
-        // Player: UI側で waitCardSelect 処理
-        telop = { text: '🗿兵馬俑！秦の兵士をサーチ中...', color };
-      } else {
-        telop = { text: '🗿兵馬俑（ベンチに秦の兵士なし）', color };
+      // 兵馬俑 (spec v7): 公開時（任意・自動発動）、除外の秦の兵士 1 枚をデッキトップに戻す。
+      // 死者の兵を蘇らせるテーマ。発動源が「ベンチ」から「除外」に変わった。
+      const myTcState = side === 'player' ? next.player : next.ai;
+      const exileList = next.exile[side];
+      const soldierIdx = exileList.findIndex((c) => c.name === '秦の兵士');
+      if (soldierIdx < 0) {
+        telop = { text: '🗿 兵馬俑（除外に秦の兵士なし）', color };
+        break;
       }
+      const soldierCard = exileList[soldierIdx];
+      const newExile = [...exileList.slice(0, soldierIdx), ...exileList.slice(soldierIdx + 1)];
+      const newDeck = [soldierCard, ...myTcState.deck];
+      next = applySide(next, side, { ...myTcState, deck: newDeck });
+      next = { ...next, exile: { ...next.exile, [side]: newExile } };
+      telop = { text: '🗿 兵馬俑！除外の秦の兵士をデッキトップへ！', color };
+      console.log(`[Engine] 兵馬俑: 除外→デッキトップ`);
       break;
     }
     case 'qinshi': {
-      // 始皇帝: 防御時、ベンチに万里の長城があれば防御+2
+      // 始皇帝:
+      //  - 防御時（自動）、ベンチに万里の長城があれば防御+2
+      //  - 公開時（任意発動）、ベンチの焚書坑儒をデッキトップに戻す（AI自動 / プレイヤーはUIで選択）
+      const myBefore = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+
+      // 防御バフ（自動）
       if (role === 'defender') {
-        const my = side === 'player' ? next.player : next.ai;
-        const sealed = next.sealedBenchNames[side];
-        const hasWall = my.bench.some((b) => b.name === '万里の長城' && !sealed.includes(b.name));
+        const hasWall = myBefore.bench.some((b) => b.name === '万里の長城' && !sealed.includes(b.name));
         if (hasWall) {
           next = { ...next, defenderBonus: next.defenderBonus + 2 };
           next = withBenchGlow(next, side, ['万里の長城']);
           telop = { text: '👑始皇帝天下統一！万里の長城の守りで防御+2！', color };
         } else {
-          telop = { text: '👑始皇帝（万里の長城なし）', color };
+          telop = { text: '👑始皇帝', color };
         }
       } else {
         telop = { text: '👑始皇帝', color };
+      }
+
+      // 公開時（任意発動）: 焚書坑儒をデッキトップに戻す
+      const myNow = side === 'player' ? next.player : next.ai;
+      const burnSlot = myNow.bench.find((b) => b.name === '焚書坑儒' && !sealed.includes(b.name));
+      if (burnSlot) {
+        if (side === 'ai') {
+          const newBench = removeOneFromBench(myNow.bench, '焚書坑儒');
+          const newDeck = [burnSlot.card, ...myNow.deck];
+          next = applySide(next, side, { ...myNow, bench: newBench, deck: newDeck });
+          telop = { text: '👑始皇帝！焚書坑儒をデッキトップへ！', color };
+          console.log('[Engine] 始皇帝: 焚書坑儒をベンチ→デッキトップへ (AI)');
+        } else {
+          // Player: UIが waitCardSelect で選択処理
+          telop = { text: '👑始皇帝！焚書坑儒を回収中...', color };
+        }
       }
       break;
     }
