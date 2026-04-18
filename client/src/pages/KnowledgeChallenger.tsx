@@ -5921,13 +5921,12 @@ function getBenchActiveStatus(
   const benchHas = (name: string) => my.bench.some((b) => b.name === name && !sealed.includes(b.name));
   const deckHas  = (name: string) => my.deck.some((c) => c.name === name);
   const exileHas = (name: string) => gs.exile[side].some((c) => c.name === name);
+  const hasAnywhere = (names: string[]) => names.some((n) => benchHas(n) || deckHas(n));
 
   switch (cardName) {
     // ===== 始皇帝デッキ =====
     case '万里の長城':
-      // 自側の秦の兵士 / 始皇帝 が今後公開されれば防御+2 が発動
-      return (benchHas('秦の兵士') || deckHas('秦の兵士') || benchHas('始皇帝') || deckHas('始皇帝'))
-        ? 'active' : 'inactive';
+      return hasAnywhere(['秦の兵士', '始皇帝']) ? 'active' : 'inactive';
     case '不老不死の薬':
       // spec v7: 攻撃時、除外に始皇帝 && !usedElixir で発動可
       if (gs.usedElixir?.[side]) return 'inactive';
@@ -5936,32 +5935,112 @@ function getBenchActiveStatus(
     // ===== ジャンヌ・ダルクデッキ =====
     case '聖剣':
     case '白百合の盾':
-      // ジャンヌ or 聖女ジャンヌ が攻撃 / 防御するときに +2
-      return (benchHas('ジャンヌ・ダルク') || deckHas('ジャンヌ・ダルク') ||
-              benchHas('聖女ジャンヌ')     || deckHas('聖女ジャンヌ'))
-        ? 'active' : 'inactive';
+      return hasAnywhere(['ジャンヌ・ダルク', '聖女ジャンヌ']) ? 'active' : 'inactive';
 
     // ===== アマゾンデッキ =====
-    case 'アマゾン川': {
-      const amazonCreatures = ['アナコンダ', 'ピラニア', 'ジャガー', '毒矢カエル', 'ピンクイルカ', '大蛇'];
-      return amazonCreatures.some((n) => benchHas(n) || deckHas(n)) ? 'active' : 'inactive';
-    }
+    case 'アマゾン川':
+      return hasAnywhere(['アナコンダ', 'ピラニア', 'ジャガー', '毒矢カエル', 'ピンクイルカ', '大蛇'])
+        ? 'active' : 'inactive';
     case 'アナコンダ':
-      // ベンチに居るだけで相手防御バフ-2 を常時発動
-      return 'active';
+      return 'active';  // 常時: 相手防御バフ-2
+    case 'サバンナ':
+      return 'active';  // 常時: 生き物攻防+1
 
     // ===== ナポレオン =====
     case '火薬':
-      // 大砲 / ダイナマイト と組合せで +2 attack
-      return (benchHas('大砲') || deckHas('大砲') || benchHas('ダイナマイト') || deckHas('ダイナマイト'))
-        ? 'active' : 'inactive';
+      return hasAnywhere(['大砲', 'ダイナマイト']) ? 'active' : 'inactive';
     case '凱旋門':
-      return (benchHas('ナポレオン') || deckHas('ナポレオン')) ? 'active' : 'inactive';
+    case 'ナポレオン法典':
+      return hasAnywhere(['ナポレオン']) ? 'active' : 'inactive';
+    case 'ワーテルローの戦い':
+      // デッキ3枚以下 + ベンチにナポレオン → trigger
+      return (my.deck.length <= 3 && benchHas('ナポレオン')) ? 'trigger' : 'inactive';
 
     // ===== 信長デッキ =====
     case '馬防柵':
     case '安土城':
-      return (benchHas('織田信長') || deckHas('織田信長')) ? 'active' : 'inactive';
+    case '鉄砲':
+    case '楽市楽座':
+      return hasAnywhere(['織田信長']) ? 'active' : 'inactive';
+
+    // ===== 明智ルート =====
+    case '愛宕百韻':
+    case '天王山':
+      return hasAnywhere(['明智光秀']) ? 'active' : 'inactive';
+
+    // ===== マリー・アントワネット =====
+    case 'ヴェルサイユ宮殿':
+    case 'ケーキ':
+      return hasAnywhere(['マリー・アントワネット']) ? 'active' : 'inactive';
+
+    // ===== ダ・ヴィンチ =====
+    case 'モナ・リザ':
+    case '最後の晩餐':
+    case '設計図':
+      return hasAnywhere(['ダ・ヴィンチ', 'レオナルド・ダ・ヴィンチ', '万能の天才'])
+        ? 'active' : 'inactive';
+
+    // ===== ニュートン =====
+    case 'プリズム':
+    case '万有引力':
+      return hasAnywhere(['ニュートン']) ? 'active' : 'inactive';
+
+    // ===== ゴッホ =====
+    case 'ひまわり':
+    case '星月夜':
+      return hasAnywhere(['ゴッホ']) ? 'active' : 'inactive';
+    case '糸杉':
+      return 'active';  // 常時: ゴッホが場を離れる時 reroute
+
+    // ===== アインシュタイン =====
+    case '相対性理論の論文':
+    case '光速':
+      return hasAnywhere(['アインシュタイン']) ? 'active' : 'inactive';
+
+    // ===== キュリー夫人 =====
+    case 'ラジウム':
+    case '研究ノート':
+      return hasAnywhere(['キュリー夫人']) ? 'active' : 'inactive';
+    case 'ノーベル賞メダル':
+      return hasAnywhere(['キュリー夫人', 'アインシュタイン', 'ダーウィン']) ? 'active' : 'inactive';
+
+    // ===== ダーウィン =====
+    case 'ゾウガメ':
+    case 'ダーウィンフィンチ':
+      return hasAnywhere(['ダーウィン']) ? 'active' : 'inactive';
+
+    // ===== エジソン =====
+    case '蓄音機':
+      return hasAnywhere(['エジソン']) ? 'active' : 'inactive';
+
+    // ===== ガリレオ =====
+    case '地動説':
+      return hasAnywhere(['ガリレオ']) ? 'active' : 'inactive';
+
+    // ===== ライト兄弟 =====
+    case '風洞':
+      return hasAnywhere(['ライト兄弟']) ? 'active' : 'inactive';
+
+    // ===== 大航海 =====
+    case 'キャラベル船':
+      return hasAnywhere(['コロンブス', 'マゼラン']) ? 'active' : 'inactive';
+    case '香辛料':
+      return 'active';  // 常時: ラウンド終了時ALT+5
+
+    // ===== マンデラ =====
+    case 'アパルトヘイト':
+    case 'ロベン島':
+      return hasAnywhere(['ネルソン・マンデラ']) ? 'active' : 'inactive';
+
+    // ===== 常時 active（無条件の味方バフ／除外耐性等） =====
+    case '血清':
+    case '聖書':
+    case '千利休':
+    case 'ダイヤモンド':
+    case 'サファイア':
+    case 'ルビー':
+    case 'アメジスト':
+      return 'active';
 
     default:
       return 'inactive';
