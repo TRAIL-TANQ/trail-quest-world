@@ -7,6 +7,7 @@ import AdminGuard from '@/components/admin/AdminGuard';
 import AdminShell, { AdminCard, KpiTile } from '@/components/admin/AdminShell';
 import MenuButton from '@/components/ui/MenuButton';
 import { fetchDashboardOverview, type DashboardOverview } from '@/lib/adminDashboardService';
+import { listInviteCodes } from '@/lib/inviteCode';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 
 function formatPct(v: number) { return `${Math.round(v * 1000) / 10}%`; }
@@ -23,6 +24,7 @@ export default function AdminDashboardPage() {
 function Inner() {
   const [data, setData] = useState<DashboardOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [activeInviteCount, setActiveInviteCount] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -31,6 +33,19 @@ function Inner() {
       .catch((e) => { if (!cancelled) setError(String(e)); });
     return () => { cancelled = true; };
   }, []);
+
+  // 招待コード 未使用件数を非同期取得（失敗しても画面には影響させない）
+  useEffect(() => {
+    let cancelled = false;
+    listInviteCodes({ status: 'active' })
+      .then((items) => { if (!cancelled) setActiveInviteCount(items.length); })
+      .catch(() => { /* 無視: カード自体は表示する */ });
+    return () => { cancelled = true; };
+  }, []);
+
+  const inviteSubtitle = activeInviteCount === null
+    ? '保護者ダッシュボード連携'
+    : `保護者ダッシュボード連携・未使用 ${activeInviteCount}件`;
 
   return (
     <AdminShell title="管理者ダッシュボード" subtitle="全体サマリーと分析メニュー">
@@ -99,6 +114,13 @@ function Inner() {
               title="生徒一覧"
               subtitle="21名の詳細データを確認"
               gradient="linear-gradient(135deg, #1a3a5c 0%, #2980b9 55%, #3498db 100%)"
+            />
+            <MenuButton
+              href="/admin/invite"
+              icon="🎫"
+              title="招待コード"
+              subtitle={inviteSubtitle}
+              gradient="linear-gradient(135deg, #134e4a 0%, #0d9488 55%, #2dd4bf 100%)"
             />
             <MenuButton
               href="/admin/decks"
