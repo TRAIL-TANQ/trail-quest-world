@@ -36,7 +36,28 @@ export function isAdminMode(): boolean {
 
 // ===== Constants =====
 
-export const DECK_KEYS: DeckKey[] = ['napoleon', 'amazon', 'qinshi', 'galileo', 'jeanne', 'murasaki', 'mandela', 'davinci', 'nobunaga', 'wolf'];
+/**
+ * デッキの並び順（spec v6 §4.3）。
+ * 上 5 つが解放済み（DECK_AVAILABILITY=true）、下 5 つが準備中。
+ * この順序が UI の表示順のソースオブトゥルース:
+ *   - QuestBoardPage（デッキクエスト一覧）
+ *   - AdminStudentDetailPage（生徒詳細のクエスト進捗表）
+ *   - その他 DECK_KEYS を順に回している箇所
+ */
+export const DECK_KEYS: DeckKey[] = [
+  // 解放済み
+  'amazon',
+  'nobunaga',
+  'jeanne',
+  'qinshi',
+  'murasaki',
+  // 準備中
+  'napoleon',
+  'mandela',
+  'wolf',
+  'galileo',
+  'davinci',
+];
 
 /**
  * デッキ実装可否フラグ。false は「準備中」で一般ユーザー/モニターには提供しない。
@@ -70,7 +91,18 @@ export function isDeckAvailable(deckKey: DeckKey): boolean {
 
 export const QUEST_DIFFICULTIES: QuestDifficulty[] = ['beginner', 'challenger', 'master', 'legend'];
 
-export const CLEAR_THRESHOLD = 5; // ビギナー5問正解でデッキ解放（チャレンジモードは10問でALT稼ぎ用）
+export const CLEAR_THRESHOLD = 5; // ビギナー5問正解でクエストクリア判定
+
+/**
+ * 各難易度のクエストを初回クリアした際に付与する ALT ボーナス。
+ * 通常のクイズ正解ボーナスとは別枠で、一度クリアしたら同じ難易度では再付与されない。
+ */
+export const QUEST_CLEAR_BONUS_ALT: Record<QuestDifficulty, number> = {
+  beginner:   50,
+  challenger: 100,
+  master:     150,
+  legend:     300,
+};
 
 /** デッキ key → starter deck id マッピング */
 export const DECK_KEY_TO_STARTER_ID: Record<DeckKey, string> = {
@@ -231,12 +263,23 @@ export function isFirstDeckClaimed(): boolean {
   return getFirstDeckGift() !== null;
 }
 
-/** デッキが使用可能か（ビギナー10問正解で解放 / 初回プレゼント / モニターモード or 管理者なら常にtrue） */
+/**
+ * デッキがバトルで使用可能か（= 準備中でない）。
+ * v12 以降: 提供中の5デッキはクエスト未クリアでもバトルで使用可能。
+ * クエストはALTボーナス獲得の手段として機能する。
+ */
 export function isDeckUnlocked(progress: QuestProgressData, deckKey: DeckKey): boolean {
   if (MONITOR_MODE || isAdminMode()) return true;
-  // 初回プレゼントで選んだデッキは常に解放済み（ゲスト時のリロードでも失われない）
+  // 準備中でないデッキは全て使用可能
+  if (isDeckAvailable(deckKey)) return true;
+  // レガシー: 初回プレゼント / ビギナークリアも解放扱い（準備中デッキが将来解放された場合に備えて）
   if (getFirstDeckGift() === deckKey) return true;
   return progress[deckKey].beginner.cleared;
+}
+
+/** デッキのビギナークエストをクリア済みか（クエストバッジ表示用） */
+export function isBeginnerCleared(progress: QuestProgressData, deckKey: DeckKey): boolean {
+  return progress[deckKey]?.beginner?.cleared ?? false;
 }
 
 /** SSR が解放されているか（モニターモード or 管理者なら常にtrue） */

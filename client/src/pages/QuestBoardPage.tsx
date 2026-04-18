@@ -5,6 +5,7 @@
  */
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'wouter';
+import { toast } from 'sonner';
 import {
   type DeckKey,
   type QuestDifficulty,
@@ -13,6 +14,7 @@ import {
   DECK_QUEST_INFO,
   DIFFICULTY_INFO,
   CLEAR_THRESHOLD,
+  isDeckAvailable,
   isDifficultyUnlocked,
   isDeckUnlocked,
   isSSRUnlocked,
@@ -80,6 +82,10 @@ export default function QuestBoardPage() {
           const deckProgress = progress[deckKey];
           const deckUnlocked = isDeckUnlocked(progress, deckKey);
           const ssrUnlocked = isSSRUnlocked(progress, deckKey);
+          // spec v6 §4.2: 準備中デッキはグレーアウト + 🔨 準備中 バッジ +
+          // タップで「もうすこしまってね！」トースト。管理者は isDeckAvailable が
+          // 常に true を返すため、準備中扱いにはならず従来通り難易度ボタンが出る。
+          const available = isDeckAvailable(deckKey);
 
           return (
             <div
@@ -88,8 +94,10 @@ export default function QuestBoardPage() {
               className="rounded-xl overflow-hidden scroll-mt-6"
               style={{
                 background: 'linear-gradient(135deg, rgba(21,29,59,0.95), rgba(14,20,45,0.95))',
-                border: `1.5px solid ${info.color}30`,
+                border: `1.5px solid ${available ? `${info.color}30` : 'rgba(120,120,140,0.25)'}`,
                 boxShadow: `0 3px 12px rgba(0,0,0,0.3), inset 0 0 20px ${info.color}06`,
+                opacity: available ? 1 : 0.5,
+                filter: available ? 'none' : 'grayscale(0.6)',
               }}
             >
               {/* Deck Header */}
@@ -97,13 +105,19 @@ export default function QuestBoardPage() {
                 <span className="text-xl">{info.icon}</span>
                 <div className="flex-1 min-w-0">
                   <h3 className="text-sm font-bold text-amber-100">{info.name}</h3>
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    {deckUnlocked && (
+                  <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                    {!available && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded font-bold"
+                        style={{ background: 'rgba(255,215,0,0.15)', color: 'var(--tqw-gold, #ffd700)', border: '1px solid rgba(255,215,0,0.4)' }}>
+                        🔨 準備中
+                      </span>
+                    )}
+                    {available && deckUnlocked && (
                       <span className="text-[9px] px-1.5 py-0.5 rounded font-bold" style={{ background: 'rgba(34,197,94,0.2)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.3)' }}>
                         デッキ解放済
                       </span>
                     )}
-                    {ssrUnlocked && (
+                    {available && ssrUnlocked && (
                       <span className="text-[9px] px-1.5 py-0.5 rounded font-bold" style={{ background: 'rgba(255,215,0,0.15)', color: '#ffd700', border: '1px solid rgba(255,215,0,0.3)' }}>
                         SSR解放済
                       </span>
@@ -112,7 +126,27 @@ export default function QuestBoardPage() {
                 </div>
               </div>
 
-              {/* Difficulty Row */}
+              {/* 準備中: 難易度ボタン列を置き換えて全面タップでトースト */}
+              {!available && (
+                <div className="px-3 pb-3">
+                  <button
+                    type="button"
+                    onClick={() => toast.info('🔨 もうすこしまってね！', { duration: 1800 })}
+                    className="w-full rounded-lg py-2.5 font-black text-[12px]"
+                    style={{
+                      background: 'rgba(255,215,0,0.06)',
+                      color: 'var(--tqw-gold, #ffd700)',
+                      border: '1px dashed rgba(255,215,0,0.3)',
+                    }}
+                  >
+                    🔨 準備中 — タップで詳細
+                  </button>
+                </div>
+              )}
+
+              {/* Difficulty Row（解放済みデッキのみ表示） */}
+              {available && (<>
+
               <div className="px-3 pb-3 flex gap-1.5">
                 {QUEST_DIFFICULTIES.map((diff) => {
                   const diffInfo = DIFFICULTY_INFO[diff];
@@ -235,6 +269,7 @@ export default function QuestBoardPage() {
                   </div>
                 );
               })()}
+              </>)}
             </div>
           );
         })}

@@ -207,24 +207,14 @@ export interface StarterDeck {
   description: string;
 }
 
+/**
+ * spec v6 §4.3 に従った並び順:
+ *   上 5 つ = 解放済み（アマゾン/信長/ジャンヌ/始皇帝/紫式部）
+ *   下 5 つ = 準備中（ナポレオン/マンデラ/オオカミ/ガリレオ/ダ・ヴィンチ）
+ *   末尾    = starter-random（特殊、ランダムデッキ）
+ */
 export const STARTER_DECKS: StarterDeck[] = [
-  {
-    id: 'starter-napoleon',
-    name: 'ナポレオンデッキ',
-    icon: '⚔️',
-    trumpCard: 'ナポレオン',
-    themeCards: [
-      '大砲', '大砲', '大砲',
-      'ナポレオン法典', 'ナポレオン法典', 'ナポレオン法典',
-      '火薬', '火薬',
-      'ワーテルローの戦い',
-      '凱旋門',
-      'ダイナマイト',
-      'アウステルリッツの太陽',
-    ],
-    noiseCards: ['紙', '紙'],
-    description: '大砲とナポレオン法典で皇帝を強化。アウステルリッツの太陽で全効果を倍化',
-  },
+  // ========== 解放済み ==========
   {
     id: 'starter-amazon',
     name: 'アマゾンデッキ',
@@ -241,23 +231,6 @@ export const STARTER_DECKS: StarterDeck[] = [
     ],
     noiseCards: ['紙'],
     description: '巫師で大蛇を召喚し、ピンクイルカで巫師を回収。アマゾン川がある限りループは止まらない',
-  },
-  {
-    id: 'starter-heritage',
-    name: '始皇帝デッキ',
-    icon: '🏛️',
-    trumpCard: '始皇帝',
-    themeCards: [
-      '万里の長城',
-      '紙', '紙', '紙',
-      '兵馬俑', '兵馬俑',
-      '秦の兵士', '秦の兵士', '秦の兵士',
-      '始皇帝の勅令', '始皇帝の勅令',
-      '焚書坑儒',
-      '光合成',
-    ],
-    noiseCards: ['車輪'],
-    description: '紙と焚書坑儒で相手デッキを削り、兵馬俑と秦の兵士で圧倒せよ',
   },
   {
     id: 'starter-nobunaga',
@@ -279,21 +252,37 @@ export const STARTER_DECKS: StarterDeck[] = [
     description: '鉄砲と足軽で戦場を制圧。本能寺の変で歴史を塗り替える明智ルートへ',
   },
   {
-    id: 'starter-galileo',
-    name: 'ガリレオデッキ',
-    icon: '🔭',
-    trumpCard: 'ガリレオ',
+    id: 'starter-jeanne',
+    name: 'ジャンヌダルクデッキ',
+    icon: '🗡️',
+    trumpCard: 'ジャンヌ・ダルク',
     themeCards: [
-      'ガリレオ',
-      '望遠鏡', '望遠鏡', '望遠鏡',
-      '地動説', '地動説', '地動説',
-      '天動説', '天動説',
-      '万有引力', '万有引力',
-      '地球は動いている',
-      '電球',
+      'ジャンヌ・ダルク',
+      '聖剣', '聖剣', '聖剣',
+      '軍旗', '軍旗', '軍旗',
+      '祈りの光', '祈りの光',
+      '白百合の盾', '白百合の盾', '白百合の盾',
+      '火刑', '火刑',
     ],
-    noiseCards: ['紙'],
-    description: '望遠鏡で地動説をサーチ。地球は動いているで相手ベンチを封印',
+    noiseCards: [],
+    description: '聖剣と白百合の盾でジャンヌを強化。軍旗でサーチ、祈りの光で聖女ジャンヌが蘇る',
+  },
+  {
+    id: 'starter-heritage',
+    name: '始皇帝デッキ',
+    icon: '🏛️',
+    trumpCard: '始皇帝',
+    themeCards: [
+      '万里の長城',
+      '紙', '紙', '紙',
+      '兵馬俑', '兵馬俑',
+      '秦の兵士', '秦の兵士', '秦の兵士',
+      '始皇帝の勅令', '始皇帝の勅令',
+      '焚書坑儒',
+      '光合成',
+    ],
+    noiseCards: ['車輪'],
+    description: '紙と焚書坑儒で相手デッキを削り、兵馬俑と秦の兵士で圧倒せよ',
   },
   {
     id: 'starter-murasaki',
@@ -312,21 +301,23 @@ export const STARTER_DECKS: StarterDeck[] = [
     noiseCards: ['紙'],
     description: '十二単で二人の才女を守り、源氏物語と枕草子で戦場を支配せよ',
   },
+  // ========== 準備中 ==========
   {
-    id: 'starter-jeanne',
-    name: 'ジャンヌダルクデッキ',
-    icon: '🗡️',
-    trumpCard: 'ジャンヌ・ダルク',
+    id: 'starter-napoleon',
+    name: 'ナポレオンデッキ',
+    icon: '⚔️',
+    trumpCard: 'ナポレオン',
     themeCards: [
-      'ジャンヌ・ダルク',
-      '聖剣', '聖剣', '聖剣',
-      '軍旗', '軍旗', '軍旗',
-      '祈りの光', '祈りの光',
-      '白百合の盾', '白百合の盾', '白百合の盾',
-      '火刑', '火刑',
+      '大砲', '大砲', '大砲',
+      'ナポレオン法典', 'ナポレオン法典', 'ナポレオン法典',
+      '火薬', '火薬',
+      'ワーテルローの戦い',
+      '凱旋門',
+      'ダイナマイト',
+      'アウステルリッツの太陽',
     ],
-    noiseCards: [],
-    description: '聖剣と白百合の盾でジャンヌを強化。軍旗でサーチ、祈りの光で聖女ジャンヌが蘇る',
+    noiseCards: ['紙', '紙'],
+    description: '大砲とナポレオン法典で皇帝を強化。アウステルリッツの太陽で全効果を倍化',
   },
   {
     id: 'starter-mandela',
@@ -363,6 +354,23 @@ export const STARTER_DECKS: StarterDeck[] = [
     description: '群れの掟と縄張りでオオカミを育て、月下の遠吠えで祖先の力を呼び覚ませ',
   },
   {
+    id: 'starter-galileo',
+    name: 'ガリレオデッキ',
+    icon: '🔭',
+    trumpCard: 'ガリレオ',
+    themeCards: [
+      'ガリレオ',
+      '望遠鏡', '望遠鏡', '望遠鏡',
+      '地動説', '地動説', '地動説',
+      '天動説', '天動説',
+      '万有引力', '万有引力',
+      '地球は動いている',
+      '電球',
+    ],
+    noiseCards: ['紙'],
+    description: '望遠鏡で地動説をサーチ。地球は動いているで相手ベンチを封印',
+  },
+  {
     id: 'starter-davinci',
     name: 'ダ・ヴィンチデッキ',
     icon: '🎨',
@@ -379,6 +387,7 @@ export const STARTER_DECKS: StarterDeck[] = [
     noiseCards: ['紙'],
     description: 'モナ・リザ+最後の晩餐でダ・ヴィンチを万能の天才に進化させろ',
   },
+  // ========== 特殊 ==========
   {
     id: 'starter-random',
     name: 'ランダムデッキ',
