@@ -123,6 +123,13 @@ function Inner() {
               gradient="linear-gradient(135deg, #134e4a 0%, #0d9488 55%, #2dd4bf 100%)"
             />
             <MenuButton
+              href="/admin/parent-preview"
+              icon="🎓"
+              title="週次レポート"
+              subtitle="保護者ダッシュボードを確認・AI レポート生成"
+              gradient="linear-gradient(135deg, #0e3148 0%, #155e75 55%, #22d3ee 100%)"
+            />
+            <MenuButton
               href="/admin/decks"
               icon="⚔️"
               title="デッキ分析"
