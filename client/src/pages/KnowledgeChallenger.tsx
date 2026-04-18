@@ -228,8 +228,12 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
 
   // Card preview before committing an attack reveal (step 2 of 3-step play).
   // null = no preview shown. Set just before revealNextAttackCard is called.
+  //
+  // cantActivateReason: optional 効果で発動条件を満たしていない場合の理由。
+  //   null なら条件 OK (発動可)。非 null の場合、UI 側で「発動する」を抑止して
+  //   「⚔️ 出す（効果スキップ）」に切り替える。
   const [attackPreview, setAttackPreview] = useState<
-    | { card: BattleCard; optionalEffect: boolean }
+    | { card: BattleCard; optionalEffect: boolean; cantActivateReason: string | null }
     | null
   >(null);
   // Latch that resolves when the player clicks a preview action button.
@@ -269,13 +273,76 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
     }
     return false;
   }, []);
+  /**
+   * 任意発動カードの発動条件チェッカー。
+   * 発動可能なら null、条件未満なら理由文字列を返す。
+   * UI 側でボタンの disabled 状態切替 + サブテキスト表示に使う。
+   */
+  const canActivateOptionalEffect = useCallback(
+    (card: BattleCard): string | null => {
+      const effId = card.effect?.id;
+      if (!effId) return null;
+      const gs = gameStateRef.current;
+      if (!gs) return null;
+      const atkSide: 'player' | 'ai' = gs.flagHolder === 'player' ? 'ai' : 'player';
+      const my = gs[atkSide];
+      const sealed = gs.sealedBenchNames[atkSide];
+      const benchHas = (name: string) => my.bench.some((b) => b.name === name && !sealed.includes(b.name));
+      const deckHas = (name: string) => my.deck.some((c) => c.name === name);
+      const exileHas = (name: string) => gs.exile[atkSide].some((c) => c.name === name);
+      switch (effId) {
+        // ----- 除外参照系（発動対象が除外ゾーンにいる必要がある） -----
+        case 'prayer_light':    return exileHas('ジャンヌ・ダルク') ? null : '除外にジャンヌ・ダルクがいません';
+        case 'terracotta':      return exileHas('秦の兵士')          ? null : '除外に秦の兵士がいません';
+        case 'elixir': {
+          if (gs.usedElixir?.[atkSide]) return 'このバトルでは既に発動済み';
+          return exileHas('始皇帝') ? null : '除外に始皇帝がいません';
+        }
+        case 'rainbow_nation':  return gs.exile[atkSide].length > 0   ? null : '除外にカードがありません';
+        // ----- ベンチ参照系 -----
+        case 'burning_stake':   return benchHas('ジャンヌ・ダルク')   ? null : 'ベンチにジャンヌ・ダルクがいません';
+        case 'anaconda_hunter': return (benchHas('アマゾン川') && benchHas('アナコンダ')) ? null : 'ベンチにアマゾン川とアナコンダが必要';
+        case 'honnoji':         return benchHas('織田信長')           ? null : 'ベンチに織田信長がいません';
+        case 'mikka_tenka':     return benchHas('明智光秀')           ? null : 'ベンチに明智光秀がいません';
+        // ----- ベンチ or 除外 いずれかに対象が必要 -----
+        case 'pink_dolphin':    return (benchHas('大蛇の巫師') || exileHas('大蛇の巫師')) ? null : 'ベンチ/除外に大蛇の巫師が必要';
+        // ----- デッキ参照系（サーチ系） -----
+        case 'imperial_decree': return (deckHas('紙') || deckHas('焚書坑儒')) ? null : 'デッキに紙・焚書坑儒がいません';
+        case 'banner':
+        case 'holy_banner':     return deckHas('ジャンヌ・ダルク')     ? null : 'デッキにジャンヌ・ダルクがいません';
+        // ----- ベンチ集計系（0 枚なら不発） -----
+        case 'book_burning': {
+          const paperCount  = my.bench.find((b) => b.name === '紙' && !sealed.includes(b.name))?.count ?? 0;
+          const decreeCount = my.bench.find((b) => b.name === '始皇帝の勅令' && !sealed.includes(b.name))?.count ?? 0;
+          return (paperCount + decreeCount) > 0 ? null : 'ベンチに紙・勅令がありません';
+        }
+        // ----- 常時発動可（対象は UI 側で別途検証、または無条件に効果発動） -----
+        case 'saint_jeanne':    return null;  // 除外カード回収（0 枚でも -3 バフは効く）
+        case 'nobel_peace':     return null;  // 味方全攻防+1（常時発動可）
+        case 'anatomy':
+        case 'mirror_writing':  return null;  // ダ・ヴィンチ系、詳細は engine で判定
+        case 'moonlit_howl':    return null;  // オオカミ系
+        case 'genji':
+        case 'makura_no_soshi': return null;  // 紫式部系
+        case 'photosynthesis':  return '対象なし（植物カード未実装）';
+        case 'paper':           return null;
+        // ----- cannon/dynamite (conditionalOptional で火薬チェック済) -----
+        case 'cannon':
+        case 'dynamite':        return benchHas('火薬') ? null : 'ベンチに火薬がいません';
+        default:                return null;
+      }
+    },
+    [],
+  );
   const waitAttackPreview = useCallback(
     (card: BattleCard): Promise<{ skipEffect: boolean }> => {
       if (unmountedRef.current) return Promise.resolve({ skipEffect: false });
       const optional =
         !!(card.effect && OPTIONAL_EFFECT_IDS.has(card.effect.id)) ||
         conditionalOptional(card);
-      setAttackPreview({ card, optionalEffect: optional });
+      const cantActivateReason = optional ? canActivateOptionalEffect(card) : null;
+      console.log(`[UI][attackPreview] card=${card.name} effectId=${card.effect?.id ?? 'none'} optional=${optional} cantActivate=${cantActivateReason !== null} reason=${cantActivateReason ?? '(can activate)'}`);
+      setAttackPreview({ card, optionalEffect: optional, cantActivateReason });
       return new Promise((resolve) => {
         previewResolveRef.current = (v) => {
           previewResolveRef.current = null;
@@ -284,7 +351,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
         };
       });
     },
-    [OPTIONAL_EFFECT_IDS, conditionalOptional],
+    [OPTIONAL_EFFECT_IDS, conditionalOptional, canActivateOptionalEffect],
   );
   const handlePreviewChoice = useCallback((skipEffect: boolean) => {
     previewResolveRef.current?.({ skipEffect });
@@ -3835,10 +3902,21 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
           const effectText = card.effect?.description ?? null;
           const effectName = card.effect?.name ?? null;
           const optional = attackPreview.optionalEffect;
-          const playLabel = optional
-            ? '⬆️ 上にスワイプで発動'
-            : '⬆️ 上にスワイプで出す';
-          const playButtonLabel = optional ? '✨ 発動する' : '⚔️ 出す';
+          const cantReason = attackPreview.cantActivateReason;
+          // optional でも発動条件を満たさない場合、「発動する」を封じて「出す（効果スキップ）」に切替。
+          const cantActivate = optional && !!cantReason;
+          const playLabel = cantActivate
+            ? '⬆️ 上にスワイプで出す（発動不可）'
+            : optional
+              ? '⬆️ 上にスワイプで発動'
+              : '⬆️ 上にスワイプで出す';
+          const playButtonLabel = cantActivate
+            ? '⚔️ 出す'
+            : optional ? '✨ 発動する' : '⚔️ 出す';
+          // cantActivate は skipEffect=true 相当（engine は効果処理をバイパス）
+          const onPlay = cantActivate
+            ? () => handlePreviewChoice(true)
+            : () => handlePreviewChoice(false);
 
           const subActions = (
             <div className="flex flex-col items-center gap-2 mt-2" style={{ width: 'min(80vw, 340px)' }}>
@@ -3847,20 +3925,29 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                   className="rounded-xl px-3 py-2.5 text-center w-full"
                   style={{
                     background: 'rgba(0,0,0,0.65)',
-                    border: `1.5px solid ${optional ? 'rgba(255,215,0,0.55)' : 'rgba(255,215,0,0.35)'}`,
-                    boxShadow: optional ? '0 0 14px rgba(255,215,0,0.18)' : 'none',
+                    border: cantActivate
+                      ? '1.5px solid rgba(148,163,184,0.55)'
+                      : `1.5px solid ${optional ? 'rgba(255,215,0,0.55)' : 'rgba(255,215,0,0.35)'}`,
+                    boxShadow: (optional && !cantActivate) ? '0 0 14px rgba(255,215,0,0.18)' : 'none',
+                    opacity: cantActivate ? 0.8 : 1,
                   }}
                 >
-                  <p className="font-black mb-1" style={{ color: '#ffd700', fontSize: 13, letterSpacing: 0.5 }}>
+                  <p className="font-black mb-1" style={{ color: cantActivate ? '#cbd5e1' : '#ffd700', fontSize: 13, letterSpacing: 0.5 }}>
                     ✨ 効果{effectName ? `: ${effectName}` : ''}
                     {!optional && hasAutoEffect ? ' (自動)' : ''}
+                    {cantActivate ? '（発動条件未満）' : ''}
                   </p>
-                  <p className="font-medium leading-snug" style={{ color: '#ffffff', fontSize: 14 }}>
+                  <p className="font-medium leading-snug" style={{ color: cantActivate ? 'rgba(255,255,255,0.75)' : '#ffffff', fontSize: 14 }}>
                     {effectText}
                   </p>
+                  {cantActivate && cantReason && (
+                    <p className="font-bold mt-1.5" style={{ color: '#fca5a5', fontSize: 12 }}>
+                      🚫 {cantReason}
+                    </p>
+                  )}
                 </div>
               )}
-              {optional && (
+              {optional && !cantActivate && (
                 <button
                   onClick={(e) => { e.stopPropagation(); playTap(); handlePreviewChoice(true); }}
                   className="tappable rounded-lg font-bold"
@@ -3881,7 +3968,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
 
           return (
             <CardPreviewOverlay
-              onPlay={() => handlePreviewChoice(false)}
+              onPlay={onPlay}
               playLabel={playLabel}
               playButtonLabel={playButtonLabel}
               subActions={subActions}
