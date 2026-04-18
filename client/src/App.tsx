@@ -38,6 +38,7 @@ import AdminAltGamesPage from "./pages/admin/AdminAltGamesPage";
 import AdminPvPPage from "./pages/admin/AdminPvPPage";
 import AdminTournamentsPage from "./pages/admin/AdminTournamentsPage";
 import AdminTournamentDetailPage from "./pages/admin/AdminTournamentDetailPage";
+import AdminInvitePage from "./pages/admin/AdminInvitePage";
 import AdminGuard from "./components/admin/AdminGuard";
 import TournamentJoinPage from "./pages/TournamentJoinPage";
 import QuizPracticePage from "./pages/QuizPracticePage";
@@ -98,6 +99,7 @@ function Router() {
             <Route path="/admin/pvp" component={AdminPvPPage} />
             <Route path="/admin/tournaments/:id" component={AdminTournamentDetailPage} />
             <Route path="/admin/tournaments" component={AdminTournamentsPage} />
+            <Route path="/admin/invite" component={AdminInvitePage} />
             <Route path="/admin/shop-order">
               <AdminGuard><AdminPage /></AdminGuard>
             </Route>
