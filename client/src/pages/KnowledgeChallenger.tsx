@@ -281,12 +281,26 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
   const canActivateOptionalEffect = useCallback(
     (card: BattleCard): string | null => {
       const effId = card.effect?.id;
-      if (!effId) return null;
+      if (!effId) {
+        console.log(`[UI][canActivate] card=${card.name} effId=(none) → null (no effect; can activate)`);
+        return null;
+      }
       const gs = gameStateRef.current;
-      if (!gs) return null;
+      if (!gs) {
+        console.log(`[UI][canActivate] card=${card.name} effId=${effId} → null (gameStateRef.current is null!)`);
+        return null;
+      }
       const atkSide: 'player' | 'ai' = gs.flagHolder === 'player' ? 'ai' : 'player';
       const my = gs[atkSide];
       const sealed = gs.sealedBenchNames[atkSide];
+      // 診断ログ: 判定時の state snapshot を全量出力（FAIL 1 根本原因特定用）
+      console.log(
+        `[UI][canActivate] card=${card.name} effId=${effId} ` +
+        `flagHolder=${gs.flagHolder} atkSide=${atkSide} ` +
+        `exile[${atkSide}]=[${gs.exile[atkSide].map((c) => c.name).join(',')}] ` +
+        `bench=[${my.bench.map((b) => `${b.name}×${b.count}${sealed.includes(b.name) ? '(sealed)' : ''}`).join(',')}] ` +
+        `deckTop3=[${my.deck.slice(0, 3).map((c) => c.name).join(',')}]`,
+      );
       const benchHas = (name: string) => my.bench.some((b) => b.name === name && !sealed.includes(b.name));
       const deckHas = (name: string) => my.deck.some((c) => c.name === name);
       const exileHas = (name: string) => gs.exile[atkSide].some((c) => c.name === name);
