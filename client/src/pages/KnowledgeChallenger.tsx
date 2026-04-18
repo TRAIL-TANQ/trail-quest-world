@@ -3573,9 +3573,12 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
           </>
         )}
 
-        {/* Manual/Auto toggle + Skip button */}
+        {/* Manual/Auto toggle + Skip button + Exile indicator */}
         {gameState.phase !== 'deck_phase' && gameState.phase !== 'game_over' && (
-          <div className="absolute top-1 right-2 z-50 flex gap-1.5">
+          <div
+            className="absolute top-1 right-2 z-50 flex flex-wrap justify-end gap-1.5"
+            style={{ maxWidth: 'calc(100vw - 16px)' }}
+          >
             <button
               onClick={() => setManualMode((p) => !p)}
               className="text-[11px] font-black px-3 py-1.5 rounded-lg"
@@ -3682,11 +3685,31 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                 <div className="flex items-center gap-1">
                   {hudPill(p2Label, `🂠${p2DeckN}`, p2Color, deckCritical(p2DeckN) ? 'red' : deckDangerous(p2DeckN) ? 'yellow' : undefined)}
                   {hudPill('', `🎴${p2BenchN}/${aiBenchMax}`, p2Color, benchNearFull(p2BenchN, aiBenchMax) ? 'yellow' : undefined)}
+                  {/* 除外数（相手）— 右上ボタンが overflow した時の冗長表示 */}
+                  <button
+                    onClick={() => setShowExile(true)}
+                    className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-md active:scale-95 transition-transform"
+                    style={{ background: 'rgba(168,85,247,0.22)', border: '1px solid rgba(168,85,247,0.55)', fontSize: 9 }}
+                    aria-label="敵の除外ゾーン"
+                  >
+                    <span className="font-bold" style={{ color: '#c4b5fd' }}>🚫</span>
+                    <span className="font-black" style={{ color: '#f87171' }}>{gameState.exile.ai.length}</span>
+                  </button>
                 </div>
                 {/* P1 (self) row */}
                 <div className="flex items-center gap-1">
                   {hudPill(p1Label, `🂠${p1DeckN}`, p1Color, deckCritical(p1DeckN) ? 'red' : deckDangerous(p1DeckN) ? 'yellow' : undefined)}
                   {hudPill('', `🎴${p1BenchN}/${benchMax}`, p1Color, benchNearFull(p1BenchN, benchMax) ? 'yellow' : undefined)}
+                  {/* 除外数（自分）— タップでモーダル展開、バトル中常時表示 */}
+                  <button
+                    onClick={() => setShowExile(true)}
+                    className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-md active:scale-95 transition-transform"
+                    style={{ background: 'rgba(168,85,247,0.22)', border: '1px solid rgba(168,85,247,0.55)', fontSize: 9 }}
+                    aria-label="自分の除外ゾーン"
+                  >
+                    <span className="font-bold" style={{ color: '#c4b5fd' }}>🚫</span>
+                    <span className="font-black" style={{ color: '#4ade80' }}>{gameState.exile.player.length}</span>
+                  </button>
                 </div>
               </div>
               {/* Last-card big warning for whichever side is attacker */}
