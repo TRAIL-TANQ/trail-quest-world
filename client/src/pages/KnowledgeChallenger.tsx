@@ -1027,11 +1027,22 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
     lastFanFlightIdxRef.current = sb.idx;
 
     const attackerSide = sb.attackerSide;
-    const targetAnchor = attackerSide === 'player' ? playerFanAnchorRef.current : aiFanAnchorRef.current;
-    if (!targetAnchor) return;
+    // kk 2026-04-19 バグ調査用: ref が差し替わるケースを除外するため、ref と
+    // `data-fan-anchor` DOM 属性の両方から取得して一致を検証する。
+    const refAnchor = attackerSide === 'player' ? playerFanAnchorRef.current : aiFanAnchorRef.current;
+    const domAnchor = document.querySelector<HTMLDivElement>(`[data-fan-anchor="${attackerSide}"]`);
+    const targetAnchor = domAnchor ?? refAnchor;
+    if (!targetAnchor) {
+      console.warn(`[FanFlight] no anchor found for attackerSide=${attackerSide}`);
+      return;
+    }
+    if (refAnchor && domAnchor && refAnchor !== domAnchor) {
+      console.error(`[FanFlight] ANCHOR MISMATCH: ref=${refAnchor.getAttribute('data-fan-anchor')} dom=${domAnchor.getAttribute('data-fan-anchor')} — using DOM`);
+    }
     const tRect = targetAnchor.getBoundingClientRect();
     const targetX = tRect.left + tRect.width / 2;
     const targetY = tRect.top + tRect.height / 2;
+    console.log(`[FanFlight] sub-battle idx=${sb.idx} winner=${sb.winner} attackerSide=${attackerSide} defenderSide=${sb.defenderSide} → anchor="${targetAnchor.getAttribute('data-fan-anchor')}" (x=${Math.round(targetX)}, y=${Math.round(targetY)})`);
 
     // attacker role のインデックスを振り分けるためのカウンタ
     let attackerI = 0;
