@@ -153,8 +153,10 @@ interface FanCountUpOverlayProps {
   toAi: number;
   duration: number; // ms（スピン時間。hold 時間は呼び出し側で確保）
   onComplete?: () => void;
+  /** 二人対戦時のみ相手側を180°回転（CPU戦では上段も正位置） */
+  rotateOpponent?: boolean;
 }
-function FanCountUpOverlay({ fromPlayer, toPlayer, fromAi, toAi, duration, onComplete }: FanCountUpOverlayProps) {
+function FanCountUpOverlay({ fromPlayer, toPlayer, fromAi, toAi, duration, onComplete, rotateOpponent = false }: FanCountUpOverlayProps) {
   // スピン中の各桁表示値（左=高位 → 右=低位）
   const [playerDigits, setPlayerDigits] = useState<number[]>(() => fanDigits(fromPlayer, fromPlayer, toPlayer));
   const [aiDigits,     setAiDigits]     = useState<number[]>(() => fanDigits(fromAi,     fromAi,     toAi));
@@ -207,7 +209,7 @@ function FanCountUpOverlay({ fromPlayer, toPlayer, fromAi, toAi, duration, onCom
   const renderSide = (digits: number[], isOpponent: boolean) => (
     <div
       className="kc-fan-countup-side"
-      style={{ transform: isOpponent ? 'rotate(180deg)' : 'none' }}
+      style={{ transform: isOpponent && rotateOpponent ? 'rotate(180deg)' : 'none' }}
     >
       <div className="kc-fan-countup-frame">
         <span className="kc-fan-countup-star">⭐</span>
@@ -312,8 +314,10 @@ interface TrophyBonusBreakdownProps {
   bonuses: RoundBonuses;
   winnerSide: 'player' | 'ai';
   duration: number;
+  /** 二人対戦時のみ上段（相手側）を180°回転 */
+  rotateOpponent?: boolean;
 }
-function TrophyBonusBreakdown({ bonuses, winnerSide, duration: _duration }: TrophyBonusBreakdownProps) {
+function TrophyBonusBreakdown({ bonuses, winnerSide, duration: _duration, rotateOpponent = false }: TrophyBonusBreakdownProps) {
   const [revealedCount, setRevealedCount] = useState(0);
   const [showTotal, setShowTotal] = useState(false);
 
@@ -348,7 +352,7 @@ function TrophyBonusBreakdown({ bonuses, winnerSide, duration: _duration }: Trop
       <div
         className="kc-trophy-breakdown-side"
         style={{
-          transform: `${isOpponent ? 'rotate(180deg)' : 'none'} scale(${scale})`,
+          transform: `${isOpponent && rotateOpponent ? 'rotate(180deg)' : 'none'} scale(${scale})`,
           opacity,
         }}
       >
@@ -406,8 +410,10 @@ function TrophyBonusBreakdown({ bonuses, winnerSide, duration: _duration }: Trop
 interface ComboCounterProps {
   playerStreak: number;
   aiStreak: number;
+  /** 二人対戦時のみ上段（相手側）を180°回転 */
+  rotateOpponent?: boolean;
 }
-function ComboCounter({ playerStreak, aiStreak }: ComboCounterProps) {
+function ComboCounter({ playerStreak, aiStreak, rotateOpponent = false }: ComboCounterProps) {
   const tierClass = (n: number): string => {
     if (n >= 10) return 'kc-combo-tier-fever';
     if (n >= 7)  return 'kc-combo-tier-lightning';
@@ -421,7 +427,7 @@ function ComboCounter({ playerStreak, aiStreak }: ComboCounterProps) {
     return (
       <div
         className={`kc-combo-counter ${tierClass(streak)} ${isSelf ? 'kc-combo-counter-self' : 'kc-combo-counter-opp'}`}
-        style={{ transform: isOpponent ? 'rotate(180deg)' : 'none' }}
+        style={{ transform: isOpponent && rotateOpponent ? 'rotate(180deg)' : 'none' }}
         key={`combo-${isOpponent ? 'opp' : 'self'}-${streak}`}
       >
         <span className="kc-combo-prefix">{streak >= 10 ? 'FEVER!' : 'COMBO'}</span>
@@ -3952,6 +3958,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
         triggerNames={gameState.ai.bench.filter((b) => getBenchActiveStatus(b.name, gameState, 'ai') === 'trigger').map((b) => b.name)}
         maxSlots={gameState.stageRules?.npcBenchSlots ?? BENCH_MAX_SLOTS}
         onCardTap={setDetailCard}
+        rotateOpponent={isPvP}
       />
 
       {/* ===== Battle Field =====
@@ -3983,7 +3990,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
         // turn_banner 前) のごく短い時間だけ。攻撃側のカードバックは別ロジック。
         const renderDefenderSlot = () => {
           if (!defenderCard) {
-            return <CardBack side={defenderSide} isOpponent={defenderSide === 'ai'} />;
+            return <CardBack side={defenderSide} isOpponent={defenderSide === 'ai' && isPvP} />;
           }
           const shatter = attackerWonSub;
           return (
@@ -4001,7 +4008,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                   {gameState.defenderBonus < 0 && <span className="kc-power-bounce" style={{ color: '#ef4444' }}> {gameState.defenderBonus}</span>}
                 </p>
               </div>
-              <CardDisplay card={defenderCard} size="battle" mode="defense" onTap={() => setDetailCard(defenderCard)} defBonus={gameState.defenderBonus} isOpponent={defenderSide === 'ai'} />
+              <CardDisplay card={defenderCard} size="battle" mode="defense" onTap={() => setDetailCard(defenderCard)} defBonus={gameState.defenderBonus} isOpponent={defenderSide === 'ai' && isPvP} />
             </div>
           );
         };
@@ -4009,7 +4016,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
         const renderAttackerSlot = () => {
           if (!shouldShowAttackPile || attackCards.length === 0) {
             // Before any reveals, show the attacker's deck top as a card back.
-            return <CardBack side={attackerSide} isOpponent={attackerSide === 'ai'} />;
+            return <CardBack side={attackerSide} isOpponent={attackerSide === 'ai' && isPvP} />;
           }
           // Staircase stack: each successive card offset right + up so edges are all visible.
           const lastCard = attackCards[attackCards.length - 1];
@@ -4044,7 +4051,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                       animationDelay: `${delay}s`,
                     }}
                   >
-                    <CardDisplay card={c} size="battle" mode="attack" onTap={() => setDetailCard(c)} isOpponent={attackerSide === 'ai'} />
+                    <CardDisplay card={c} size="battle" mode="attack" onTap={() => setDetailCard(c)} isOpponent={attackerSide === 'ai' && isPvP} />
                   </div>
                 );
               })}
@@ -4058,7 +4065,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                   width: 'clamp(110px, 30vw, 180px)',
                   height: 'clamp(154px, 42vw, 250px)',
                 }}>
-                <CardDisplay card={lastCard} size="battle" mode="attack" onTap={() => setDetailCard(lastCard)} isOpponent={attackerSide === 'ai'} />
+                <CardDisplay card={lastCard} size="battle" mode="attack" onTap={() => setDetailCard(lastCard)} isOpponent={attackerSide === 'ai' && isPvP} />
                 {/* Light ripple on reveal */}
                 <div key={`ripple-${attackCards.length}`} className="absolute inset-0 pointer-events-none z-[105]">
                   <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[180px] h-[180px] rounded-full"
@@ -4609,7 +4616,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                 {/* 除外プール（相手側）— デッキ真上 */}
                 <ExilePoolStack
                   count={gameState.exile.ai.length}
-                  isOpponent
+                  isOpponent={isPvP}
                   onTap={() => setShowExile(true)}
                 />
                 <MiniDeckStack
@@ -4618,7 +4625,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                   interactive={aiDeckTappable}
                   glow={aiDeckTappable}
                   onTap={handleAdvance}
-                  isOpponent
+                  isOpponent={isPvP}
                 />
               </div>
             );
@@ -4828,6 +4835,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
             bonuses={gameState.lastRoundBonuses}
             winnerSide={gameState.lastRoundBonuses.winnerSide}
             duration={trophyBreakdownDuration(gameState.lastRoundBonuses.items.length)}
+            rotateOpponent={isPvP}
           />
         )}
 
@@ -4839,6 +4847,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
             fromAi={fanCountUp.fromAi}
             toAi={fanCountUp.toAi}
             duration={1300}
+            rotateOpponent={isPvP}
           />
         )}
 
@@ -4846,6 +4855,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
         <ComboCounter
           playerStreak={gameState.consecutiveKillStreak?.player ?? 0}
           aiStreak={gameState.consecutiveKillStreak?.ai ?? 0}
+          rotateOpponent={isPvP}
         />
 
         {/* ====== Turn Transition: vignette color shift (no text) ====== */}
@@ -5135,12 +5145,12 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                   <div className="grid grid-cols-4 gap-1.5">
                     {cards.map((c, i) => (
                       <div key={i} className="text-center" style={{ opacity: 0.5, filter: 'grayscale(0.7)' }}>
-                        {/* kk spec v8: 相手側（ai）のカード画像は180°回転で一貫性維持 */}
+                        {/* kk spec v8: 相手側（ai）のカード画像は180°回転で一貫性維持（PvP のみ） */}
                         <div
                           className="rounded-md overflow-hidden"
                           style={{
                             border: '1px solid rgba(168,85,247,0.3)',
-                            transform: side === 'ai' ? 'rotate(180deg)' : undefined,
+                            transform: side === 'ai' && isPvP ? 'rotate(180deg)' : undefined,
                           }}
                         >
                           {c.imageUrl ? <img src={c.imageUrl} alt={c.name} className="w-full aspect-[3/4] object-cover" /> : <div className="w-full aspect-[3/4] bg-purple-900/30" />}
@@ -6996,7 +7006,7 @@ function getBenchActiveStatus(
   }
 }
 
-function BenchDisplay({ side, bench, deckCount, quarantineCount, animKey, glowNames, activeNames, triggerNames, maxSlots = BENCH_MAX_SLOTS, onCardTap }: {
+function BenchDisplay({ side, bench, deckCount, quarantineCount, animKey, glowNames, activeNames, triggerNames, maxSlots = BENCH_MAX_SLOTS, onCardTap, rotateOpponent = false }: {
   side: 'player' | 'ai';
   bench: BenchSlotUI[];
   deckCount: number;
@@ -7010,6 +7020,8 @@ function BenchDisplay({ side, bench, deckCount, quarantineCount, animKey, glowNa
   triggerNames?: string[];
   maxSlots?: number;
   onCardTap?: (card: BattleCard) => void;
+  /** 二人対戦モード時のみ AI 側ベンチカードを180°回転（CPU戦では非回転） */
+  rotateOpponent?: boolean;
 }) {
   const glowSet    = glowNames    ? new Set(glowNames)    : null;
   const activeSet  = activeNames  ? new Set(activeNames)  : null;
@@ -7106,8 +7118,8 @@ function BenchDisplay({ side, bench, deckCount, quarantineCount, animKey, glowNa
                   border: `2px solid ${catInfo.color}77`,
                   minHeight: '54px',
                   cursor: isPlayer ? 'pointer' : 'default',
-                  // 相手ベンチカード画像を180°回転（ヘッダー・残数ラベル・空枠は非回転）
-                  transform: !isPlayer ? 'rotate(180deg)' : undefined,
+                  // 相手ベンチカード画像を180°回転（二人対戦時のみ。ヘッダー・残数ラベル・空枠は非回転）
+                  transform: !isPlayer && rotateOpponent ? 'rotate(180deg)' : undefined,
                 }}
                 title={isTrigger ? '⚡ 発動条件を満たしています' : isActive ? '✨ ベンチ効果が発動中' : undefined}
               >
