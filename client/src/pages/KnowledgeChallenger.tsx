@@ -3981,7 +3981,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
         // turn_banner 前) のごく短い時間だけ。攻撃側のカードバックは別ロジック。
         const renderDefenderSlot = () => {
           if (!defenderCard) {
-            return <CardBack side={defenderSide} />;
+            return <CardBack side={defenderSide} isOpponent={defenderSide === 'ai'} />;
           }
           const shatter = attackerWonSub;
           return (
@@ -3999,7 +3999,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                   {gameState.defenderBonus < 0 && <span className="kc-power-bounce" style={{ color: '#ef4444' }}> {gameState.defenderBonus}</span>}
                 </p>
               </div>
-              <CardDisplay card={defenderCard} size="battle" mode="defense" onTap={() => setDetailCard(defenderCard)} defBonus={gameState.defenderBonus} />
+              <CardDisplay card={defenderCard} size="battle" mode="defense" onTap={() => setDetailCard(defenderCard)} defBonus={gameState.defenderBonus} isOpponent={defenderSide === 'ai'} />
             </div>
           );
         };
@@ -4007,7 +4007,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
         const renderAttackerSlot = () => {
           if (!shouldShowAttackPile || attackCards.length === 0) {
             // Before any reveals, show the attacker's deck top as a card back.
-            return <CardBack side={attackerSide} />;
+            return <CardBack side={attackerSide} isOpponent={attackerSide === 'ai'} />;
           }
           // Staircase stack: each successive card offset right + up so edges are all visible.
           const lastCard = attackCards[attackCards.length - 1];
@@ -4042,7 +4042,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                       animationDelay: `${delay}s`,
                     }}
                   >
-                    <CardDisplay card={c} size="battle" mode="attack" onTap={() => setDetailCard(c)} />
+                    <CardDisplay card={c} size="battle" mode="attack" onTap={() => setDetailCard(c)} isOpponent={attackerSide === 'ai'} />
                   </div>
                 );
               })}
@@ -4056,7 +4056,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                   width: 'clamp(110px, 30vw, 180px)',
                   height: 'clamp(154px, 42vw, 250px)',
                 }}>
-                <CardDisplay card={lastCard} size="battle" mode="attack" onTap={() => setDetailCard(lastCard)} />
+                <CardDisplay card={lastCard} size="battle" mode="attack" onTap={() => setDetailCard(lastCard)} isOpponent={attackerSide === 'ai'} />
                 {/* Light ripple on reveal */}
                 <div key={`ripple-${attackCards.length}`} className="absolute inset-0 pointer-events-none z-[105]">
                   <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[180px] h-[180px] rounded-full"
@@ -4219,19 +4219,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
             >
               ⏭ スキップ
             </button>
-            {/* Exile zone indicator — always visible during battle
-                spec v7: 自/敵の除外数を色分けで常時表示。タップでモーダル展開。 */}
-            <button
-              onClick={() => setShowExile(true)}
-              className="text-[11px] font-black px-2.5 py-1.5 rounded-lg flex items-center gap-1"
-              style={{ background: 'rgba(168,85,247,0.22)', border: '1.5px solid rgba(168,85,247,0.55)' }}
-              title="除外ゾーン（タップで内容を確認）"
-            >
-              <span>🚫</span>
-              <span style={{ color: '#4ade80' }}>自{gameState.exile.player.length}</span>
-              <span style={{ color: 'rgba(168,85,247,0.5)' }}>/</span>
-              <span style={{ color: '#f87171' }}>敵{gameState.exile.ai.length}</span>
-            </button>
+            {/* spec v8 (kk): 右上の除外ボタンは削除。デッキ真上の ExilePoolStack で代替。 */}
           </div>
         )}
 
@@ -4303,31 +4291,13 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                 <div className="flex items-center gap-1">
                   {hudPill(p2Label, `🂠${p2DeckN}`, p2Color, deckCritical(p2DeckN) ? 'red' : deckDangerous(p2DeckN) ? 'yellow' : undefined)}
                   {hudPill('', `🎴${p2BenchN}/${aiBenchMax}`, p2Color, benchNearFull(p2BenchN, aiBenchMax) ? 'yellow' : undefined)}
-                  {/* 除外数（相手）— 右上ボタンが overflow した時の冗長表示 */}
-                  <button
-                    onClick={() => setShowExile(true)}
-                    className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-md active:scale-95 transition-transform"
-                    style={{ background: 'rgba(168,85,247,0.22)', border: '1px solid rgba(168,85,247,0.55)', fontSize: 9 }}
-                    aria-label="敵の除外ゾーン"
-                  >
-                    <span className="font-bold" style={{ color: '#c4b5fd' }}>🚫</span>
-                    <span className="font-black" style={{ color: '#f87171' }}>{gameState.exile.ai.length}</span>
-                  </button>
+                  {/* spec v8 (kk): 除外数の HUD pill は削除。デッキ真上の ExilePoolStack で代替。 */}
                 </div>
                 {/* P1 (self) row */}
                 <div className="flex items-center gap-1">
                   {hudPill(p1Label, `🂠${p1DeckN}`, p1Color, deckCritical(p1DeckN) ? 'red' : deckDangerous(p1DeckN) ? 'yellow' : undefined)}
                   {hudPill('', `🎴${p1BenchN}/${benchMax}`, p1Color, benchNearFull(p1BenchN, benchMax) ? 'yellow' : undefined)}
-                  {/* 除外数（自分）— タップでモーダル展開、バトル中常時表示 */}
-                  <button
-                    onClick={() => setShowExile(true)}
-                    className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-md active:scale-95 transition-transform"
-                    style={{ background: 'rgba(168,85,247,0.22)', border: '1px solid rgba(168,85,247,0.55)', fontSize: 9 }}
-                    aria-label="自分の除外ゾーン"
-                  >
-                    <span className="font-bold" style={{ color: '#c4b5fd' }}>🚫</span>
-                    <span className="font-black" style={{ color: '#4ade80' }}>{gameState.exile.player.length}</span>
-                  </button>
+                  {/* spec v8 (kk): 除外数の HUD pill は削除。デッキ真上の ExilePoolStack で代替。 */}
                 </div>
               </div>
               {/* Last-card big warning for whichever side is attacker */}
@@ -4634,12 +4604,19 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                     👆
                   </div>
                 )}
+                {/* 除外プール（相手側）— デッキ真上 */}
+                <ExilePoolStack
+                  count={gameState.exile.ai.length}
+                  isOpponent
+                  onTap={() => setShowExile(true)}
+                />
                 <MiniDeckStack
                   count={gameState.ai.deck.length}
                   color={aiColor}
                   interactive={aiDeckTappable}
                   glow={aiDeckTappable}
                   onTap={handleAdvance}
+                  isOpponent
                 />
               </div>
             );
@@ -4734,6 +4711,11 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                     ⚔️ {gameState.attackCurrentPower} / 🛡️ {defenderEffectiveDef}
                   </p>
                 )}
+                {/* 除外プール（自分側）— デッキ真上 */}
+                <ExilePoolStack
+                  count={gameState.exile.player.length}
+                  onTap={() => setShowExile(true)}
+                />
                 <div className="relative flex flex-col items-center">
                   {tappable && (
                     <div className="kc-tap-hint absolute -top-5 left-1/2 -translate-x-1/2 z-10" style={{ fontSize: '20px' }}>
@@ -5150,7 +5132,14 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                   <div className="grid grid-cols-4 gap-1.5">
                     {cards.map((c, i) => (
                       <div key={i} className="text-center" style={{ opacity: 0.5, filter: 'grayscale(0.7)' }}>
-                        <div className="rounded-md overflow-hidden" style={{ border: '1px solid rgba(168,85,247,0.3)' }}>
+                        {/* kk spec v8: 相手側（ai）のカード画像は180°回転で一貫性維持 */}
+                        <div
+                          className="rounded-md overflow-hidden"
+                          style={{
+                            border: '1px solid rgba(168,85,247,0.3)',
+                            transform: side === 'ai' ? 'rotate(180deg)' : undefined,
+                          }}
+                        >
                           {c.imageUrl ? <img src={c.imageUrl} alt={c.name} className="w-full aspect-[3/4] object-cover" /> : <div className="w-full aspect-[3/4] bg-purple-900/30" />}
                         </div>
                         <p className="text-[8px] text-purple-200/60 truncate mt-0.5">{c.name}</p>
@@ -6056,6 +6045,13 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
         }
         .kc-deck-stack { animation: kcDeckStackPulse 1.6s ease-in-out infinite; }
         .kc-deck-stack:active { animation: none; }
+        /* ExilePoolStack: 残数 >= 1 でタップ可能を示す薄いパルス */
+        @keyframes kcExileGlow {
+          0%, 100% { filter: brightness(1); }
+          50%      { filter: brightness(1.18); }
+        }
+        .kc-exile-glow { animation: kcExileGlow 2.2s ease-in-out infinite; }
+        .kc-exile-glow:active { animation: none; }
         @keyframes kcCountBump {
           0%   { transform: scale(1); }
           40%  { transform: scale(1.5); background: #ff6b6b !important; }
@@ -7102,7 +7098,14 @@ function BenchDisplay({ side, bench, deckCount, quarantineCount, animKey, glowNa
                 key={slotKey}
                 onClick={() => onCardTap ? onCardTap(slot.card) : (isPlayer && setDetailSlot(slot))}
                 className={`flex-1 rounded-lg relative overflow-hidden transition-all active:scale-95 ${isNew ? 'kc-bench-pop' : ''} ${isGlowing ? 'kc-bench-glow' : ''} ${isTrigger ? 'kc-bench-trigger-ready' : isActive ? 'kc-bench-active' : ''}`}
-                style={{ background: `${catInfo.color}1a`, border: `2px solid ${catInfo.color}77`, minHeight: '54px', cursor: isPlayer ? 'pointer' : 'default' }}
+                style={{
+                  background: `${catInfo.color}1a`,
+                  border: `2px solid ${catInfo.color}77`,
+                  minHeight: '54px',
+                  cursor: isPlayer ? 'pointer' : 'default',
+                  // 相手ベンチカード画像を180°回転（ヘッダー・残数ラベル・空枠は非回転）
+                  transform: !isPlayer ? 'rotate(180deg)' : undefined,
+                }}
                 title={isTrigger ? '⚡ 発動条件を満たしています' : isActive ? '✨ ベンチ効果が発動中' : undefined}
               >
                 {slot.card.imageUrl ? (
@@ -7276,7 +7279,7 @@ function CardDetailModal({ card, onClose }: { card: BattleCard; onClose: () => v
  *  - mode='defense'  : 🛡️ glows blue, ⚔️ greyed out
  *  - mode='neutral'  : both at normal brightness
  */
-function CardDisplay({ card, isDefense, isWinner, size, mode, onTap, atkBonus = 0, defBonus = 0 }: {
+function CardDisplay({ card, isDefense, isWinner, size, mode, onTap, atkBonus = 0, defBonus = 0, isOpponent = false }: {
   card: BattleCard;
   isDefense?: boolean;
   isWinner?: boolean;
@@ -7285,6 +7288,8 @@ function CardDisplay({ card, isDefense, isWinner, size, mode, onTap, atkBonus = 
   onTap?: () => void;
   atkBonus?: number;
   defBonus?: number;
+  /** 相手側（AI）のカードとして描画する場合 true。カード全体を180°回転。 */
+  isOpponent?: boolean;
 }) {
   const catInfo = CATEGORY_INFO[card.category];
   const [imgLoaded, setImgLoaded] = useState(false);
@@ -7325,6 +7330,8 @@ function CardDisplay({ card, isDefense, isWinner, size, mode, onTap, atkBonus = 
           : card.rarity === 'SR' ? '0 0 8px rgba(255,215,0,0.3), 0 6px 20px rgba(0,0,0,0.5)'
           : '0 6px 20px rgba(0,0,0,0.5)',
         width: `${w}px`, height: `${h}px`,
+        // kk 指示: 相手側カードは全体を180°回転（カード画像・名前・ATK/DEF 全て含む）
+        transform: isOpponent ? 'rotate(180deg)' : undefined,
       }}
     >
       {/* Loading placeholder */}
@@ -7432,12 +7439,15 @@ function MiniDeckStack({
   interactive = false,
   glow = false,
   onTap,
+  isOpponent = false,
 }: {
   count: number;
   color: string;
   interactive?: boolean;
   glow?: boolean;
   onTap?: () => void;
+  /** 相手側デッキは180°回転（残数バッジも一緒に回転して左下に表示される） */
+  isOpponent?: boolean;
 }) {
   const isMobileDeck = typeof window !== 'undefined' && window.innerWidth < 480;
   const W = isMobileDeck ? 50 : 70;
@@ -7457,6 +7467,7 @@ function MiniDeckStack({
         padding: 0,
         cursor: interactive && count > 0 ? 'pointer' : 'default',
         opacity: count === 0 ? 0.35 : 1,
+        transform: isOpponent ? 'rotate(180deg)' : undefined,
       }}
       aria-label={interactive ? 'デッキをタップしてカードを出す' : 'デッキ'}
     >
@@ -7509,7 +7520,7 @@ function MiniDeckStack({
   );
 }
 
-function CardBack({ side }: { side: 'player' | 'ai' }) {
+function CardBack({ side, isOpponent = false }: { side: 'player' | 'ai'; isOpponent?: boolean }) {
   const isPlayer = side === 'player';
   const color = isPlayer ? '#22c55e' : '#ef4444';
   return (
@@ -7521,6 +7532,7 @@ function CardBack({ side }: { side: 'player' | 'ai' }) {
         border: `3px solid ${color}aa`,
         boxShadow: `0 6px 20px rgba(0,0,0,0.6), 0 0 22px ${color}55`,
         background: 'rgba(14,20,45,0.95)',
+        transform: isOpponent ? 'rotate(180deg)' : undefined,
       }}
     >
       <img
@@ -7536,6 +7548,93 @@ function CardBack({ side }: { side: 'player' | 'ai' }) {
         {isPlayer ? 'あなた' : '相手'}
       </div>
     </div>
+  );
+}
+
+/**
+ * ExilePoolStack — MiniDeckStack と同等サイズの除外プール表示枠。
+ *
+ * - 枠色: 自=緑結界 / 敵=赤結界
+ * - 中央に残数（大）、上部に小さく "除外" ラベル
+ * - 残数 >= 1 で薄い glow（タップ可能示唆）
+ * - 相手側は180°回転（ラベル・数字含めた一体感）
+ * - タップで既存 setShowExile(true) を呼ぶ
+ */
+function ExilePoolStack({
+  count,
+  isOpponent = false,
+  onTap,
+}: {
+  count: number;
+  isOpponent?: boolean;
+  onTap?: () => void;
+}) {
+  const isMobileDeck = typeof window !== 'undefined' && window.innerWidth < 480;
+  const W = isMobileDeck ? 50 : 70;
+  const H = isMobileDeck ? 70 : 100;
+  const color = isOpponent ? '#ef4444' : '#22c55e';
+  const glowColor = isOpponent ? 'rgba(239,68,68,0.55)' : 'rgba(34,197,94,0.55)';
+  const hasContents = count > 0;
+
+  return (
+    <button
+      onClick={hasContents && onTap ? onTap : undefined}
+      disabled={!hasContents}
+      className={`relative ${hasContents ? 'active:scale-95 kc-exile-glow' : ''} transition-transform`}
+      style={{
+        width: W + 6,
+        height: H + 6,
+        background: 'transparent',
+        border: 'none',
+        padding: 0,
+        cursor: hasContents ? 'pointer' : 'default',
+        opacity: hasContents ? 1 : 0.35,
+        transform: isOpponent ? 'rotate(180deg)' : undefined,
+      }}
+      aria-label={`${isOpponent ? '相手' : '自分'}の除外プール ${count}枚${hasContents ? ' — タップで内容を確認' : ''}`}
+    >
+      <div
+        className="absolute rounded-md flex flex-col items-center justify-center"
+        style={{
+          top: 3,
+          left: 3,
+          width: W,
+          height: H,
+          border: `2.5px solid ${color}cc`,
+          background: `linear-gradient(160deg, rgba(14,20,45,0.9), rgba(30,10,10,0.85))`,
+          boxShadow: hasContents
+            ? `0 4px 12px rgba(0,0,0,0.55), 0 0 14px ${glowColor}, inset 0 0 10px ${glowColor}`
+            : '0 3px 8px rgba(0,0,0,0.4)',
+        }}
+      >
+        <span
+          className="font-black tracking-widest"
+          style={{
+            fontSize: isMobileDeck ? '9px' : '11px',
+            color: `${color}`,
+            textShadow: `0 0 6px ${glowColor}, 0 1px 2px rgba(0,0,0,0.9)`,
+            letterSpacing: '2px',
+            marginTop: '2px',
+          }}
+        >
+          除外
+        </span>
+        <span
+          className="font-black"
+          style={{
+            fontSize: isMobileDeck ? '28px' : '38px',
+            color: hasContents ? '#ffffff' : '#555',
+            textShadow: hasContents
+              ? `0 0 12px ${glowColor}, 0 2px 4px rgba(0,0,0,0.95)`
+              : '0 1px 2px rgba(0,0,0,0.8)',
+            lineHeight: 1,
+            marginTop: '-2px',
+          }}
+        >
+          {count}
+        </span>
+      </div>
+    </button>
   );
 }
 
