@@ -29,6 +29,16 @@ export interface GameResult {
   timeSeconds: number;
   accuracy?: number;
   isBestScore?: boolean;
+  /**
+   * 画面上の score ラベル（kk 2026-04-19）。
+   * KC（カードバトル）では '獲得ファン'、他ゲームは未設定で既定の 'PT'。
+   */
+  label?: string;
+  /**
+   * true の時、ResultPage は addTotalAlt() をスキップする（既に配布済み）。
+   * KC の「受け取る」ボタン経由で ALT を加算したケースで立てる。
+   */
+  altAlreadyGranted?: boolean;
   metadata?: Record<string, unknown>;
 }
 

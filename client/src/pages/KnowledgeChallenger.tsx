@@ -74,6 +74,7 @@ import { saveHallOfFame } from '@/lib/hallOfFameService';
 import { saveBattleHistory, savePvPBattleHistory, starterIdToDeckKey } from '@/lib/battleHistoryService';
 import { toast } from 'sonner';
 import { loadEquippedBg, getBg } from '@/lib/backgrounds';
+import { fansToAlt } from '@/lib/fanAltRate';
 
 type ScreenPhase = 'title' | 'deck_select' | 'playing' | 'result';
 
@@ -492,6 +493,9 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
   })();
   const [screen, setScreen] = useState<ScreenPhase>(initialScreen);
   const [gameState, setGameState] = useState<GameState | null>(null);
+  // kk 2026-04-19: リザルト画面「ALT X 受け取る」ボタンの二重タップ防止。
+  // 'result' 画面を離れる／新しい gameState が入った時に false に戻す（下の effect）。
+  const [altClaimed, setAltClaimed] = useState(false);
   // HUD 表示用のカウントアップ（ファン加算時になめらかに数値が増える）
   const displayPlayerFans = useCountUpValue(gameState?.playerFans ?? 0);
   const displayAiFans     = useCountUpValue(gameState?.aiFans ?? 0);
@@ -1134,6 +1138,11 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
       setSelectedAnswer(null);
     }
   }, [gameState?.phase]);
+
+  // kk 2026-04-19: altClaimed をリザルト画面から離れる度にリセット（次戦のために初期化）
+  useEffect(() => {
+    if (screen !== 'result') setAltClaimed(false);
+  }, [screen]);
 
   // ===== Deck phase setup (fires at the start of each round) =====
   // 各ラウンド開始時にデッキフェイズ: 6枚提示→最大2枚取得でバトルへ（3回戦仕様、kk 2026-04-19）。
@@ -2705,7 +2714,14 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
         toast.info(`🔵 ${p2.childName} レート ${fmt(res.p2.delta)} (${res.p2.newRating})`);
       });
       const winnerName = p1Won ? p1.childName : p2.childName;
-      setLastResult({ score: 100, maxScore: 100, timeSeconds: 0, accuracy: 1, isBestScore: false });
+      setLastResult({
+        score: gameState.playerFans,
+        maxScore: Math.max(gameState.playerFans, gameState.aiFans, 100),
+        timeSeconds: 0,
+        accuracy: 1,
+        isBestScore: false,
+        label: '獲得ファン',
+      });
       toast.success(`🏆 勝者: ${winnerName}`);
 
       // battle_history に対人戦として2件記録（管理者/モニターは service 側でスキップ）
@@ -2789,7 +2805,14 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
 
     addTotalAlt(altReward);
     triggerEarnEffect(altReward);
-    setLastResult({ score: won ? 100 : 30, maxScore: 100, timeSeconds: 0, accuracy: won ? 1 : 0.3, isBestScore: won });
+    setLastResult({
+      score: gameState.playerFans,
+      maxScore: Math.max(gameState.playerFans, gameState.aiFans, 100),
+      timeSeconds: 0,
+      accuracy: won ? 1 : 0.3,
+      isBestScore: won,
+      label: '獲得ファン',
+    });
 
     // battle_history に保存（PvP / 管理者 / モニター / ゲスト はサービス内でスキップ）
     if (activeDeckKeyRef.current !== null) {
@@ -3587,17 +3610,52 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
               {gameState.message}
             </p>
           </div>
-          {!isPvP && (
-          <div
-            className="rounded-lg px-3 py-2 mb-4 mx-auto kc-reward-pop"
-            style={{ background: 'rgba(255,215,0,0.1)', border: '1px solid rgba(255,215,0,0.3)' }}
-          >
-            <p className="text-[10px] text-amber-200/70">獲得ALT</p>
-            <p className="text-2xl font-black" style={{ color: '#ffd700', textShadow: '0 0 10px rgba(255,215,0,0.6)' }}>
-              +{rewardAlt}
-            </p>
-          </div>
-          )}
+          {!isPvP && (() => {
+            // kk 2026-04-19: 獲得ファンに応じた ALT を「受け取る」ボタンでのみ加算（二重防止）。
+            const altToGrant = fansToAlt(gameState.playerFans);
+            return (
+              <div className="mb-4 mx-auto flex flex-col items-center gap-1.5">
+                <p className="text-[10px] text-amber-200/60">獲得ファン ⭐{gameState.playerFans}</p>
+                {altClaimed ? (
+                  <div
+                    className="rounded-lg px-4 py-2 kc-reward-pop flex items-center gap-2"
+                    style={{
+                      background: 'rgba(34,197,94,0.15)',
+                      border: '1.5px solid rgba(34,197,94,0.5)',
+                      boxShadow: '0 0 10px rgba(34,197,94,0.2)',
+                    }}
+                  >
+                    <span className="text-lg">✅</span>
+                    <span className="text-sm font-black" style={{ color: '#4ade80' }}>受け取り済</span>
+                    <span className="text-base font-black" style={{ color: '#ffd700' }}>ALT {altToGrant}</span>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => {
+                      if (altClaimed || altToGrant <= 0) return;
+                      addTotalAlt(altToGrant);
+                      triggerEarnEffect(altToGrant);
+                      setAltClaimed(true);
+                    }}
+                    disabled={altToGrant <= 0}
+                    className="rounded-lg px-5 py-2.5 transition-all active:scale-95 kc-reward-pop"
+                    style={{
+                      background: altToGrant > 0
+                        ? 'linear-gradient(135deg, rgba(255,215,0,0.25), rgba(240,165,0,0.2))'
+                        : 'rgba(255,255,255,0.05)',
+                      border: `2px solid ${altToGrant > 0 ? 'rgba(255,215,0,0.7)' : 'rgba(255,255,255,0.15)'}`,
+                      boxShadow: altToGrant > 0 ? '0 0 14px rgba(255,215,0,0.35)' : 'none',
+                      cursor: altToGrant > 0 ? 'pointer' : 'not-allowed',
+                    }}
+                  >
+                    <span className="text-lg font-black" style={{ color: '#ffd700', textShadow: '0 0 8px rgba(255,215,0,0.6)' }}>
+                      ALT {altToGrant} 受け取る
+                    </span>
+                  </button>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Stage clear reward */}
           {won && currentStage && (
