@@ -714,7 +714,12 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
         // ----- ベンチ or 除外 いずれかに対象が必要 -----
         case 'pink_dolphin':    return (benchHas('大蛇の巫師') || exileHas('大蛇の巫師')) ? null : 'ベンチ/除外に大蛇の巫師が必要';
         // ----- デッキ参照系（サーチ系） -----
-        case 'imperial_decree': return (deckHas('紙') || deckHas('焚書坑儒')) ? null : 'デッキに紙・焚書坑儒がいません';
+        case 'imperial_decree': {
+          // 始皇帝の勅令: 紙はいつでも。焚書坑儒はベンチに始皇帝がいる時のみ
+          if (deckHas('紙')) return null;
+          if (benchHas('始皇帝') && deckHas('焚書坑儒')) return null;
+          return benchHas('始皇帝') ? 'デッキに紙・焚書坑儒がいません' : 'デッキに紙がいません（焚書坑儒はベンチに始皇帝が必要）';
+        }
         case 'banner':
         case 'holy_banner':     return deckHas('ジャンヌ・ダルク')     ? null : 'デッキにジャンヌ・ダルクがいません';
         // ----- ベンチ集計系（0 枚なら不発） -----
@@ -1759,21 +1764,27 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
           //     の処理を自動発動する。以前ここにあった「ベンチの秦の兵士を選ぶ」
           //     ロジックは spec v6 以前の仕様で、v7 では bench から拾うと誤動作。
 
-          // ===== 始皇帝の勅令: デッキの紙または焚書坑儒を選んでデッキトップへ =====
+          // ===== 始皇帝の勅令: デッキの紙をデッキトップへ（ベンチに始皇帝がいれば焚書坑儒も選択可能） =====
           if (canShowChoice) {
             const lastRevealed = rs.attackRevealed[rs.attackRevealed.length - 1];
             if (lastRevealed?.effect?.id === 'imperial_decree') {
               const gs = gameStateRef.current ?? rs;
+              const sealedNames = gs.sealedBenchNames[mySide];
+              const hasEmperor = gs[mySide].bench.some((b) => b.name === '始皇帝' && !sealedNames.includes(b.name));
               const hasPaper = gs[mySide].deck.some((c) => c.name === '紙');
               const hasBurn = gs[mySide].deck.some((c) => c.name === '焚書坑儒');
-              if (hasPaper || hasBurn) {
-                // 候補カードを構築: 紙（代表1枚）と焚書坑儒
+              const canPickBurn = hasEmperor && hasBurn;
+              if (hasPaper || canPickBurn) {
+                // 候補カードを構築: 紙（代表1枚）、焚書坑儒（ベンチに始皇帝がいる時のみ）
                 const candidates: typeof rs.attackRevealed = [];
                 const paperCard = gs[mySide].deck.find((c) => c.name === '紙');
-                const burnCard = gs[mySide].deck.find((c) => c.name === '焚書坑儒');
+                const burnCard = canPickBurn ? gs[mySide].deck.find((c) => c.name === '焚書坑儒') : undefined;
                 if (paperCard) candidates.push(paperCard);
                 if (burnCard) candidates.push(burnCard);
-                const chosen = await waitCardSelect('📜 デッキトップに置くカードを選んでください', candidates);
+                const promptText = canPickBurn
+                  ? '📜 デッキトップに置くカードを選んでください'
+                  : '📜 デッキトップに置くカードを選んでください（焚書坑儒はベンチに始皇帝が必要）';
+                const chosen = await waitCardSelect(promptText, candidates);
                 if (chosen && !unmountedRef.current) {
                   setGameState((prev) => {
                     if (!prev) return prev;

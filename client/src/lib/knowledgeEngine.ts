@@ -1956,20 +1956,25 @@ export function applyRevealEffect(
       break;
     }
     case 'imperial_decree': {
-      // 始皇帝の勅令: デッキの紙または焚書坑儒を選んでデッキトップに配置（任意発動）
+      // 始皇帝の勅令: デッキの紙をデッキトップに配置（任意発動）
+      // ベンチに始皇帝がいる場合のみ、焚書坑儒も選択可能（spec: 始皇帝 gate）
       const my = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      const hasEmperor = my.bench.some((b) => b.name === '始皇帝' && !sealed.includes(b.name));
       const hasPaper = my.deck.some((c) => c.name === '紙');
       const hasBurn = my.deck.some((c) => c.name === '焚書坑儒');
-      if ((hasPaper || hasBurn) && side === 'ai') {
-        // AI: 焚書坑儒を優先、なければ紙をデッキトップへ
-        const targetName = hasBurn ? '焚書坑儒' : '紙';
+      const canPickBurn = hasEmperor && hasBurn;
+      if ((hasPaper || canPickBurn) && side === 'ai') {
+        // AI: 始皇帝がベンチにいれば焚書坑儒を優先、なければ紙をデッキトップへ
+        const targetName = canPickBurn ? '焚書坑儒' : '紙';
         let newDeck = [...my.deck];
         const idx = newDeck.findIndex((c) => c.name === targetName);
         const [card] = newDeck.splice(idx, 1);
         newDeck.unshift(card);
         next = applySide(next, side, { ...my, deck: newDeck });
+        if (canPickBurn) next = withBenchGlow(next, side, ['始皇帝']);
         telop = { text: `📜 天子の命！${targetName}をデッキトップへ！`, color: '#ffd700' };
-      } else if (hasPaper || hasBurn) {
+      } else if (hasPaper || canPickBurn) {
         // Player: UI側で waitCardSelect 処理
         telop = { text: '📜 天子の命！サーチ中...', color: '#ffd700' };
       } else {

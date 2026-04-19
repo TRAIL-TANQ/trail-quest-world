@@ -185,7 +185,7 @@ export const EFFECT_DEFS: Record<string, CardEffect> = {
   pink_dolphin:     { id: 'pink_dolphin',     name: '聖なる回帰',       description: '公開時（任意発動）、ベンチまたは除外の大蛇の巫師1枚をデッキトップに戻す。', category: 'bench' },
   arc_de_triomphe:  { id: 'arc_de_triomphe',  name: '凱旋の門',         description: 'From the bench: ナポレオンがカードを撃破した時、追加で+2ファン獲得。', category: 'special' },
   qin_soldier:      { id: 'qin_soldier',      name: '皇帝の尖兵',       description: '防御時、ベンチに万里の長城があれば防御+2。', category: 'def' },
-  imperial_decree:  { id: 'imperial_decree',  name: '天子の命',         description: '公開時（任意発動）: デッキの紙または焚書坑儒を選んでデッキトップに配置。', category: 'bench' },
+  imperial_decree:  { id: 'imperial_decree',  name: '天子の命',         description: '公開時（任意発動）: デッキの紙をデッキトップに配置。ベンチに始皇帝がいれば焚書坑儒も選択可能。', category: 'bench' },
   // ===== ジャンヌダルクデッキ =====
   prayer_light:     { id: 'prayer_light',     name: '聖なる祈り',       description: '公開時、除外されたジャンヌ・ダルクを聖女ジャンヌとしてデッキの一番上に置く（任意発動）。', category: 'bench' },
   // lily_shield: 白百合の盾はバニラカード（効果なし）。ジャンヌのベンチ条件として参照のみ。
