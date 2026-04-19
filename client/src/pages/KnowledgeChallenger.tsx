@@ -498,6 +498,9 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
   // commit 3 のパーティクル飛翔の到達点として HUD ファン表示位置を保存
   const playerFanAnchorRef = useRef<HTMLDivElement | null>(null);
   const aiFanAnchorRef     = useRef<HTMLDivElement | null>(null);
+  // kk 2026-04-19: CPU戦では「自分の攻撃で獲得したファンは画面下方向（自分の手元）に飛ぶ」べき。
+  // 画面下部 player 側に配置する self anchor。PvP は対面 UI の都合で TOP HUD を維持。
+  const selfFanAnchorRef = useRef<HTMLDivElement | null>(null);
   // ファン獲得時に飛翔する +N バッジ。sub-battle 解決時に spawn。
   type FanFlight = {
     id: number;
@@ -1027,22 +1030,21 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
     lastFanFlightIdxRef.current = sb.idx;
 
     const attackerSide = sb.attackerSide;
-    // kk 2026-04-19 バグ調査用: ref が差し替わるケースを除外するため、ref と
-    // `data-fan-anchor` DOM 属性の両方から取得して一致を検証する。
-    const refAnchor = attackerSide === 'player' ? playerFanAnchorRef.current : aiFanAnchorRef.current;
-    const domAnchor = document.querySelector<HTMLDivElement>(`[data-fan-anchor="${attackerSide}"]`);
-    const targetAnchor = domAnchor ?? refAnchor;
+    // kk 2026-04-19: CPU戦で自分が attacker の時は画面下部 self anchor を優先して、
+    // ファンバッジが「自分の手元（画面下方向）」に飛ぶようにする。AI attacker や PvP は
+    // 既存の TOP HUD anchor を使う（PvP は対面 UI のため両プレイヤーに見える位置が必要）。
+    const useSelfAnchor = !isPvP && attackerSide === 'player' && selfFanAnchorRef.current;
+    const targetAnchor: HTMLDivElement | null = useSelfAnchor
+      ? selfFanAnchorRef.current
+      : (attackerSide === 'player' ? playerFanAnchorRef.current : aiFanAnchorRef.current);
     if (!targetAnchor) {
       console.warn(`[FanFlight] no anchor found for attackerSide=${attackerSide}`);
       return;
     }
-    if (refAnchor && domAnchor && refAnchor !== domAnchor) {
-      console.error(`[FanFlight] ANCHOR MISMATCH: ref=${refAnchor.getAttribute('data-fan-anchor')} dom=${domAnchor.getAttribute('data-fan-anchor')} — using DOM`);
-    }
     const tRect = targetAnchor.getBoundingClientRect();
     const targetX = tRect.left + tRect.width / 2;
     const targetY = tRect.top + tRect.height / 2;
-    console.log(`[FanFlight] sub-battle idx=${sb.idx} winner=${sb.winner} attackerSide=${attackerSide} defenderSide=${sb.defenderSide} → anchor="${targetAnchor.getAttribute('data-fan-anchor')}" (x=${Math.round(targetX)}, y=${Math.round(targetY)})`);
+    console.log(`[FanFlight] sub-battle idx=${sb.idx} winner=${sb.winner} attackerSide=${attackerSide} → ${useSelfAnchor ? 'self (bottom)' : `top anchor="${targetAnchor.getAttribute('data-fan-anchor')}"`} (x=${Math.round(targetX)}, y=${Math.round(targetY)})`);
 
     // attacker role のインデックスを振り分けるためのカウンタ
     let attackerI = 0;
@@ -4718,6 +4720,27 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
              The deck stack is tappable while the player is the attacker
              and the loop is waiting on a manual reveal. */}
         <div className="flex-1 flex items-center justify-center gap-4 relative px-4">
+          {/* kk 2026-04-19: 自分が攻撃で獲得した +N ファンの着地点（画面下方向）。
+              TOP HUD のミラー表示だが、CPU戦では FanFlight の target はこちらを優先。 */}
+          {!isPvP && (
+            <div
+              ref={selfFanAnchorRef}
+              data-fan-anchor-self="true"
+              className="absolute top-1 left-2 flex items-center gap-1 px-2 py-1 rounded-lg pointer-events-none"
+              style={{
+                background: 'rgba(34,197,94,0.18)',
+                border: '1.5px solid rgba(34,197,94,0.55)',
+                boxShadow: '0 0 10px rgba(255,215,0,0.2)',
+                zIndex: 5,
+              }}
+              aria-hidden="true"
+            >
+              <span className="text-[9px] font-bold text-green-200/80">あなた</span>
+              <span key={`self-fan-${gameState.playerFans}`} className="text-sm font-black kc-power-bounce" style={{ color: '#ffd700', textShadow: '0 0 6px rgba(255,215,0,0.5)' }}>
+                ⭐{displayPlayerFans}
+              </span>
+            </div>
+          )}
           {(() => {
             const playerIsAttacker = gameState.flagHolder === 'ai';
             const tappable = playerIsAttacker && waitingForPlayerReveal && cineStep === 'attack_reveal';
