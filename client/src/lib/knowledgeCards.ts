@@ -128,7 +128,7 @@ export const EFFECT_DEFS: Record<string, CardEffect> = {
   starry_night:    { id: 'starry_night',    name: '星月夜の光',       description: 'From the bench: ゴッホの防御+2。', category: 'def' },
   cypress:         { id: 'cypress',         name: '天へ伸びる糸杉',   description: 'From the bench: ゴッホが場を離れる時、ベンチではなく隔離へ。', category: 'special' },
   gogh:            { id: 'gogh',            name: '炎の画家',         description: 'ベンチのひまわり・星月夜・糸杉の種類数で段階強化。3種で相手ベンチ効果無効。', category: 'special' },
-  banner:          { id: 'banner',          name: '進軍の号令',       description: '公開時（任意発動）: デッキのジャンヌ・ダルクをデッキトップに置く。', category: 'bench' },
+  banner:          { id: 'banner',          name: '進軍の号令',       description: '公開時（任意発動）: デッキの聖剣または白百合の盾をデッキトップに置く。', category: 'bench' },
   jeanne:          { id: 'jeanne',          name: 'オルレアンの乙女', description: '攻撃時ベンチに聖剣→攻撃+2、防御時ベンチに白百合の盾→防御+2。公開時（自動）、ベンチに火刑があればデッキのランダム位置に戻す。', category: 'special' },
   versailles:      { id: 'versailles',      name: '豪奢なる宮殿',     description: 'From the bench: マリー・アントワネットの防御+4。', category: 'def' },
   cake:            { id: 'cake',            name: '王妃のお菓子',     description: 'From the bench: マリーの攻撃+3。マリーが場を離れる時、相手デッキ上2枚を隔離。', category: 'atk' },

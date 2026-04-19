@@ -1517,20 +1517,34 @@ export function applyRevealEffect(
       break;
     }
     case 'banner': {
-      // 軍旗: 公開時（任意発動）、デッキのジャンヌ・ダルクをデッキトップに置く
+      // 軍旗 (kk spec 2026-04-20): 装備品サーチに変更。
+      //   公開時（任意発動）、デッキの 聖剣 または 白百合の盾 をデッキトップに置く。
+      //   - 両方デッキにある場合: プレイヤーは UI 側 waitCardSelect で 2 択、AI は 聖剣 優先
+      //   - 片方のみの場合: 自動でそれをデッキトップへ（side 問わず engine で完結）
       const my = side === 'player' ? next.player : next.ai;
-      const jeanneIdx = my.deck.findIndex((c) => c.name === 'ジャンヌ・ダルク');
-      if (jeanneIdx >= 0) {
-        if (side === 'ai') {
-          const jeanneCard = my.deck[jeanneIdx];
-          const newDeck = [jeanneCard, ...my.deck.slice(0, jeanneIdx), ...my.deck.slice(jeanneIdx + 1)];
-          next = applySide(next, side, { ...my, deck: newDeck });
-          telop = { text: '🚩進軍の号令！ジャンヌをデッキトップへ！', color: '#ffd700' };
-        } else {
-          telop = { text: '🚩進軍の号令！ジャンヌをサーチ中...', color: '#ffd700' };
-        }
+      const swordIdx = my.deck.findIndex((c) => c.name === '聖剣');
+      const shieldIdx = my.deck.findIndex((c) => c.name === '白百合の盾');
+      const hasSword = swordIdx >= 0;
+      const hasShield = shieldIdx >= 0;
+      const moveToTop = (targetName: string, targetIdx: number) => {
+        const card = my.deck[targetIdx];
+        const newDeck = [card, ...my.deck.slice(0, targetIdx), ...my.deck.slice(targetIdx + 1)];
+        next = applySide(next, side, { ...my, deck: newDeck });
+        telop = { text: `🚩進軍の号令！${targetName}をデッキトップへ！`, color: '#ffd700' };
+      };
+      if (!hasSword && !hasShield) {
+        telop = { text: '🚩軍旗（デッキに聖剣・白百合の盾がいません）', color };
+      } else if (side === 'ai') {
+        // AI: 聖剣優先、なければ 白百合の盾
+        if (hasSword) moveToTop('聖剣', swordIdx);
+        else moveToTop('白百合の盾', shieldIdx);
+      } else if (hasSword && !hasShield) {
+        moveToTop('聖剣', swordIdx);
+      } else if (!hasSword && hasShield) {
+        moveToTop('白百合の盾', shieldIdx);
       } else {
-        telop = { text: '🚩軍旗（デッキにジャンヌがいません）', color };
+        // Player + 両方デッキにある → UI 側の waitCardSelect で 2 択処理
+        telop = { text: '🚩進軍の号令！装備を選択中...', color: '#ffd700' };
       }
       break;
     }
@@ -2585,7 +2599,7 @@ function computeAttackerAura(
   const { names, sunflower } = unsealedBenchNames(state, attackerSide);
   let bonus = 0;
   const details: BenchBoostDetail[] = [];
-  // 軍旗: ベンチオーラ廃止（公開時任意発動→ジャンヌサーチに変更）
+  // 軍旗: ベンチオーラ廃止。公開時に聖剣/白百合の盾をデッキトップへ置く効果に変更
   // アマゾン川: no longer a bench aura (changed to on-reveal deck search)
   if (sunflower >= 2) { bonus += 1; details.push({ benchCardName: 'ひまわり', atkBonus: 1, defBonus: 0 }); }
   // Opponent 万里の長城: 各サブバトルで最初の攻撃カードの攻撃-1（最低1）

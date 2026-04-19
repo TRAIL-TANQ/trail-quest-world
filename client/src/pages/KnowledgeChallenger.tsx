@@ -723,7 +723,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
           if (benchHas('始皇帝') && deckHas('焚書坑儒')) return null;
           return benchHas('始皇帝') ? 'デッキに紙・焚書坑儒がいません' : 'デッキに紙がいません（焚書坑儒はベンチに始皇帝が必要）';
         }
-        case 'banner':
+        case 'banner':          return (deckHas('聖剣') || deckHas('白百合の盾')) ? null : 'デッキに聖剣・白百合の盾がいません';
         case 'holy_banner':     return deckHas('ジャンヌ・ダルク')     ? null : 'デッキにジャンヌ・ダルクがいません';
         // ----- ベンチ集計系（0 枚なら不発） -----
         case 'book_burning': {
@@ -1755,27 +1755,40 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
             }
           }
 
-          // ===== 軍旗: デッキ内のジャンヌ・ダルクをデッキトップに移動 =====
+          // ===== 軍旗 (kk spec 2026-04-20): 聖剣/白百合の盾 をデッキトップへ =====
+          //   engine 側で「片方しかない場合」「AI」は既に処理済。
+          //   ここで扱うのは「Player かつ 両方デッキにある」の 2 択のみ。
           if (canShowChoice) {
             const lastRevealed = rs.attackRevealed[rs.attackRevealed.length - 1];
             if (lastRevealed?.effect?.id === 'banner') {
               const gs = gameStateRef.current ?? rs;
-              const jeanneInDeck = gs[mySide].deck.filter((c) => c.name === 'ジャンヌ・ダルク');
-              if (jeanneInDeck.length > 0) {
-                // Auto-apply: move first Jeanne to deck top (no selection needed)
-                setGameState((prev) => {
-                  if (!prev) return prev;
-                  const idx = prev[mySide].deck.findIndex((c) => c.name === 'ジャンヌ・ダルク');
-                  if (idx < 0) return prev;
-                  const jeanneCard = prev[mySide].deck[idx];
-                  const newDeck = [jeanneCard, ...prev[mySide].deck.slice(0, idx), ...prev[mySide].deck.slice(idx + 1)];
-                  return {
-                    ...prev,
-                    [mySide]: { ...prev[mySide], deck: newDeck },
-                    effectTelop: { text: '🚩 進軍の号令！ジャンヌ・ダルクをデッキトップへ！', color: '#ffd700', key: Date.now() },
-                  };
-                });
+              const hasSword = gs[mySide].deck.some((c) => c.name === '聖剣');
+              const hasShield = gs[mySide].deck.some((c) => c.name === '白百合の盾');
+              if (hasSword && hasShield) {
+                const candidates: typeof rs.attackRevealed = [];
+                const swordCard = gs[mySide].deck.find((c) => c.name === '聖剣');
+                const shieldCard = gs[mySide].deck.find((c) => c.name === '白百合の盾');
+                if (swordCard) candidates.push(swordCard);
+                if (shieldCard) candidates.push(shieldCard);
+                const chosen = await waitCardSelect('🚩 デッキトップに置く装備を選んでください', candidates);
+                if (chosen && !unmountedRef.current) {
+                  setGameState((prev) => {
+                    if (!prev) return prev;
+                    let newDeck = [...prev[mySide].deck];
+                    const idx = newDeck.findIndex((c) => c.name === chosen.name);
+                    if (idx >= 0) {
+                      const [card] = newDeck.splice(idx, 1);
+                      newDeck.unshift(card);
+                    }
+                    return {
+                      ...prev,
+                      [mySide]: { ...prev[mySide], deck: newDeck },
+                      effectTelop: { text: `🚩 進軍の号令！${chosen.name}をデッキトップへ！`, color: '#ffd700', key: Date.now() },
+                    };
+                  });
+                }
               }
+              // 片方のみ / 対象なしのケースは engine 側で既にテロップ + state を確定済。
             }
           }
 
