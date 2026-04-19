@@ -203,6 +203,20 @@ export const EFFECT_DEFS: Record<string, CardEffect> = {
   pack_law:         { id: 'pack_law',         name: '群れの掟',         description: 'From the bench: オオカミの防御+2（重複可能）。', category: 'def' },
   territory:        { id: 'territory',        name: '縄張り',           description: 'From the bench: 相手の生き物カードの攻撃-1。', category: 'debuff' },
   lone_wolf:        { id: 'lone_wolf',        name: '孤高の狼',         description: '公開時、ベンチにオオカミ系0枚なら攻撃+5。', category: 'atk' },
+  // ===== 核ボスデッキ (仮登録・効果ロジック未実装) =====
+  // TODO: Phase X で起動条件システム + 効果ロジック実装。詳細は NUCLEAR_BOSS_DECK_SPEC.md 参照。
+  atomic_bomb_search:          { id: 'atomic_bomb_search',          name: '原爆投下',           description: '【未実装】起動条件を満たした時、原子爆弾効果を発動する。', category: 'special' },
+  passive_nuclear_bonus:       { id: 'passive_nuclear_bonus',       name: '原爆の父',           description: '【未実装】ベンチに居る間、核兵器系カードを強化する。', category: 'special' },
+  b29_asymmetric_shield:       { id: 'b29_asymmetric_shield',       name: '戦略爆撃機',         description: '【未実装】非対称戦力ルールで原爆投下を支援する。', category: 'special' },
+  reveal_exile_for_attack:     { id: 'reveal_exile_for_attack',     name: '連鎖反応',           description: '【未実装】公開時、自ベンチ1枚を除外して攻撃を強化する。', category: 'atk' },
+  stackable_fission_bonus:     { id: 'stackable_fission_bonus',     name: 'ウランの臨界',       description: '【未実装】From the bench: 核分裂系カードを累積強化する（重複可）。', category: 'atk' },
+  stackable_defense:           { id: 'stackable_defense',           name: 'プルトニウムの殻',   description: '【未実装】From the bench: 核分裂系カードの防御を累積強化する（重複可）。', category: 'def' },
+  passive_fan_on_exile:        { id: 'passive_fan_on_exile',        name: '記憶の継承',         description: '【未実装】自身が除外された時、ファンを獲得する。', category: 'special' },
+  reveal_nerf_ssr:             { id: 'reveal_nerf_ssr',             name: '被爆者の証言',       description: '【未実装】公開時、相手のSSR核兵器カードを弱体化する。', category: 'debuff' },
+  reveal_conditional_bonus:    { id: 'reveal_conditional_bonus',    name: '名もなき頭脳',       description: '【未実装】公開時、条件を満たせば自身を強化する。', category: 'special' },
+  exile_opponent_atomic_bomb:  { id: 'exile_opponent_atomic_bomb',  name: '核兵器禁止',         description: '【未実装】公開時、相手ベンチの原子爆弾を除外する。', category: 'debuff' },
+  reset_trinity_success:       { id: 'reset_trinity_success',       name: '核実験禁止',         description: '【未実装】公開時、トリニティ実験の成立フラグをリセットする。', category: 'debuff' },
+  passive_fan_on_self_exile:   { id: 'passive_fan_on_self_exile',   name: '平和への祈り',       description: '【未実装】自身が除外された時、ファンを獲得する（折り鶴）。', category: 'special' },
 };
 
 // Card name → effect id. These are the only cards that carry on-reveal effects.
@@ -351,6 +365,21 @@ export const EFFECT_BY_CARD_NAME: Record<string, string> = {
   '解剖学':               'anatomy',
   '鏡文字':               'mirror_writing',
   '万能の天才':           'genius',
+  // ===== 核ボスデッキ (効果ロジック未実装) =====
+  // TODO: Phase X で起動条件システム + 効果ロジック実装。NUCLEAR_BOSS_DECK_SPEC.md 参照。
+  'リトルボーイ':             'atomic_bomb_search',
+  'ファットマン':             'atomic_bomb_search',
+  'ロバート・オッペンハイマー': 'passive_nuclear_bonus',
+  'B-29 エノラ・ゲイ':        'b29_asymmetric_shield',
+  '核分裂':                   'reveal_exile_for_attack',
+  'ウラン235':                'stackable_fission_bonus',
+  'プルトニウム239':          'stackable_defense',
+  '広島原爆ドーム':           'passive_fan_on_exile',
+  '被爆者の証言':             'reveal_nerf_ssr',
+  '科学者':                   'reveal_conditional_bonus',
+  '核兵器禁止条約':           'exile_opponent_atomic_bomb',
+  '包括的核実験禁止条約':     'reset_trinity_success',
+  '折り鶴':                   'passive_fan_on_self_exile',
 };
 
 export interface BattleCard {
@@ -546,6 +575,21 @@ export const CARD_STAT_OVERRIDES: Record<string, StatProfile> = {
   '群れの掟':             { attackPower: 1, defensePower: 2 },
   '縄張り':               { attackPower: 1, defensePower: 3 },
   '一匹狼':               { attackPower: 4, defensePower: 1 },
+  // ===== 核ボスデッキ (13枚・効果ロジックは後日) =====
+  // TODO: Phase X で起動条件システム + 効果ロジック実装。NUCLEAR_BOSS_DECK_SPEC.md 参照。
+  'リトルボーイ':             { attackPower: 8, defensePower: 1 },
+  'ファットマン':             { attackPower: 9, defensePower: 1 },
+  'ロバート・オッペンハイマー': { attackPower: 2, defensePower: 4 },
+  'B-29 エノラ・ゲイ':        { attackPower: 3, defensePower: 3 },
+  '核分裂':                   { attackPower: 2, defensePower: 2 },
+  'ウラン235':                { attackPower: 1, defensePower: 3 },
+  'プルトニウム239':          { attackPower: 1, defensePower: 3 },
+  '広島原爆ドーム':           { attackPower: 0, defensePower: 3 },
+  '被爆者の証言':             { attackPower: 0, defensePower: 2 },
+  '科学者':                   { attackPower: 1, defensePower: 1 },
+  '核兵器禁止条約':           { attackPower: 2, defensePower: 3 },
+  '包括的核実験禁止条約':     { attackPower: 1, defensePower: 3 },
+  '折り鶴':                   { attackPower: 0, defensePower: 2 },
   // ===== ダ・ヴィンチデッキ =====
   'レオナルド・ダ・ヴィンチ': { attackPower: 5, defensePower: 5 },
   'モナ・リザ':           { attackPower: 2, defensePower: 3 },

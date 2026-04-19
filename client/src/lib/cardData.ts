@@ -271,6 +271,22 @@ export const COLLECTION_CARDS: CollectionCard[] = [
   // ===== アマゾンデッキ追加 (2枚) =====
   { id: 'card-212', name: 'ジャガー', category: 'creatures', rarity: 'SR', description: 'アマゾンの密林に君臨する斑点模様の大型ネコ科動物。強靭な顎で獲物を一撃で仕留める。', imageUrl: '/images/cards/jaguar.png' },
   { id: 'card-213', name: 'ピンクイルカ', category: 'creatures', rarity: 'R', description: 'アマゾン川に棲む淡水イルカ。ピンク色の体を持ち、現地では聖なる存在とされる。', imageUrl: '/images/cards/pink-dolphin.png' },
+
+  // ===== 核ボスデッキ (13枚) — 詳細は NUCLEAR_BOSS_DECK_SPEC.md 参照 =====
+  // 効果ロジックは未実装。EFFECT_DEFS に string 識別子のみ登録。
+  { id: 'little-boy', name: 'リトルボーイ', category: 'inventions', rarity: 'SSR', description: '1945年8月6日、広島に投下されたウラン型原爆。', imageUrl: '/images/cards/little-boy.png' },
+  { id: 'fat-man', name: 'ファットマン', category: 'inventions', rarity: 'SSR', description: '1945年8月9日、長崎に投下されたプルトニウム型原爆。', imageUrl: '/images/cards/fat-man.png' },
+  { id: 'oppenheimer-new', name: 'ロバート・オッペンハイマー', category: 'great_people', rarity: 'SSR', description: 'マンハッタン計画の科学的指導者。原爆の父と呼ばれた物理学者。', imageUrl: '/images/cards/oppenheimer.png' },
+  { id: 'enola-gay-b29', name: 'B-29 エノラ・ゲイ', category: 'inventions', rarity: 'SR', description: '広島に原爆を投下した戦略爆撃機。非対称戦力の象徴。', imageUrl: '/images/cards/enola-gay-b29.png' },
+  { id: 'nuclear-fission', name: '核分裂', category: 'discovery', rarity: 'R', description: '原子核が分裂し巨大なエネルギーを放つ現象。原爆の原理。', imageUrl: '/images/cards/nuclear-fission.png' },
+  { id: 'uranium-235', name: 'ウラン235', category: 'discovery', rarity: 'R', description: '核分裂を起こすウラン同位体。リトルボーイの原料。', imageUrl: '/images/cards/uranium-235.png' },
+  { id: 'plutonium-239', name: 'プルトニウム239', category: 'discovery', rarity: 'R', description: '人工核分裂性物質。ファットマンの原料として用いられた。', imageUrl: '/images/cards/plutonium-239.png' },
+  { id: 'hiroshima-dome', name: '広島原爆ドーム', category: 'world_heritage', rarity: 'N', description: '1996年に世界遺産登録。核の惨禍を後世に伝える記憶の建築。', imageUrl: '/images/cards/hiroshima-dome.png' },
+  { id: 'hibakusha-testimony', name: '被爆者の証言', category: 'inventions', rarity: 'N', description: '被爆者が語り継ぐ核の真実。核兵器SSRカードを弱体化する。', imageUrl: '/images/cards/hibakusha-testimony.png' },
+  { id: 'scientist-atomic', name: '科学者', category: 'great_people', rarity: 'N', description: 'マンハッタン計画に参加した名もなき科学者たち。', imageUrl: '/images/cards/scientist.png' },
+  { id: 'tpnw-treaty', name: '核兵器禁止条約', category: 'inventions', rarity: 'R', description: '2021年発効。核兵器の開発・使用を国際法で禁止する条約。', imageUrl: '/images/cards/tpnw-treaty.png' },
+  { id: 'ctbt-treaty', name: '包括的核実験禁止条約', category: 'inventions', rarity: 'R', description: 'あらゆる核実験を禁止する国際条約。トリニティ実験を無効化する。', imageUrl: '/images/cards/ctbt-treaty.png' },
+  { id: 'origami-crane', name: '折り鶴', category: 'inventions', rarity: 'N', description: '平和への祈りを込めた折り紙。広島の少女・佐々木禎子の物語の象徴。', imageUrl: '/images/cards/origami-crane.png' },
 ];
 
 // ガチャ排出率
