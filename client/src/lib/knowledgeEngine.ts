@@ -33,8 +33,8 @@
 import type { BattleCard } from './knowledgeCards';
 import { EFFECT_COLORS, ALL_BATTLE_CARDS } from './knowledgeCards';
 import type { StageRules } from './stages';
-import type { RoundBonuses } from './knowledgeBonuses';
-import { computePhase1Bonuses } from './knowledgeBonuses';
+import type { RoundBonuses, RoundStartSnapshot } from './knowledgeBonuses';
+import { computePhase1Bonuses, computePhase2Bonuses } from './knowledgeBonuses';
 
 export const BENCH_MAX_SLOTS = 6;
 
@@ -172,6 +172,15 @@ export interface GameState {
   roundFinisherSide: Side | null;
   // advanceToNextRound で計算される直前ラウンドのボーナス内訳。UI が TrophyBonusBreakdown で読む。
   lastRoundBonuses: RoundBonuses | null;
+  // ===== Phase 2 bonus tracking (perfect / comeback / last-draw) =====
+  // ラウンド中に各 side が失ったカード数（防御時に破壊された回数）。advanceToNextRound で 0 リセット。
+  cardsLostThisRound: { player: number; ai: number };
+  // バトル全体通算で失ったカード数（game_over まで保持、フルゲームパーフェクト判定用）。
+  totalCardsLost: { player: number; ai: number };
+  // ラウンド開始時のファン値スナップショット（劣勢逆転判定用）。
+  roundStartSnapshot: RoundStartSnapshot | null;
+  // そのラウンドで「最後のドロー」が決定打になったか（resolveSubBattleWin で検出）。
+  roundFinisherLastDraw: boolean;
   // ===== Stage rules =====
   stageRules: StageRules | null;      // null = free battle (no stage rules)
   // ===== Round result =====
@@ -272,6 +281,10 @@ export function initGameState(
     roundFinisherCard: null,
     roundFinisherSide: null,
     lastRoundBonuses: null,
+    cardsLostThisRound: { player: 0, ai: 0 },
+    totalCardsLost: { player: 0, ai: 0 },
+    roundStartSnapshot: { playerFans: 0, aiFans: 0 },
+    roundFinisherLastDraw: false,
     stageRules: stageRules ?? null,
     roundWinner: null,
     history: [],
@@ -2994,6 +3007,18 @@ export function resolveSubBattleWin(state: GameState): GameState {
     },
     roundFinisherCard: lastAttackCard,
     roundFinisherSide: attackerSide,
+    // Phase 2 tracking:
+    //   - defender lost their card → increment cardsLostThisRound + totalCardsLost
+    //   - if attacker's deck is now empty, this sub-battle win was a "last-draw decisive"
+    cardsLostThisRound: {
+      ...state.cardsLostThisRound,
+      [defenderSide]: state.cardsLostThisRound[defenderSide] + 1,
+    },
+    totalCardsLost: {
+      ...state.totalCardsLost,
+      [defenderSide]: state.totalCardsLost[defenderSide] + 1,
+    },
+    roundFinisherLastDraw: state.roundFinisherLastDraw || attackerStateForTrim.deck.length === 0,
   };
 }
 
@@ -3012,19 +3037,47 @@ export function advanceToNextRound(state: GameState): GameState {
   // ===== Phase 1 combo bonus =====
   // Compute winner's round bonuses (combo + finisher rarity + multiplier). Loser gets no bonus.
   const winnerStreak = state.consecutiveKillStreak[state.roundWinner];
-  const roundBonuses = computePhase1Bonuses(
+  const phase1 = computePhase1Bonuses(
     state.roundWinner,
     winnerStreak,
     state.roundFinisherCard,
     state.roundFinisherSide,
   );
-  const bonusFans = roundBonuses.total;
-  if (bonusFans > 0) {
-    console.log(`[Engine] Phase 1 bonus: ${state.roundWinner} earns +${bonusFans} extra fans (streak=${winnerStreak}, items=${roundBonuses.items.map(i => `${i.label}+${i.amount}`).join(', ')})`);
+
+  // ===== Phase 2 bonuses (perfect / comeback / last-draw) =====
+  const winnerLivingState = state.roundWinner === 'player' ? state.player : state.ai;
+  const willBeFinalRound = state.round + 1 > state.totalRounds;
+  const fanDiffAtStart = state.roundStartSnapshot
+    ? (state.roundWinner === 'player'
+        ? state.roundStartSnapshot.playerFans - state.roundStartSnapshot.aiFans
+        : state.roundStartSnapshot.aiFans - state.roundStartSnapshot.playerFans)
+    : 0;
+  const phase2Items = computePhase2Bonuses({
+    roundWinner: state.roundWinner,
+    cardsLostByWinnerThisRound: state.cardsLostThisRound[state.roundWinner],
+    roundFinisherLastDraw: state.roundFinisherLastDraw,
+    winnerDeckAtWin: winnerLivingState.deck.length,
+    winnerBenchAtWin: winnerLivingState.bench.length,
+    winnerFanDiffAtRoundStart: fanDiffAtStart,
+    isFinalRound: willBeFinalRound,
+    totalCardsLostByWinner: state.totalCardsLost[state.roundWinner],
+  });
+
+  // Merge Phase 1 + Phase 2 into a single RoundBonuses (発動順で連結)
+  const allItems = [...phase1.items, ...phase2Items];
+  const bonusTotal = allItems.reduce((s, it) => s + it.amount, 0);
+  const roundBonuses: RoundBonuses = {
+    items: allItems,
+    total: bonusTotal,
+    isLegendary: false,
+    winnerSide: state.roundWinner,
+  };
+  if (bonusTotal > 0) {
+    console.log(`[Engine] Round bonuses: ${state.roundWinner} earns +${bonusTotal} extra fans (items=${allItems.map(i => `${i.label}+${i.amount}`).join(', ')})`);
   }
 
-  const newPlayerFans = state.roundWinner === 'player' ? state.playerFans + trophyFanBonus + bonusFans : state.playerFans;
-  const newAiFans = state.roundWinner === 'ai' ? state.aiFans + trophyFanBonus + bonusFans : state.aiFans;
+  const newPlayerFans = state.roundWinner === 'player' ? state.playerFans + trophyFanBonus + bonusTotal : state.playerFans;
+  const newAiFans = state.roundWinner === 'ai' ? state.aiFans + trophyFanBonus + bonusTotal : state.aiFans;
 
   const nextRound = state.round + 1;
 
@@ -3132,6 +3185,12 @@ export function advanceToNextRound(state: GameState): GameState {
     roundFinisherCard: null,
     roundFinisherSide: null,
     lastRoundBonuses: roundBonuses, // UI reads this at cineStep=trophy_breakdown, cleared next advance
+    // ===== Phase 2 reset =====
+    // cardsLostThisRound はラウンド毎リセット、totalCardsLost は累積保持。
+    // roundStartSnapshot は次ラウンド開始時のファン値を記録（劣勢逆転判定用）。
+    cardsLostThisRound: { player: 0, ai: 0 },
+    roundStartSnapshot: { playerFans: newPlayerFans, aiFans: newAiFans },
+    roundFinisherLastDraw: false,
     message: `第${nextRound}回戦 デッキフェイズ：カードを選ぼう`,
   };
 }

@@ -120,3 +120,76 @@ export function computePhase1Bonuses(
   const total = items.reduce((s, it) => s + it.amount, 0);
   return { items, total, isLegendary: false, winnerSide: roundWinner };
 }
+
+/**
+ * Snapshot of fan totals captured at the start of each round. Used for comeback
+ * detection (Phase 2): "ファン差-20以上から逆転".
+ *
+ * Note: deck/bench counts are NOT snapshotted — kk spec Q4/Q5 updated to use
+ * "勝利瞬間" values (current state at round_end), not round-start values.
+ */
+export interface RoundStartSnapshot {
+  playerFans: number;
+  aiFans: number;
+}
+
+/**
+ * Phase 2 bonus calculator — perfect / comeback / last-draw decisive.
+ *
+ * Chronological display order (per 発動順 spec):
+ *   1. 🎯 パーフェクトラウンド
+ *   2. 💀 ギリギリ勝利 (deck <= 3 at win moment)
+ *   3. 🌟 ベンチ空から勝利 (bench == 0 at win moment)
+ *   4. 🔥 劣勢逆転 (fan diff <= -20 at round start)
+ *   5. ⚡ 最後のドロー決定打 (last card used for winning reveal)
+ *   6. 🏆 フルゲームパーフェクト (final round + zero total destructions)
+ */
+export function computePhase2Bonuses(params: {
+  roundWinner: Side;
+  cardsLostByWinnerThisRound: number;
+  roundFinisherLastDraw: boolean;
+  /** 勝利瞬間の勝者デッキ残数（kk Q4: 勝利瞬間で判定） */
+  winnerDeckAtWin: number;
+  /** 勝利瞬間の勝者ベンチ数（kk Q5: 勝利瞬間で判定） */
+  winnerBenchAtWin: number;
+  /** ラウンド開始時のファン差（勝者視点）— 負なら勝者が劣勢スタート */
+  winnerFanDiffAtRoundStart: number;
+  /** 最終ラウンドかどうか（nextRound > totalRounds） */
+  isFinalRound: boolean;
+  /** バトル全体通算で勝者が失ったカード数 */
+  totalCardsLostByWinner: number;
+}): BonusItem[] {
+  const items: BonusItem[] = [];
+
+  // 1. パーフェクトラウンド
+  if (params.cardsLostByWinnerThisRound === 0) {
+    items.push({ key: 'perfect_round', icon: '🎯', label: 'パーフェクトラウンド', amount: 15 });
+  }
+
+  // 2. ギリギリ勝利（デッキ残 N 以下）
+  if (params.winnerDeckAtWin <= BONUS_THRESHOLDS.DECK_LOW_THRESHOLD) {
+    items.push({ key: 'deck_low', icon: '💀', label: 'ギリギリ勝利', amount: 8 });
+  }
+
+  // 3. ベンチ空から勝利
+  if (params.winnerBenchAtWin <= BONUS_THRESHOLDS.BENCH_EMPTY) {
+    items.push({ key: 'bench_empty', icon: '🌟', label: 'ベンチ空から勝利', amount: 10 });
+  }
+
+  // 4. 劣勢逆転（ラウンド開始時にファン差-20以上）
+  if (params.winnerFanDiffAtRoundStart <= BONUS_THRESHOLDS.COMEBACK_FAN_DIFF) {
+    items.push({ key: 'comeback', icon: '🔥', label: '劣勢逆転', amount: 12 });
+  }
+
+  // 5. 最後のドロー決定打
+  if (params.roundFinisherLastDraw) {
+    items.push({ key: 'last_draw', icon: '⚡', label: '最後のドロー決定打', amount: 15 });
+  }
+
+  // 6. フルゲームパーフェクト（最終ラウンド勝利 + 通算0破壊）
+  if (params.isFinalRound && params.totalCardsLostByWinner === 0) {
+    items.push({ key: 'perfect_game', icon: '🏆', label: 'フルゲームパーフェクト', amount: 30 });
+  }
+
+  return items;
+}

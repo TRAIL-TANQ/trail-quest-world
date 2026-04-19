@@ -93,9 +93,12 @@ const POWER_ADD_PAUSE_MS  = 200;   // after reveal, before power-add animation (
 const POWER_COMPARE_MS    = 300;   // pause for power comparison display (was 500)
 // Pachinko-style fan totalizer: 1.3s slot-spin + 0.3s hold at final value.
 const FAN_COUNT_UP_MS     = 1600;
-// Trophy bonus breakdown (Phase 1): 600ms banner + 250ms/item stagger + 500ms total reveal.
-// Max 3 items in Phase 1 (combo + finisher + multiplier) → ~1850ms worst case. Padding: 2400ms.
-const TROPHY_BREAKDOWN_MS = 2400;
+// Trophy bonus breakdown: dynamic duration based on item count.
+//   400ms initial delay + 300ms per item + 300ms total reveal + 400ms padding.
+// Phase 1 alone (max 3): ~2000ms. Phase 1+2 (max ~9): ~4000ms. Scales linearly.
+function trophyBreakdownDuration(itemCount: number): number {
+  return 400 + (itemCount + 1) * 300 + 400;
+}
 
 export interface KnowledgeChallengerProps {
   /** When set, this component runs in 2-player local mode instead of vs-AI. */
@@ -2006,12 +2009,12 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
 
             const advs = advanced as GameState;
 
-            // ===== Phase 1: Trophy bonus breakdown =====
-            // 連続破壊コンボ / フィニッシャー / 倍率のボーナス内訳を表示。
-            // items.length === 0 の場合（ボーナス無し）はスキップ。
+            // ===== Phase 1 + 2: Trophy bonus breakdown =====
+            // コンボ / フィニッシャー / 倍率 + パーフェクト / 劣勢逆転 / 最後のドロー等。
+            // items.length === 0（ボーナス無し）はスキップ。duration は item 数に応じて自動スケール。
             if (advs.lastRoundBonuses && advs.lastRoundBonuses.items.length > 0) {
               setCineStep('trophy_breakdown');
-              await waitStep(TROPHY_BREAKDOWN_MS);
+              await waitStep(trophyBreakdownDuration(advs.lastRoundBonuses.items.length));
               if (unmountedRef.current) return;
             }
 
@@ -2173,10 +2176,10 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
 
               const advs = advanced as GameState;
 
-              // ===== Phase 1: Trophy bonus breakdown =====
+              // ===== Phase 1 + 2: Trophy bonus breakdown =====
               if (advs.lastRoundBonuses && advs.lastRoundBonuses.items.length > 0) {
                 setCineStep('trophy_breakdown');
-                await waitStep(TROPHY_BREAKDOWN_MS);
+                await waitStep(trophyBreakdownDuration(advs.lastRoundBonuses.items.length));
                 if (unmountedRef.current) return;
               }
 
@@ -4819,13 +4822,13 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
           </div>
         )}
 
-        {/* ====== TrophyBonusBreakdown: Phase 1 コンボボーナス内訳 ====== */}
+        {/* ====== TrophyBonusBreakdown: Phase 1+2 ボーナス内訳 ====== */}
         {/* advanceToNextRound で roundWinner は null に reset されるため、bonuses.winnerSide を使う */}
         {cineStep === 'trophy_breakdown' && gameState.lastRoundBonuses && gameState.lastRoundBonuses.items.length > 0 && (
           <TrophyBonusBreakdown
             bonuses={gameState.lastRoundBonuses}
             winnerSide={gameState.lastRoundBonuses.winnerSide}
-            duration={TROPHY_BREAKDOWN_MS}
+            duration={trophyBreakdownDuration(gameState.lastRoundBonuses.items.length)}
           />
         )}
 
