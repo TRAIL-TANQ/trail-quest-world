@@ -2721,6 +2721,8 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
         accuracy: 1,
         isBestScore: false,
         label: '獲得ファン',
+        // PvP は元々 ALT を配布しない → ResultPage でも加算させない
+        altAlreadyGranted: true,
       });
       toast.success(`🏆 勝者: ${winnerName}`);
 
@@ -2753,14 +2755,16 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
       return;
     }
 
-    // 基本報酬: フリープレイなら won?30:5
-    let altReward = won ? 30 : 5;
+    // kk 2026-04-19: 基本 ALT（旧仕様 won?30:5）は廃止。
+    // 獲得ファンから換算した ALT はリザルト画面の「受け取る」ボタンで
+    // 既に加算済み（altClaimed）。ここではステージ初クリアのボーナスのみ扱う。
+    let stageBonusAlt = 0;
 
-    // ステージクリア報酬を加算 & 状態更新
+    // ステージクリア報酬: 初クリア時のみカード・称号・ALT ボーナス
     if (won && currentStage) {
       markStageCleared(currentStage.id);
       if (!isStageRewarded(currentStage.id)) {
-        altReward += currentStage.altReward;
+        stageBonusAlt = currentStage.altReward;
         if (currentStage.cardRewardId) {
           addCollectionCard(currentStage.cardRewardId);
           toast.success(`カード「${currentStage.cardRewardId}」を獲得！`);
@@ -2803,8 +2807,11 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
       });
     }
 
-    addTotalAlt(altReward);
-    triggerEarnEffect(altReward);
+    // ステージ初クリアボーナスのみ自動付与（ファン換算分は受け取るボタン経由）
+    if (stageBonusAlt > 0) {
+      addTotalAlt(stageBonusAlt);
+      triggerEarnEffect(stageBonusAlt);
+    }
     setLastResult({
       score: gameState.playerFans,
       maxScore: Math.max(gameState.playerFans, gameState.aiFans, 100),
@@ -2812,6 +2819,9 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
       accuracy: won ? 1 : 0.3,
       isBestScore: won,
       label: '獲得ファン',
+      // KC 経由は ResultPage で addTotalAlt をスキップさせる（kk Q6）。
+      // ファン換算 ALT は「受け取る」ボタン、ステージボーナスは上で既に加算済み。
+      altAlreadyGranted: true,
     });
 
     // battle_history に保存（PvP / 管理者 / モニター / ゲスト はサービス内でスキップ）
