@@ -67,7 +67,7 @@ export const EFFECT_DEFS: Record<string, CardEffect> = {
   anatomy:       { id: 'anatomy',       name: '人体の探求',       description: '公開時、デッキ内のダ・ヴィンチ系1枚をデッキトップに移動（任意発動）。', category: 'bench' },
   mirror_writing:{ id: 'mirror_writing',name: '逆さの秘密',       description: '公開時、相手の次のカードの効果を無効化（任意発動）。', category: 'debuff' },
   genius:        { id: 'genius',        name: 'ルネサンスの光',   description: '公開時、味方全カード攻防+2、相手の効果カードを全て無効化（このラウンド中）。', category: 'special' },
-  honnoji:       { id: 'honnoji',       name: '灰からの継承',     description: '公開時（任意発動・ベンチに信長）: 信長を除外、自ベンチ全除外、自デッキを明智光秀・愛宕百韻・天王山・三日天下の4枚に再構成する。', category: 'special' },
+  honnoji:       { id: 'honnoji',       name: '灰からの継承',     description: '公開時（任意発動・ベンチに信長）: 信長を除外、自ベンチ全除外、自デッキを明智光秀・愛宕百韻・天王山・三日天下の4枚に再構成する。※ベンチに織田信長が居る場合、信長の威光により本能寺の変は自動的にデッキ底へ送り返される（織田信長公開時）。', category: 'special' },
   akechi_mitsuhide: { id: 'akechi_mitsuhide', name: '本能寺の主', description: '公開時、相手ベンチから2枚除外。ベンチの愛宕百韻で攻+3、天王山で攻防+2、三日天下で攻防+3。', category: 'special' },
   atago_hyakuin: { id: 'atago_hyakuin', name: '謀反の連歌',       description: 'From the bench: 明智光秀の攻撃+3。', category: 'atk' },
   tennouzan:     { id: 'tennouzan',     name: '天下分け目',       description: 'From the bench: 明智光秀の攻防+2。', category: 'special' },
@@ -1739,6 +1739,8 @@ export const MAX_SAME_NAME_BY_RARITY: Record<CardRarity, number> = {
 // 個別カード名の上限オーバーライド
 const MAX_SAME_NAME_OVERRIDE: Record<string, number> = {
   '始皇帝': 1,
+  // 歴史の転換点は一度きり。信長デッキ内でも1枚制限。
+  '本能寺の変': 1,
 };
 export function maxSameNameFor(rarity: CardRarity, cardName?: string): number {
   if (cardName && MAX_SAME_NAME_OVERRIDE[cardName] !== undefined) return MAX_SAME_NAME_OVERRIDE[cardName];

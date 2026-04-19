@@ -687,6 +687,20 @@ export function applyRevealEffect(
         }
         telop = { text: `🔥信長天下布武！防御+${defBonus}${hasGun && hasRakuichi ? ' 敵封印' : ''}`, color };
       }
+      // 信長の威光: ベンチに本能寺の変があれば、デッキ底へ送り返す（歴史的介入）。
+      // honnoji は自デッキ 1 枚制限（MAX_SAME_NAME_OVERRIDE）なので返却先は常に 1 枚分のみ。
+      {
+        const myAfter = side === 'player' ? next.player : next.ai;
+        const sealedAfter = next.sealedBenchNames[side];
+        const honnojiSlot = myAfter.bench.find((b) => b.name === '本能寺の変' && !sealedAfter.includes(b.name));
+        if (honnojiSlot) {
+          const newBench = removeOneFromBench(myAfter.bench, '本能寺の変');
+          const newDeck = [...myAfter.deck, honnojiSlot.card];
+          next = applySide(next, side, { ...myAfter, bench: newBench, deck: newDeck });
+          telop = { text: `${telop?.text ?? '🔥信長天下布武！'} + 👑本能寺を退けた`, color };
+          console.log('[特殊効果] 織田信長: ベンチの本能寺の変をデッキ底へ送還');
+        }
+      }
       break;
     }
     case 'mozart': {
