@@ -535,10 +535,11 @@ export const CARD_STAT_OVERRIDES: Record<string, StatProfile> = {
   '南蛮貿易':             { attackPower: 1, defensePower: 1 },
   '安土城':               { attackPower: 1, defensePower: 5 },
   '本能寺の変':           { attackPower: 2, defensePower: 1 },
-  '明智光秀':             { attackPower: 4, defensePower: 1 },
-  '愛宕百韻':             { attackPower: 1, defensePower: 2 },
-  '天王山':               { attackPower: 2, defensePower: 3 },
-  '三日天下':             { attackPower: 3, defensePower: 1 },
+  // 明智デッキ: 少数精鋭 3/3 統一（11日天下の瞬発力を表現）
+  '明智光秀':             { attackPower: 3, defensePower: 3 },
+  '愛宕百韻':             { attackPower: 3, defensePower: 3 },
+  '天王山':               { attackPower: 3, defensePower: 3 },
+  '三日天下':             { attackPower: 3, defensePower: 3 },
   // ===== オオカミデッキ =====
   'オオカミ':             { attackPower: 2, defensePower: 1 },
   '遠吠え':               { attackPower: 1, defensePower: 1 },
