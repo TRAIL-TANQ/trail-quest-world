@@ -457,7 +457,7 @@ export const CARD_STAT_OVERRIDES: Record<string, StatProfile> = {
   'マゼラン':         { attackPower: 2, defensePower: 3 },
   'キャラベル船':     { attackPower: 1, defensePower: 2 },
   '香辛料':           { attackPower: 1, defensePower: 1 },
-  '鉄砲':             { attackPower: 2, defensePower: 1 },
+  '鉄砲':             { attackPower: 1, defensePower: 1 },
   '楽市楽座':         { attackPower: 1, defensePower: 1 },
   '千利休':           { attackPower: 1, defensePower: 3 },
   '相対性理論の論文': { attackPower: 1, defensePower: 1 },
@@ -473,7 +473,7 @@ export const CARD_STAT_OVERRIDES: Record<string, StatProfile> = {
   'アインシュタイン': { attackPower: 4, defensePower: 3 },
   'キュリー夫人':     { attackPower: 4, defensePower: 3 },
   'ナポレオン':       { attackPower: 3, defensePower: 3 },
-  '織田信長':         { attackPower: 3, defensePower: 2 },
+  '織田信長':         { attackPower: 3, defensePower: 3 },
   '豊臣秀吉':        { attackPower: 2, defensePower: 3 },
   // ===== 宝石カード + アフリカデッキ =====
   'ダイヤモンド':         { attackPower: 3, defensePower: 3 },
