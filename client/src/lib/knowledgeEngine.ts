@@ -751,14 +751,23 @@ export function applyRevealEffect(
       break;
     }
     case 'piranha': {
+      // kk spec 2026-04-20: ピラニアバフはベンチにアマゾン川がある時のみ発動。
+      //   封印されたアマゾン川は無効。不在時は静かにスキップせず、ヒントテロップを出す。
+      //   ピラニア count 側の封印考慮は別 commit のスコープ外（現状維持）。
       if (role === 'attacker') {
         const myState = side === 'player' ? next.player : next.ai;
+        const sealed = next.sealedBenchNames[side];
+        const hasAmazonRiver = myState.bench.some(
+          (b) => b.name === 'アマゾン川' && !sealed.includes(b.name),
+        );
         const same = myState.bench.find((b) => b.name === card.name);
         const copies = same?.count ?? 0;
-        console.log(`[Engine]   piranha check: role=${role}, benchMatch="${same?.name ?? 'none'}", copies=${copies}, bench=[${myState.bench.map(b => `${b.name}×${b.count}`).join(', ')}]`);
-        if (copies > 0) {
+        console.log(`[Engine]   piranha check: role=${role}, amazonRiver=${hasAmazonRiver}, benchMatch="${same?.name ?? 'none'}", copies=${copies}, bench=[${myState.bench.map(b => `${b.name}×${b.count}`).join(', ')}]`);
+        if (hasAmazonRiver && copies > 0) {
           bonusAttack += copies;
           telop = { text: `🐟ピラニアの群れの猛攻！攻撃+${copies}`, color };
+        } else if (!hasAmazonRiver) {
+          telop = { text: '🐟ピラニア…アマゾン川がなく群れは動かず', color };
         }
       }
       break;
