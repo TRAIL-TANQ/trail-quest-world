@@ -54,6 +54,7 @@ import {
   aiDeckGrowth,
   removeOneFromBench,
 } from '@/lib/knowledgeEngine';
+import type { RoundBonuses } from '@/lib/knowledgeBonuses';
 import {
   processQuizResult,
   fetchChildStatus,
@@ -92,6 +93,9 @@ const POWER_ADD_PAUSE_MS  = 200;   // after reveal, before power-add animation (
 const POWER_COMPARE_MS    = 300;   // pause for power comparison display (was 500)
 // Pachinko-style fan totalizer: 1.3s slot-spin + 0.3s hold at final value.
 const FAN_COUNT_UP_MS     = 1600;
+// Trophy bonus breakdown (Phase 1): 600ms banner + 250ms/item stagger + 500ms total reveal.
+// Max 3 items in Phase 1 (combo + finisher + multiplier) → ~1850ms worst case. Padding: 2400ms.
+const TROPHY_BREAKDOWN_MS = 2400;
 
 export interface KnowledgeChallengerProps {
   /** When set, this component runs in 2-player local mode instead of vs-AI. */
@@ -292,6 +296,153 @@ function computeSpinDigits(
   return out;
 }
 
+/**
+ * TrophyBonusBreakdown — ラウンド終了時のコンボボーナス内訳を段階的に表示する。
+ *
+ * - 各 BonusItem を 250ms 間隔で順次ポップ（発動順＝RoundBonuses.items の順序）
+ * - アイテム毎に playCardLand、最終合計で playBattleStart
+ * - 画面中央のオーバーレイ（相手側は180°回転して点対称）
+ * - 点対称レイアウト（上段=相手/rotated、下段=自分/通常）
+ * - 自分側は彩度と大きさで強調（対戦相手は40%透明度）
+ */
+interface TrophyBonusBreakdownProps {
+  bonuses: RoundBonuses;
+  winnerSide: 'player' | 'ai';
+  duration: number;
+}
+function TrophyBonusBreakdown({ bonuses, winnerSide, duration: _duration }: TrophyBonusBreakdownProps) {
+  const [revealedCount, setRevealedCount] = useState(0);
+  const [showTotal, setShowTotal] = useState(false);
+
+  useEffect(() => {
+    setRevealedCount(0);
+    setShowTotal(false);
+    const timeouts: number[] = [];
+    const STAGGER = 300;
+    const INITIAL_DELAY = 400;
+
+    bonuses.items.forEach((_item, idx) => {
+      const t = window.setTimeout(() => {
+        setRevealedCount(idx + 1);
+        try { playCardLand(); } catch { /* noop */ }
+      }, INITIAL_DELAY + idx * STAGGER);
+      timeouts.push(t);
+    });
+    const totalT = window.setTimeout(() => {
+      setShowTotal(true);
+      try { playBattleStart(); } catch { /* noop */ }
+    }, INITIAL_DELAY + bonuses.items.length * STAGGER + 100);
+    timeouts.push(totalT);
+
+    return () => { timeouts.forEach((t) => window.clearTimeout(t)); };
+  }, [bonuses]);
+
+  const renderSide = (isOpponent: boolean) => {
+    const isWinnerSide = (winnerSide === 'player') !== isOpponent;
+    const opacity = isWinnerSide ? 1 : 0.45;
+    const scale = isWinnerSide ? 1 : 0.85;
+    return (
+      <div
+        className="kc-trophy-breakdown-side"
+        style={{
+          transform: `${isOpponent ? 'rotate(180deg)' : 'none'} scale(${scale})`,
+          opacity,
+        }}
+      >
+        <div className="kc-trophy-breakdown-frame">
+          <div className="kc-trophy-breakdown-title">
+            <span className="kc-trophy-breakdown-trophy">🏆</span>
+            <span>ボーナス獲得！</span>
+          </div>
+          <div className="kc-trophy-breakdown-items">
+            {bonuses.items.slice(0, revealedCount).map((item) => (
+              <div
+                key={item.key}
+                className={`kc-trophy-breakdown-item ${item.legendary ? 'kc-trophy-breakdown-legendary' : ''}`}
+              >
+                <span className="kc-trophy-breakdown-icon">{item.icon}</span>
+                <span className="kc-trophy-breakdown-label">{item.label}</span>
+                <span className="kc-trophy-breakdown-amount">+{item.amount}</span>
+              </div>
+            ))}
+          </div>
+          {showTotal && (
+            <div className="kc-trophy-breakdown-total">
+              <span className="kc-trophy-breakdown-total-label">合計ボーナス</span>
+              <span className="kc-trophy-breakdown-total-amount">+{bonuses.total}</span>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="fixed inset-0 pointer-events-none z-[56] flex flex-col kc-trophy-breakdown-overlay">
+      <div className="flex-1 flex items-center justify-center">
+        {renderSide(true)}
+      </div>
+      <div className="flex-1 flex items-center justify-center">
+        {renderSide(false)}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * ComboCounter — サブバトル中、streak >= 2 のときに表示する連続破壊カウンタ。
+ *
+ * - 点対称レイアウト（上段=相手バトルフィールド中央 / 下段=自分バトルフィールド中央）
+ * - streak に応じてビジュアル段階が変化:
+ *     2-4: 通常（白-黄色）
+ *     5-6: 炎エフェクト
+ *     7-9: 稲妻エフェクト
+ *     10+: FEVER TIME + 虹色（kcFanSSRRainbow 流用）
+ * - 自分側は彩度と大きさで強調
+ */
+interface ComboCounterProps {
+  playerStreak: number;
+  aiStreak: number;
+}
+function ComboCounter({ playerStreak, aiStreak }: ComboCounterProps) {
+  const tierClass = (n: number): string => {
+    if (n >= 10) return 'kc-combo-tier-fever';
+    if (n >= 7)  return 'kc-combo-tier-lightning';
+    if (n >= 5)  return 'kc-combo-tier-fire';
+    return 'kc-combo-tier-normal';
+  };
+
+  const renderSide = (streak: number, isOpponent: boolean) => {
+    if (streak < 2) return null;
+    const isSelf = !isOpponent;
+    return (
+      <div
+        className={`kc-combo-counter ${tierClass(streak)} ${isSelf ? 'kc-combo-counter-self' : 'kc-combo-counter-opp'}`}
+        style={{ transform: isOpponent ? 'rotate(180deg)' : 'none' }}
+        key={`combo-${isOpponent ? 'opp' : 'self'}-${streak}`}
+      >
+        <span className="kc-combo-prefix">{streak >= 10 ? 'FEVER!' : 'COMBO'}</span>
+        <span className="kc-combo-num">×{streak}</span>
+      </div>
+    );
+  };
+
+  if (playerStreak < 2 && aiStreak < 2) return null;
+
+  return (
+    <>
+      {/* 相手側: バトルフィールド上中央 */}
+      <div className="absolute left-1/2 -translate-x-1/2 z-[25] pointer-events-none" style={{ top: '18%' }}>
+        {renderSide(aiStreak, true)}
+      </div>
+      {/* 自分側: バトルフィールド下中央 */}
+      <div className="absolute left-1/2 -translate-x-1/2 z-[25] pointer-events-none" style={{ bottom: '18%' }}>
+        {renderSide(playerStreak, false)}
+      </div>
+    </>
+  );
+}
+
 export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChallengerProps = {}) {
   const [, navigate] = useLocation();
   const [, stageMatch] = useRoute<{ id: string }>('/games/knowledge-challenger/stage/:id');
@@ -367,10 +518,11 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
   //   turn_banner   : "あなたの攻撃！" / "あなたが防御中！" 1s
   //   defender_show : defender card on field, "🛡️ 防御パワー X" 0.8s
   //   attack_reveal : one attacker card animating in (back → flip → settled)
-  //   resolve       : "🚩 フラッグ奪取！" outcome banner 2s
-  //   round_end     : ROUND CLEAR stamp + reason/victory banners
-  //   fan_count_up  : pachinko-style slot-reel fan totalizer (after round_end)
-  //   game_over     : end banner
+  //   resolve          : "🚩 フラッグ奪取！" outcome banner 2s
+  //   round_end        : ROUND CLEAR stamp + reason/victory banners
+  //   trophy_breakdown : コンボ/フィニッシャー/倍率などの獲得ボーナス内訳（Phase 1）
+  //   fan_count_up     : pachinko-style slot-reel fan totalizer (after round_end)
+  //   game_over        : end banner
   type CinematicStep =
     | 'idle'
     | 'turn_banner'
@@ -379,6 +531,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
     | 'resolve'
     | 'turn_transition'
     | 'round_end'
+    | 'trophy_breakdown'
     | 'fan_count_up'
     | 'game_over';
   const [cineStep, setCineStep] = useState<CinematicStep>('idle');
@@ -1853,6 +2006,15 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
 
             const advs = advanced as GameState;
 
+            // ===== Phase 1: Trophy bonus breakdown =====
+            // 連続破壊コンボ / フィニッシャー / 倍率のボーナス内訳を表示。
+            // items.length === 0 の場合（ボーナス無し）はスキップ。
+            if (advs.lastRoundBonuses && advs.lastRoundBonuses.items.length > 0) {
+              setCineStep('trophy_breakdown');
+              await waitStep(TROPHY_BREAKDOWN_MS);
+              if (unmountedRef.current) return;
+            }
+
             // Pachinko-style fan totalizer — fires between round_end and the next
             // phase (either transition banner or game_over). Skipped if both
             // sides' totals are unchanged (defensive; normally trophy fans add).
@@ -2010,6 +2172,13 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
               if (unmountedRef.current || !advanced) return;
 
               const advs = advanced as GameState;
+
+              // ===== Phase 1: Trophy bonus breakdown =====
+              if (advs.lastRoundBonuses && advs.lastRoundBonuses.items.length > 0) {
+                setCineStep('trophy_breakdown');
+                await waitStep(TROPHY_BREAKDOWN_MS);
+                if (unmountedRef.current) return;
+              }
 
               // Pachinko-style fan totalizer — between round_end and next phase.
               if (advs.playerFans !== prevPlayerFans2 || advs.aiFans !== prevAiFans2) {
@@ -4668,6 +4837,16 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
           </div>
         )}
 
+        {/* ====== TrophyBonusBreakdown: Phase 1 コンボボーナス内訳 ====== */}
+        {/* advanceToNextRound で roundWinner は null に reset されるため、bonuses.winnerSide を使う */}
+        {cineStep === 'trophy_breakdown' && gameState.lastRoundBonuses && gameState.lastRoundBonuses.items.length > 0 && (
+          <TrophyBonusBreakdown
+            bonuses={gameState.lastRoundBonuses}
+            winnerSide={gameState.lastRoundBonuses.winnerSide}
+            duration={TROPHY_BREAKDOWN_MS}
+          />
+        )}
+
         {/* ====== FanCountUp: ラウンド終了時の累計ファンパチンコ演出 ====== */}
         {cineStep === 'fan_count_up' && fanCountUp && (
           <FanCountUpOverlay
@@ -4678,6 +4857,12 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
             duration={1300}
           />
         )}
+
+        {/* ====== ComboCounter: サブバトル中の連続破壊カウンタ（streak >= 2 で表示） ====== */}
+        <ComboCounter
+          playerStreak={gameState.consecutiveKillStreak?.player ?? 0}
+          aiStreak={gameState.consecutiveKillStreak?.ai ?? 0}
+        />
 
         {/* ====== Turn Transition: vignette color shift (no text) ====== */}
         {cineStep === 'turn_transition' && (
@@ -6224,6 +6409,223 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
           .kc-fan-countup-spark {
             animation: none !important;
           }
+        }
+
+        /* ===== TrophyBonusBreakdown (Phase 1 combo bonus breakdown) ===== */
+        .kc-trophy-breakdown-overlay {
+          background: radial-gradient(ellipse at center, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.2) 70%, rgba(0,0,0,0) 100%);
+          animation: kcTrophyBreakdownFade 0.3s ease-out;
+        }
+        @keyframes kcTrophyBreakdownFade {
+          0%   { opacity: 0; }
+          100% { opacity: 1; }
+        }
+        .kc-trophy-breakdown-side {
+          animation: kcTrophyBreakdownPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+          will-change: transform, opacity;
+          transition: opacity 0.3s, transform 0.3s;
+        }
+        @keyframes kcTrophyBreakdownPop {
+          0%   { opacity: 0; transform: scale(0.4); }
+          100% { opacity: 1; transform: scale(1); }
+        }
+        .kc-trophy-breakdown-frame {
+          display: flex;
+          flex-direction: column;
+          align-items: stretch;
+          gap: 8px;
+          padding: 16px 20px;
+          border-radius: 18px;
+          min-width: 280px;
+          background: linear-gradient(135deg, rgba(24,16,44,0.92), rgba(48,30,12,0.92));
+          border: 3px solid rgba(255,215,0,0.9);
+          box-shadow: 0 0 36px rgba(255,215,0,0.55), 0 0 72px rgba(255,215,0,0.3), inset 0 0 18px rgba(255,215,0,0.2);
+        }
+        .kc-trophy-breakdown-title {
+          display: flex; align-items: center; justify-content: center; gap: 8px;
+          font-size: 20px; font-weight: 900;
+          color: #ffe680;
+          text-shadow: 0 0 10px rgba(255,215,0,0.7), 0 2px 4px rgba(0,0,0,0.9);
+          letter-spacing: 2px;
+          padding-bottom: 6px;
+          border-bottom: 1.5px solid rgba(255,215,0,0.35);
+        }
+        .kc-trophy-breakdown-trophy {
+          font-size: 24px;
+          filter: drop-shadow(0 0 8px rgba(255,215,0,0.9));
+        }
+        .kc-trophy-breakdown-items {
+          display: flex; flex-direction: column; gap: 6px;
+        }
+        .kc-trophy-breakdown-item {
+          display: grid;
+          grid-template-columns: 28px 1fr auto;
+          align-items: center;
+          gap: 10px;
+          padding: 8px 12px;
+          border-radius: 10px;
+          background: rgba(255,255,255,0.08);
+          border: 1px solid rgba(255,215,0,0.35);
+          animation: kcTrophyItemSlide 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+          font-weight: 700;
+        }
+        @keyframes kcTrophyItemSlide {
+          0%   { opacity: 0; transform: translateX(-12px) scale(0.9); }
+          60%  { transform: translateX(2px) scale(1.05); }
+          100% { opacity: 1; transform: translateX(0) scale(1); }
+        }
+        .kc-trophy-breakdown-icon {
+          font-size: 22px;
+          text-align: center;
+          filter: drop-shadow(0 0 6px rgba(255,215,0,0.6));
+        }
+        .kc-trophy-breakdown-label {
+          font-size: 15px;
+          color: #fff6c0;
+          text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+        }
+        .kc-trophy-breakdown-amount {
+          font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+          font-size: 20px; font-weight: 900;
+          color: #ffd700;
+          text-shadow: 0 0 12px rgba(255,215,0,0.9), 0 2px 4px rgba(0,0,0,0.9);
+          min-width: 52px;
+          text-align: right;
+        }
+        .kc-trophy-breakdown-legendary {
+          background: linear-gradient(135deg, rgba(255,79,163,0.35), rgba(255,215,0,0.35), rgba(77,208,255,0.35), rgba(168,85,247,0.35));
+          border: 2px solid rgba(255,255,255,0.8);
+          animation: kcTrophyItemSlide 0.35s cubic-bezier(0.22, 1, 0.36, 1), kcFanSSRRainbow 1.2s linear infinite;
+        }
+        .kc-trophy-breakdown-total {
+          display: flex; justify-content: space-between; align-items: center;
+          padding: 8px 12px;
+          margin-top: 4px;
+          border-radius: 12px;
+          background: linear-gradient(180deg, rgba(255,215,0,0.2), rgba(184,117,0,0.3));
+          border: 2px solid rgba(255,215,0,0.95);
+          animation: kcTrophyTotalPop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+          box-shadow: 0 0 20px rgba(255,215,0,0.6);
+        }
+        @keyframes kcTrophyTotalPop {
+          0%   { opacity: 0; transform: scale(0.6); }
+          60%  { transform: scale(1.12); }
+          100% { opacity: 1; transform: scale(1); }
+        }
+        .kc-trophy-breakdown-total-label {
+          font-size: 16px; font-weight: 900;
+          color: #ffffff;
+          text-shadow: 0 2px 4px rgba(0,0,0,0.9);
+          letter-spacing: 1px;
+        }
+        .kc-trophy-breakdown-total-amount {
+          font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+          font-size: 28px; font-weight: 900;
+          color: #fff;
+          text-shadow: 0 0 18px rgba(255,215,0,1), 0 2px 6px rgba(0,0,0,0.9);
+        }
+        @media (max-width: 640px) {
+          .kc-trophy-breakdown-frame { min-width: 240px; padding: 12px 14px; gap: 6px; }
+          .kc-trophy-breakdown-title { font-size: 16px; gap: 6px; }
+          .kc-trophy-breakdown-trophy { font-size: 20px; }
+          .kc-trophy-breakdown-icon { font-size: 18px; }
+          .kc-trophy-breakdown-label { font-size: 13px; }
+          .kc-trophy-breakdown-amount { font-size: 17px; min-width: 44px; }
+          .kc-trophy-breakdown-total-label { font-size: 13px; }
+          .kc-trophy-breakdown-total-amount { font-size: 22px; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .kc-trophy-breakdown-overlay,
+          .kc-trophy-breakdown-side,
+          .kc-trophy-breakdown-item,
+          .kc-trophy-breakdown-total,
+          .kc-trophy-breakdown-legendary { animation: none !important; }
+        }
+
+        /* ===== ComboCounter (in-battle streak display, tier-escalating visuals) ===== */
+        .kc-combo-counter {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 6px 14px;
+          border-radius: 999px;
+          font-weight: 900;
+          white-space: nowrap;
+          backdrop-filter: blur(4px);
+          animation: kcComboPopIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        @keyframes kcComboPopIn {
+          0%   { opacity: 0; transform: scale(0.6); }
+          100% { opacity: 1; transform: scale(1); }
+        }
+        .kc-combo-counter-self { font-size: 22px; }
+        .kc-combo-counter-opp  { font-size: 16px; opacity: 0.75; }
+        .kc-combo-prefix {
+          font-size: 0.7em;
+          letter-spacing: 2px;
+          opacity: 0.9;
+        }
+        .kc-combo-num {
+          font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+        }
+        /* Tier: normal (2-4) */
+        .kc-combo-tier-normal {
+          background: rgba(255,255,255,0.12);
+          border: 2px solid rgba(255,215,0,0.75);
+          color: #ffe680;
+          text-shadow: 0 0 8px rgba(255,215,0,0.6), 0 2px 3px rgba(0,0,0,0.9);
+          box-shadow: 0 0 14px rgba(255,215,0,0.35);
+        }
+        /* Tier: fire (5-6) */
+        .kc-combo-tier-fire {
+          background: radial-gradient(circle at 30% 50%, rgba(255,140,0,0.55), rgba(255,60,0,0.35));
+          border: 2px solid rgba(255,140,0,0.95);
+          color: #ffffff;
+          text-shadow: 0 0 10px rgba(255,80,0,0.9), 0 2px 4px rgba(0,0,0,0.9);
+          box-shadow: 0 0 22px rgba(255,140,0,0.7), inset 0 0 12px rgba(255,80,0,0.5);
+          animation: kcComboPopIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), kcComboFire 0.6s ease-in-out infinite alternate;
+        }
+        @keyframes kcComboFire {
+          0%   { box-shadow: 0 0 22px rgba(255,140,0,0.7), inset 0 0 12px rgba(255,80,0,0.5); }
+          100% { box-shadow: 0 0 32px rgba(255,180,0,0.95), inset 0 0 18px rgba(255,120,0,0.75); }
+        }
+        /* Tier: lightning (7-9) */
+        .kc-combo-tier-lightning {
+          background: radial-gradient(circle at 30% 50%, rgba(77,208,255,0.6), rgba(168,85,247,0.4));
+          border: 2px solid rgba(200,230,255,1);
+          color: #ffffff;
+          text-shadow: 0 0 12px rgba(77,208,255,0.95), 0 2px 4px rgba(0,0,0,0.9);
+          box-shadow: 0 0 28px rgba(77,208,255,0.75), inset 0 0 14px rgba(168,85,247,0.6);
+          animation: kcComboPopIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), kcComboLightning 0.35s steps(2, end) infinite;
+        }
+        @keyframes kcComboLightning {
+          0%   { box-shadow: 0 0 28px rgba(77,208,255,0.75), inset 0 0 14px rgba(168,85,247,0.6); filter: brightness(1); }
+          50%  { box-shadow: 0 0 40px rgba(200,230,255,1), inset 0 0 20px rgba(255,255,255,0.8); filter: brightness(1.3); }
+          100% { box-shadow: 0 0 28px rgba(77,208,255,0.75), inset 0 0 14px rgba(168,85,247,0.6); filter: brightness(1); }
+        }
+        /* Tier: fever (10+) — 虹色、kcFanSSRRainbow 流用 */
+        .kc-combo-tier-fever {
+          background: linear-gradient(45deg, #ff4fa3, #ffd700, #4dd0ff, #a855f7);
+          border: 3px solid rgba(255,255,255,0.95);
+          color: #ffffff;
+          text-shadow: 0 0 14px rgba(255,255,255,1), 0 2px 6px rgba(0,0,0,1);
+          box-shadow: 0 0 36px rgba(255,215,0,0.95), 0 0 72px rgba(255,79,163,0.6);
+          animation: kcComboPopIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), kcFanSSRRainbow 1.2s linear infinite;
+          padding: 8px 18px;
+        }
+        .kc-combo-counter-self.kc-combo-tier-fever { font-size: 26px; }
+        .kc-combo-counter-opp.kc-combo-tier-fever  { font-size: 18px; }
+        @media (max-width: 640px) {
+          .kc-combo-counter-self { font-size: 18px; padding: 5px 11px; }
+          .kc-combo-counter-opp  { font-size: 13px; padding: 4px 9px; }
+          .kc-combo-counter-self.kc-combo-tier-fever { font-size: 22px; padding: 6px 14px; }
+          .kc-combo-counter-opp.kc-combo-tier-fever  { font-size: 15px; padding: 5px 11px; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .kc-combo-counter,
+          .kc-combo-tier-fire,
+          .kc-combo-tier-lightning,
+          .kc-combo-tier-fever { animation: none !important; }
         }
 
         /* Round victory celebration telop */

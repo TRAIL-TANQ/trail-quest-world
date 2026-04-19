@@ -33,6 +33,8 @@
 import type { BattleCard } from './knowledgeCards';
 import { EFFECT_COLORS, ALL_BATTLE_CARDS } from './knowledgeCards';
 import type { StageRules } from './stages';
+import type { RoundBonuses } from './knowledgeBonuses';
+import { computePhase1Bonuses } from './knowledgeBonuses';
 
 export const BENCH_MAX_SLOTS = 6;
 
@@ -162,6 +164,14 @@ export interface GameState {
   usedGiantSnake: { player: boolean; ai: boolean }; // 大蛇の呑み込み効果（1回戦1回）
   usedElixir:     { player: boolean; ai: boolean }; // 不老不死の薬（1バトル=1試合1回、ラウンド跨ぎで保持）
   effectSuppressed: { player: boolean; ai: boolean }; // 聖女ジャンヌ「神の啓示」で相手効果をこのラウンド無効化
+  // ===== Combo bonus tracking (Phase 1) =====
+  // 連続破壊コンボ — 攻撃失敗 or ラウンド終了でリセット。side 別。
+  consecutiveKillStreak: { player: number; ai: number };
+  // そのラウンドで最後に破壊を起こした攻撃カード（round_end 時点のものが「フィニッシャー」）
+  roundFinisherCard: BattleCard | null;
+  roundFinisherSide: Side | null;
+  // advanceToNextRound で計算される直前ラウンドのボーナス内訳。UI が TrophyBonusBreakdown で読む。
+  lastRoundBonuses: RoundBonuses | null;
   // ===== Stage rules =====
   stageRules: StageRules | null;      // null = free battle (no stage rules)
   // ===== Round result =====
@@ -258,6 +268,10 @@ export function initGameState(
     usedGiantSnake: { player: false, ai: false },
     usedElixir:     { player: false, ai: false },
     effectSuppressed: { player: false, ai: false },
+    consecutiveKillStreak: { player: 0, ai: 0 },
+    roundFinisherCard: null,
+    roundFinisherSide: null,
+    lastRoundBonuses: null,
     stageRules: stageRules ?? null,
     roundWinner: null,
     history: [],
@@ -2671,6 +2685,11 @@ export function revealNextAttackCard(
       },
       attackRevealed: [],
       attackCurrentPower: 0,
+      // Attacker failed → their combo streak breaks. Defender's streak is preserved.
+      consecutiveKillStreak: {
+        ...state.consecutiveKillStreak,
+        [attackerSide]: 0,
+      },
     };
   }
 
@@ -2967,6 +2986,14 @@ export function resolveSubBattleWin(state: GameState): GameState {
     subBattleCount: state.subBattleCount + 1,
     lastSubBattle: result,
     history: [...state.history, result],
+    // Combo bonus tracking (Phase 1):
+    // Attacker won → their streak++ and they become the current finisher candidate.
+    consecutiveKillStreak: {
+      ...state.consecutiveKillStreak,
+      [attackerSide]: state.consecutiveKillStreak[attackerSide] + 1,
+    },
+    roundFinisherCard: lastAttackCard,
+    roundFinisherSide: attackerSide,
   };
 }
 
@@ -2981,8 +3008,23 @@ export function advanceToNextRound(state: GameState): GameState {
   const trophyFanBonus = state.trophyFans[state.round - 1] ?? 0;
   const newPlayerTrophies = state.roundWinner === 'player' ? state.playerTrophies + 1 : state.playerTrophies;
   const newAiTrophies = state.roundWinner === 'ai' ? state.aiTrophies + 1 : state.aiTrophies;
-  const newPlayerFans = state.roundWinner === 'player' ? state.playerFans + trophyFanBonus : state.playerFans;
-  const newAiFans = state.roundWinner === 'ai' ? state.aiFans + trophyFanBonus : state.aiFans;
+
+  // ===== Phase 1 combo bonus =====
+  // Compute winner's round bonuses (combo + finisher rarity + multiplier). Loser gets no bonus.
+  const winnerStreak = state.consecutiveKillStreak[state.roundWinner];
+  const roundBonuses = computePhase1Bonuses(
+    state.roundWinner,
+    winnerStreak,
+    state.roundFinisherCard,
+    state.roundFinisherSide,
+  );
+  const bonusFans = roundBonuses.total;
+  if (bonusFans > 0) {
+    console.log(`[Engine] Phase 1 bonus: ${state.roundWinner} earns +${bonusFans} extra fans (streak=${winnerStreak}, items=${roundBonuses.items.map(i => `${i.label}+${i.amount}`).join(', ')})`);
+  }
+
+  const newPlayerFans = state.roundWinner === 'player' ? state.playerFans + trophyFanBonus + bonusFans : state.playerFans;
+  const newAiFans = state.roundWinner === 'ai' ? state.aiFans + trophyFanBonus + bonusFans : state.aiFans;
 
   const nextRound = state.round + 1;
 
@@ -2998,6 +3040,7 @@ export function advanceToNextRound(state: GameState): GameState {
       aiTrophies: newAiTrophies,
       playerFans: newPlayerFans,
       aiFans: newAiFans,
+      lastRoundBonuses: roundBonuses,
       message: `最終結果: あなた ${newPlayerFans} ファン vs 相手 ${newAiFans} ファン`,
     };
   }
@@ -3084,6 +3127,11 @@ export function advanceToNextRound(state: GameState): GameState {
     lastRevealPowerAdded: 0,
     usedGiantSnake: { player: false, ai: false },
     effectSuppressed: { player: false, ai: false },
+    // ===== Combo bonus reset (Phase 1) =====
+    consecutiveKillStreak: { player: 0, ai: 0 },
+    roundFinisherCard: null,
+    roundFinisherSide: null,
+    lastRoundBonuses: roundBonuses, // UI reads this at cineStep=trophy_breakdown, cleared next advance
     message: `第${nextRound}回戦 デッキフェイズ：カードを選ぼう`,
   };
 }
