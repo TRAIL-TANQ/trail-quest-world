@@ -1820,6 +1820,28 @@ export function applyRevealEffect(
       console.log('[特殊効果] 楽市楽座: 足軽1枚をデッキトップへ');
       break;
     }
+    case 'nagashino': {
+      // 長篠の陣: 公開時、ベンチに鉄砲が3枚以上で攻撃+2（固定値、スケールしない）
+      // Phase 4 でトークン鉄砲も合算予定
+      if (role === 'attacker') {
+        const my = side === 'player' ? next.player : next.ai;
+        const sealed = next.sealedBenchNames[side];
+        const teppoCount = my.bench
+          .filter((b) => b.name === '鉄砲' && !sealed.includes(b.name))
+          .reduce((sum, b) => sum + b.count, 0);
+        if (teppoCount >= 3) {
+          bonusAttack += 2;
+          next = withBenchGlow(next, side, ['鉄砲']);
+          telop = { text: `🔫 長篠の陣！鉄砲${teppoCount}枚で攻撃+2`, color: '#ffd700' };
+        } else {
+          telop = { text: `🔫 長篠の陣（鉄砲${teppoCount}/3枚）`, color };
+        }
+        console.log(`[特殊効果] 長篠の陣: 鉄砲${teppoCount}枚 → ${teppoCount >= 3 ? '攻撃+2' : '条件未達'}`);
+      } else {
+        telop = { text: '🔫 長篠の陣！', color };
+      }
+      break;
+    }
     case 'cannon': {
       // 任意発動: consume 1 火薬 from bench for +2 attack.
       if (role === 'attacker') {
