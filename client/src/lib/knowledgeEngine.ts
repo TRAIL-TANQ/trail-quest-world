@@ -1842,6 +1842,12 @@ export function applyRevealEffect(
       }
       break;
     }
+    case 'bafousaku': {
+      // 馬防柵: passive defender デバフ（実処理は revealNextAttackCard）。
+      // reveal 時はテロップで配備宣言のみ。
+      telop = { text: '🏯 馬防柵を配備！相手の初撃を-1', color };
+      break;
+    }
     case 'cannon': {
       // 任意発動: consume 1 火薬 from bench for +2 attack.
       if (role === 'attacker') {
@@ -2802,6 +2808,30 @@ export function revealNextAttackCard(
     if (aura.bonus !== 0) console.log(`[Engine]   bench aura → bonus=${aura.bonus}, details=[${aura.details.map(d => `${d.benchCardName}:atk${d.atkBonus}`).join(', ')}]`);
   } else if (aura.bonus !== 0) {
     console.log(`[Engine]   bench aura bonus=${aura.bonus} DISCARDED (聖女ジャンヌ passive)`);
+  }
+
+  // ===== 馬防柵 (defender bench passive) — kk spec v7 Phase 2 2026-04-20 =====
+  //   - defender 側ベンチに馬防柵があり、かつサブバトル1枚目の reveal なら addedPower -= 1
+  //   - 最低 1 にクランプ（addedPower = Math.max(1, addedPower - 1)）
+  //   - 万里の長城 (computeAttackerAura 内) との違い:
+  //       * 万里: base atk == 1 の時は debuff スキップ
+  //       * 馬防柵: 常時 -1 + final clamp（kk が明示的に指定）
+  //   - ジャンヌ nullifyBuffs と同時発動 OK（base atk のみ → さらに -1 → max(1,...)）
+  //   - 判定は state.attackRevealed.length === 0（jeanne と同じシグナル）
+  const opp_bafou = otherSide(attackerSide);
+  const opp_state_bafou = opp_bafou === 'player' ? next.player : next.ai;
+  const opp_sealed_bafou = next.sealedBenchNames[opp_bafou];
+  const defenderHasBafousaku = opp_state_bafou.bench.some(
+    (b) => b.name === '馬防柵' && !opp_sealed_bafou.includes(b.name),
+  );
+  if (defenderHasBafousaku && state.attackRevealed.length === 0) {
+    const beforeBafou = addedPower;
+    addedPower = Math.max(1, addedPower - 1);
+    if (beforeBafou !== addedPower) {
+      console.log(`[Engine]   bafousaku debuff: ${beforeBafou} → ${addedPower} (defender bench 馬防柵, sub-battle 1st reveal)`);
+    } else {
+      console.log(`[Engine]   bafousaku: clamp at 1 (no change, addedPower already ${addedPower})`);
+    }
   }
 
   // Override telop with saint-jeanne banner when nullified (overwrites card's own telop).
