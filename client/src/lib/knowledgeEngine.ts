@@ -1799,8 +1799,25 @@ export function applyRevealEffect(
       telop = { text: '🔬アインシュタインを強化', color };
       break;
     }
-    case 'gun': case 'rakuichi': {
+    case 'gun': {
       telop = { text: '🏯安土桃山の道具！', color };
+      break;
+    }
+    case 'rakuichi': {
+      // 楽市楽座: ベンチの足軽1枚をデッキトップに戻す（自動発動、複数時は先頭採用）
+      const my = side === 'player' ? next.player : next.ai;
+      const sealed = next.sealedBenchNames[side];
+      const ashigaruSlot = my.bench.find((b) => b.name === '足軽' && !sealed.includes(b.name));
+      if (ashigaruSlot) {
+        const newBench = removeOneFromBench(my.bench, '足軽');
+        const newDeck = [ashigaruSlot.card, ...my.deck];
+        next = applySide(next, side, { ...my, bench: newBench, deck: newDeck });
+        next = withBenchGlow(next, side, ['足軽']);
+        telop = { text: '🏪 楽市楽座！足軽1枚をデッキトップへ', color };
+      } else {
+        telop = { text: '🏪 楽市楽座（ベンチに足軽がいません）', color };
+      }
+      console.log('[特殊効果] 楽市楽座: 足軽1枚をデッキトップへ');
       break;
     }
     case 'cannon': {
