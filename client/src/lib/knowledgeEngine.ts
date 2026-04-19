@@ -1903,18 +1903,12 @@ export function applyRevealEffect(
         const saintTemplate = ALL_BATTLE_CARDS.find((c) => c.name === '聖女ジャンヌ');
         if (saintTemplate) {
           if (side === 'ai') {
-            // 除外からジャンヌを取り除く
-            const newExile = next.exile[side].filter((c) => c.id !== exiledJeanne.id);
-            // 聖女ジャンヌに変換してデッキトップに
+            // 元ジャンヌは除外に残し、聖女ジャンヌだけをデッキトップに生成する（spec: kk 2026-04-19）
             const saintCard: BattleCard = { ...saintTemplate, id: `saint-jeanne-prayer-${Date.now()}` };
             const my = next.ai;
-            next = applySide(
-              { ...next, exile: { ...next.exile, [side]: newExile } },
-              side,
-              { ...my, deck: [saintCard, ...my.deck] },
-            );
+            next = applySide(next, side, { ...my, deck: [saintCard, ...my.deck] });
             telop = { text: '✨ 聖なる祈り！ジャンヌが聖女として蘇る！', color: '#ffd700' };
-            console.log(`[Engine] 祈りの光 → 除外のジャンヌ・ダルクを聖女ジャンヌとしてデッキトップへ`);
+            console.log(`[Engine] 祈りの光 → 除外のジャンヌ・ダルクはそのまま、聖女ジャンヌをデッキトップへ`);
           } else {
             telop = { text: '✨ 聖なる祈り！ジャンヌが聖女として蘇る...', color: '#ffd700' };
           }

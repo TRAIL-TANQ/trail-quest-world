@@ -1665,11 +1665,10 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                     const saintTemplate = ALL_BATTLE_CARDS.find((c) => c.name === '聖女ジャンヌ');
                     if (!saintTemplate) return prev;
                     const saintCard = { ...saintTemplate, id: `saint-jeanne-prayer-${Date.now()}` };
-                    const newExile = prev.exile[mySide].filter((c) => c.id !== chosen.id);
+                    // 元ジャンヌは除外に残し、聖女ジャンヌだけをデッキトップに生成（spec: kk 2026-04-19）
                     return {
                       ...prev,
                       [mySide]: { ...prev[mySide], deck: [saintCard, ...prev[mySide].deck] },
-                      exile: { ...prev.exile, [mySide]: newExile },
                       effectTelop: { text: '✨ 聖なる祈り！ジャンヌが聖女として蘇る！', color: '#ffd700', key: Date.now() },
                     };
                   });
@@ -1832,7 +1831,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
           // ===== Check for transformation (火刑 → 聖女ジャンヌ) =====
           {
             const lastRevealed = rs.attackRevealed[rs.attackRevealed.length - 1];
-            if (lastRevealed?.name === '聖女ジャンヌ' && lastRevealed.id.startsWith('evolved-saint-jeanne-')) {
+            if (lastRevealed?.name === '聖女ジャンヌ' && lastRevealed.id.startsWith('saint-jeanne-prayer-')) {
               const burningStakeTemplate = ALL_BATTLE_CARDS.find((c) => c.name === '火刑');
               if (burningStakeTemplate) {
                 playSound('evolve');
