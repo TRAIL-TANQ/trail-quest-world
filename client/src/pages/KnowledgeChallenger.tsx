@@ -2720,7 +2720,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
         timeSeconds: 0,
         accuracy: 1,
         isBestScore: false,
-        label: '獲得ファン',
+        label: 'FAN',
         // PvP は元々 ALT を配布しない → ResultPage でも加算させない
         altAlreadyGranted: true,
       });
@@ -2818,7 +2818,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
       timeSeconds: 0,
       accuracy: won ? 1 : 0.3,
       isBestScore: won,
-      label: '獲得ファン',
+      label: 'FAN',
       // KC 経由は ResultPage で addTotalAlt をスキップさせる（kk Q6）。
       // ファン換算 ALT は「受け取る」ボタン、ステージボーナスは上で既に加算済み。
       altAlreadyGranted: true,

@@ -22,7 +22,7 @@ export default function ResultPage() {
 
   const score = lastResult?.score ?? 185;
   const isBest = lastResult?.isBestScore ?? true;
-  // kk 2026-04-19: score 下のラベル（既定 'PT'、KC は '獲得ファン'）
+  // kk 2026-04-19: score 下のラベル（既定 'PT'、KC は 'FAN'）
   const scoreLabel = lastResult?.label ?? 'PT';
   // KC 経由は ALT を「受け取る」ボタンで加算済み（altAlreadyGranted=true）。
   // ResultPage 側の重複加算をスキップし、関連 UI も隠す。

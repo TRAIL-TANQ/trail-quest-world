@@ -31,7 +31,7 @@ export interface GameResult {
   isBestScore?: boolean;
   /**
    * 画面上の score ラベル（kk 2026-04-19）。
-   * KC（カードバトル）では '獲得ファン'、他ゲームは未設定で既定の 'PT'。
+   * KC（カードバトル）では 'FAN'、他ゲームは未設定で既定の 'PT'。
    */
   label?: string;
   /**

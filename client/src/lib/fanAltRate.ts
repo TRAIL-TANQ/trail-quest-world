@@ -1,13 +1,13 @@
 /**
- * Fan → ALT 換算レート（kk 2026-04-19 仕様）
+ * Fan → ALT 換算レート（kk 2026-04-19 最終確定）
  *
- * 通常時は 100 獲得ファン = 65 ALT（1:0.65）。
+ * 通常時は 100 FAN = 25 ALT（1:0.25）。
  * 将来のイベント時に動的に変動可能になるよう、定数を直接参照せず
  * getFanToAltRate() を経由する設計。
  */
 
 /** 通常時の換算レート。イベント未発動時のフォールバック。 */
-export const DEFAULT_FAN_TO_ALT_RATE = 0.65;
+export const DEFAULT_FAN_TO_ALT_RATE = 0.25;
 
 /**
  * 現在適用する fan → ALT 換算レートを返す。
