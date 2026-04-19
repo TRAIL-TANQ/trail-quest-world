@@ -22,6 +22,11 @@ export default function ResultPage() {
 
   const score = lastResult?.score ?? 185;
   const isBest = lastResult?.isBestScore ?? true;
+  // kk 2026-04-19: score 下のラベル（既定 'PT'、KC は '獲得ファン'）
+  const scoreLabel = lastResult?.label ?? 'PT';
+  // KC 経由は ALT を「受け取る」ボタンで加算済み（altAlreadyGranted=true）。
+  // ResultPage 側の重複加算をスキップし、関連 UI も隠す。
+  const altAlreadyGranted = lastResult?.altAlreadyGranted === true;
   const altEarned = 10;
   const bonusAlt = isBest ? 5 : 0;
   const totalAltEarned = altEarned + bonusAlt;
@@ -42,7 +47,14 @@ export default function ResultPage() {
 
     const t1 = setTimeout(() => setShowScore(true), 300);
     const t2 = setTimeout(() => setShowDetails(true), 1800);
-    const t3 = setTimeout(() => { setShowLevelUp(true); addTotalAlt(totalAltEarned); triggerEarnEffect(totalAltEarned); }, 2500);
+    const t3 = setTimeout(() => {
+      setShowLevelUp(true);
+      // KC 経由（altAlreadyGranted=true）はここで加算しない — 重複防止
+      if (!altAlreadyGranted) {
+        addTotalAlt(totalAltEarned);
+        triggerEarnEffect(totalAltEarned);
+      }
+    }, 2500);
 
     const interval = setInterval(() => {
       const elapsed = Date.now() - startTime - 300;
@@ -101,7 +113,7 @@ export default function ResultPage() {
                 style={{ color: '#ffd700', textShadow: '0 0 30px rgba(255,215,0,0.5), 0 0 60px rgba(255,215,0,0.2), 0 4px 8px rgba(0,0,0,0.5)' }}>
                 {displayScore}
               </p>
-              <p className="text-sm text-amber-200/40 mt-1 font-[var(--font-orbitron)]">PT</p>
+              <p className="text-sm text-amber-200/40 mt-1 font-[var(--font-orbitron)]">{scoreLabel}</p>
             </div>
           )}
         </div>
@@ -114,15 +126,20 @@ export default function ResultPage() {
               boxShadow: '0 4px 20px rgba(0,0,0,0.4), inset 0 0 20px rgba(255,215,0,0.03)',
             }}>
             <div className="space-y-2.5 mb-4">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-amber-200/50">スコア</span>
-                <span className="text-amber-100 font-bold">+{altEarned}</span>
-              </div>
-              {isBest && (
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-amber-200/50">🏆 ベスト更新ボーナス！</span>
-                  <span className="font-bold" style={{ color: '#ffd700' }}>+{bonusAlt}</span>
-                </div>
+              {/* KC 経由は「スコア +10 / ベスト更新 +5」の breakdown を省く（ファン換算で別途受け取り済） */}
+              {!altAlreadyGranted && (
+                <>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-amber-200/50">スコア</span>
+                    <span className="text-amber-100 font-bold">+{altEarned}</span>
+                  </div>
+                  {isBest && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-amber-200/50">🏆 ベスト更新ボーナス！</span>
+                      <span className="font-bold" style={{ color: '#ffd700' }}>+{bonusAlt}</span>
+                    </div>
+                  )}
+                </>
               )}
               {lastResult?.accuracy !== undefined && (
                 <div className="flex items-center justify-between text-sm">
@@ -140,15 +157,24 @@ export default function ResultPage() {
 
             <div className="h-px mb-4" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,215,0,0.2), transparent)' }} />
 
-            <div className="rounded-xl p-3 text-center"
-              style={{ background: 'linear-gradient(135deg, rgba(255,215,0,0.1), rgba(255,215,0,0.03))', border: '1px solid rgba(255,215,0,0.2)' }}>
-              <div className="flex items-center justify-center gap-2">
-                <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold"
-                  style={{ background: 'linear-gradient(135deg, #ffd700, #d4a500)', color: '#0b1128', boxShadow: '0 0 8px rgba(255,215,0,0.3)' }}>A</div>
-                <span className="text-2xl font-bold font-[var(--font-orbitron)]" style={{ color: '#ffd700' }}>+{totalAltEarned}</span>
-                <span className="text-sm" style={{ color: '#ffd700' }}>ALT</span>
+            {altAlreadyGranted ? (
+              <div className="rounded-xl p-3 text-center"
+                style={{ background: 'linear-gradient(135deg, rgba(34,197,94,0.12), rgba(34,197,94,0.04))', border: '1px solid rgba(34,197,94,0.3)' }}>
+                <p className="text-xs font-bold" style={{ color: '#4ade80' }}>
+                  ✨ ALT はバトル画面で受け取り済
+                </p>
               </div>
-            </div>
+            ) : (
+              <div className="rounded-xl p-3 text-center"
+                style={{ background: 'linear-gradient(135deg, rgba(255,215,0,0.1), rgba(255,215,0,0.03))', border: '1px solid rgba(255,215,0,0.2)' }}>
+                <div className="flex items-center justify-center gap-2">
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold"
+                    style={{ background: 'linear-gradient(135deg, #ffd700, #d4a500)', color: '#0b1128', boxShadow: '0 0 8px rgba(255,215,0,0.3)' }}>A</div>
+                  <span className="text-2xl font-bold font-[var(--font-orbitron)]" style={{ color: '#ffd700' }}>+{totalAltEarned}</span>
+                  <span className="text-sm" style={{ color: '#ffd700' }}>ALT</span>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
