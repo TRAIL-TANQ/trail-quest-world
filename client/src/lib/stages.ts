@@ -418,12 +418,27 @@ function findCardByName(name: string): BattleCard | undefined {
   return ALL_BATTLE_CARDS.find((c) => c.name === name);
 }
 
+interface BuildNamedDeckOptions {
+  /**
+   * allNames < deckSize の時に random N でパディングするかどうか。
+   * - true (default): 既存動作、不足分を draftable N からランダム補填
+   * - false: 補填せず names のみで構築 + console.warn（starter デッキで使用）
+   *
+   * kk 2026-04-19: starter デッキでテーマ外カード（野口英世等）が混入する
+   * バグを構造的に防ぐため、starter は false で呼ぶ。random/AI デッキは
+   * 意図的にランダム補填なので true のまま。
+   */
+  fillNoise?: boolean;
+}
+
 /** Build a deck from named cards, filling noise with random N cards */
 function buildNamedDeck(
   prefix: string,
   cardNames: string[],
   deckSize: number = INITIAL_DECK_SIZE,
+  options: BuildNamedDeckOptions = {},
 ): BattleCard[] {
+  const { fillNoise = true } = options;
   const stamp = Date.now();
   const deck: BattleCard[] = [];
   const usedNames = new Set<string>();
@@ -443,19 +458,24 @@ function buildNamedDeck(
 
   const filledFromNames = deck.length;
 
-  // Fill remaining with random N cards (noise)
   if (deck.length < deckSize) {
-    const nPool = shuffled(
-      DRAFTABLE_BATTLE_CARDS.filter((c) => c.rarity === 'N' && !usedNames.has(c.name)),
-    );
-    for (const c of nPool) {
-      if (deck.length >= deckSize) break;
-      if (deck.filter((d) => d.name === c.name).length >= maxSameNameFor(c.rarity, c.name)) continue;
-      deck.push({ ...c, id: `${prefix}-${c.id}-${deck.length}-${stamp}` });
+    if (fillNoise) {
+      // Fill remaining with random N cards (noise)
+      const nPool = shuffled(
+        DRAFTABLE_BATTLE_CARDS.filter((c) => c.rarity === 'N' && !usedNames.has(c.name)),
+      );
+      for (const c of nPool) {
+        if (deck.length >= deckSize) break;
+        if (deck.filter((d) => d.name === c.name).length >= maxSameNameFor(c.rarity, c.name)) continue;
+        deck.push({ ...c, id: `${prefix}-${c.id}-${deck.length}-${stamp}` });
+      }
+    } else {
+      // starter デッキ: random 補填を封じる。不足は定義側のバグなので明示する。
+      console.warn(`[デッキ構築] ${prefix}: 名前指定 ${deck.length}枚 < 目標 ${deckSize}枚。starter は random 補填をスキップ（allNames を見直してください）`);
     }
   }
 
-  console.log(`[デッキ構築] prefix=${prefix} 要求${cardNames.length}名 → 名前一致${filledFromNames}枚 + 補填${deck.length - filledFromNames}枚 = 合計${deck.length}枚 (deckSize=${deckSize})`);
+  console.log(`[デッキ構築] prefix=${prefix} 要求${cardNames.length}名 → 名前一致${filledFromNames}枚 + 補填${deck.length - filledFromNames}枚 = 合計${deck.length}枚 (deckSize=${deckSize}, fillNoise=${fillNoise})`);
   if (missedNames.length > 0) {
     console.warn(`[デッキ構築] 不一致カード: ${missedNames.join(', ')}`);
   }
@@ -467,7 +487,7 @@ function buildNamedDeck(
 /** Build a player starter deck from a StarterDeck definition */
 export function buildStarterDeck(starter: StarterDeck): BattleCard[] {
   if (starter.id === 'starter-random') {
-    // Random: 1 R trump + 9 random N
+    // Random: 1 R trump + 9 random N. 意図的にランダム構成なので fillNoise は true のまま。
     const rPool = shuffled(DRAFTABLE_BATTLE_CARDS.filter((c) => c.rarity === 'R'));
     const trump = rPool[0];
     const nPool = shuffled(DRAFTABLE_BATTLE_CARDS.filter((c) => c.rarity === 'N' && c.name !== trump?.name));
@@ -475,8 +495,9 @@ export function buildStarterDeck(starter: StarterDeck): BattleCard[] {
     return buildNamedDeck('player', names);
   }
 
+  // テーマ starter: random N 補填を封じ、テーマ外混入を構造的に防ぐ
   const allNames = [starter.trumpCard, ...starter.themeCards, ...starter.noiseCards];
-  return buildNamedDeck('player', allNames);
+  return buildNamedDeck('player', allNames, INITIAL_DECK_SIZE, { fillNoise: false });
 }
 
 /** Create NPC initial deck from stage config */
