@@ -90,6 +90,8 @@ const TURN_TRANSITION_MS  = 500;   // between sub-battles (was 800)
 const FINAL_REVEAL_MS     = 1500;  // hold final game_over overlay (was 2000)
 const POWER_ADD_PAUSE_MS  = 200;   // after reveal, before power-add animation (was 400)
 const POWER_COMPARE_MS    = 300;   // pause for power comparison display (was 500)
+// Pachinko-style fan totalizer: 1.3s slot-spin + 0.3s hold at final value.
+const FAN_COUNT_UP_MS     = 1600;
 
 export interface KnowledgeChallengerProps {
   /** When set, this component runs in 2-player local mode instead of vs-AI. */
@@ -123,6 +125,171 @@ function useCountUpValue(target: number, durationMs = 500): number {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [target]);
   return display;
+}
+
+/**
+ * FanCountUpOverlay — パチンコ/スロット風の累計ファン加算演出。
+ *
+ * ラウンド終了後に from → to の数値を、各桁独立のスロット回転で表現する。
+ * 1の位が最も速く回り、10の位、100の位と順に遅く・早く停止する
+ * （＝高位桁から先に settle し、最後に1の位が止まる）。
+ *
+ * - 両プレイヤー分を同一 overlay で同時描画（上段=相手、180°回転）
+ * - 桁数は max(from, to) から動的決定（1〜3桁以上に自動対応）
+ * - `prefers-reduced-motion` 時は最終値へ即スナップ
+ * - 各桁が settle したタイミングで playCardLand、全体確定で playSuccess
+ */
+interface FanCountUpOverlayProps {
+  fromPlayer: number;
+  toPlayer: number;
+  fromAi: number;
+  toAi: number;
+  duration: number; // ms（スピン時間。hold 時間は呼び出し側で確保）
+  onComplete?: () => void;
+}
+function FanCountUpOverlay({ fromPlayer, toPlayer, fromAi, toAi, duration, onComplete }: FanCountUpOverlayProps) {
+  // スピン中の各桁表示値（左=高位 → 右=低位）
+  const [playerDigits, setPlayerDigits] = useState<number[]>(() => fanDigits(fromPlayer, fromPlayer, toPlayer));
+  const [aiDigits,     setAiDigits]     = useState<number[]>(() => fanDigits(fromAi,     fromAi,     toAi));
+  const completedRef = useRef(false);
+  const settledRef   = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    completedRef.current = false;
+    settledRef.current = new Set();
+
+    const prefersReduced = typeof window !== 'undefined'
+      && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReduced) {
+      setPlayerDigits(fanDigits(toPlayer, fromPlayer, toPlayer));
+      setAiDigits(fanDigits(toAi,     fromAi,     toAi));
+      completedRef.current = true;
+      const t = window.setTimeout(() => onComplete?.(), 200);
+      return () => window.clearTimeout(t);
+    }
+
+    const numDigitsP = fanDigitCount(fromPlayer, toPlayer);
+    const numDigitsA = fanDigitCount(fromAi,     toAi);
+    const startedAt  = performance.now();
+
+    let rafId = 0;
+    const tick = () => {
+      const now = performance.now();
+      const elapsed = now - startedAt;
+      const t = Math.min(1, elapsed / duration);
+
+      setPlayerDigits(computeSpinDigits(t, fromPlayer, toPlayer, numDigitsP, elapsed, 'p', settledRef.current));
+      setAiDigits(    computeSpinDigits(t, fromAi,     toAi,     numDigitsA, elapsed, 'a', settledRef.current));
+
+      if (t < 1) {
+        rafId = requestAnimationFrame(tick);
+      } else if (!completedRef.current) {
+        completedRef.current = true;
+        // 全桁確定 SE
+        try { playSuccess(); } catch { /* noop */ }
+        // 0.3s ホールド後に onComplete
+        window.setTimeout(() => onComplete?.(), 300);
+      }
+    };
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
+    // onComplete は useRef で持たない分、依存に入れない（親側で安定参照済みとみなす）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fromPlayer, toPlayer, fromAi, toAi, duration]);
+
+  const renderSide = (digits: number[], isOpponent: boolean) => (
+    <div
+      className="kc-fan-countup-side"
+      style={{ transform: isOpponent ? 'rotate(180deg)' : 'none' }}
+    >
+      <div className="kc-fan-countup-frame">
+        <span className="kc-fan-countup-star">⭐</span>
+        <span className="kc-fan-countup-digits">
+          {digits.map((d, idx) => (
+            <span key={idx} className="kc-fan-countup-digit">{d}</span>
+          ))}
+        </span>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 pointer-events-none z-[55] flex flex-col kc-fan-countup-overlay">
+      <div className="flex-1 flex items-center justify-center">
+        {renderSide(aiDigits, true)}
+      </div>
+      {/* 中央の金色パーティクルライン */}
+      <div className="relative w-full h-0">
+        <div className="absolute left-0 right-0 top-0 flex justify-around pointer-events-none">
+          {Array.from({ length: 14 }).map((_, i) => (
+            <span key={i} className="kc-fan-countup-spark" style={{ animationDelay: `${i * 60}ms` }} />
+          ))}
+        </div>
+      </div>
+      <div className="flex-1 flex items-center justify-center">
+        {renderSide(playerDigits, false)}
+      </div>
+    </div>
+  );
+}
+
+/** max(from, to) の桁数（最低1）。 */
+function fanDigitCount(from: number, to: number): number {
+  const max = Math.max(Math.abs(from), Math.abs(to), 0);
+  return Math.max(1, String(max).length);
+}
+
+/** 指定値を `numDigits` 桁に展開（左=高位 → 右=低位）。 */
+function fanDigits(value: number, from: number, to: number): number[] {
+  const n = fanDigitCount(from, to);
+  const v = Math.max(0, Math.floor(value));
+  const out: number[] = [];
+  for (let i = n - 1; i >= 0; i--) {
+    out.push(Math.floor(v / Math.pow(10, i)) % 10);
+  }
+  return out;
+}
+
+/**
+ * スロット風の桁別計算。
+ *   - t < settleT_i: 高周波で 0-9 を循環（低位ほど速く回る）
+ *   - t ≥ settleT_i: to の該当桁に固定（初回 settle 時に SE）
+ *   - settleT_i: 低位ほど遅く settle（高位から先に止まる）
+ */
+function computeSpinDigits(
+  t: number,
+  from: number,
+  to: number,
+  numDigits: number,
+  elapsedMs: number,
+  sideKey: string,
+  settledSet: Set<string>,
+): number[] {
+  const eased = 1 - Math.pow(1 - t, 2);
+  const currentApprox = from + (to - from) * eased;
+  const out: number[] = [];
+  for (let pos = numDigits - 1; pos >= 0; pos--) {
+    // pos: 0=ones, 1=tens, 2=hundreds ...
+    // 低位（pos=0）ほど遅く settle。
+    const settleT = Math.max(0.35, 0.95 - (numDigits - 1 - pos) * 0.20);
+    if (t >= settleT) {
+      const d = Math.floor(Math.max(0, to) / Math.pow(10, pos)) % 10;
+      out.push(d);
+      const key = `${sideKey}-${pos}`;
+      if (!settledSet.has(key)) {
+        settledSet.add(key);
+        try { playCardLand(); } catch { /* noop */ }
+      }
+    } else {
+      // 低位ほど速いスピン（ones=30Hz, tens=15Hz, hundreds=10Hz...）
+      const hz = 30 / (pos + 1);
+      const cycleFrame = Math.floor((elapsedMs * hz) / 1000);
+      // currentApprox 由来のベースに少しランダムっぽい乱れを加える
+      const base = Math.floor(Math.max(0, currentApprox) / Math.pow(10, pos)) % 10;
+      out.push((base + cycleFrame) % 10);
+    }
+  }
+  return out;
 }
 
 export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChallengerProps = {}) {
@@ -183,6 +350,13 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
   };
   const [fanFlights, setFanFlights] = useState<FanFlight[]>([]);
   const lastFanFlightIdxRef = useRef<number>(0);
+  // ラウンド終了時のパチンコ風ファン累計カウントアップ演出。
+  //   fromPlayer/fromAi: 今ラウンド加算前の累計（round_end 処理の直前にスナップショット）
+  //   toPlayer/toAi    : 今ラウンド加算後の累計（advanceToNextRound 直後の値）
+  const [fanCountUp, setFanCountUp] = useState<{
+    fromPlayer: number; toPlayer: number;
+    fromAi: number;     toAi: number;
+  } | null>(null);
   const [imagesPreloaded, setImagesPreloaded] = useState(false);
   const [preloadProgress, setPreloadProgress] = useState(0);
   const imageCache = useRef<Map<string, HTMLImageElement>>(new Map());
@@ -194,6 +368,8 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
   //   defender_show : defender card on field, "🛡️ 防御パワー X" 0.8s
   //   attack_reveal : one attacker card animating in (back → flip → settled)
   //   resolve       : "🚩 フラッグ奪取！" outcome banner 2s
+  //   round_end     : ROUND CLEAR stamp + reason/victory banners
+  //   fan_count_up  : pachinko-style slot-reel fan totalizer (after round_end)
   //   game_over     : end banner
   type CinematicStep =
     | 'idle'
@@ -203,6 +379,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
     | 'resolve'
     | 'turn_transition'
     | 'round_end'
+    | 'fan_count_up'
     | 'game_over';
   const [cineStep, setCineStep] = useState<CinematicStep>('idle');
   // Skip / manual advance via a latch: the battle loop creates an
@@ -1661,6 +1838,9 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
             // Advance to next round (awards fans, resets bench, or game_over)
             setDeckOffer(null);
             setRemovedCards([]);
+            // Capture pre-advance fan totals for the count-up overlay.
+            const prevPlayerFans = rs.playerFans;
+            const prevAiFans     = rs.aiFans;
             let advanced: GameState | null = null;
             setGameState((prev) => {
               if (!prev) return prev;
@@ -1672,6 +1852,21 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
             if (unmountedRef.current || !advanced) return;
 
             const advs = advanced as GameState;
+
+            // Pachinko-style fan totalizer — fires between round_end and the next
+            // phase (either transition banner or game_over). Skipped if both
+            // sides' totals are unchanged (defensive; normally trophy fans add).
+            if (advs.playerFans !== prevPlayerFans || advs.aiFans !== prevAiFans) {
+              setFanCountUp({
+                fromPlayer: prevPlayerFans, toPlayer: advs.playerFans,
+                fromAi:     prevAiFans,     toAi:     advs.aiFans,
+              });
+              setCineStep('fan_count_up');
+              await waitStep(FAN_COUNT_UP_MS);
+              if (unmountedRef.current) return;
+              setFanCountUp(null);
+            }
+
             if (advs.phase === 'game_over') {
               // Final result: show 5-round summary
               if (isPvP && pvpSession) {
@@ -1801,6 +1996,9 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
               // Advance to next round
               setDeckOffer(null);
               setRemovedCards([]);
+              // Capture pre-advance fan totals for the count-up overlay.
+              const prevPlayerFans2 = rzs.playerFans;
+              const prevAiFans2     = rzs.aiFans;
               let advanced: GameState | null = null;
               setGameState((prev) => {
                 if (!prev) return prev;
@@ -1812,6 +2010,19 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
               if (unmountedRef.current || !advanced) return;
 
               const advs = advanced as GameState;
+
+              // Pachinko-style fan totalizer — between round_end and next phase.
+              if (advs.playerFans !== prevPlayerFans2 || advs.aiFans !== prevAiFans2) {
+                setFanCountUp({
+                  fromPlayer: prevPlayerFans2, toPlayer: advs.playerFans,
+                  fromAi:     prevAiFans2,     toAi:     advs.aiFans,
+                });
+                setCineStep('fan_count_up');
+                await waitStep(FAN_COUNT_UP_MS);
+                if (unmountedRef.current) return;
+                setFanCountUp(null);
+              }
+
               if (advs.phase === 'game_over') {
                 if (isPvP && pvpSession) {
                   const winnerName = advs.winner === 'player' ? pvpSession.player1.childName : pvpSession.player2.childName;
@@ -4457,6 +4668,17 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
           </div>
         )}
 
+        {/* ====== FanCountUp: ラウンド終了時の累計ファンパチンコ演出 ====== */}
+        {cineStep === 'fan_count_up' && fanCountUp && (
+          <FanCountUpOverlay
+            fromPlayer={fanCountUp.fromPlayer}
+            toPlayer={fanCountUp.toPlayer}
+            fromAi={fanCountUp.fromAi}
+            toAi={fanCountUp.toAi}
+            duration={1300}
+          />
+        )}
+
         {/* ====== Turn Transition: vignette color shift (no text) ====== */}
         {cineStep === 'turn_transition' && (
           <div className="absolute inset-0 pointer-events-none z-40 kc-vignette-in" style={{
@@ -5920,6 +6142,88 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
         }
         @media (prefers-reduced-motion: reduce) {
           .kc-fan-flight, .kc-fan-flight-ssr, .kc-fan-flight-particle { animation-duration: 1ms !important; opacity: 0.2 !important; }
+        }
+
+        /* ===== FanCountUp (pachinko totalizer, round_end → next) ===== */
+        .kc-fan-countup-overlay {
+          background: radial-gradient(ellipse at center, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.15) 60%, rgba(0,0,0,0) 100%);
+          animation: kcFanCountUpFade 0.25s ease-out;
+        }
+        @keyframes kcFanCountUpFade {
+          0%   { opacity: 0; }
+          100% { opacity: 1; }
+        }
+        .kc-fan-countup-side {
+          animation: kcFanCountUpPopIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+          will-change: transform, opacity;
+        }
+        @keyframes kcFanCountUpPopIn {
+          0%   { opacity: 0; transform: scale(0.6); }
+          100% { opacity: 1; transform: scale(1); }
+        }
+        .kc-fan-countup-frame {
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          padding: 14px 26px;
+          border-radius: 20px;
+          background: linear-gradient(135deg, rgba(20,14,40,0.85), rgba(40,24,8,0.85));
+          border: 3px solid rgba(255,215,0,0.9);
+          box-shadow: 0 0 40px rgba(255,215,0,0.55), 0 0 80px rgba(255,215,0,0.25), inset 0 0 20px rgba(255,215,0,0.25);
+        }
+        .kc-fan-countup-star {
+          font-size: 36px;
+          filter: drop-shadow(0 0 10px rgba(255,215,0,0.9));
+        }
+        .kc-fan-countup-digits {
+          display: inline-flex;
+          gap: 4px;
+        }
+        .kc-fan-countup-digit {
+          display: inline-block;
+          min-width: 48px;
+          text-align: center;
+          font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+          font-size: 64px;
+          font-weight: 900;
+          line-height: 1;
+          color: #ffe680;
+          text-shadow: 0 0 18px rgba(255,215,0,0.9), 0 0 36px rgba(255,215,0,0.55), 0 3px 6px rgba(0,0,0,0.9);
+          background: linear-gradient(180deg, #fff6c0 0%, #ffd700 45%, #b87500 100%);
+          -webkit-background-clip: text;
+          background-clip: text;
+          -webkit-text-fill-color: transparent;
+          animation: kcFanDigitShake 0.08s linear infinite;
+        }
+        @keyframes kcFanDigitShake {
+          0%, 100% { transform: translateY(0); }
+          50%      { transform: translateY(-1px); }
+        }
+        @media (max-width: 640px) {
+          .kc-fan-countup-star { font-size: 28px; }
+          .kc-fan-countup-digit { min-width: 36px; font-size: 48px; }
+          .kc-fan-countup-frame { padding: 10px 18px; border-radius: 16px; gap: 6px; }
+        }
+        .kc-fan-countup-spark {
+          width: 6px; height: 6px;
+          border-radius: 50%;
+          background: radial-gradient(circle, #fff6c0 0%, #ffd700 40%, transparent 70%);
+          box-shadow: 0 0 12px rgba(255,215,0,0.9);
+          animation: kcFanCountupSpark 0.9s ease-out infinite;
+          opacity: 0;
+        }
+        @keyframes kcFanCountupSpark {
+          0%   { opacity: 0; transform: translateY(0) scale(0.4); }
+          40%  { opacity: 1; transform: translateY(-10px) scale(1.2); }
+          100% { opacity: 0; transform: translateY(-24px) scale(0.6); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .kc-fan-countup-overlay,
+          .kc-fan-countup-side,
+          .kc-fan-countup-digit,
+          .kc-fan-countup-spark {
+            animation: none !important;
+          }
         }
 
         /* Round victory celebration telop */
