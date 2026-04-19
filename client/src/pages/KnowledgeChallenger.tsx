@@ -5123,7 +5123,8 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
             border: '2px solid rgba(168,85,247,0.5)',
           }} onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-black mb-3" style={{ color: '#a855f7' }}>🚫 除外されたカード</h3>
-            {(['player', 'ai'] as const).map((side) => {
+            {/* kk spec: 上=相手、下=自分（バトル画面のレイアウトと整合） */}
+            {(['ai', 'player'] as const).map((side) => {
               const cards = gameState.exile[side];
               if (cards.length === 0) return null;
               return (
