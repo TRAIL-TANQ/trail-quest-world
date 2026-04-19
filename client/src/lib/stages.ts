@@ -10,7 +10,7 @@ import type { BattleCard, CardRarity } from './knowledgeCards';
 // ===== Stage Rules =====
 export interface StageRules {
   benchLimit?: number;            // player bench max (default 6)
-  deckPhaseCards?: number;        // cards offered per deck phase (default 9)
+  deckPhaseCards?: number;        // cards offered per deck phase (default 6)
   npcEffectMultiplier?: number;   // multiply NPC effect bonuses (default 1.0)
   npcAttackBonus?: number;        // flat attack bonus for NPC cards matching condition
   npcAttackBonusFilter?: string;  // category filter for npcAttackBonus (e.g. 'creature')
@@ -141,7 +141,7 @@ export function shortSpecialRuleTags(rules: StageRules): string[] {
   if (rules.npcBenchSlots !== undefined && rules.npcBenchSlots !== 6) {
     tags.push(`⚠️ 相手ベンチ${rules.npcBenchSlots}枠`);
   }
-  if (rules.deckPhaseCards !== undefined && rules.deckPhaseCards !== 9) {
+  if (rules.deckPhaseCards !== undefined && rules.deckPhaseCards !== 6) {
     tags.push(`⚠️ 提示${rules.deckPhaseCards}枚`);
   }
   if (rules.skipDeckPhase) {
@@ -168,8 +168,8 @@ export function longSpecialRuleMessages(rules: StageRules): string[] {
   if (rules.npcBenchSlots !== undefined && rules.npcBenchSlots !== 6) {
     msgs.push(`相手のベンチは${rules.npcBenchSlots}枠です（通常6枠）`);
   }
-  if (rules.deckPhaseCards !== undefined && rules.deckPhaseCards !== 9) {
-    msgs.push(`提示カードが${rules.deckPhaseCards}枚です（通常9枚）`);
+  if (rules.deckPhaseCards !== undefined && rules.deckPhaseCards !== 6) {
+    msgs.push(`提示カードが${rules.deckPhaseCards}枚です（通常6枚）`);
   }
   if (rules.skipDeckPhase) {
     msgs.push('デッキフェイズなし');

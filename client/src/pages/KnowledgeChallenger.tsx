@@ -1136,7 +1136,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
   }, [gameState?.phase]);
 
   // ===== Deck phase setup (fires at the start of each round) =====
-  // 各ラウンド開始時にデッキフェイズ: 9枚提示→最大2枚取得でバトルへ（3回戦仕様）。
+  // 各ラウンド開始時にデッキフェイズ: 6枚提示→最大2枚取得でバトルへ（3回戦仕様、kk 2026-04-19）。
   // NPC also auto-picks cards during this phase (skipped in PvP mode).
   useEffect(() => {
     if (!gameState || gameState.phase !== 'deck_phase' || deckOffer) return;
@@ -1176,7 +1176,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
       }
     }
 
-    const cardCount = rules?.deckPhaseCards ?? 9;
+    const cardCount = rules?.deckPhaseCards ?? 6;
     // Use active player's unlocked SSRs in PvP mode
     const unlockedSSR = isPvP && pvpSession
       ? (pvpDeckTurn === 'p1' ? pvpSession.player1.unlockedSSRCardNames : pvpSession.player2.unlockedSSRCardNames)
@@ -2519,7 +2519,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
 
     // 未選択カードの数だけ新しく引く（提示枚数を維持）
     const remainingPicks = maxPicks - deckOffer.acquired.size;
-    const cardCount = gameState.stageRules?.deckPhaseCards ?? 9;
+    const cardCount = gameState.stageRules?.deckPhaseCards ?? 6;
     const newCount = cardCount - deckOffer.acquired.size;
     const unlockedSSR2 = isPvP && pvpSession
       ? (pvpDeckTurn === 'p1' ? pvpSession.player1.unlockedSSRCardNames : pvpSession.player2.unlockedSSRCardNames)
