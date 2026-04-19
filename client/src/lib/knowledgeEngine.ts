@@ -1550,25 +1550,19 @@ export function applyRevealEffect(
       break;
     }
     case 'saint_jeanne': {
-      // 救国の祈り: 味方の除外カードを全てデッキに戻す。さらに相手の防御-3（任意発動）。
+      // 救国の祈り (v2 spec, kk 2026-04-19):
+      //   - 公開時: 味方の除外カードを全てデッキに戻す
+      //   - 防御時（passive）: そのサブバトルの相手1枚目の attacker reveal の
+      //     攻撃値バフを無効化 → 判定は revealNextAttackCard 側で完結
+      //   - ベンチシナジー: 聖剣で攻撃+2、白百合の盾で防御+3（ジャンヌと同等）
+      // 旧仕様の「相手防御-3 / roundAttackBonus[opp]-3」は撤廃（累積して相手攻撃を
+      // 過度に削る副作用があったため）。
       const exiledForSide = next.exile[side];
       const recoveredCount = exiledForSide.length;
       if (recoveredCount > 0) {
         next = { ...next, exile: { ...next.exile, [side]: [] } };
         const mySideNow = side === 'player' ? next.player : next.ai;
         next = applySide(next, side, { ...mySideNow, deck: [...mySideNow.deck, ...exiledForSide] });
-      }
-      // 相手防御-3
-      if (role === 'attacker') {
-        next = { ...next, defenderBonus: next.defenderBonus - 3 };
-      } else {
-        next = {
-          ...next,
-          roundAttackBonus: {
-            ...next.roundAttackBonus,
-            [opp]: next.roundAttackBonus[opp] - 3,
-          },
-        };
       }
       // ベンチの聖剣・白百合の盾による強化（ジャンヌと同じ条件）
       const mySJ = side === 'player' ? next.player : next.ai;
@@ -1584,8 +1578,8 @@ export function applyRevealEffect(
         sjGlow.push('白百合の盾');
       }
       if (sjGlow.length > 0) next = withBenchGlow(next, side, sjGlow);
-      telop = { text: `✨ 救国の祈り！除外${recoveredCount}枚回収＋相手防御-3`, color: '#ffd700' };
-      console.log(`[Engine] 聖女ジャンヌ → 除外回収=${recoveredCount}枚, 相手防御-3`);
+      telop = { text: `✨ 救国の祈り！除外${recoveredCount}枚回収`, color: '#ffd700' };
+      console.log(`[Engine] 聖女ジャンヌ → 除外回収=${recoveredCount}枚 (バフ無効化は defender スロット配置中に発動)`);
       break;
     }
     case 'honnoji': {
@@ -2713,19 +2707,35 @@ export function revealNextAttackCard(
   const roundBonus = state.roundAttackBonus[attackerSide];
   const pendingBonus = state.pendingAttackBonus[attackerSide];
 
+  // ===== 聖女ジャンヌ (passive defender) — kk spec v2 2026-04-19 =====
+  //   - defender が聖女ジャンヌで、かつサブバトルの 1 枚目の reveal である場合
+  //   - そのカードの「攻撃値バフ」をすべて無効化（base attack のみ計上）
+  //   - カード効果の state 変更（デッキ操作等）は発動するが、bonusAttack は捨てる
+  //   - ラウンドバフ / pending / NPC stage bonus / bench aura もすべて無視
+  //   - pendingAttackBonus は通常通り「消費」（次の reveal に残らないように clear）
+  // 判定条件は state.attackRevealed.length === 0（= 今サブバトル最初の reveal）。
+  // サブバトル終了（resolveSubBattleWin / 攻撃失敗）で attackRevealed が [] にリセット
+  // されるので、2 枚目以降は通常通りバフが乗る。
+  const nullifyBuffs =
+    state.defenseCard?.name === '聖女ジャンヌ' && state.attackRevealed.length === 0;
+
   let next: GameState = {
     ...state,
     player: attackerSide === 'player' ? updatedAttacker : state.player,
     ai: attackerSide === 'ai' ? updatedAttacker : state.ai,
     attackRevealed: [...state.attackRevealed, nextCard],
-    // Consume pending buff
+    // Consume pending buff (even when nullified — pending shouldn't leak to next reveal)
     pendingAttackBonus: { ...state.pendingAttackBonus, [attackerSide]: 0 },
   };
 
-  let addedPower = getBaseAttack(nextCard) + roundBonus + pendingBonus;
+  // Base attack is always counted. All bonuses are gated by !nullifyBuffs.
+  let addedPower = getBaseAttack(nextCard);
+  if (!nullifyBuffs) {
+    addedPower += roundBonus + pendingBonus;
+  }
 
-  // NPC stage bonus (attack)
-  if (attackerSide === 'ai' && state.stageRules) {
+  // NPC stage bonus (attack) — skipped when nullifyBuffs
+  if (!nullifyBuffs && attackerSide === 'ai' && state.stageRules) {
     const r = state.stageRules;
     if (r.npcAttackBonus && r.npcAttackBonusFilter) {
       if (nextCard.category === r.npcAttackBonusFilter) addedPower += r.npcAttackBonus;
@@ -2735,27 +2745,43 @@ export function revealNextAttackCard(
   }
 
   // Card-specific on-reveal effect (skippable when the attacker chose "効果なしで出す").
+  // Under nullifyBuffs: effect's state mutations still apply (deck manipulation, exile, etc.)
+  // but bonusAttack is discarded.
   const myBench = (attackerSide === 'player' ? next.player : next.ai).bench;
-  console.log(`[Engine] revealNextAttackCard: "${nextCard.name}" (effect=${nextCard.effect?.id ?? 'none'}, skipEffect=${opts?.skipEffect ?? false}) | attacker=${attackerSide} | bench=[${myBench.map(b => `${b.name}×${b.count}`).join(', ')}]`);
+  console.log(`[Engine] revealNextAttackCard: "${nextCard.name}" (effect=${nextCard.effect?.id ?? 'none'}, skipEffect=${opts?.skipEffect ?? false}${nullifyBuffs ? ', nullifyBuffs=true (聖女ジャンヌ)' : ''}) | attacker=${attackerSide} | bench=[${myBench.map(b => `${b.name}×${b.count}`).join(', ')}]`);
   if (nextCard.effect && !opts?.skipEffect) {
     const eff = applyRevealEffect(next, nextCard, attackerSide, 'attacker');
     next = withTelop(eff.state, eff.telop);
-    addedPower += eff.bonusAttack;
-    console.log(`[Engine]   effect "${nextCard.effect.id}" → bonusAttack=${eff.bonusAttack}, telop="${eff.telop?.text ?? 'none'}"`);
+    if (!nullifyBuffs) {
+      addedPower += eff.bonusAttack;
+      console.log(`[Engine]   effect "${nextCard.effect.id}" → bonusAttack=${eff.bonusAttack}, telop="${eff.telop?.text ?? 'none'}"`);
+    } else {
+      console.log(`[Engine]   effect "${nextCard.effect.id}" → bonusAttack=${eff.bonusAttack} DISCARDED (聖女ジャンヌ passive), state changes applied`);
+    }
   }
 
-  // Bench auras from passive cards (any-reveal buffs from own/opponent bench)
+  // Bench auras from passive cards — skipped when nullifyBuffs
   const aura = computeAttackerAura(next, attackerSide, nextCard, state.attackRevealed.length);
-  addedPower += aura.bonus;
-  if (aura.bonus !== 0) console.log(`[Engine]   bench aura → bonus=${aura.bonus}, details=[${aura.details.map(d => `${d.benchCardName}:atk${d.atkBonus}`).join(', ')}]`);
+  if (!nullifyBuffs) {
+    addedPower += aura.bonus;
+    if (aura.bonus !== 0) console.log(`[Engine]   bench aura → bonus=${aura.bonus}, details=[${aura.details.map(d => `${d.benchCardName}:atk${d.atkBonus}`).join(', ')}]`);
+  } else if (aura.bonus !== 0) {
+    console.log(`[Engine]   bench aura bonus=${aura.bonus} DISCARDED (聖女ジャンヌ passive)`);
+  }
+
+  // Override telop with saint-jeanne banner when nullified (overwrites card's own telop).
+  if (nullifyBuffs) {
+    next = withTelop(next, { text: '🕊️ 聖女ジャンヌ！バフ効果を無効化', color: '#60a5fa' });
+  }
 
   const newPower = state.attackCurrentPower + addedPower;
-  console.log(`[Engine]   total addedPower=${addedPower} (base=${getBaseAttack(nextCard)}) → cumulative=${newPower}`);
+  console.log(`[Engine]   total addedPower=${addedPower} (base=${getBaseAttack(nextCard)}${nullifyBuffs ? ', buffs nullified' : ''}) → cumulative=${newPower}`);
   return {
     ...next,
     attackCurrentPower: newPower,
     lastRevealPowerAdded: addedPower,
-    benchBoostDetails: aura.details.length > 0 ? aura.details : null,
+    // Under nullifyBuffs, suppress bench-boost animation details too.
+    benchBoostDetails: (!nullifyBuffs && aura.details.length > 0) ? aura.details : null,
     message: `${attackerSide === 'player' ? 'あなたの' : '相手の'}攻撃パワー ${newPower}`,
   };
 }

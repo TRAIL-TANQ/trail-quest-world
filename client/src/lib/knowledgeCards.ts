@@ -188,7 +188,7 @@ export const EFFECT_DEFS: Record<string, CardEffect> = {
   prayer_light:     { id: 'prayer_light',     name: '聖なる祈り',       description: '公開時、除外されたジャンヌ・ダルクを聖女ジャンヌとしてデッキの一番上に置く（任意発動）。', category: 'bench' },
   // lily_shield: 白百合の盾はバニラカード（効果なし）。ジャンヌのベンチ条件として参照のみ。
   holy_banner:      { id: 'holy_banner',      name: '聖女の導き',       description: '公開時、デッキにあるジャンヌ・ダルクをデッキの一番上に戻す（任意発動）。', category: 'bench' },
-  saint_jeanne:     { id: 'saint_jeanne',     name: '救国の祈り',       description: '公開時、味方の除外カードを全てデッキに戻す。さらに相手の防御-3（任意発動）。', category: 'special' },
+  saint_jeanne:     { id: 'saint_jeanne',     name: '救国の祈り',       description: '公開時、味方の除外カードを全てデッキに戻す。防御時、そのサブバトル最初の相手攻撃カードのバフ効果を無効化（素の攻撃値のみ有効）。', category: 'special' },
   burning_stake:    { id: 'burning_stake',    name: '殉教の炎',         description: '公開時、ベンチにジャンヌ・ダルクがいる時、そのジャンヌを除外することができる（任意発動）。', category: 'special' },
   // ===== 紫式部・清少納言デッキ =====
   murasaki:         { id: 'murasaki',         name: '文才の守護',       description: '交戦中、ベンチの十二単の枚数だけ防御+1。', category: 'def' },
