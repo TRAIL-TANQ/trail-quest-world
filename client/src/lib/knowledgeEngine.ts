@@ -1599,6 +1599,8 @@ export function applyRevealEffect(
       for (const slot of benchAfterNobunaga) {
         for (let i = 0; i < slot.count; i++) newExileSelf.push(slot.card);
       }
+      // 山札残りも exile に退避（次ラウンドで信長デッキ全体を復帰させるため）
+      for (const c of my.deck) newExileSelf.push(c);
       // Step 3: rebuild own deck with 4 明智ルート cards (old deck discarded)
       const akechiNames = ['明智光秀', '愛宕百韻', '天王山', '三日天下'];
       const newDeck: BattleCard[] = [];
