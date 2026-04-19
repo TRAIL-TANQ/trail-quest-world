@@ -1813,8 +1813,22 @@ export function applyRevealEffect(
       telop = { text: '🔬アインシュタインを強化', color };
       break;
     }
-    case 'gun': {
-      telop = { text: '🏯安土桃山の道具！', color };
+    case 'stackable_weapon_buff': {
+      // kk spec v7 Phase 3 (2026-04-20): 武器スタックバフ
+      //   攻撃時、既に attackRevealed に積まれている同名カード数 × +1 を加算。
+      //   nextCard は revealNextAttackCard 内で attackRevealed に push 済み
+      //   （knowledgeEngine.ts L2781 参照）なので、-1 して自身を除外する。
+      //   1 枚目 → priorInStack=0、バフなし。2 枚目 → +1、3 枚目 → +2。
+      //   サブバトル終了で attackRevealed は解決されるため自動リセット。
+      if (role === 'attacker') {
+        const priorInStack = next.attackRevealed.filter((c) => c.name === card.name).length - 1;
+        if (priorInStack > 0) {
+          bonusAttack += priorInStack;
+          telop = { text: `🔫${card.name}スタック${priorInStack + 1}！攻撃+${priorInStack}`, color };
+        } else {
+          telop = { text: `🔫${card.name}構え！`, color };
+        }
+      }
       break;
     }
     case 'rakuichi': {
