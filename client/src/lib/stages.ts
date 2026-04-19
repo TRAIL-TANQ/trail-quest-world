@@ -229,7 +229,7 @@ export const STARTER_DECKS: StarterDeck[] = [
       'アマゾン川',
       '大蛇の巫師',
     ],
-    noiseCards: ['紙'],
+    noiseCards: [],
     description: '巫師で大蛇を召喚し、ピンクイルカで巫師を回収。アマゾン川がある限りループは止まらない',
   },
   {
@@ -301,7 +301,7 @@ export const STARTER_DECKS: StarterDeck[] = [
       '源氏物語',
       '枕草子',
     ],
-    noiseCards: ['紙'],
+    noiseCards: [],
     description: '十二単で二人の才女を守り、源氏物語と枕草子で戦場を支配せよ',
   },
   // ========== 準備中 ==========
