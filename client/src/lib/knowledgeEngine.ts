@@ -143,6 +143,13 @@ export interface GameState {
   attackRevealed: BattleCard[];         // cards revealed in the current attack
   attackCurrentPower: number;           // cumulative attack power so far
   lastSubBattle: SubBattleResult | null; // last resolved sub-battle (for outcome banner)
+  // ===== Per-sub-battle stack / flags (kk spec v7 Phase 3 refactor 2026-04-20) =====
+  //   turnAttackStack: sub-battle 単位で「この攻撃で公開された全カード」を side 別に保持。
+  //     stackable_weapon_buff の priorInStack 計算に使用（attackRevealed 依存を排除）。
+  //     リセット点: startBattle / 攻撃失敗 / resolveSubBattleWin / advanceToNextRound。
+  //   turnFlags: sub-battle 単位の使い切りフラグ群（信長リサイクル等）。同じリセット点。
+  turnAttackStack: { player: BattleCard[]; ai: BattleCard[] };
+  turnFlags: { player: { usedNobunagaRecycle: boolean }; ai: { usedNobunagaRecycle: boolean } };
   // ===== Effect system =====
   // Per-sub-battle buffs (reset at resolveSubBattleWin)
   defenderBonus: number;                                      // ±defense for current defender
@@ -263,6 +270,8 @@ export function initGameState(
     attackRevealed: [],
     attackCurrentPower: 0,
     lastSubBattle: null,
+    turnAttackStack: { player: [], ai: [] },
+    turnFlags: { player: { usedNobunagaRecycle: false }, ai: { usedNobunagaRecycle: false } },
     defenderBonus: 0,
     roundAttackBonus: { player: 0, ai: 0 },
     pendingAttackBonus: { player: 0, ai: 0 },
@@ -687,7 +696,7 @@ export function applyRevealEffect(
         }
         telop = { text: `🔥信長天下布武！防御+${defBonus}${hasGun && hasRakuichi ? ' 敵封印' : ''}`, color };
       }
-      // 信長の威光: ベンチに本能寺の変があれば、デッキ底へ送り返す（歴史的介入）。
+      // 信長の威光 (kk spec 2026-04-20 reveal コンボ): ベンチに本能寺の変があれば、デッキ底へ送り返す（歴史的介入・自動発動）。
       // honnoji は自デッキ 1 枚制限（MAX_SAME_NAME_OVERRIDE）なので返却先は常に 1 枚分のみ。
       {
         const myAfter = side === 'player' ? next.player : next.ai;
@@ -697,8 +706,9 @@ export function applyRevealEffect(
           const newBench = removeOneFromBench(myAfter.bench, '本能寺の変');
           const newDeck = [...myAfter.deck, honnojiSlot.card];
           next = applySide(next, side, { ...myAfter, bench: newBench, deck: newDeck });
-          telop = { text: `${telop?.text ?? '🔥信長天下布武！'} + 👑本能寺を退けた`, color };
-          console.log('[特殊効果] 織田信長: ベンチの本能寺の変をデッキ底へ送還');
+          next = withBenchGlow(next, side, ['本能寺の変']);
+          telop = { text: `${telop?.text ?? '🔥信長天下布武！'} + 👑本能寺を退けた`, color: '#ffd700' };
+          console.log(`[Engine] 織田信長 (${side}): 本能寺の変をベンチ→デッキ底へ送還`);
         }
       }
       break;
@@ -1180,9 +1190,9 @@ export function applyRevealEffect(
       break;
     }
     case 'qinshi': {
-      // 始皇帝:
+      // 始皇帝 (kk spec 2026-04-20 reveal コンボ自動化):
       //  - 防御時（自動）、ベンチに万里の長城があれば防御+2
-      //  - 公開時（任意発動）、ベンチの焚書坑儒をデッキトップに戻す（AI自動 / プレイヤーはUIで選択）
+      //  - 公開時（自動発動）、ベンチに焚書坑儒があればデッキトップに戻す（AI/Player 同処理）
       const myBefore = side === 'player' ? next.player : next.ai;
       const sealed = next.sealedBenchNames[side];
 
@@ -1200,20 +1210,16 @@ export function applyRevealEffect(
         telop = { text: '👑始皇帝', color };
       }
 
-      // 公開時（任意発動）: 焚書坑儒をデッキトップに戻す
+      // 公開時（自動発動）: 焚書坑儒をデッキトップに戻す
       const myNow = side === 'player' ? next.player : next.ai;
       const burnSlot = myNow.bench.find((b) => b.name === '焚書坑儒' && !sealed.includes(b.name));
       if (burnSlot) {
-        if (side === 'ai') {
-          const newBench = removeOneFromBench(myNow.bench, '焚書坑儒');
-          const newDeck = [burnSlot.card, ...myNow.deck];
-          next = applySide(next, side, { ...myNow, bench: newBench, deck: newDeck });
-          telop = { text: '👑始皇帝！焚書坑儒をデッキトップへ！', color };
-          console.log('[Engine] 始皇帝: 焚書坑儒をベンチ→デッキトップへ (AI)');
-        } else {
-          // Player: UIが waitCardSelect で選択処理
-          telop = { text: '👑始皇帝！焚書坑儒を回収中...', color };
-        }
+        const newBench = removeOneFromBench(myNow.bench, '焚書坑儒');
+        const newDeck = [burnSlot.card, ...myNow.deck];
+        next = applySide(next, side, { ...myNow, bench: newBench, deck: newDeck });
+        next = withBenchGlow(next, side, ['焚書坑儒']);
+        telop = { text: '👑始皇帝の勅令！焚書坑儒をデッキトップへ！', color: '#ffd700' };
+        console.log(`[Engine] 始皇帝 (${side}): 焚書坑儒をベンチ→デッキトップへ`);
       }
       break;
     }
@@ -1529,7 +1535,9 @@ export function applyRevealEffect(
       break;
     }
     case 'jeanne': {
-      // ジャンヌ・ダルク: 攻撃時+聖剣ベンチ→攻撃+2、防御時+白百合の盾ベンチ→防御+2
+      // ジャンヌ・ダルク:
+      //  - 攻撃時+聖剣ベンチ→攻撃+2、防御時+白百合の盾ベンチ→防御+2
+      //  - kk spec 2026-04-20 reveal コンボ: 公開時、ベンチに火刑があればデッキのランダム位置に戻す（自動発動）
       const my = side === 'player' ? next.player : next.ai;
       const sealed = next.sealedBenchNames[side];
       const hasSword = my.bench.some((b) => b.name === '聖剣' && !sealed.includes(b.name));
@@ -1547,6 +1555,23 @@ export function applyRevealEffect(
         telop = { text: '⚜️ジャンヌ・ダルク！', color };
       }
       if (glowNames.length > 0) next = withBenchGlow(next, side, glowNames);
+
+      // 公開時 reveal コンボ: 火刑が自ベンチにあればランダム位置へ戻す（自動発動）
+      const pyreSlot = my.bench.find((b) => b.name === '火刑' && !sealed.includes(b.name));
+      if (pyreSlot) {
+        const myRefreshed = side === 'player' ? next.player : next.ai;
+        const newBench = removeOneFromBench(myRefreshed.bench, '火刑');
+        const insertIdx = Math.floor(Math.random() * (myRefreshed.deck.length + 1));
+        const newDeck = [
+          ...myRefreshed.deck.slice(0, insertIdx),
+          pyreSlot.card,
+          ...myRefreshed.deck.slice(insertIdx),
+        ];
+        next = applySide(next, side, { ...myRefreshed, bench: newBench, deck: newDeck });
+        next = withBenchGlow(next, side, ['火刑']);
+        telop = { text: '⚜️殉教回避！火刑をデッキへ隠匿', color: '#ffd700' };
+        console.log(`[Engine] ジャンヌ (${side}): 火刑をベンチ→デッキ位置${insertIdx}/${newDeck.length}`);
+      }
       break;
     }
     case 'burning_stake': {
@@ -1823,14 +1848,24 @@ export function applyRevealEffect(
       break;
     }
     case 'stackable_weapon_buff': {
-      // kk spec v7 Phase 3 (2026-04-20): 武器スタックバフ
-      //   攻撃時、既に attackRevealed に積まれている同名カード数 × +1 を加算。
-      //   nextCard は revealNextAttackCard 内で attackRevealed に push 済み
-      //   （knowledgeEngine.ts L2781 参照）なので、-1 して自身を除外する。
+      // kk spec v7 Phase 3 refactor (2026-04-20): 武器スタックバフ
+      //   turnAttackStack（sub-battle 単位）を参照。attackRevealed 依存を廃止し、
+      //   予期せぬリセットの影響を排除。push は revealNextAttackCard 側で行うため
+      //   ここでは「まだ push 前」前提の length（-1 不要）を使う。
       //   1 枚目 → priorInStack=0、バフなし。2 枚目 → +1、3 枚目 → +2。
-      //   サブバトル終了で attackRevealed は解決されるため自動リセット。
+      //   カード名比較は trim() を通して空白揺れを吸収。
       if (role === 'attacker') {
-        const priorInStack = next.attackRevealed.filter((c) => c.name === card.name).length - 1;
+        const myStack = next.turnAttackStack[side];
+        const cardName = card.name.trim();
+        const priorInStack = myStack.filter((c) => c.name.trim() === cardName).length;
+        console.log('[STACK_DEBUG]', {
+          card: card.name,
+          side,
+          priorInStack,
+          stackSize: myStack.length,
+          stackNames: myStack.map((c) => c.name),
+          attackRevealedCount: next.attackRevealed.length,
+        });
         if (priorInStack > 0) {
           bonusAttack += priorInStack;
           telop = { text: `🔫${card.name}スタック${priorInStack + 1}！攻撃+${priorInStack}`, color };
@@ -2692,6 +2727,9 @@ export function startBattle(state: GameState): GameState {
     defenseCard: defender,
     attackRevealed: [],
     attackCurrentPower: 0,
+    // sub-battle 境界で turnAttackStack / turnFlags もリセット
+    turnAttackStack: { player: [], ai: [] },
+    turnFlags: { player: { usedNobunagaRecycle: false }, ai: { usedNobunagaRecycle: false } },
     message: state.flagHolder === 'player' ? 'あなたが防御中！' : 'あなたの攻撃！',
   };
 
@@ -2775,6 +2813,8 @@ export function revealNextAttackCard(
       },
       attackRevealed: [],
       attackCurrentPower: 0,
+      turnAttackStack: { player: [], ai: [] },
+      turnFlags: { player: { usedNobunagaRecycle: false }, ai: { usedNobunagaRecycle: false } },
       // Attacker failed → their combo streak breaks. Defender's streak is preserved.
       consecutiveKillStreak: {
         ...state.consecutiveKillStreak,
@@ -2830,9 +2870,14 @@ export function revealNextAttackCard(
   // Card-specific on-reveal effect (skippable when the attacker chose "効果なしで出す").
   // Under nullifyBuffs: effect's state mutations still apply (deck manipulation, exile, etc.)
   // but bonusAttack is discarded.
+  // kk spec v7 Phase 3 refactor (2026-04-20): 武器系スタック効果は skipEffect でも必ず発動させる。
+  //   任意発動 UI 経由で skipEffect=true が来ても、stackable_weapon_buff は通す。
+  const ALWAYS_RUN_EFFECT_IDS = new Set<string>(['stackable_weapon_buff']);
   const myBench = (attackerSide === 'player' ? next.player : next.ai).bench;
-  console.log(`[Engine] revealNextAttackCard: "${nextCard.name}" (effect=${nextCard.effect?.id ?? 'none'}, skipEffect=${opts?.skipEffect ?? false}${nullifyBuffs ? ', nullifyBuffs=true (聖女ジャンヌ)' : ''}) | attacker=${attackerSide} | bench=[${myBench.map(b => `${b.name}×${b.count}`).join(', ')}]`);
-  if (nextCard.effect && !opts?.skipEffect) {
+  const shouldRunEffect =
+    !!nextCard.effect && (!opts?.skipEffect || ALWAYS_RUN_EFFECT_IDS.has(nextCard.effect.id));
+  console.log(`[Engine] revealNextAttackCard: "${nextCard.name}" (effect=${nextCard.effect?.id ?? 'none'}, skipEffect=${opts?.skipEffect ?? false}, shouldRunEffect=${shouldRunEffect}${nullifyBuffs ? ', nullifyBuffs=true (聖女ジャンヌ)' : ''}) | attacker=${attackerSide} | bench=[${myBench.map(b => `${b.name}×${b.count}`).join(', ')}]`);
+  if (shouldRunEffect && nextCard.effect) {
     const eff = applyRevealEffect(next, nextCard, attackerSide, 'attacker');
     next = withTelop(eff.state, eff.telop);
     if (!nullifyBuffs) {
@@ -2883,14 +2928,65 @@ export function revealNextAttackCard(
 
   const newPower = state.attackCurrentPower + addedPower;
   console.log(`[Engine]   total addedPower=${addedPower} (base=${getBaseAttack(nextCard)}${nullifyBuffs ? ', buffs nullified' : ''}) → cumulative=${newPower}`);
+  // turnAttackStack: sub-battle 単位の公開履歴に追加（stackable_weapon_buff の次回参照用）
   return {
     ...next,
     attackCurrentPower: newPower,
     lastRevealPowerAdded: addedPower,
+    turnAttackStack: {
+      ...next.turnAttackStack,
+      [attackerSide]: [...next.turnAttackStack[attackerSide], nextCard],
+    },
     // Under nullifyBuffs, suppress bench-boost animation details too.
     benchBoostDetails: (!nullifyBuffs && aura.details.length > 0) ? aura.details : null,
     message: `${attackerSide === 'player' ? 'あなたの' : '相手の'}攻撃パワー ${newPower}`,
   };
+}
+
+/**
+ * 信長の号令: ベンチに織田信長・足軽があれば、sub-battle 1 回に限り
+ * 足軽 1 枚をデッキトップに戻す（プレイヤー/AI の任意発動）。
+ *
+ * 条件（kk spec 2026-04-20）:
+ *   - ベンチに「織田信長」がいる（非封印）
+ *   - ベンチに「足軽」がいる（非封印）
+ *   - turnFlags[side].usedNobunagaRecycle === false
+ *
+ * phase は battle / battle_intro のどちらでも呼べるが、ベンチ/デッキ操作を
+ * 伴うため UI 側で攻撃中以外は非活性推奨。
+ */
+export function canActivateNobunagaRecycle(state: GameState, side: Side): boolean {
+  if (state.turnFlags[side].usedNobunagaRecycle) return false;
+  const my = side === 'player' ? state.player : state.ai;
+  const sealed = state.sealedBenchNames[side];
+  const hasNobunaga = my.bench.some((b) => b.name === '織田信長' && !sealed.includes(b.name));
+  if (!hasNobunaga) return false;
+  const hasAshigaru = my.bench.some((b) => b.name === '足軽' && !sealed.includes(b.name));
+  return hasAshigaru;
+}
+
+export function activateNobunagaRecycle(state: GameState, side: Side): GameState {
+  if (!canActivateNobunagaRecycle(state, side)) {
+    console.warn('[信長の号令] 条件未達、発動スキップ');
+    return state;
+  }
+  const my = side === 'player' ? state.player : state.ai;
+  const ashigaruSlot = my.bench.find((b) => b.name === '足軽');
+  if (!ashigaruSlot) return state;
+  const newBench = removeOneFromBench(my.bench, '足軽');
+  const newDeck = [ashigaruSlot.card, ...my.deck];
+  let next = applySide(state, side, { ...my, bench: newBench, deck: newDeck });
+  next = withBenchGlow(next, side, ['織田信長', '足軽']);
+  next = withTelop(next, { text: '⚔️ 信長の号令！足軽を再配置', color: '#ffd700' });
+  next = {
+    ...next,
+    turnFlags: {
+      ...next.turnFlags,
+      [side]: { ...next.turnFlags[side], usedNobunagaRecycle: true },
+    },
+  };
+  console.log(`[信長の号令] side=${side}: 足軽1枚をデッキトップへ → turnFlags.usedNobunagaRecycle=true`);
+  return next;
 }
 
 /**
@@ -3125,6 +3221,8 @@ export function resolveSubBattleWin(state: GameState): GameState {
     defenseCard: lastAttackCard,
     attackRevealed: [],
     attackCurrentPower: 0,
+    turnAttackStack: { player: [], ai: [] },
+    turnFlags: { player: { usedNobunagaRecycle: false }, ai: { usedNobunagaRecycle: false } },
     // Reset per-sub-battle buffs
     defenderBonus: 0,
     roundAttackBonus: { player: 0, ai: 0 },
@@ -3303,6 +3401,8 @@ export function advanceToNextRound(state: GameState): GameState {
     defenseCard: null,
     attackRevealed: [],
     attackCurrentPower: 0,
+    turnAttackStack: { player: [], ai: [] },
+    turnFlags: { player: { usedNobunagaRecycle: false }, ai: { usedNobunagaRecycle: false } },
     lastSubBattle: null,
     defenderBonus: 0,
     roundAttackBonus: { player: 0, ai: 0 },

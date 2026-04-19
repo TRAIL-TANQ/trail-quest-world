@@ -53,6 +53,8 @@ import {
   swapCardInDeck,
   aiDeckGrowth,
   removeOneFromBench,
+  canActivateNobunagaRecycle,
+  activateNobunagaRecycle,
 } from '@/lib/knowledgeEngine';
 import type { RoundBonuses } from '@/lib/knowledgeBonuses';
 import {
@@ -632,7 +634,8 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
   // Latch that resolves when the player clicks a preview action button.
   // `skipEffect=true` → call revealNextAttackCard with { skipEffect: true }
   // and also suppress the interactive-choice overlays later in the loop.
-  const previewResolveRef = useRef<((v: { skipEffect: boolean }) => void) | null>(null);
+  // `recycleNobunaga=true` → 攻撃ループ側で activateNobunagaRecycle を呼び、プレビューを再表示する。
+  const previewResolveRef = useRef<((v: { skipEffect: boolean; recycleNobunaga?: boolean }) => void) | null>(null);
   // Read inside interactive-effect blocks so the loop can honor "効果なしで出す".
   const skipNextEffectRef = useRef(false);
   // Card effect IDs that present choice UIs — these are the "任意発動" cards.
@@ -747,7 +750,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
     [],
   );
   const waitAttackPreview = useCallback(
-    (card: BattleCard): Promise<{ skipEffect: boolean }> => {
+    (card: BattleCard): Promise<{ skipEffect: boolean; recycleNobunaga?: boolean }> => {
       if (unmountedRef.current) return Promise.resolve({ skipEffect: false });
       const optional =
         !!(card.effect && OPTIONAL_EFFECT_IDS.has(card.effect.id)) ||
@@ -767,6 +770,10 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
   );
   const handlePreviewChoice = useCallback((skipEffect: boolean) => {
     previewResolveRef.current?.({ skipEffect });
+  }, []);
+  // 信長の号令 ボタン: プレビュー中に足軽をデッキトップへ戻す。攻撃ループ側で再プレビュー。
+  const handlePreviewRecycleNobunaga = useCallback(() => {
+    previewResolveRef.current?.({ skipEffect: false, recycleNobunaga: true });
   }, []);
   // Sound effect hook (future SE implementation)
   const playSound = useCallback((soundId: string) => {
@@ -1476,18 +1483,32 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
           // ===== Preview step (新): before committing, show the top card to the
           // attacker and let them choose 発動する / 効果なしで出す.
           // Only for human-controlled attackers (solo player, or either PvP side).
-          // AI-controlled attackers skip preview — revealNextAttackCard runs normally. =====
+          // AI-controlled attackers skip preview — revealNextAttackCard runs normally.
+          //
+          // kk spec 2026-04-20: プレビュー中に「信長の号令」を発動できる。足軽を
+          //   デッキトップに戻した後、新しい top card で再プレビューする。
+          // =====
           const attackerIsHuman = isPvP || isPlayerAttacker;
           let skipEffectChoice = false;
           if (attackerIsHuman) {
-            const gs = gameStateRef.current;
-            const atkSideLocal: 'player' | 'ai' =
-              gs && gs.flagHolder === 'player' ? 'ai' : 'player';
-            const topCard = gs && (atkSideLocal === 'player' ? gs.player.deck[0] : gs.ai.deck[0]);
-            if (topCard) {
+            // 再プレビュー対応: 信長の号令が発動されるとデッキトップが変わるため while で繰り返す。
+            let guard = 0;
+            while (guard++ < 8) {
+              const gs = gameStateRef.current;
+              const atkSideLocal: 'player' | 'ai' =
+                gs && gs.flagHolder === 'player' ? 'ai' : 'player';
+              const topCard = gs && (atkSideLocal === 'player' ? gs.player.deck[0] : gs.ai.deck[0]);
+              if (!topCard) break;
               const choice = await waitAttackPreview(topCard);
               if (unmountedRef.current) return;
+              if (choice.recycleNobunaga) {
+                // 信長の号令: 足軽をデッキトップへ移動させ、プレビューを再表示
+                setGameState((prev) => (prev ? activateNobunagaRecycle(prev, atkSideLocal) : prev));
+                await waitMs(320); // テロップ表示を少し見せる
+                continue;
+              }
               skipEffectChoice = choice.skipEffect;
+              break;
             }
           }
           skipNextEffectRef.current = skipEffectChoice;
@@ -4520,6 +4541,10 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
           const effectName = card.effect?.name ?? null;
           const optional = attackPreview.optionalEffect;
           const cantReason = attackPreview.cantActivateReason;
+          // 信長の号令: プレビュー中に発動可能か（攻撃側ベンチに信長+足軽、ターン未使用）
+          const attackerSideForPreview: 'player' | 'ai' =
+            gameState.flagHolder === 'player' ? 'ai' : 'player';
+          const canShowNobunagaRecycle = canActivateNobunagaRecycle(gameState, attackerSideForPreview);
           // optional でも発動条件を満たさない場合、「発動する」を封じて「出す（効果スキップ）」に切替。
           const cantActivate = optional && !!cantReason;
           const playLabel = cantActivate
@@ -4578,6 +4603,25 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                   }}
                 >
                   そのまま出す
+                </button>
+              )}
+              {/* 信長の号令: 足軽をデッキトップへ（sub-battle 1 回、条件: 信長+足軽ベンチ有） */}
+              {canShowNobunagaRecycle && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); playTap(); handlePreviewRecycleNobunaga(); }}
+                  className="tappable rounded-lg font-bold"
+                  style={{
+                    width: '80%',
+                    minHeight: 40,
+                    background: 'linear-gradient(135deg, #8B1A1A 0%, #5A0F0F 100%)',
+                    border: '1.5px solid rgba(255,215,0,0.55)',
+                    color: '#ffd700',
+                    fontSize: 13,
+                    letterSpacing: 0.3,
+                    boxShadow: '0 0 14px rgba(255,215,0,0.22)',
+                  }}
+                >
+                  ⚔️ 信長の号令！足軽を再配置
                 </button>
               )}
             </div>
