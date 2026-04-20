@@ -915,6 +915,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
   const [selectedStarter, setSelectedStarter] = useState<StarterDeck | null>(null);
   const [expandedStarterId, setExpandedStarterId] = useState<string | null>(null);
   const [giftConfirmDeck, setGiftConfirmDeck] = useState<{ deckKey: DeckKey; icon: string; name: string; strategy: string } | null>(null);
+  const [giftCelebrationDeck, setGiftCelebrationDeck] = useState<{ icon: string; name: string } | null>(null);
 
   // ===== Special rule banner (shown briefly at battle start) =====
   const [specialRuleBanner, setSpecialRuleBanner] = useState<string[] | null>(null);
@@ -3170,6 +3171,14 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
       'starter-davinci': 'モナリザ+最後の晩餐をベンチに揃えて万能の天才に進化',
     };
 
+    // kk 2026-04-21: メインデッキ 4 択のイベント風紹介文（タグライン + 学べる内容）
+    const DECK_INTRO: Partial<Record<DeckKey, { tagline: string; desc: string }>> = {
+      nobunaga: { tagline: '戦国時代を駆け抜けた風雲児', desc: '鉄砲と足軽で奇襲を決める戦術家' },
+      jeanne:   { tagline: '神の声を聞いた少女',         desc: '聖剣と盾で祖国を救う' },
+      amazon:   { tagline: '生命の宝庫、南米大陸',       desc: 'ピラニア、ジャガー、多様な生態系' },
+      qinshi:   { tagline: '中華統一、万里の長城',       desc: '焚書坑儒と不老不死の薬' },
+    };
+
     // 初回デッキプレゼント判定
     const showGift = !isFirstDeckClaimed();
 
@@ -3183,48 +3192,111 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
         .map((k) => STARTER_DECKS.find((d) => d.id === DECK_KEY_TO_STARTER_ID[k]))
         .filter((d): d is NonNullable<typeof d> => !!d && mainStarterIds.has(d.id));
       return (
-        <div className="min-h-screen px-4 py-6 flex flex-col" style={{ background: 'linear-gradient(180deg, #0b1128 0%, #151d3b 50%, #0e1430 100%)' }}>
-          <div className="text-center mb-4">
+        <div className="min-h-screen py-6 flex flex-col" style={{ background: 'linear-gradient(180deg, #0b1128 0%, #151d3b 50%, #0e1430 100%)' }}>
+          <div className="text-center mb-3 px-4">
             <p className="text-3xl mb-2">🎁</p>
             <h1 className="text-xl font-black" style={{ color: '#ffd700' }}>メインデッキを選ぼう！</h1>
             <p className="text-sm text-amber-200/70 mt-1">4つのデッキから1つ選択（他デッキはクエストで獲得）</p>
+            <p className="text-[11px] text-amber-200/50 mt-1">← スワイプで切り替え →</p>
           </div>
-          <div className="flex-1 overflow-y-auto space-y-2 max-w-md mx-auto w-full">
-            {themedDecks.map((deck) => {
-              const deckKeyEntry = Object.entries(DECK_KEY_TO_STARTER_ID).find(([, sid]) => sid === deck.id);
-              const deckKey = deckKeyEntry?.[0] as DeckKey | undefined;
-              const info = deckKey ? DECK_QUEST_INFO[deckKey] : null;
-              return (
-                <button
-                  key={deck.id}
-                  onClick={() => {
-                    if (!deckKey) return;
-                    setGiftConfirmDeck({
-                      deckKey,
-                      icon: deck.icon,
-                      name: deck.name,
-                      strategy: DECK_STRATEGY[deck.id] ?? deck.description,
-                    });
-                  }}
-                  className="w-full rounded-xl p-3 flex items-center gap-3 active:scale-[0.98] transition-transform text-left"
-                  style={{
-                    background: 'linear-gradient(135deg, rgba(21,29,59,0.95), rgba(14,20,45,0.95))',
-                    border: `1.5px solid ${info?.color ?? 'rgba(255,215,0,0.25)'}50`,
-                    boxShadow: '0 2px 10px rgba(0,0,0,0.3)',
-                  }}
-                >
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl shrink-0"
-                    style={{ background: `${info?.color ?? '#ffd700'}22`, border: `1px solid ${info?.color ?? '#ffd700'}44` }}>
-                    {deck.icon}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-amber-100">{deck.name}</p>
-                    <p className="text-[11px] text-amber-200/60 truncate">{DECK_STRATEGY[deck.id] ?? deck.description}</p>
-                  </div>
-                  <span className="text-amber-200/40 text-lg">›</span>
-                </button>
-              );
-            })}
+          <div
+            className="flex-1 overflow-x-auto overflow-y-hidden"
+            style={{
+              scrollSnapType: 'x mandatory',
+              WebkitOverflowScrolling: 'touch',
+            }}
+          >
+            <div className="flex gap-3 py-2" style={{ paddingInline: '12vw', minWidth: 'max-content' }}>
+              {themedDecks.map((deck) => {
+                const deckKeyEntry = Object.entries(DECK_KEY_TO_STARTER_ID).find(([, sid]) => sid === deck.id);
+                const deckKey = deckKeyEntry?.[0] as DeckKey | undefined;
+                const info = deckKey ? DECK_QUEST_INFO[deckKey] : null;
+                const intro = deckKey ? DECK_INTRO[deckKey] : null;
+                const trump = findCardByName(deck.trumpCard);
+                const color = info?.color ?? '#ffd700';
+                return (
+                  <button
+                    key={deck.id}
+                    onClick={() => {
+                      if (!deckKey) return;
+                      setGiftConfirmDeck({
+                        deckKey,
+                        icon: deck.icon,
+                        name: deck.name,
+                        strategy: DECK_STRATEGY[deck.id] ?? deck.description,
+                      });
+                    }}
+                    className="rounded-2xl p-3 flex flex-col items-center active:scale-[0.97] transition-transform text-center"
+                    style={{
+                      flexShrink: 0,
+                      width: 'min(76vw, 300px)',
+                      scrollSnapAlign: 'center',
+                      background: `linear-gradient(160deg, ${color}22 0%, rgba(21,29,59,0.95) 40%, rgba(14,20,45,0.95) 100%)`,
+                      border: `2px solid ${color}88`,
+                      boxShadow: `0 6px 20px rgba(0,0,0,0.4), 0 0 24px ${color}33`,
+                    }}
+                  >
+                    {/* Trump card image */}
+                    <div
+                      className="w-full rounded-xl overflow-hidden relative mb-3"
+                      style={{
+                        aspectRatio: '360/500',
+                        background: '#0b1128',
+                        border: `2px solid ${color}66`,
+                        boxShadow: `inset 0 0 20px rgba(0,0,0,0.5)`,
+                      }}
+                    >
+                      {trump?.imageUrl ? (
+                        <img
+                          src={trump.imageUrl}
+                          alt={trump.name}
+                          className="absolute inset-0 w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="absolute inset-0 flex items-center justify-center text-6xl">{deck.icon}</div>
+                      )}
+                      <div className="absolute inset-x-0 bottom-0 px-2 py-1" style={{ background: 'linear-gradient(transparent, rgba(0,0,0,0.88))' }}>
+                        <p className="text-[10px] font-bold text-white/90 text-center truncate" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.9)' }}>
+                          エース: {trump?.name ?? deck.trumpCard}
+                        </p>
+                      </div>
+                      <span className="absolute top-1 left-1 text-[9px] font-black px-1 rounded"
+                        style={{ background: '#ffd700', color: '#0b1128' }}>
+                        SSR
+                      </span>
+                    </div>
+
+                    {/* Deck name + intro */}
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <span className="text-xl">{deck.icon}</span>
+                      <p className="text-base font-black text-amber-100">{deck.name}</p>
+                    </div>
+                    {intro && (
+                      <>
+                        <p className="text-[12px] font-bold mb-0.5" style={{ color }}>{intro.tagline}</p>
+                        <p className="text-[11px] text-amber-200/75 leading-snug">{intro.desc}</p>
+                      </>
+                    )}
+                    <p className="text-[10px] text-amber-200/50 mt-2 px-2 leading-snug">
+                      {DECK_STRATEGY[deck.id] ?? deck.description}
+                    </p>
+
+                    {/* CTA */}
+                    <div
+                      className="mt-3 w-full rounded-lg py-2 text-xs font-black"
+                      style={{
+                        background: `linear-gradient(135deg, ${color}, ${color}cc)`,
+                        color: '#0b1128',
+                        boxShadow: `0 3px 10px ${color}55`,
+                      }}
+                    >
+                      このデッキを選ぶ →
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* Gift confirm modal with card list */}
@@ -3297,15 +3369,18 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                 <div className="flex flex-col items-center gap-3 px-6 py-5 shrink-0">
                   <button
                     onClick={() => {
-                      claimFirstDeck(giftConfirmDeck.deckKey);
+                      const picked = giftConfirmDeck;
+                      claimFirstDeck(picked.deckKey);
                       // デッキのカードをコレクションに追加
-                      const deckCardNames = getStarterDeckCardNames(giftConfirmDeck.deckKey);
+                      const deckCardNames = getStarterDeckCardNames(picked.deckKey);
                       const deckCardIds = COLLECTION_CARDS
                         .filter((c) => deckCardNames.includes(c.name))
                         .map((c) => c.id);
                       addCollectionCards(deckCardIds);
                       setGiftConfirmDeck(null);
-                      window.location.reload();
+                      // kk 2026-04-21: 即リロードせず、1.8s のお祝い演出を挟んでから reload
+                      setGiftCelebrationDeck({ icon: picked.icon, name: picked.name });
+                      setTimeout(() => { window.location.reload(); }, 1800);
                     }}
                     className="tappable pulse-btn rounded-xl font-black text-base active:scale-[0.97] transition-transform"
                     style={{
@@ -3334,6 +3409,48 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
             </div>
             );
           })()}
+
+          {/* kk 2026-04-21: 初回デッキ獲得セレブレーション（紙吹雪 + 大きい GET!） */}
+          {giftCelebrationDeck && (
+            <div
+              className="fixed inset-0 z-[60] flex items-center justify-center px-6"
+              style={{
+                background: 'radial-gradient(ellipse at center, rgba(255,215,0,0.22), rgba(11,17,40,0.92) 55%, rgba(11,17,40,0.98))',
+                backdropFilter: 'blur(3px)',
+              }}
+            >
+              <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                {Array.from({ length: 40 }).map((_, i) => (
+                  <span
+                    key={`gift-confetti-${i}`}
+                    className="kc-confetti-piece kc-confetti-slow"
+                    style={{
+                      left: `${(i * 2.6 + 3) % 100}%`,
+                      background: ['#ffd700', '#ff6b6b', '#4ade80', '#60a5fa', '#f5d76e', '#ffffff'][i % 6],
+                      animationDelay: `${(i % 12) * 0.1}s`,
+                    }}
+                  />
+                ))}
+              </div>
+              <div className="relative text-center kc-fan-count">
+                <p className="text-7xl mb-3">{giftCelebrationDeck.icon}</p>
+                <h2
+                  className="font-black mb-1"
+                  style={{
+                    fontSize: '36px',
+                    color: '#ffd700',
+                    textShadow: '0 0 28px rgba(255,215,0,0.85), 0 0 56px rgba(255,215,0,0.45)',
+                    lineHeight: 1.1,
+                  }}
+                >
+                  {giftCelebrationDeck.name}デッキ
+                </h2>
+                <p className="text-2xl font-black" style={{ color: '#ffd700', textShadow: '0 0 18px rgba(255,215,0,0.7)' }}>
+                  GET！
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       );
     }
