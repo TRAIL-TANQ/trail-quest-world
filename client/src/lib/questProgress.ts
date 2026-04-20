@@ -80,6 +80,15 @@ export const DECK_AVAILABILITY: Record<DeckKey, boolean> = {
 export const AVAILABLE_DECK_KEYS: DeckKey[] = DECK_KEYS.filter((k) => DECK_AVAILABILITY[k]);
 
 /**
+ * 初回プレゼント + メインデッキ選択で提示する 4 デッキ（kk spec 2026-04-21 DECK_QUEST_SPEC §2.2 確定）。
+ * 紫式部（murasaki）は 5 番目の解放済みデッキだが、メインデッキ候補からは除外し
+ * クエストクリアで獲得する「獲得済みデッキ」扱いとする。
+ *
+ * 並び順: DECK_QUEST_SPEC §2.2 に準拠（戦国 → 中世仏 → 生態系 → 古代中国）。
+ */
+export const MAIN_DECK_KEYS: DeckKey[] = ['nobunaga', 'jeanne', 'amazon', 'qinshi'];
+
+/**
  * 「準備中」でないか。管理者のみ常に true。
  * 注意: isDeckUnlocked（進捗ベースの解放判定）とは別軸。
  *       どのUIでも「表示する前に available をチェック」→「進捗で unlock か判定」の順で使う。

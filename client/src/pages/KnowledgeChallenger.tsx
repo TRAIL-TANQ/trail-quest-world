@@ -64,7 +64,7 @@ import {
 import { getStage, createStageAIDeck, STARTER_DECKS, buildStarterDeck, npcDeckPhasePick, longSpecialRuleMessages } from '@/lib/stages';
 import type { StarterDeck, StageRules } from '@/lib/stages';
 import { useStageProgressStore } from '@/lib/stageProgressStore';
-import { loadQuestProgress, isDeckUnlocked, isDeckAvailable, getUnlockedSSRCardNames, DECK_KEY_TO_STARTER_ID, QUEST_DIFFICULTIES, DIFFICULTY_INFO, isDifficultyUnlocked, DECK_QUEST_INFO, isFirstDeckClaimed, claimFirstDeck, type DeckKey } from '@/lib/questProgress';
+import { loadQuestProgress, isDeckUnlocked, isDeckAvailable, getUnlockedSSRCardNames, DECK_KEY_TO_STARTER_ID, QUEST_DIFFICULTIES, DIFFICULTY_INFO, isDifficultyUnlocked, DECK_QUEST_INFO, isFirstDeckClaimed, claimFirstDeck, MAIN_DECK_KEYS, type DeckKey } from '@/lib/questProgress';
 import type { PvPSession } from '@/lib/pvpSession';
 import { clearPvPSession } from '@/lib/pvpSession';
 import { applyRatingChange, applyPvPRatingChange } from '@/lib/ratingService';
@@ -3069,18 +3069,19 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
 
     // Gift overlay: 初回プレゼント画面
     if (showGift) {
-      const themedDecks = STARTER_DECKS.filter((d) => d.id !== 'starter-random').filter((d) => {
-        // 準備中のデッキはプレゼント対象から除外
-        const entry = Object.entries(DECK_KEY_TO_STARTER_ID).find(([, sid]) => sid === d.id);
-        const dk = entry?.[0] as DeckKey | undefined;
-        return !dk || isDeckAvailable(dk);
-      });
+      // kk spec 2026-04-21 DECK_QUEST_SPEC §2.2: 初回プレゼントは 4 デッキ（信長・ジャンヌ・アマゾン・始皇帝）に絞る。
+      // 紫式部（murasaki）は解放済みだがメインデッキ候補外 → クエストクリアで別途獲得扱い。
+      // 並び順は MAIN_DECK_KEYS 準拠（UI 表示順のソースオブトゥルース）。
+      const mainStarterIds = new Set(MAIN_DECK_KEYS.map((k) => DECK_KEY_TO_STARTER_ID[k]));
+      const themedDecks = MAIN_DECK_KEYS
+        .map((k) => STARTER_DECKS.find((d) => d.id === DECK_KEY_TO_STARTER_ID[k]))
+        .filter((d): d is NonNullable<typeof d> => !!d && mainStarterIds.has(d.id));
       return (
         <div className="min-h-screen px-4 py-6 flex flex-col" style={{ background: 'linear-gradient(180deg, #0b1128 0%, #151d3b 50%, #0e1430 100%)' }}>
           <div className="text-center mb-4">
             <p className="text-3xl mb-2">🎁</p>
-            <h1 className="text-xl font-black" style={{ color: '#ffd700' }}>デッキプレゼント！</h1>
-            <p className="text-sm text-amber-200/70 mt-1">好きなデッキを1つ選ぼう</p>
+            <h1 className="text-xl font-black" style={{ color: '#ffd700' }}>メインデッキを選ぼう！</h1>
+            <p className="text-sm text-amber-200/70 mt-1">4つのデッキから1つ選択（他デッキはクエストで獲得）</p>
           </div>
           <div className="flex-1 overflow-y-auto space-y-2 max-w-md mx-auto w-full">
             {themedDecks.map((deck) => {
