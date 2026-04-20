@@ -1889,21 +1889,54 @@ export function applyRevealEffect(
       }
       break;
     }
-    case 'rakuichi': {
-      // 楽市楽座: ベンチの足軽1枚をデッキトップに戻す（自動発動、複数時は先頭採用）
-      const my = side === 'player' ? next.player : next.ai;
+    case 'rakuichi_rakuza_recycle': {
+      // 楽市楽座 (kk spec 2026-04-21):
+      //   Step 1: ベンチから鉄砲1枚をデッキトップ（position 0）へ（封印された鉄砲は対象外）
+      //   Step 2: ベンチに織田信長（非封印）がいれば、足軽1枚をデッキ2番目（position 1）へ
+      //   自動発動。複数時は先頭採用（find）。鉄砲・足軽が不在なら該当ステップはスキップ。
+      const my0 = side === 'player' ? next.player : next.ai;
       const sealed = next.sealedBenchNames[side];
-      const ashigaruSlot = my.bench.find((b) => b.name === '足軽' && !sealed.includes(b.name));
-      if (ashigaruSlot) {
-        const newBench = removeOneFromBench(my.bench, '足軽');
-        const newDeck = [ashigaruSlot.card, ...my.deck];
-        next = applySide(next, side, { ...my, bench: newBench, deck: newDeck });
-        next = withBenchGlow(next, side, ['足軽']);
-        telop = { text: '🏪 楽市楽座！足軽1枚をデッキトップへ', color };
-      } else {
-        telop = { text: '🏪 楽市楽座（ベンチに足軽がいません）', color };
+      const teppoSlot = my0.bench.find((b) => b.name === '鉄砲' && !sealed.includes(b.name));
+      const hasNobunaga = my0.bench.some((b) => b.name === '織田信長' && !sealed.includes(b.name));
+      const ashigaruSlot = hasNobunaga
+        ? my0.bench.find((b) => b.name === '足軽' && !sealed.includes(b.name))
+        : undefined;
+
+      let gunRecycled = false;
+      let ashigaruRecycled = false;
+      const glowNames: string[] = [];
+
+      if (teppoSlot) {
+        const myAfter = side === 'player' ? next.player : next.ai;
+        const newBench = removeOneFromBench(myAfter.bench, '鉄砲');
+        const newDeck = [teppoSlot.card, ...myAfter.deck];
+        next = applySide(next, side, { ...myAfter, bench: newBench, deck: newDeck });
+        gunRecycled = true;
+        glowNames.push('鉄砲');
       }
-      console.log('[特殊効果] 楽市楽座: 足軽1枚をデッキトップへ');
+
+      if (ashigaruSlot) {
+        const myAfter = side === 'player' ? next.player : next.ai;
+        const newBench = removeOneFromBench(myAfter.bench, '足軽');
+        // Insert at position 1 (second slot). If deck has 0 cards after gun insert,
+        // splice at 1 safely falls back to end of deck.
+        const newDeck = [...myAfter.deck];
+        newDeck.splice(1, 0, ashigaruSlot.card);
+        next = applySide(next, side, { ...myAfter, bench: newBench, deck: newDeck });
+        ashigaruRecycled = true;
+        glowNames.push('織田信長', '足軽');
+      }
+
+      if (glowNames.length > 0) next = withBenchGlow(next, side, glowNames);
+
+      if (gunRecycled && ashigaruRecycled) {
+        telop = { text: '🏪 楽市楽座！ 🔫 鉄砲を再装填 + 👑 信長の威光で足軽を再動員', color: '#ffd700' };
+      } else if (gunRecycled) {
+        telop = { text: '🏪 楽市楽座！ 🔫 鉄砲を再装填', color: '#ffd700' };
+      } else {
+        telop = { text: '🏪 楽市楽座...鉄砲が尽きた', color };
+      }
+      console.log(`[特殊効果] 楽市楽座 (${side}): 鉄砲=${gunRecycled ? '再装填' : 'なし'}, 信長=${hasNobunaga ? '有' : '無'}, 足軽=${ashigaruRecycled ? '再動員' : 'なし'}`);
       break;
     }
     case 'nagashino': {
