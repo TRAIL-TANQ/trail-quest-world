@@ -912,7 +912,6 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
   }, []);
 
   // ===== Starter deck selection (stage mode) =====
-  const [selectedStarter, setSelectedStarter] = useState<StarterDeck | null>(null);
   const [expandedStarterId, setExpandedStarterId] = useState<string | null>(null);
   const [giftConfirmDeck, setGiftConfirmDeck] = useState<{ deckKey: DeckKey; icon: string; name: string; strategy: string } | null>(null);
   const [giftCelebrationDeck, setGiftCelebrationDeck] = useState<{ icon: string; name: string } | null>(null);
@@ -3576,7 +3575,6 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
 
         <div className="space-y-2.5 max-w-md mx-auto">
           {STARTER_DECKS.map((deck) => {
-            const isSelected = selectedStarter?.id === deck.id;
             const trumpCard = deck.trumpCard ? findCardByName(deck.trumpCard) : null;
             const deckKeyEntry = Object.entries(DECK_KEY_TO_STARTER_ID).find(([, sid]) => sid === deck.id);
             const deckKey = deckKeyEntry?.[0] as DeckKey | undefined;
@@ -3590,15 +3588,11 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                 key={deck.id}
                 className="rounded-xl overflow-hidden relative transition-all"
                 style={{
-                  background: isSelected
-                    ? 'linear-gradient(135deg, rgba(255,215,0,0.18), rgba(255,215,0,0.03))'
-                    : 'linear-gradient(135deg, rgba(21,29,59,0.95), rgba(14,20,45,0.95))',
-                  border: isSelected
-                    ? '2px solid rgba(255,215,0,0.7)'
-                    : isUnlocked
-                      ? '1.5px solid rgba(255,215,0,0.25)'
-                      : '1.5px solid rgba(120,120,140,0.25)',
-                  boxShadow: isSelected ? '0 0 18px rgba(255,215,0,0.3)' : '0 2px 10px rgba(0,0,0,0.3)',
+                  background: 'linear-gradient(135deg, rgba(21,29,59,0.95), rgba(14,20,45,0.95))',
+                  border: isUnlocked
+                    ? '1.5px solid rgba(255,215,0,0.25)'
+                    : '1.5px solid rgba(120,120,140,0.25)',
+                  boxShadow: '0 2px 10px rgba(0,0,0,0.3)',
                 }}
               >
                 <div className="px-3 pt-2.5 pb-2 flex items-center gap-3">
@@ -3682,31 +3676,17 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
                       🔨 準備中
                     </button>
                   ) : isUnlocked ? (
-                    isSelected ? (
-                      <button
-                        onClick={() => startGame(deck)}
-                        className="w-full rounded-lg py-2 font-black text-[13px] active:scale-[0.98] transition-transform"
-                        style={{
-                          background: 'linear-gradient(135deg, #ef4444, #b91c1c)',
-                          color: '#fff',
-                          boxShadow: '0 2px 10px rgba(239,68,68,0.4)',
-                        }}
-                      >
-                        ⚔️ 出撃する
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => setSelectedStarter(deck)}
-                        className="w-full rounded-lg py-1.5 font-bold text-[11px] active:scale-[0.98] transition-transform"
-                        style={{
-                          background: 'rgba(255,215,0,0.08)',
-                          color: '#ffd700',
-                          border: '1px solid rgba(255,215,0,0.25)',
-                        }}
-                      >
-                        タップで選択
-                      </button>
-                    )
+                    <button
+                      onClick={() => startGame(deck)}
+                      className="w-full rounded-lg py-2 font-black text-[13px] active:scale-[0.98] transition-transform"
+                      style={{
+                        background: 'linear-gradient(135deg, #ef4444, #b91c1c)',
+                        color: '#fff',
+                        boxShadow: '0 2px 10px rgba(239,68,68,0.4)',
+                      }}
+                    >
+                      ⚔️ 出撃する
+                    </button>
                   ) : (
                     <button
                       onClick={() => deckKey && navigate(`/quest/${deckKey}`)}
