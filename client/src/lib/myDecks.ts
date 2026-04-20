@@ -16,6 +16,7 @@ import {
   loadQuestProgress,
   isDeckUnlocked,
   isSSRUnlocked,
+  getFirstDeckGift,
   DECK_SSR_CARDS,
   DECK_KEYS,
   DECK_KEY_TO_STARTER_ID,
@@ -46,6 +47,11 @@ export interface MyDeck {
   cards: MyDeckCardEntry[];
   created_at: string;
   updated_at: string;
+  // ===== kk spec 2026-04-21 DECK_QUEST_SPEC §4.2 拡張フィールド =====
+  // すべて optional: 既存 localStorage 上のデッキは undefined のまま動作する。
+  isMain?: boolean;          // メインデッキフラグ（1ユーザー1つ true 想定）
+  sourceDeckKey?: DeckKey;   // 起源 starter デッキ（初回ギフト or クエスト獲得）
+  unlockedAt?: string;       // クエスト獲得 / 初回ギフト日時 (ISO)
 }
 
 // ===== LocalStorage I/O =====
@@ -247,4 +253,69 @@ export function buildMyDeckCards(deck: MyDeck): BattleCard[] {
     }
   }
   return out;
+}
+
+// ===== kk spec 2026-04-21 DECK_QUEST_SPEC §3.3 / §4.2 デッキクエスト獲得 =====
+
+/**
+ * Starter デッキ定義から MyDeck を生成。
+ * - card 名 → ALL_BATTLE_CARDS から id 解決して count 集計
+ * - sourceDeckKey / unlockedAt を自動付与
+ * - isMain は呼び出し側で指定（getFirstDeckGift とのマッチで決定）
+ */
+export function createMyDeckFromStarter(
+  childId: string,
+  deckKey: DeckKey,
+  options: { isMain?: boolean } = {},
+): MyDeck | null {
+  const starterId = DECK_KEY_TO_STARTER_ID[deckKey];
+  const starter = STARTER_DECKS.find((d) => d.id === starterId);
+  if (!starter) {
+    console.warn(`[MyDecks] starter not found for deckKey=${deckKey}`);
+    return null;
+  }
+  const allNames = [starter.trumpCard, ...starter.themeCards, ...starter.noiseCards].filter(Boolean);
+  // card_id → count に集約。同名カードの ALL_BATTLE_CARDS マッチは先頭採用（バリアント無視）。
+  const grouped = new Map<string, number>();
+  for (const name of allNames) {
+    const card = ALL_BATTLE_CARDS.find((c) => c.name === name);
+    if (!card) {
+      console.warn(`[MyDecks] card not found in ALL_BATTLE_CARDS: '${name}' (deckKey=${deckKey})`);
+      continue;
+    }
+    grouped.set(card.id, (grouped.get(card.id) ?? 0) + 1);
+  }
+  const now = new Date().toISOString();
+  return {
+    id: newDeckId(),
+    child_id: childId,
+    deck_name: starter.name,
+    cards: Array.from(grouped.entries()).map(([card_id, count]) => ({ card_id, count })),
+    created_at: now,
+    updated_at: now,
+    isMain: options.isMain ?? false,
+    sourceDeckKey: deckKey,
+    unlockedAt: now,
+  };
+}
+
+/**
+ * クエストで獲得したデッキをマイデッキ一覧に追加（重複時はスキップ）。
+ * - 同じ sourceDeckKey の MyDeck が既存なら何もしない
+ * - 新規追加時、getFirstDeckGift() 一致なら isMain=true（メインデッキ自動判定）
+ * - MY_DECK_MAX_DECKS の制限はあえて無視（クエスト獲得は永続所持、UI 側で整理）
+ */
+export function addOwnedDeckIfMissing(childId: string, deckKey: DeckKey): { added: boolean; deck: MyDeck | null } {
+  const decks = loadMyDecks(childId);
+  const existing = decks.find((d) => d.sourceDeckKey === deckKey);
+  if (existing) {
+    console.log(`[MyDecks] addOwnedDeckIfMissing: ${deckKey} already exists (id=${existing.id})`);
+    return { added: false, deck: existing };
+  }
+  const isMain = getFirstDeckGift() === deckKey;
+  const newDeck = createMyDeckFromStarter(childId, deckKey, { isMain });
+  if (!newDeck) return { added: false, deck: null };
+  saveMyDecks([...decks, newDeck], childId);
+  console.log(`[MyDecks] addOwnedDeckIfMissing: added ${deckKey} (isMain=${isMain}, total decks=${decks.length + 1})`);
+  return { added: true, deck: newDeck };
 }

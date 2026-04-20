@@ -20,6 +20,11 @@ export interface DeckQuestProgress {
   challenger: QuestDifficultyProgress;
   master: QuestDifficultyProgress;
   legend: QuestDifficultyProgress;
+  // kk spec 2026-04-21 DECK_QUEST_SPEC §3.1 Step 2:
+  //   ビギナークリア後、敵デッキ戦に勝利したら true。
+  //   この時点で MyDeck.sourceDeckKey=<deckKey> が my_decks に追加される。
+  //   ビギナークリア = カード解放、battleCleared = デッキ習得（ストーリー上の到達）。
+  battleCleared?: boolean;
 }
 
 export type QuestProgressData = Record<DeckKey, DeckQuestProgress>;
@@ -289,6 +294,29 @@ export function isDeckUnlocked(progress: QuestProgressData, deckKey: DeckKey): b
 /** デッキのビギナークエストをクリア済みか（クエストバッジ表示用） */
 export function isBeginnerCleared(progress: QuestProgressData, deckKey: DeckKey): boolean {
   return progress[deckKey]?.beginner?.cleared ?? false;
+}
+
+/**
+ * 敵デッキ戦に勝利済みか（kk spec 2026-04-21 DECK_QUEST_SPEC §3.1 Step 2）
+ * ビギナークリア (cards 解放) より一段上の「デッキ習得」フラグ。
+ * MyDeck.sourceDeckKey=<deckKey> の所持と同義になる想定。
+ */
+export function isBattleCleared(progress: QuestProgressData, deckKey: DeckKey): boolean {
+  return progress[deckKey]?.battleCleared === true;
+}
+
+/**
+ * 敵デッキ戦勝利を記録。既に true ならノーオペで false を返す（toast 抑止用）。
+ * 注: 現状は localStorage のみ。Supabase sync は battleCleared の column 追加後に対応。
+ */
+export function markBattleCleared(deckKey: DeckKey): boolean {
+  const progress = loadQuestProgress();
+  if (!progress[deckKey]) return false;
+  if (progress[deckKey].battleCleared) return false;
+  progress[deckKey].battleCleared = true;
+  saveQuestProgress(progress);
+  console.log(`[questProgress] markBattleCleared: ${deckKey} → true`);
+  return true;
 }
 
 /** SSR が解放されているか（モニターモード or 管理者なら常にtrue） */

@@ -64,13 +64,13 @@ import {
 import { getStage, createStageAIDeck, STARTER_DECKS, buildStarterDeck, npcDeckPhasePick, longSpecialRuleMessages } from '@/lib/stages';
 import type { StarterDeck, StageRules } from '@/lib/stages';
 import { useStageProgressStore } from '@/lib/stageProgressStore';
-import { loadQuestProgress, isDeckUnlocked, isDeckAvailable, getUnlockedSSRCardNames, DECK_KEY_TO_STARTER_ID, QUEST_DIFFICULTIES, DIFFICULTY_INFO, isDifficultyUnlocked, DECK_QUEST_INFO, isFirstDeckClaimed, claimFirstDeck, getFirstDeckGift, MAIN_DECK_KEYS, type DeckKey } from '@/lib/questProgress';
+import { loadQuestProgress, isDeckUnlocked, isDeckAvailable, getUnlockedSSRCardNames, DECK_KEY_TO_STARTER_ID, QUEST_DIFFICULTIES, DIFFICULTY_INFO, isDifficultyUnlocked, DECK_QUEST_INFO, isFirstDeckClaimed, claimFirstDeck, getFirstDeckGift, markBattleCleared, MAIN_DECK_KEYS, type DeckKey } from '@/lib/questProgress';
 import type { PvPSession } from '@/lib/pvpSession';
 import { clearPvPSession } from '@/lib/pvpSession';
 import { applyRatingChange, applyPvPRatingChange } from '@/lib/ratingService';
 import { playBattleStart, playTap, playDefeat, playCardLand, playSuccess } from '@/lib/sfx';
 import CardPreviewOverlay from '@/components/CardPreviewOverlay';
-import { loadMyDecks, buildMyDeckCards, MY_DECK_MAX_DECKS, getStarterDeckCardNames } from '@/lib/myDecks';
+import { loadMyDecks, buildMyDeckCards, MY_DECK_MAX_DECKS, getStarterDeckCardNames, addOwnedDeckIfMissing } from '@/lib/myDecks';
 import { COLLECTION_CARDS } from '@/lib/cardData';
 import { saveHallOfFame } from '@/lib/hallOfFameService';
 import { saveBattleHistory, savePvPBattleHistory, starterIdToDeckKey } from '@/lib/battleHistoryService';
@@ -1021,6 +1021,34 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
     startGame(playerStarter, undefined, aiStarter);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [questMode, isPvP, stageId]);
+
+  // ===== Deck Quest victory hook (kk spec 2026-04-21 DECK_QUEST_SPEC §3.1 Step 2/3) =====
+  // クエストモードで勝利したら:
+  //   1. questProgress.battleCleared = true（per-deck フラグ）
+  //   2. MyDeck に sourceDeckKey=<enemyDeck> の starter デッキを自動追加
+  //   3. toast で告知
+  // 敗北時は何もしない（Commit 3 の再挑戦 UI で対応）。
+  // 多重発火防止: 同セッション内で 1 度だけ。replay → 新規ナビゲーションで component remount
+  // → ref も初期化されるため問題なし。
+  const questVictoryHandledRef = useRef(false);
+  useEffect(() => {
+    if (screen !== 'result') return;
+    if (!gameState) return;
+    if (questVictoryHandledRef.current) return;
+    if (!questEnemyDeckKeyRef.current) return; // not quest mode
+    if (gameState.winner !== 'player') return; // 敗北時は Commit 3 の再挑戦フローへ
+    questVictoryHandledRef.current = true;
+    const enemyDeck = questEnemyDeckKeyRef.current;
+    const newlyMarked = markBattleCleared(enemyDeck);
+    const result = addOwnedDeckIfMissing(userId, enemyDeck);
+    const deckName = DECK_QUEST_INFO[enemyDeck]?.name ?? enemyDeck;
+    if (result.added) {
+      toast.success(`🎉 ${deckName}デッキをマスター！マイデッキに追加されたよ`);
+    } else if (newlyMarked) {
+      toast.success(`🏅 ${deckName}デッキの戦闘記録を更新`);
+    }
+    console.log(`[KC] quest victory: enemy=${enemyDeck}, newlyMarked=${newlyMarked}, deckAdded=${result.added}`);
+  }, [screen, gameState, userId]);
 
   // Tracks which round last initialized its PvP deck phase, so we can reset
   // pvpDeckTurn to 'p1' exactly once per deck_phase entry.
