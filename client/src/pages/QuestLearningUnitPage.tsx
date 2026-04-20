@@ -20,15 +20,14 @@ import {
   DECK_SSR_CARDS,
   QUEST_DIFFICULTIES,
   CLEAR_THRESHOLD,
+  QUEST_CLEAR_BONUS_ALT,
   type DeckKey,
   type QuestDifficulty,
   type QuestProgressData,
 } from '@/lib/questProgress';
-import { QUEST_QUIZ_DATA, type QuestQuiz } from '@/lib/questQuizData';
+import { getQuizPoolForMode, shuffleQuizChoices, type QuestQuiz } from '@/lib/questQuizData';
 import { processQuizResult, fetchChildStatus } from '@/lib/quizService';
-import { useUserStore, useCollectionStore } from '@/lib/stores';
-import { getStarterDeckCardNames } from '@/lib/myDecks';
-import { COLLECTION_CARDS } from '@/lib/cardData';
+import { useUserStore } from '@/lib/stores';
 import { supabase } from '@/lib/supabase';
 
 const DIFFICULTY_INT: Record<QuestDifficulty, number> = {
@@ -82,7 +81,6 @@ export default function QuestLearningUnitPage() {
 
   const userId = useUserStore((s) => s.user.id);
   const addTotalAlt = useUserStore((s) => s.addTotalAlt);
-  const addCollectionCards = useCollectionStore((s) => s.addCards);
 
   const [progress, setProgress] = useState<QuestProgressData>(loadQuestProgress);
   const [difficulty, setDifficulty] = useState<QuestDifficulty>('beginner');
@@ -110,7 +108,6 @@ export default function QuestLearningUnitPage() {
   const [timer, setTimer] = useState<number>(999);
   const [correctFlash, setCorrectFlash] = useState(false);
   const [wrongFlash, setWrongFlash] = useState(false);
-  const [deckJustUnlocked, setDeckJustUnlocked] = useState(false);
   const [ssrJustUnlocked, setSsrJustUnlocked] = useState(false);
   const [altBalance, setAltBalance] = useState<number | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -122,14 +119,14 @@ export default function QuestLearningUnitPage() {
 
   useEffect(() => {
     if (!unit) return;
-    const raw = QUEST_QUIZ_DATA[deckKey]?.[difficulty] || [];
-    setPool(shuffle(raw));
+    const raw = getQuizPoolForMode(deckKey, difficulty);
+    // 問題自体をシャッフルした上で、各問題の選択肢もランダム化
+    setPool(shuffle(raw).map(shuffleQuizChoices));
     setQIndex(0);
     setSessionCorrect(0);
     setSelected(null);
     setShowFeedback(false);
     setTimer(timeLimit ?? 999);
-    setDeckJustUnlocked(false);
     setSsrJustUnlocked(false);
     savedRef.current = false;
   }, [deckKey, difficulty, unit, timeLimit]);
@@ -144,22 +141,20 @@ export default function QuestLearningUnitPage() {
     if (!cleared || savedRef.current || !unit) return;
     savedRef.current = true;
     const old = loadQuestProgress();
-    const wasDeck = isDeckUnlocked(old, deckKey);
     const wasSSR = isSSRUnlocked(old, deckKey);
+    const wasThisDiffCleared = old[deckKey][difficulty].cleared;
     const next = recordQuizResult(old, deckKey, difficulty, CLEAR_THRESHOLD);
     saveQuestProgress(next);
     setProgress(next);
-    if (!wasDeck && isDeckUnlocked(next, deckKey)) {
-      setDeckJustUnlocked(true);
-      // デッキ解放時: そのデッキのカードをコレクションに追加
-      const deckCardNames = getStarterDeckCardNames(deckKey);
-      const deckCardIds = COLLECTION_CARDS
-        .filter((c) => deckCardNames.includes(c.name))
-        .map((c) => c.id);
-      addCollectionCards(deckCardIds);
-    }
+    // kk 2026-04-21: デッキ解放は敵デッキ戦勝利時 (KnowledgeChallenger) に移動。
+    // ビギナークリアでは解放・コレクション追加を行わない。
     if (!wasSSR && isSSRUnlocked(next, deckKey)) setSsrJustUnlocked(true);
-  }, [cleared, deckKey, difficulty, unit]);
+    // クエスト初回クリアボーナス（同じ難易度で再付与しない）
+    if (!wasThisDiffCleared && next[deckKey][difficulty].cleared) {
+      const bonus = QUEST_CLEAR_BONUS_ALT[difficulty];
+      if (bonus > 0) addTotalAlt(bonus);
+    }
+  }, [cleared, deckKey, difficulty, unit, addTotalAlt]);
 
   const advance = useCallback(() => {
     setSelected(null);
@@ -167,7 +162,7 @@ export default function QuestLearningUnitPage() {
     setQIndex((i) => {
       const next = i + 1;
       if (next >= pool.length) {
-        setPool(shuffle(QUEST_QUIZ_DATA[deckKey]?.[difficulty] || []));
+        setPool(shuffle(getQuizPoolForMode(deckKey, difficulty)).map(shuffleQuizChoices));
         return 0;
       }
       return next;
@@ -328,6 +323,24 @@ export default function QuestLearningUnitPage() {
           <span className="text-xs font-bold" style={{ color: '#ffd700' }}>{altBalance !== null ? altBalance.toLocaleString() : '---'}</span>
         </div>
       </div>
+
+      {/* Quest clear bonus banner */}
+      {!progress[deckKey][difficulty].cleared && (
+        <div className="px-3 pt-2 shrink-0">
+          <div className="rounded-lg px-3 py-2 flex items-center gap-2"
+            style={{
+              background: 'linear-gradient(135deg, rgba(255,215,0,0.15), rgba(255,215,0,0.04))',
+              border: '1.5px solid rgba(255,215,0,0.4)',
+              boxShadow: 'inset 0 0 12px rgba(255,215,0,0.08)',
+            }}>
+            <span className="text-lg">🌟</span>
+            <p className="text-[11px] font-bold flex-1" style={{ color: 'var(--tqw-gold, #ffd700)' }}>
+              このクエストを初めてクリアすると <span className="font-black">+{QUEST_CLEAR_BONUS_ALT[difficulty]} ALT</span> ボーナス！
+              {difficulty === 'legend' && ' + SSR解放'}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Difficulty Tabs + Progress */}
       <div className="px-3 py-2 shrink-0" style={{ background: 'rgba(0,0,0,0.25)' }}>
@@ -522,12 +535,6 @@ export default function QuestLearningUnitPage() {
               <h2 className="text-lg font-black mb-1" style={{ color: diffInfo.color, textShadow: `0 0 16px ${diffInfo.color}40` }}>
                 {diffInfo.label} クリア！
               </h2>
-              {deckJustUnlocked && (
-                <div className="rounded-lg px-3 py-2 my-2" style={{ background: 'rgba(34,197,94,0.18)', border: '1.5px solid rgba(34,197,94,0.5)' }}>
-                  <p className="text-sm font-bold text-green-400">🧪 {info.name}デッキ解放！</p>
-                  <p className="text-[10px] text-green-300/70 mt-0.5">バトルで使用可能になりました</p>
-                </div>
-              )}
               {ssrJustUnlocked && (
                 <div className="rounded-lg px-3 py-2 my-2" style={{ background: 'rgba(255,215,0,0.15)', border: '1.5px solid rgba(255,215,0,0.5)' }}>
                   <p className="text-sm font-bold" style={{ color: '#ffd700' }}>👑 SSRカード解放！</p>
@@ -614,7 +621,7 @@ export default function QuestLearningUnitPage() {
           <div className="rounded-md px-2.5 py-1.5 text-center text-[10px]"
             style={{ background: 'rgba(0,0,0,0.35)', border: '1px solid rgba(255,215,0,0.15)' }}>
             {!deckUnlocked ? (
-              <span className="text-amber-200/70">⭐ ビギナーで{CLEAR_THRESHOLD}問正解でデッキ解放！</span>
+              <span className="text-amber-200/70">⭐ ビギナーをクリアして敵デッキ戦に挑戦！</span>
             ) : !ssrUnlocked ? (
               <span className="text-amber-200/70">👑 レジェンドをクリアでSSR解放！</span>
             ) : (

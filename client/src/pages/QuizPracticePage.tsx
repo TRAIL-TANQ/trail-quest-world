@@ -5,17 +5,14 @@
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation, useRoute } from 'wouter';
-import { useUserStore, useAltStore, useCollectionStore } from '@/lib/stores';
+import { useUserStore } from '@/lib/stores';
 import { processQuizResult, fetchChildStatus } from '@/lib/quizService';
-import { getStarterDeckCardNames } from '@/lib/myDecks';
-import { COLLECTION_CARDS } from '@/lib/cardData';
 import {
   type DeckKey,
   type QuestDifficulty,
   DECK_QUEST_INFO,
   DIFFICULTY_INFO,
   CLEAR_THRESHOLD,
-  isDeckUnlocked,
   isSSRUnlocked,
   loadQuestProgress,
   saveQuestProgress,
@@ -48,7 +45,6 @@ export default function QuizPracticePage() {
 
   const addTotalAlt = useUserStore((s) => s.addTotalAlt);
   const userId = useUserStore((s) => s.user.id);
-  const addCollectionCards = useCollectionStore((s) => s.addCards);
 
   const [phase, setPhase] = useState<Phase>('playing');
   const [questions, setQuestions] = useState<QuestQuiz[]>([]);
@@ -67,7 +63,6 @@ export default function QuizPracticePage() {
   const unmountedRef = useRef(false);
 
   // Reward states
-  const [deckJustUnlocked, setDeckJustUnlocked] = useState(false);
   const [ssrJustUnlocked, setSsrJustUnlocked] = useState(false);
   // kk spec 2026-04-21 DECK_QUEST_SPEC §3.3: 結果画面で「敵デッキ戦へ挑戦」ボタンを出すフラグ。
   // クイズ累計5正解 (cleared=true) で true に固定（過去にクリア済でも true）。
@@ -204,20 +199,12 @@ export default function QuizPracticePage() {
         }
         // Record quest progress
         const oldProgress = loadQuestProgress();
-        const wasDeckUnlocked = isDeckUnlocked(oldProgress, deckKey);
         const wasSSRUnlocked = isSSRUnlocked(oldProgress, deckKey);
         const newProgress = recordQuizResult(oldProgress, deckKey, diffKey, finalCorrect);
         saveQuestProgress(newProgress);
 
-        if (!wasDeckUnlocked && isDeckUnlocked(newProgress, deckKey)) {
-          setDeckJustUnlocked(true);
-          // デッキ解放時: そのデッキのカードをコレクションに追加
-          const deckCardNames = getStarterDeckCardNames(deckKey);
-          const deckCardIds = COLLECTION_CARDS
-            .filter((c) => deckCardNames.includes(c.name))
-            .map((c) => c.id);
-          addCollectionCards(deckCardIds);
-        }
+        // kk 2026-04-21: デッキ解放は敵デッキ戦勝利時 (KnowledgeChallenger) に移動。
+        // クイズクリアでは解放・コレクション追加を行わない。
         if (!wasSSRUnlocked && isSSRUnlocked(newProgress, deckKey)) {
           setSsrJustUnlocked(true);
         }
@@ -298,13 +285,6 @@ export default function QuizPracticePage() {
           )}
 
           {/* Unlock banners */}
-          {deckJustUnlocked && (
-            <div className="rounded-lg p-3 mb-3 text-center" style={{ background: 'rgba(34,197,94,0.15)', border: '1.5px solid rgba(34,197,94,0.4)' }}>
-              <span className="text-lg">🎉</span>
-              <p className="text-sm font-bold text-green-400 mt-1">{deckInfo.name}デッキ解放！</p>
-              <p className="text-[10px] text-green-300/60 mt-0.5">バトルで使用可能になりました</p>
-            </div>
-          )}
           {ssrJustUnlocked && (
             <div className="rounded-lg p-3 mb-3 text-center" style={{ background: 'rgba(255,215,0,0.12)', border: '1.5px solid rgba(255,215,0,0.4)' }}>
               <span className="text-lg">👑</span>

@@ -1044,6 +1044,14 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
     const result = addOwnedDeckIfMissing(userId, enemyDeck);
     const deckName = DECK_QUEST_INFO[enemyDeck]?.name ?? enemyDeck;
     if (result.added) {
+      // kk 2026-04-21: デッキ解放は battle-cleared 起点に一本化。
+      // コレクションへのカード追加も、以前の「beginner クリア時」から
+      // 「敵デッキ戦勝利時」に移動。
+      const deckCardNames = getStarterDeckCardNames(enemyDeck);
+      const deckCardIds = COLLECTION_CARDS
+        .filter((c) => deckCardNames.includes(c.name))
+        .map((c) => c.id);
+      addCollectionCards(deckCardIds);
       toast.success(`🎉 ${deckName}デッキをマスター！マイデッキに追加されたよ`);
     } else if (newlyMarked) {
       toast.success(`🏅 ${deckName}デッキの戦闘記録を更新`);

@@ -278,17 +278,16 @@ export function isFirstDeckClaimed(): boolean {
 }
 
 /**
- * デッキがバトルで使用可能か（= 準備中でない）。
- * v12 以降: 提供中の5デッキはクエスト未クリアでもバトルで使用可能。
- * クエストはALTボーナス獲得の手段として機能する。
+ * デッキがバトルで使用可能か。
+ * v20 以降 (kk 2026-04-21 DECK_QUEST_SPEC): 使用可能 = メインデッキ（初回ギフト）
+ *   または 敵デッキ戦勝利済み (battleCleared)。ビギナークリアだけでは解放しない。
+ * 準備中デッキは管理者/モニター以外は常に false。
  */
 export function isDeckUnlocked(progress: QuestProgressData, deckKey: DeckKey): boolean {
   if (MONITOR_MODE || isAdminMode()) return true;
-  // 準備中でないデッキは全て使用可能
-  if (isDeckAvailable(deckKey)) return true;
-  // レガシー: 初回プレゼント / ビギナークリアも解放扱い（準備中デッキが将来解放された場合に備えて）
-  if (getFirstDeckGift() === deckKey) return true;
-  return progress[deckKey].beginner.cleared;
+  if (!isDeckAvailable(deckKey)) return false;              // 準備中
+  if (getFirstDeckGift() === deckKey) return true;          // メインデッキ
+  return progress[deckKey]?.battleCleared === true;         // 敵デッキ戦勝利
 }
 
 /** デッキのビギナークエストをクリア済みか（クエストバッジ表示用） */
