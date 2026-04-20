@@ -22,7 +22,7 @@ import {
   recordQuizResult,
   DECK_SSR_CARDS,
 } from '@/lib/questProgress';
-import { QUEST_QUIZ_DATA, type QuestQuiz } from '@/lib/questQuizData';
+import { getQuizPoolForMode, shuffleQuizChoices, type QuestQuiz } from '@/lib/questQuizData';
 import { incrementTodayAltCount, getRemainingAltCount } from '@/lib/altDailyLimit';
 
 const QUESTIONS_PER_SESSION = 10;
@@ -69,6 +69,9 @@ export default function QuizPracticePage() {
   // Reward states
   const [deckJustUnlocked, setDeckJustUnlocked] = useState(false);
   const [ssrJustUnlocked, setSsrJustUnlocked] = useState(false);
+  // kk spec 2026-04-21 DECK_QUEST_SPEC §3.3: 結果画面で「敵デッキ戦へ挑戦」ボタンを出すフラグ。
+  // クイズ累計5正解 (cleared=true) で true に固定（過去にクリア済でも true）。
+  const [questBattleEligible, setQuestBattleEligible] = useState(false);
 
   // 1日3回ALT制限: セッション開始時点で「今回ALT獲得できるか」を固定。
   const [earnAltThisSession, setEarnAltThisSession] = useState(false);
@@ -85,8 +88,8 @@ export default function QuizPracticePage() {
 
   // Generate questions on mount
   useEffect(() => {
-    const pool = QUEST_QUIZ_DATA[deckKey]?.[diffKey] || [];
-    const shuffled = [...pool].sort(() => Math.random() - 0.5);
+    const pool = getQuizPoolForMode(deckKey, diffKey);
+    const shuffled = [...pool].sort(() => Math.random() - 0.5).map(shuffleQuizChoices);
     setQuestions(shuffled.slice(0, QUESTIONS_PER_SESSION));
     setCurrentIndex(0);
     setAnswers([]);
@@ -218,6 +221,10 @@ export default function QuizPracticePage() {
         if (!wasSSRUnlocked && isSSRUnlocked(newProgress, deckKey)) {
           setSsrJustUnlocked(true);
         }
+        // クエスト戦エントリー判定: ビギナークリア済なら結果画面で「敵デッキ戦へ」ボタンを出す
+        if (newProgress[deckKey].beginner.cleared) {
+          setQuestBattleEligible(true);
+        }
         return prev;
       });
       setPhase('result');
@@ -340,6 +347,21 @@ export default function QuizPracticePage() {
           )}
 
           {/* Buttons */}
+          {questBattleEligible && (
+            <button
+              onClick={() => navigate(`/games/knowledge-challenger?mode=quest&enemyDeck=${deckKey}`)}
+              className="w-full rounded-xl font-black text-base py-3 mb-2 active:scale-[0.97] transition-transform"
+              style={{
+                minHeight: 52,
+                background: `linear-gradient(135deg, ${deckInfo.color}, ${deckInfo.color}cc)`,
+                color: '#0b1128',
+                boxShadow: `0 4px 16px ${deckInfo.color}66`,
+                border: `2px solid ${deckInfo.color}`,
+              }}
+            >
+              ⚔️ {deckInfo.name}デッキ戦へ挑戦
+            </button>
+          )}
           <div className="flex gap-3">
             <button
               onClick={() => navigate(`/games/quiz/${deckKey}/${diffKey}`)}

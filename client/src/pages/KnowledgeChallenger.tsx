@@ -64,7 +64,7 @@ import {
 import { getStage, createStageAIDeck, STARTER_DECKS, buildStarterDeck, npcDeckPhasePick, longSpecialRuleMessages } from '@/lib/stages';
 import type { StarterDeck, StageRules } from '@/lib/stages';
 import { useStageProgressStore } from '@/lib/stageProgressStore';
-import { loadQuestProgress, isDeckUnlocked, isDeckAvailable, getUnlockedSSRCardNames, DECK_KEY_TO_STARTER_ID, QUEST_DIFFICULTIES, DIFFICULTY_INFO, isDifficultyUnlocked, DECK_QUEST_INFO, isFirstDeckClaimed, claimFirstDeck, MAIN_DECK_KEYS, type DeckKey } from '@/lib/questProgress';
+import { loadQuestProgress, isDeckUnlocked, isDeckAvailable, getUnlockedSSRCardNames, DECK_KEY_TO_STARTER_ID, QUEST_DIFFICULTIES, DIFFICULTY_INFO, isDifficultyUnlocked, DECK_QUEST_INFO, isFirstDeckClaimed, claimFirstDeck, getFirstDeckGift, MAIN_DECK_KEYS, type DeckKey } from '@/lib/questProgress';
 import type { PvPSession } from '@/lib/pvpSession';
 import { clearPvPSession } from '@/lib/pvpSession';
 import { applyRatingChange, applyPvPRatingChange } from '@/lib/ratingService';
@@ -493,6 +493,28 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
     } catch { /* ignore */ }
     return 'title';
   })();
+
+  // ===== Deck Quest mode (kk spec 2026-04-21 DECK_QUEST_SPEC §3.3) =====
+  // URL: /games/knowledge-challenger?mode=quest&enemyDeck=<deckKey>
+  //   - 自動でバトル開始（タイトル/デッキ選択画面をスキップ）
+  //   - プレイヤー: 初回プレゼントで選んだメインデッキ (getFirstDeckGift)
+  //   - 相手:       enemyDeck パラメータ指定の starter デッキ
+  // 起動条件: メインデッキ claim 済み AND enemyDeck が DECK_KEY_TO_STARTER_ID に存在
+  // 失敗時 (claim 未) は通常フロー (gift overlay) にフォールバック。
+  const questMode = useMemo<{ enemyDeck: DeckKey } | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const p = new URLSearchParams(window.location.search);
+      if (p.get('mode') !== 'quest') return null;
+      const enemyDeck = p.get('enemyDeck') as DeckKey | null;
+      if (!enemyDeck || !(enemyDeck in DECK_KEY_TO_STARTER_ID)) return null;
+      return { enemyDeck };
+    } catch {
+      return null;
+    }
+  }, []);
+  // 後段の commit で「クエスト戦勝利」判定に使用。auto-start 時に enemyDeck を保持。
+  const questEnemyDeckKeyRef = useRef<DeckKey | null>(null);
   const [screen, setScreen] = useState<ScreenPhase>(initialScreen);
   const [gameState, setGameState] = useState<GameState | null>(null);
   // kk 2026-04-19: リザルト画面「ALT X 受け取る」ボタンの二重タップ防止。
@@ -898,7 +920,9 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
   const [specialRuleBanner, setSpecialRuleBanner] = useState<string[] | null>(null);
 
   // ===== Start game =====
-  const startGame = useCallback((starterOverride?: StarterDeck, myDeckCards?: BattleCard[]) => {
+  // aiStarterOverride: kk spec 2026-04-21 DECK_QUEST_SPEC §3.3 デッキクエスト。
+  //   非 PvP のとき AI デッキを指定 starter で固定する（stages.ts のステージ AI を上書き）。
+  const startGame = useCallback((starterOverride?: StarterDeck, myDeckCards?: BattleCard[], aiStarterOverride?: StarterDeck) => {
     clearStepTimeouts();
     let playerDeck: BattleCard[];
     let aiDeckCards: BattleCard[];
@@ -930,6 +954,11 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
       aiDeckCards = stageId !== null ? createStageAIDeck(stageId) : createAIDeck();
       activeDeckKeyRef.current = 'custom';
       console.log('[KC] startGame path=createInitialDeck (default fallback!)');
+    }
+    // クエストモード: 非 PvP のとき AI starter override で AI デッキを差し替え（最終段で適用）
+    if (!isPvP && aiStarterOverride) {
+      aiDeckCards = buildStarterDeck(aiStarterOverride);
+      console.log('[KC] startGame: aiStarterOverride applied =', aiStarterOverride.id);
     }
     const stage = stageId !== null ? getStage(stageId) : null;
     const rules = stage?.rules ?? undefined;
@@ -970,6 +999,28 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
     startGame();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPvP]);
+
+  // ===== Deck Quest auto-start (kk spec 2026-04-21 DECK_QUEST_SPEC §3.3) =====
+  // ?mode=quest&enemyDeck=<deckKey> でアクセスされたら、メインデッキ vs enemyDeck で即開始。
+  // メインデッキ未 claim の時は通常の gift overlay が出るためここでは何もしない。
+  const questAutoStartedRef = useRef(false);
+  useEffect(() => {
+    if (!questMode || questAutoStartedRef.current) return;
+    if (isPvP || stageId !== null) return;
+    const playerDeckKey = getFirstDeckGift();
+    if (!playerDeckKey) return; // メインデッキ未 claim → gift overlay にフォールバック
+    const playerStarter = STARTER_DECKS.find((d) => d.id === DECK_KEY_TO_STARTER_ID[playerDeckKey]);
+    const aiStarter = STARTER_DECKS.find((d) => d.id === DECK_KEY_TO_STARTER_ID[questMode.enemyDeck]);
+    if (!playerStarter || !aiStarter) {
+      console.warn('[KC] quest auto-start abort: starter not found', { playerDeckKey, enemyDeck: questMode.enemyDeck });
+      return;
+    }
+    questAutoStartedRef.current = true;
+    questEnemyDeckKeyRef.current = questMode.enemyDeck;
+    console.log('[KC] quest auto-start: player=', playerDeckKey, 'enemy=', questMode.enemyDeck);
+    startGame(playerStarter, undefined, aiStarter);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [questMode, isPvP, stageId]);
 
   // Tracks which round last initialized its PvP deck phase, so we can reset
   // pvpDeckTurn to 'p1' exactly once per deck_phase entry.
