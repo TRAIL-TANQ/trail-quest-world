@@ -1,8 +1,9 @@
-# 4デッキ選択制 + デッキクエスト仕様書 v1.1（確定版）
+# 4デッキ選択制 + デッキクエスト仕様書 v1.2（実装同期版）
 
 **作成日**: 2026-04-21
 **確定日**: 2026-04-21
-**ステータス**: 確定（kk Q1-Q7 回答済み・実装開始承認）
+**実装サイクル完了**: 2026-04-21（Commits 1-5 push 済み）
+**ステータス**: 実装済み（§11 完了サマリー / §12 残タスク参照）
 **作成**: Claude Code（kk 指示に基づく）
 
 ---
@@ -89,11 +90,12 @@ Step 3: マイデッキ一覧に追加
     ↓（カードタップ）
 カルーセル学習（既存）
     ↓（次へ）
-クイズ 5問（既存）
-    ↓（正解でアンロック）
-敵デッキ戦（新規）    ← Phase 3
-    ↓（勝利で解放）
-マイデッキに追加（既存拡張）
+クイズ 10問（QUESTIONS_PER_SESSION=10、累計5正解で beginner.cleared=true）
+    ↓（クリアでアンロック）
+敵デッキ戦（実装済み Commit 1 `3cfa0ac`）
+    ↓（勝利で battleCleared=true & MyDeck 自動追加 — Commit 2 `6501722`）
+    ↓（敗北時は即再挑戦 — Commit 3 `0fedc58`）
+マイデッキに追加（MyDeck.sourceDeckKey で識別）
 ```
 
 ### 3.4 既存実装との統合点
@@ -174,8 +176,11 @@ export interface MyDeck {
 - 4デッキに絞る UI フィルタのみ必要（Phase 1 スコープ）
 
 ### Q4: クイズの合格条件
-→ **B. 80%以上で合格**
-- 実装: 既存の「5問正解=クリア」を「5問中4問=80%以上」に変更。`CLEAR_THRESHOLD` 前後のロジック要改修。
+→ **実装現状を正とする（kk 2026-04-21 commit-after 判断）**
+- 実装: `QUESTIONS_PER_SESSION = 10` 問 / セッション、`CLEAR_THRESHOLD = 5`（累計正解 5 で `beginner.cleared = true`）。
+- 1セッション内で 50% 取れなかった場合も、累計でクリア閾値に達すれば解放扱い（連続学習を促す）。
+- 当初 spec の「B. 80%以上」案は廃案。実装変更は行わず、本仕様書を実装に合わせて同期した（Commit 4）。
+- 関連: `QuizPracticePage.tsx` L28 / `questProgress.ts` L103。
 
 ### Q5: 既存プレイヤーのデータ扱い
 → **B. 保持（現状の獲得デッキ維持）**
@@ -222,10 +227,11 @@ export interface MyDeck {
 | Commit | 内容 | 状態 |
 |---|---|---|
 | 1 | `feat(onboarding): change initial present from 5 to 4 decks` | ✅ `ecce995` |
-| — | `docs(deck-quest): finalize Q1-Q7 decisions in spec` | ✅ 本 commit |
-| 2 | `feat(deck-quest): enemy deck battle phase` | 🔜 次 |
-| 3 | `feat(deck-quest): integrate quest flow (学習→クイズ→戦闘→獲得)` | ⏸ Commit 2 後 |
-| 4 | `refactor(deck-quest): polish and testing` | ⏸ 最後 |
+| — | `docs(deck-quest): finalize Q1-Q7 decisions in spec` | ✅ `35c76da` |
+| 2 | `feat(deck-quest): connect quiz victory to enemy deck battle` | ✅ `3cfa0ac` |
+| 3 | `feat(deck-quest): victory grants deck ownership` | ✅ `6501722` |
+| 4 | `feat(deck-quest): defeat allows immediate retry` | ✅ `0fedc58` |
+| 5 | `docs(deck-quest): sync spec with implementation` | ✅ 本 commit |
 
 ---
 
@@ -255,13 +261,90 @@ export interface MyDeck {
 2. ✅ Step 2: 仕様書ドラフト保存（commit `e469874`）
 3. ✅ Step 3: kk Q1-Q7 回答（2026-04-21）+ 4デッキ候補A確定
 4. ✅ Commit 1: 初回プレゼント 5→4 変更（commit `ecce995`）
-5. 🔜 Commit 2: 敵デッキ戦フェーズ実装（最大タスク）
-6. ⏸ Commit 3: 動線統合（学習 → クイズ → 戦闘 → 獲得）
-7. ⏸ Commit 4: 仕上げ + テスト
+5. ✅ Commit 2: クイズ → 敵デッキ戦の接続（commit `3cfa0ac`）
+6. ✅ Commit 3: 勝利 → デッキ獲得（commit `6501722`）
+7. ✅ Commit 4: 敗北 → 即再挑戦（commit `0fedc58`）
+8. ✅ Commit 5: 仕様書同期（本 commit）
+9. ⏸ §12 残タスクを順次着手（別日）
+
+---
+
+## 11. 実装完了サマリー (2026-04-21)
+
+### 動線フロー（実装後）
+
+```
+1. /games/quiz/:deck/:difficulty
+   → クイズ 10問 → 累計5正解で beginner.cleared=true
+   → 結果画面に「⚔️ {デッキ}デッキ戦へ挑戦」ボタン表示
+
+2. /games/knowledge-challenger?mode=quest&enemyDeck=<deckKey>
+   → questMode useMemo がパース
+   → quest auto-start useEffect:
+        playerStarter = STARTER_DECKS[getFirstDeckGift()]
+        aiStarter     = STARTER_DECKS[enemyDeck]
+        startGame(playerStarter, undefined, aiStarter)
+
+3. バトル決着 → screen='result'
+   3a. 勝利: questVictoryHandled hook
+        - markBattleCleared(enemyDeck) → progress[deckKey].battleCleared=true
+        - addOwnedDeckIfMissing(userId, enemyDeck) → MyDeck 自動追加
+            → sourceDeckKey 重複なら skip / getFirstDeckGift 一致で isMain=true
+        - toast: 「🎉 {デッキ}デッキをマスター！...」
+   3b. 敗北: 結果画面に「⚔️ {デッキ}デッキに もう一度挑戦」prominent button
+        - handleQuestRetry → in-place で startGame 再発火（URL 遷移なし）
+        - questVictoryHandledRef リセットで次回勝利時 hook 再発火可能
+```
+
+### データモデル拡張
+
+`MyDeck` 型 (`client/src/lib/myDecks.ts`):
+```ts
+interface MyDeck {
+  // 既存フィールド (id, child_id, deck_name, cards, created_at, updated_at)
+  isMain?: boolean;          // メインデッキフラグ（getFirstDeckGift 一致で自動 true）
+  sourceDeckKey?: DeckKey;   // 起源 starter デッキ
+  unlockedAt?: string;       // ISO datetime
+}
+```
+
+`DeckQuestProgress` (`client/src/lib/questProgress.ts`):
+```ts
+interface DeckQuestProgress {
+  beginner: ...; challenger: ...; master: ...; legend: ...;
+  battleCleared?: boolean;   // 敵デッキ戦勝利フラグ
+}
+```
+
+### 主要 helper
+
+| 関数 | ファイル | 役割 |
+|---|---|---|
+| `markBattleCleared(deckKey)` | `questProgress.ts` | battleCleared 永続化、初回 true 返却 |
+| `isBattleCleared(progress, deckKey)` | `questProgress.ts` | フラグ参照 |
+| `createMyDeckFromStarter(childId, deckKey, opts)` | `myDecks.ts` | starter → MyDeck 変換 |
+| `addOwnedDeckIfMissing(childId, deckKey)` | `myDecks.ts` | sourceDeckKey 重複検出 + isMain 自動判定 |
+
+---
+
+## 12. 残タスク（別日）
+
+| # | 項目 | 優先度 | メモ |
+|---|---|---|---|
+| 1 | デッキビルダー画面で「獲得済み quest デッキ」セクション表示 | 🔥 | `MyDeck.sourceDeckKey` ベースで分類、メインデッキを強調 |
+| 2 | メインデッキ切替 UI（マイデッキ画面） | 🟡 | `isMain` を 1 デッキだけ true にする排他ロジック |
+| 3 | クエスト戦勝利時の演出（モーダル/紙吹雪/SE） | 🟡 | 現状は toast のみ |
+| 4 | ALT 報酬の追加（勝利時） | 🟢 | spec Q2-A で「マイデッキ追加のみ」確定済、後日再判断 |
+| 5 | Phase 2 新ルート案 `/games/deck-quest/:deckKey`（学習→クイズ→戦闘の状態機械） | 🟢 | 現状 a 案（既存ルート活用）で十分機能、UX 改善時に検討 |
+| 6 | 難易度選択（敵 CPU 強さ可変化） | 🟢 | spec Q7-A で「固定難易度」確定済 |
+| 7 | 初回プレゼント時にも `MyDeck` を自動作成（`claimFirstDeck` 拡張） | 🟡 | 現状はクエスト勝利を経由しないと MyDeck エントリが作られない |
+| 8 | `battleCleared` の Supabase 同期 | 🟢 | `quest_progress` テーブルに column 追加 or 別テーブル |
+| 9 | 「敵デッキ戦へ」ボタンの表示条件を厳密化 | 🟢 | 現状は cleared 全デッキで表示。MAIN_DECK_KEYS 限定にするか検討 |
 
 ---
 
 ## 変更履歴
 
 - 2026-04-21 v1 (draft, commit `e469874`): Claude Code が kk 指示に基づき初版作成。§2.2 の4デッキは候補A暫定。
-- 2026-04-21 v1.1 (確定): kk Q1-Q7 回答承認。候補A確定 (§2.2)、Q1=B/Q2=C/Q3=C/Q4=B/Q5=B/Q6=A/Q7=A 反映。Commit 1 進捗追記。
+- 2026-04-21 v1.1 (確定, commit `35c76da`): kk Q1-Q7 回答承認。候補A確定 (§2.2)、Q1=B/Q2=C/Q3=C/Q4=B/Q5=B/Q6=A/Q7=A 反映。Commit 1 進捗追記。
+- 2026-04-21 v1.2 (本 commit): 実装サイクル完了に伴う仕様同期。§3.3 クイズ問題数を実装値（10問）に修正、Q4 を実装現状（累計5正解）に廃案差し替え、§8 進捗テーブル更新、§11 実装完了サマリー追加、§12 残タスク追加。
