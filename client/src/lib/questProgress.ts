@@ -3,7 +3,7 @@
  * デッキ別クエスト進捗管理（localStorage + Supabase）
  */
 import { supabase } from './supabase';
-import { getAuth, isAdmin, isGuest } from './auth';
+import { getAuth, getChildId, isAdmin, isGuest } from './auth';
 
 // ===== Types =====
 
@@ -196,7 +196,45 @@ export function createDefaultProgress(): QuestProgressData {
 
 // ===== LocalStorage =====
 
-const LS_KEY = 'trail-quest-progress';
+// kk 2026-04-21 バグ修正:
+//   旧実装は LS_KEY / LS_FIRST_DECK ともグローバルキーで保存していたため
+//   1つの端末で複数生徒が PIN ログインすると、後のログインで前のデータを読んで
+//   「全員信長デッキ」状態になっていた。childId ごとにキーを分離し、
+//   旧グローバルキーは migrateLegacyKeysOnce() で現在の生徒に一度だけ帰属させる。
+const LEGACY_LS_KEY = 'trail-quest-progress';
+const LEGACY_LS_FIRST_DECK = 'first_deck_claimed';
+const LS_KEY_PREFIX = 'trail-quest-progress_';
+const LS_FIRST_DECK_PREFIX = 'first_deck_claimed_';
+
+function progressLsKey(childId: string): string {
+  return `${LS_KEY_PREFIX}${childId}`;
+}
+
+function firstDeckLsKey(childId: string): string {
+  return `${LS_FIRST_DECK_PREFIX}${childId}`;
+}
+
+let legacyMigrationDone = false;
+function migrateLegacyKeysOnce(): void {
+  if (legacyMigrationDone) return;
+  legacyMigrationDone = true;
+  try {
+    const childId = getChildId();
+    const legacyProgress = localStorage.getItem(LEGACY_LS_KEY);
+    const legacyFirstDeck = localStorage.getItem(LEGACY_LS_FIRST_DECK);
+    // 現在ログイン中の生徒にだけレガシーデータを帰属させる。
+    // 既に childId-prefixed キーがある場合は上書きしない。
+    if (legacyProgress && !localStorage.getItem(progressLsKey(childId))) {
+      localStorage.setItem(progressLsKey(childId), legacyProgress);
+    }
+    if (legacyFirstDeck && !localStorage.getItem(firstDeckLsKey(childId))) {
+      localStorage.setItem(firstDeckLsKey(childId), legacyFirstDeck);
+    }
+    // レガシーキーは削除（他の生徒がログインしたときに間違って読まないように）
+    localStorage.removeItem(LEGACY_LS_KEY);
+    localStorage.removeItem(LEGACY_LS_FIRST_DECK);
+  } catch { /* */ }
+}
 
 // Guest sessions: in-memory only. Reset on page reload.
 let guestProgressCache: QuestProgressData | null = null;
@@ -206,8 +244,9 @@ export function loadQuestProgress(): QuestProgressData {
     if (!guestProgressCache) guestProgressCache = createDefaultProgress();
     return guestProgressCache;
   }
+  migrateLegacyKeysOnce();
   try {
-    const raw = localStorage.getItem(LS_KEY);
+    const raw = localStorage.getItem(progressLsKey(getChildId()));
     if (!raw) return createDefaultProgress();
     const parsed = JSON.parse(raw);
     // Merge with defaults (forward-compatible if new decks added)
@@ -230,8 +269,9 @@ export function saveQuestProgress(data: QuestProgressData): void {
     guestProgressCache = data;
     return;
   }
+  migrateLegacyKeysOnce();
   try {
-    localStorage.setItem(LS_KEY, JSON.stringify(data));
+    localStorage.setItem(progressLsKey(getChildId()), JSON.stringify(data));
   } catch { /* quota exceeded — silently ignore */ }
   // Admin: skip Supabase sync (test data)
   if (isAdminMode()) return;
@@ -252,29 +292,36 @@ export function isDifficultyUnlocked(
 
 // ===== First Deck Gift =====
 
-const LS_FIRST_DECK = 'first_deck_claimed';
-
 export function getFirstDeckGift(): DeckKey | null {
+  migrateLegacyKeysOnce();
   try {
-    const v = localStorage.getItem(LS_FIRST_DECK);
+    const v = localStorage.getItem(firstDeckLsKey(getChildId()));
     if (v && DECK_KEYS.includes(v as DeckKey)) return v as DeckKey;
   } catch { /* */ }
   return null;
 }
 
 export function claimFirstDeck(deckKey: DeckKey): void {
-  console.log('[デッキプレゼント] 選択:', deckKey);
-  try { localStorage.setItem(LS_FIRST_DECK, deckKey); } catch { /* */ }
+  migrateLegacyKeysOnce();
+  const childId = getChildId();
+  console.log('[デッキプレゼント] 選択:', deckKey, 'childId=', childId);
+  try { localStorage.setItem(firstDeckLsKey(childId), deckKey); } catch { /* */ }
   const progress = loadQuestProgress();
   progress[deckKey].beginner.cleared = true;
-  // ゲストでもlocalStorageに直接書き込み（リロードで失われないように）
-  try { localStorage.setItem(LS_KEY, JSON.stringify(progress)); } catch { /* */ }
+  // ゲストでも localStorage に直接書き込み（リロードで失われないように）
+  try { localStorage.setItem(progressLsKey(childId), JSON.stringify(progress)); } catch { /* */ }
   saveQuestProgress(progress);
   console.log('[デッキプレゼント] questProgress書き込み:', JSON.stringify(progress[deckKey]));
 }
 
 export function isFirstDeckClaimed(): boolean {
   return getFirstDeckGift() !== null;
+}
+
+/** 初回プレゼント選択をリセット（現在ログイン中の生徒分のみ）。 */
+export function resetFirstDeckGift(): void {
+  migrateLegacyKeysOnce();
+  try { localStorage.removeItem(firstDeckLsKey(getChildId())); } catch { /* */ }
 }
 
 /**

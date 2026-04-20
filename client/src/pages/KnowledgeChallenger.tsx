@@ -64,7 +64,7 @@ import {
 import { getStage, createStageAIDeck, STARTER_DECKS, buildStarterDeck, npcDeckPhasePick, longSpecialRuleMessages } from '@/lib/stages';
 import type { StarterDeck, StageRules } from '@/lib/stages';
 import { useStageProgressStore } from '@/lib/stageProgressStore';
-import { loadQuestProgress, isDeckUnlocked, isDeckAvailable, getUnlockedSSRCardNames, DECK_KEY_TO_STARTER_ID, QUEST_DIFFICULTIES, DIFFICULTY_INFO, isDifficultyUnlocked, DECK_QUEST_INFO, isFirstDeckClaimed, claimFirstDeck, getFirstDeckGift, markBattleCleared, MAIN_DECK_KEYS, type DeckKey } from '@/lib/questProgress';
+import { loadQuestProgress, isDeckUnlocked, isDeckAvailable, getUnlockedSSRCardNames, DECK_KEY_TO_STARTER_ID, QUEST_DIFFICULTIES, DIFFICULTY_INFO, isDifficultyUnlocked, DECK_QUEST_INFO, isFirstDeckClaimed, claimFirstDeck, getFirstDeckGift, markBattleCleared, MAIN_DECK_KEYS, resetFirstDeckGift, type DeckKey } from '@/lib/questProgress';
 import type { PvPSession } from '@/lib/pvpSession';
 import { clearPvPSession } from '@/lib/pvpSession';
 import { applyRatingChange, applyPvPRatingChange } from '@/lib/ratingService';
@@ -3484,8 +3484,8 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
           <div className="max-w-md mx-auto mb-4">
             <button
               onClick={() => {
-                // showGift を強制的にトリガー: first_deck_claimed を消してリロード
-                try { localStorage.removeItem('first_deck_claimed'); } catch { /* */ }
+                // showGift を強制的にトリガー: 現在の生徒の first_deck_claimed_${childId} を消してリロード
+                resetFirstDeckGift();
                 window.location.reload();
               }}
               className="w-full rounded-xl p-3 flex items-center gap-3 active:scale-[0.98] transition-transform"
