@@ -11,6 +11,12 @@
 --   * Supabase Auth 導入時に RLS + auth.jwt() role claim で厳格化する
 --   * anon ロールの EXECUTE 権限を剥奪する
 --   * parent_invite_codes / invite_code_logs に RLS ポリシーを張る
+--
+-- 運用ルール（全 migration 共通）:
+--   * 本ファイルは SQL Editor に全文を貼り付けて 1 トランザクションで実行する。
+--     個別ステートメントを抜き出して実行しない（関数間依存・列依存があるため）。
+--   * 依存カラム名: parent_invite_codes.used_by_line_uid（0017 で定義、
+--     設計書初版の used_by_line_id は誤記。RPC 拡張時は必ず _uid を使用）。
 -- ======================================================================
 
 set client_encoding = 'UTF8';
