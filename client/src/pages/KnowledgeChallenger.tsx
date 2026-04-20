@@ -2816,6 +2816,33 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
     setSwapState(null);
   }, [swapState, gameState]);
 
+  // ===== Deck Quest retry (kk spec 2026-04-21 DECK_QUEST_SPEC §3.1 Commit 3) =====
+  // 敗北時に同じ enemyDeck でバトルを即再開（URL 遷移せず in-place で startGame 再発火）。
+  // - questVictoryHandledRef を false に戻し、次回勝利時に hook が発火できるようにする
+  // - questAutoStartedRef は触らない（auto-start は mount 時1回限定の責務）
+  // - getFirstDeckGift() が変わっていれば最新メインデッキを使用
+  const handleQuestRetry = useCallback(() => {
+    const enemyDeck = questEnemyDeckKeyRef.current;
+    if (!enemyDeck) {
+      console.warn('[KC] handleQuestRetry: questEnemyDeckKeyRef is null');
+      return;
+    }
+    const playerDeckKey = getFirstDeckGift();
+    if (!playerDeckKey) {
+      console.warn('[KC] handleQuestRetry: no main deck claimed');
+      return;
+    }
+    const playerStarter = STARTER_DECKS.find((d) => d.id === DECK_KEY_TO_STARTER_ID[playerDeckKey]);
+    const aiStarter = STARTER_DECKS.find((d) => d.id === DECK_KEY_TO_STARTER_ID[enemyDeck]);
+    if (!playerStarter || !aiStarter) {
+      console.warn('[KC] handleQuestRetry: starter not found');
+      return;
+    }
+    questVictoryHandledRef.current = false;
+    console.log('[KC] quest retry: player=', playerDeckKey, 'enemy=', enemyDeck);
+    startGame(playerStarter, undefined, aiStarter);
+  }, [startGame]);
+
   // ===== Finish (after game_over) =====
   const handleFinish = useCallback(() => {
     if (!gameState) return;
@@ -3909,6 +3936,27 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
           ))}
 
           <div className="flex flex-col gap-2">
+            {/* kk spec 2026-04-21 DECK_QUEST_SPEC Commit 3: クエストモード敗北時の即再挑戦ボタン */}
+            {(() => {
+              const questEnemy = questEnemyDeckKeyRef.current;
+              if (!questEnemy || won || isPvP) return null;
+              const enemyInfo = DECK_QUEST_INFO[questEnemy];
+              return (
+                <button
+                  onClick={handleQuestRetry}
+                  className="w-full rounded-xl font-black text-base py-3 active:scale-[0.97] transition-transform"
+                  style={{
+                    minHeight: 52,
+                    background: `linear-gradient(135deg, ${enemyInfo.color}, ${enemyInfo.color}cc)`,
+                    color: '#0b1128',
+                    boxShadow: `0 4px 18px ${enemyInfo.color}66`,
+                    border: `2px solid ${enemyInfo.color}`,
+                  }}
+                >
+                  ⚔️ {enemyInfo.name}デッキに もう一度挑戦
+                </button>
+              );
+            })()}
             <button onClick={handleFinish} className="rpg-btn rpg-btn-gold w-full py-3 text-base">
               {isPvP ? '🏠 ホームに戻る' : (won ? '🎯 次のステージへ' : '📋 ステージ選択に戻る')}
             </button>
