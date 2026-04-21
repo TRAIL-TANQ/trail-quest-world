@@ -781,6 +781,9 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
     },
     [],
   );
+  // 30s safety timeout: if player doesn't tap 発動する/効果なしで出す, auto-resolve with
+  // skipEffect=false (= 通常発動) to prevent battle-loop freeze. PvP では両プレイヤーが
+  // 同端末で操作するため、相手ターンの preview を放置するとフリーズする問題があった。
   const waitAttackPreview = useCallback(
     (card: BattleCard): Promise<{ skipEffect: boolean; recycleNobunaga?: boolean }> => {
       if (unmountedRef.current) return Promise.resolve({ skipEffect: false });
@@ -791,11 +794,22 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
       console.log(`[UI][attackPreview] card=${card.name} effectId=${card.effect?.id ?? 'none'} optional=${optional} cantActivate=${cantActivateReason !== null} reason=${cantActivateReason ?? '(can activate)'}`);
       setAttackPreview({ card, optionalEffect: optional, cantActivateReason });
       return new Promise((resolve) => {
-        previewResolveRef.current = (v) => {
+        let settled = false;
+        const finish = (v: { skipEffect: boolean; recycleNobunaga?: boolean }) => {
+          if (settled) return;
+          settled = true;
           previewResolveRef.current = null;
           setAttackPreview(null);
           resolve(v);
         };
+        previewResolveRef.current = finish;
+        const safetyId = window.setTimeout(() => {
+          if (!settled) {
+            console.warn(`[KC] waitAttackPreview: 30s safety timeout fired (card=${card.name})`);
+            finish({ skipEffect: false });
+          }
+        }, 30000);
+        stepTimeoutsRef.current.push(safetyId);
       });
     },
     [OPTIONAL_EFFECT_IDS, conditionalOptional, canActivateOptionalEffect],
@@ -1406,18 +1420,28 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
   }, []);
 
   // ===== Manual advance wait: shows big button, resolves on player tap =====
-  // Show card selection overlay and wait for player choice
+  // Show card selection overlay and wait for player choice.
+  // 60s safety timeout: 放置された場合に null で resolve して effect スキップ扱いにし、
+  // battle loop が止まらないようにする。毒矢カエル等 start-of-battle の任意発動や
+  // effect 中の対象選択で発生していたフリーズを防ぐ。
   const waitCardSelect = useCallback((title: string, cards: BattleCard[]): Promise<BattleCard | null> => {
     if (unmountedRef.current || cards.length === 0) return Promise.resolve(null);
     return new Promise((resolve) => {
-      setCardSelectOverlay({
-        title,
-        cards,
-        onSelect: (card) => {
-          setCardSelectOverlay(null);
-          resolve(card);
-        },
-      });
+      let settled = false;
+      const finish = (card: BattleCard | null) => {
+        if (settled) return;
+        settled = true;
+        setCardSelectOverlay(null);
+        resolve(card);
+      };
+      setCardSelectOverlay({ title, cards, onSelect: finish });
+      const safetyId = window.setTimeout(() => {
+        if (!settled) {
+          console.warn(`[KC] waitCardSelect: 60s safety timeout fired (title=${title})`);
+          finish(null);
+        }
+      }, 60000);
+      stepTimeoutsRef.current.push(safetyId);
     });
   }, []);
 
