@@ -186,8 +186,10 @@ export default defineConfig({
     },
   },
   server: {
-    port: 3000,
-    strictPort: false, // Will find next available port if 3000 is busy
+    // kk 運用規約: HomeStec=3000, TQW=3001 が既定。strictPort で衝突時に silent fallback
+    // を禁止し、他プロセスと port を奪い合わないようにする。
+    port: 3001,
+    strictPort: true,
     host: true,
     allowedHosts: [
       ".manuspre.computer",
