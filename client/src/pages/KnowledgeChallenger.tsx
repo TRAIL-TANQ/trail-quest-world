@@ -4292,37 +4292,13 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
               {gameState.round}/{gameState.totalRounds}
             </p>
           </div>
-          {/* Trophy + Fan totals per side */}
-          <div
-            ref={playerFanAnchorRef}
-            data-fan-anchor="player"
-            className="text-center px-2 py-1 rounded-lg"
-            style={{ background: 'rgba(34,197,94,0.14)', border: '1.5px solid rgba(34,197,94,0.5)', boxShadow: gameState.playerFans > gameState.aiFans ? '0 0 12px rgba(255,215,0,0.3)' : 'none' }}
-          >
-            <p className="text-[9px] font-bold text-green-200/80">あなた</p>
-            <p className="text-[10px] font-bold text-amber-300">{'🏆'.repeat(gameState.playerTrophies)}{gameState.playerTrophies === 0 ? '-' : ''}</p>
-            <p key={`pfan-${gameState.playerFans}`} className="text-sm font-black kc-power-bounce" style={{ color: gameState.playerFans >= gameState.aiFans ? '#ffd700' : '#4ade80', textShadow: `0 0 8px ${gameState.playerFans >= gameState.aiFans ? 'rgba(255,215,0,0.6)' : 'rgba(34,197,94,0.6)'}` }}>
-              ⭐{displayPlayerFans}
-            </p>
-          </div>
           <div className="flex flex-col items-center gap-0.5">
             <span className="text-[10px] font-black text-amber-200/60">vs</span>
             <span className="text-[10px]" style={{ color: gameState.flagHolder === 'player' ? '#4ade80' : '#fca5a5' }}>
               🚩{gameState.flagHolder === 'player' ? '←' : '→'}
             </span>
           </div>
-          <div
-            ref={aiFanAnchorRef}
-            data-fan-anchor="ai"
-            className="text-center px-2 py-1 rounded-lg"
-            style={{ background: 'rgba(239,68,68,0.14)', border: '1.5px solid rgba(239,68,68,0.5)', boxShadow: gameState.aiFans > gameState.playerFans ? '0 0 12px rgba(255,215,0,0.3)' : 'none' }}
-          >
-            <p className="text-[9px] font-bold text-red-200/80">相手</p>
-            <p className="text-[10px] font-bold text-amber-300">{'🏆'.repeat(gameState.aiTrophies)}{gameState.aiTrophies === 0 ? '-' : ''}</p>
-            <p key={`afan-${gameState.aiFans}`} className="text-sm font-black kc-power-bounce" style={{ color: gameState.aiFans > gameState.playerFans ? '#ffd700' : '#fca5a5', textShadow: `0 0 8px ${gameState.aiFans > gameState.playerFans ? 'rgba(255,215,0,0.6)' : 'rgba(239,68,68,0.6)'}` }}>
-              ⭐{displayAiFans}
-            </p>
-          </div>
+          {/* kk 2026-04-21 (Commit 12b): Trophy + Fan totals は点対称の大型表示へ移動（下方 AI/Player Scoreboard） */}
         </div>
         <div className="flex items-center gap-1.5">
           <span className="tqw-hud-pill text-[10px]" title="あなたの山札">
@@ -4353,6 +4329,41 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
               </div>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* kk 2026-04-21 (Commit 12b): AI Scoreboard（点対称 上側）— 相手のトロフィー + ファン数 */}
+      <div className="px-3 pt-2 pb-1 flex items-center justify-between gap-2 shrink-0" aria-label="相手スコア">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-[11px] font-black text-red-200/75 shrink-0">👤 相手</span>
+          <span className="text-xs font-bold text-amber-300 truncate">
+            {'🏆'.repeat(gameState.aiTrophies)}{gameState.aiTrophies === 0 ? '🏆×0' : ''}
+          </span>
+        </div>
+        <div
+          ref={aiFanAnchorRef}
+          data-fan-anchor="ai"
+          className="px-3 py-1 rounded-lg flex items-center gap-1.5 shrink-0"
+          style={{
+            background: 'linear-gradient(135deg, rgba(239,68,68,0.22), rgba(239,68,68,0.1))',
+            border: '1.5px solid rgba(239,68,68,0.55)',
+            boxShadow: gameState.aiFans > gameState.playerFans ? '0 0 14px rgba(255,215,0,0.35)' : '0 2px 8px rgba(0,0,0,0.35)',
+          }}
+        >
+          <span className="text-base">⭐</span>
+          <span
+            key={`afan-big-${gameState.aiFans}`}
+            className="text-xl font-black kc-power-bounce"
+            style={{
+              color: gameState.aiFans > gameState.playerFans ? '#ffd700' : '#fca5a5',
+              textShadow: `0 0 10px ${gameState.aiFans > gameState.playerFans ? 'rgba(255,215,0,0.7)' : 'rgba(239,68,68,0.6)'}`,
+              minWidth: 32,
+              textAlign: 'right',
+            }}
+          >
+            {displayAiFans}
+          </span>
+          <span className="text-[10px] font-bold text-red-200/60">ファン</span>
         </div>
       </div>
 
@@ -5469,6 +5480,41 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
       </div>
         );
       })()}
+
+      {/* kk 2026-04-21 (Commit 12b): Player Scoreboard（点対称 下側）— あなたのトロフィー + ファン数 */}
+      <div className="px-3 pb-1 pt-1 flex items-center justify-between gap-2 shrink-0" aria-label="あなたのスコア">
+        <div
+          ref={playerFanAnchorRef}
+          data-fan-anchor="player"
+          className="px-3 py-1 rounded-lg flex items-center gap-1.5 shrink-0"
+          style={{
+            background: 'linear-gradient(135deg, rgba(34,197,94,0.22), rgba(34,197,94,0.1))',
+            border: '1.5px solid rgba(34,197,94,0.55)',
+            boxShadow: gameState.playerFans >= gameState.aiFans ? '0 0 14px rgba(255,215,0,0.35)' : '0 2px 8px rgba(0,0,0,0.35)',
+          }}
+        >
+          <span className="text-base">⭐</span>
+          <span
+            key={`pfan-big-${gameState.playerFans}`}
+            className="text-xl font-black kc-power-bounce"
+            style={{
+              color: gameState.playerFans >= gameState.aiFans ? '#ffd700' : '#4ade80',
+              textShadow: `0 0 10px ${gameState.playerFans >= gameState.aiFans ? 'rgba(255,215,0,0.7)' : 'rgba(34,197,94,0.6)'}`,
+              minWidth: 32,
+              textAlign: 'left',
+            }}
+          >
+            {displayPlayerFans}
+          </span>
+          <span className="text-[10px] font-bold text-green-200/60">ファン</span>
+        </div>
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-xs font-bold text-amber-300 truncate">
+            {'🏆'.repeat(gameState.playerTrophies)}{gameState.playerTrophies === 0 ? '🏆×0' : ''}
+          </span>
+          <span className="text-[11px] font-black text-green-200/75 shrink-0">あなた 👤</span>
+        </div>
+      </div>
 
       {/* Player Bench */}
       <BenchDisplay
