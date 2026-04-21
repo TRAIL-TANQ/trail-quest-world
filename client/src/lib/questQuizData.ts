@@ -9,12 +9,78 @@ export interface QuestQuiz {
   question: string;
   choices: string[];
   correctIndex: number;
+  /**
+   * 難易度タグ（1=かんたん, 2=ふつう, 3=むずかしい, 4=レジェンド）。
+   * 未指定の場合は所属する Record のキー（beginner/challenger/master/legend）から推定。
+   * 将来的には1問ごとの難易度チューニングに使える。
+   */
+  difficulty?: 1 | 2 | 3 | 4;
 }
 
 type QuizDataMap = Record<DeckKey, Record<QuestDifficulty, QuestQuiz[]>> & {
   nobunaga?: Record<QuestDifficulty, QuestQuiz[]>;
   wolf?: Record<QuestDifficulty, QuestQuiz[]>;
 };
+
+/** QuestDifficulty → difficulty 数値 */
+const DIFFICULTY_NUM: Record<QuestDifficulty, 1 | 2 | 3 | 4> = {
+  beginner: 1, challenger: 2, master: 3, legend: 4,
+};
+
+/**
+ * モードに応じたプール構築。
+ *   beginner   → 難易度1
+ *   challenger → 難易度1-2 ミックス
+ *   master     → 難易度2-3 ミックス
+ *   legend     → 難易度3-4 ミックス
+ * 既存データは各 QuestDifficulty バケットに入っているので、
+ * バケットキーを難易度タグとして扱う。
+ */
+export function getQuizPoolForMode(deckKey: DeckKey, mode: QuestDifficulty): QuestQuiz[] {
+  const allByTier = QUEST_QUIZ_DATA[deckKey];
+  if (!allByTier) return [];
+  const tagOf = (q: QuestQuiz, fallback: QuestDifficulty): 1 | 2 | 3 | 4 =>
+    q.difficulty ?? DIFFICULTY_NUM[fallback];
+
+  const collect = (tiers: QuestDifficulty[]): QuestQuiz[] => {
+    const out: QuestQuiz[] = [];
+    for (const tier of tiers) {
+      const rows = allByTier[tier] ?? [];
+      const wantMin = DIFFICULTY_NUM[tier];
+      for (const q of rows) {
+        // タグが明示されていない場合は、現在のtierに属するとみなす。
+        // タグが明示されている場合でも、そのtierバケットに入っているので通過させる。
+        if (!q.difficulty || q.difficulty === wantMin) out.push(q);
+      }
+    }
+    return out;
+  };
+
+  switch (mode) {
+    case 'beginner':   return collect(['beginner']);
+    case 'challenger': return collect(['beginner', 'challenger']);
+    case 'master':     return collect(['challenger', 'master']);
+    case 'legend':     return collect(['master', 'legend']);
+  }
+}
+
+/**
+ * 選択肢をシャッフルした QuestQuiz を返す（correctIndex も付け替える）。
+ * 正解が常にAになるのを防ぐため、問題を出すたびに呼ぶ。
+ */
+export function shuffleQuizChoices(q: QuestQuiz): QuestQuiz {
+  const pairs = q.choices.map((c, i) => ({ c, correct: i === q.correctIndex }));
+  for (let i = pairs.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pairs[i], pairs[j]] = [pairs[j], pairs[i]];
+  }
+  const newCorrect = pairs.findIndex((p) => p.correct);
+  return {
+    ...q,
+    choices: pairs.map((p) => p.c),
+    correctIndex: newCorrect >= 0 ? newCorrect : 0,
+  };
+}
 
 export const QUEST_QUIZ_DATA: QuizDataMap = {
 
