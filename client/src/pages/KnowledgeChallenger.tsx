@@ -70,6 +70,7 @@ import { clearPvPSession } from '@/lib/pvpSession';
 import { applyRatingChange, applyPvPRatingChange } from '@/lib/ratingService';
 import { playBattleStart, playTap, playDefeat, playCardLand, playSuccess } from '@/lib/sfx';
 import CardPreviewOverlay from '@/components/CardPreviewOverlay';
+import { BattleFinishOverlay } from '@/components/effects/BattleFinishOverlay';
 import { loadMyDecks, buildMyDeckCards, MY_DECK_MAX_DECKS, getStarterDeckCardNames, addOwnedDeckIfMissing } from '@/lib/myDecks';
 import { COLLECTION_CARDS } from '@/lib/cardData';
 import { saveHallOfFame } from '@/lib/hallOfFameService';
@@ -575,6 +576,9 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
     | 'fan_count_up'
     | 'game_over';
   const [cineStep, setCineStep] = useState<CinematicStep>('idle');
+  // kk 2026-04-21: 最終勝敗確定時の FINISH 演出フラグ。cineStep === 'game_over' 初回で 1 度だけ true に。
+  const [showBattleFinish, setShowBattleFinish] = useState(false);
+  const battleFinishTriggeredRef = useRef(false);
   // Skip / manual advance via a latch: the battle loop creates an
   // `advanceLatchRef` per wait, and clicking "次へ" resolves it early so the
   // loop jumps straight to the next step. Using a latch (instead of deps-based
@@ -979,6 +983,9 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
     setGameState(state);
     setScreen('playing');
     setCineStep('idle');
+    // kk 2026-04-21: 新セッション開始時に FINISH 演出トリガーをリセット
+    battleFinishTriggeredRef.current = false;
+    setShowBattleFinish(false);
     advanceLatchRef.current = null;
     battleRunningRef.current = false;
     setDeckOffer(null);
@@ -1071,6 +1078,17 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
       lastLoggedPhaseRef.current = phase;
     }
   }, [gameState?.phase, gameState?.round, cineStep]);
+
+  // ===== kk 2026-04-21: FINISH 演出トリガー =====
+  // cineStep === 'game_over' に到達した初回のみ発動。result 遷移後も overlay は position:fixed で
+  // 残り 3 秒内に自身をフェードアウトしてから onComplete する。
+  useEffect(() => {
+    if (cineStep !== 'game_over') return;
+    if (battleFinishTriggeredRef.current) return;
+    if (!gameState?.winner) return;
+    battleFinishTriggeredRef.current = true;
+    setShowBattleFinish(true);
+  }, [cineStep, gameState?.winner]);
 
   // ===== Effect telop auto-clear (match animation duration) =====
   useEffect(() => {
@@ -7254,6 +7272,13 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
           .active\:scale-95:active { transform: scale(0.95); }
         }
       `}</style>
+
+      {/* kk 2026-04-21: 最終勝敗確定時の FINISH 演出（Manus finish_01_classic_elegant） */}
+      <BattleFinishOverlay
+        active={showBattleFinish}
+        winner={gameState?.winner === 'player' ? 'player' : 'ai'}
+        onComplete={() => setShowBattleFinish(false)}
+      />
     </div>
   );
 }
