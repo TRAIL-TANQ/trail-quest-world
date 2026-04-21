@@ -1679,6 +1679,40 @@ export const ALL_BATTLE_CARDS: BattleCard[] = COLLECTION_CARDS.map(toBattleCard)
 // Cards that only appear via in-battle evolution (excluded from deck phase, gacha, AI decks)
 export const EVOLUTION_ONLY_CARDS = new Set(['大蛇', '聖女ジャンヌ', '万能の天才', '明智光秀', '愛宕百韻', '天王山', '三日天下']);
 
+// ==========================================================================
+// NON_SELLABLE_CARD_IDS — 市場で売却できないカード (進化専用 7 枚 + 進化トリガー 3 枚)
+// ==========================================================================
+// MUST be kept in sync with the hardcoded list inside the
+// market_sell_card() RPC in supabase/migrations/0032_fix_market_sell_child_id_type.sql.
+// Commit H adds a test that enforces the two lists match.
+//
+// Evolution-only cards (7): card ids for 聖女ジャンヌ / 大蛇 / 万能の天才 /
+//   明智光秀 / 愛宕百韻 / 天王山 / 三日天下. These appear only via in-battle
+//   evolution and are not normally owned, but we mark them non-sellable as
+//   defense-in-depth.
+// Evolution triggers (3): 本能寺の変 (card-187, SSR) / 焚書坑儒 (card-163, SSR) /
+//   火刑 (card-203, N). Selling any of these breaks the corresponding evolution
+//   chain, so they are protected even though 火刑 is only rarity N.
+export const NON_SELLABLE_CARD_IDS = new Set<string>([
+  // Evolution-only 7 cards
+  'card-202', // 聖女ジャンヌ (SSR)
+  'card-165', // 大蛇 (SR)
+  'card-206', // 万能の天才 (SSR)
+  'card-188', // 明智光秀 (SR)
+  'card-189', // 愛宕百韻 (SR)
+  'card-190', // 天王山 (SR)
+  'card-191', // 三日天下 (SR)
+  // Evolution triggers 3 cards
+  'card-187', // 本能寺の変 (SSR)
+  'card-163', // 焚書坑儒 (SSR)
+  'card-203', // 火刑 (N, low-rarity protected)
+]);
+
+/** Whether a card can be sold in the market. */
+export function isCardSellable(cardId: string): boolean {
+  return !NON_SELLABLE_CARD_IDS.has(cardId);
+}
+
 // Draftable pool: excludes evolution-only cards
 export const DRAFTABLE_BATTLE_CARDS: BattleCard[] = ALL_BATTLE_CARDS.filter((c) => !EVOLUTION_ONLY_CARDS.has(c.name));
 

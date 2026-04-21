@@ -55,6 +55,7 @@ import {
   saveEquippedBg,
   type BgItem,
 } from '@/lib/backgrounds';
+import ShopSellTabPage from '@/pages/ShopSellTabPage';
 
 // ===== 特別解放条件（レベル以外のロック）=====
 interface SpecialUnlockContext {
@@ -86,6 +87,7 @@ const shopTabs = [
   { id: 'bg',     label: '背景',     emoji: '🖼️', color: '#3b82f6' },
   { id: 'title',  label: '称号',     emoji: '🏷️', color: '#f59e0b' },
   { id: 'item',   label: 'アイテム', emoji: '🎒', color: '#22c55e' },
+  { id: 'sell',   label: '売却',     emoji: '💰', color: '#10b981' },
 ];
 
 const titleEmojis = ['👑', '📚', '🌟'];
@@ -622,8 +624,13 @@ export default function ShopPage() {
           </div>
         )}
 
+        {/* ========== Sell tab (Commit D) ========== */}
+        {activeTab === 'sell' && (
+          <ShopSellTabPage onAltBalanceChange={setAltBalance} />
+        )}
+
         {/* ========== Legacy Title / Item tabs ========== */}
-        {activeTab !== 'avatar' && activeTab !== 'bg' && (
+        {(activeTab === 'title' || activeTab === 'item') && (
           <div className="grid grid-cols-2 gap-3">
             {legacyItems.map((it, i) => {
               const emojiList = activeTab === 'title' ? titleEmojis : itemEmojis;
