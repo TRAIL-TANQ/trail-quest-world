@@ -576,9 +576,11 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
     | 'fan_count_up'
     | 'game_over';
   const [cineStep, setCineStep] = useState<CinematicStep>('idle');
-  // kk 2026-04-21: 最終勝敗確定時の FINISH 演出フラグ。cineStep === 'game_over' 初回で 1 度だけ true に。
+  // kk 2026-04-21: FINISH 演出フラグ。各ラウンド終了時 + 試合終了時に発動する。
+  // lastFiredRef は「round_end-1 / round_end-2 / game_over」といった識別子を保持して多重発火を防ぐ。
   const [showBattleFinish, setShowBattleFinish] = useState(false);
-  const battleFinishTriggeredRef = useRef(false);
+  const [battleFinishWinner, setBattleFinishWinner] = useState<'player' | 'ai'>('player');
+  const battleFinishLastFiredRef = useRef<string | null>(null);
   // Skip / manual advance via a latch: the battle loop creates an
   // `advanceLatchRef` per wait, and clicking "次へ" resolves it early so the
   // loop jumps straight to the next step. Using a latch (instead of deps-based
@@ -984,7 +986,7 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
     setScreen('playing');
     setCineStep('idle');
     // kk 2026-04-21: 新セッション開始時に FINISH 演出トリガーをリセット
-    battleFinishTriggeredRef.current = false;
+    battleFinishLastFiredRef.current = null;
     setShowBattleFinish(false);
     advanceLatchRef.current = null;
     battleRunningRef.current = false;
@@ -1080,15 +1082,26 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
   }, [gameState?.phase, gameState?.round, cineStep]);
 
   // ===== kk 2026-04-21: FINISH 演出トリガー =====
-  // cineStep === 'game_over' に到達した初回のみ発動。result 遷移後も overlay は position:fixed で
-  // 残り 3 秒内に自身をフェードアウトしてから onComplete する。
+  // 各ラウンド終了時 (cineStep === 'round_end') と試合終了時 (cineStep === 'game_over') に発動。
+  // lastFiredRef に「round_end-<round>」or「game_over」の識別子を保存して多重発火を防ぐ。
   useEffect(() => {
-    if (cineStep !== 'game_over') return;
-    if (battleFinishTriggeredRef.current) return;
-    if (!gameState?.winner) return;
-    battleFinishTriggeredRef.current = true;
+    if (!gameState) return;
+    let id: string | null = null;
+    let winner: 'player' | 'ai' | null = null;
+    if (cineStep === 'round_end' && gameState.roundWinner) {
+      id = `round_end-${gameState.round}`;
+      winner = gameState.roundWinner;
+    } else if (cineStep === 'game_over' && gameState.winner) {
+      id = 'game_over';
+      winner = gameState.winner;
+    } else {
+      return;
+    }
+    if (battleFinishLastFiredRef.current === id) return;
+    battleFinishLastFiredRef.current = id;
+    setBattleFinishWinner(winner);
     setShowBattleFinish(true);
-  }, [cineStep, gameState?.winner]);
+  }, [cineStep, gameState?.round, gameState?.roundWinner, gameState?.winner]);
 
   // ===== Effect telop auto-clear (match animation duration) =====
   useEffect(() => {
@@ -5288,61 +5301,8 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
           }} />
         )}
 
-        {/* ====== Round End: ROUND CLEAR stamp + confetti (no text box) ====== */}
-        {cineStep === 'round_end' && gameState.phase === 'round_end' && (() => {
-          const playerWonRound = gameState.roundWinner === 'player';
-          const trophyFanBonus = gameState.trophyFans[gameState.round - 1] ?? 0;
-          return (
-            <>
-              {/* Full-screen flash */}
-              <div
-                className="absolute inset-0 pointer-events-none z-30"
-                style={{
-                  background: playerWonRound ? 'rgba(255,215,0,0.25)' : 'rgba(239,68,68,0.15)',
-                  animation: 'kcRedFlash 1s ease-out forwards',
-                }}
-              />
-              {/* Confetti for wins */}
-              {playerWonRound && (
-                <div className="absolute inset-0 pointer-events-none overflow-hidden z-35">
-                  {Array.from({ length: 24 }).map((_, i) => (
-                    <span
-                      key={`rend-conf-${i}`}
-                      className="kc-confetti-piece"
-                      style={{
-                        left: `${(i * 4.2 + 1) % 100}%`,
-                        background: ['#ffd700', '#ff6b6b', '#4ade80', '#60a5fa', '#f5d76e'][i % 5],
-                        animationDelay: `${(i % 8) * 0.1}s`,
-                      }}
-                    />
-                  ))}
-                </div>
-              )}
-              {/* Stamp-in: ROUND CLEAR or defeat icon */}
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-40">
-                <div className="text-center">
-                  <p className="kc-stamp-in" style={{
-                    fontSize: playerWonRound ? '42px' : '36px',
-                    fontWeight: 900,
-                    color: playerWonRound ? '#ffd700' : '#ef4444',
-                    textShadow: `0 0 30px ${playerWonRound ? 'rgba(255,215,0,0.8)' : 'rgba(239,68,68,0.8)'}, 0 4px 8px rgba(0,0,0,0.9)`,
-                    letterSpacing: '4px',
-                  }}>
-                    {playerWonRound ? 'ROUND CLEAR!' : 'ROUND LOST'}
-                  </p>
-                  <p className="kc-fan-count mt-2" style={{
-                    fontSize: '24px',
-                    fontWeight: 900,
-                    color: playerWonRound ? '#4ade80' : '#fca5a5',
-                    textShadow: '0 2px 6px rgba(0,0,0,0.9)',
-                  }}>
-                    {playerWonRound ? `⭐ +${trophyFanBonus}` : `⭐ -${trophyFanBonus}`}
-                  </p>
-                </div>
-              </div>
-            </>
-          );
-        })()}
+        {/* kk 2026-04-21 (Commit 12c): ROUND CLEAR stamp + confetti を廃止し、FINISH 演出に統一。
+            ラウンド終了時の反応はバナーテロップ (roundVictoryTelop) + FINISH overlay のみ。 */}
 
         {/* ====== game_over: stamp + confetti + finisher card ====== */}
         {gameState.phase === 'game_over' && (() => {
@@ -7273,10 +7233,10 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
         }
       `}</style>
 
-      {/* kk 2026-04-21: 最終勝敗確定時の FINISH 演出（Manus finish_01_classic_elegant） */}
+      {/* kk 2026-04-21: 各ラウンド終了 + 試合終了時の FINISH 演出（Manus finish_01_classic_elegant） */}
       <BattleFinishOverlay
         active={showBattleFinish}
-        winner={gameState?.winner === 'player' ? 'player' : 'ai'}
+        winner={battleFinishWinner}
         onComplete={() => setShowBattleFinish(false)}
       />
     </div>
