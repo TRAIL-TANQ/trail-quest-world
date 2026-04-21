@@ -581,6 +581,10 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
   const [showBattleFinish, setShowBattleFinish] = useState(false);
   const [battleFinishWinner, setBattleFinishWinner] = useState<'player' | 'ai'>('player');
   const battleFinishLastFiredRef = useRef<string | null>(null);
+  // kk 2026-04-21 (Commit 12a): ラウンド開始バナー。新しいラウンドに入るたびに 1.5 秒だけ大きく表示。
+  // lastIntroRoundRef は既に表示済みのラウンド番号を保持して多重発火を防ぐ。
+  const [roundIntroNumber, setRoundIntroNumber] = useState<number | null>(null);
+  const lastIntroRoundRef = useRef<number>(0);
   // Skip / manual advance via a latch: the battle loop creates an
   // `advanceLatchRef` per wait, and clicking "次へ" resolves it early so the
   // loop jumps straight to the next step. Using a latch (instead of deps-based
@@ -985,9 +989,11 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
     setGameState(state);
     setScreen('playing');
     setCineStep('idle');
-    // kk 2026-04-21: 新セッション開始時に FINISH 演出トリガーをリセット
+    // kk 2026-04-21: 新セッション開始時に FINISH / ラウンドイントロ演出トリガーをリセット
     battleFinishLastFiredRef.current = null;
     setShowBattleFinish(false);
+    lastIntroRoundRef.current = 0;
+    setRoundIntroNumber(null);
     advanceLatchRef.current = null;
     battleRunningRef.current = false;
     setDeckOffer(null);
@@ -1080,6 +1086,20 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
       lastLoggedPhaseRef.current = phase;
     }
   }, [gameState?.phase, gameState?.round, cineStep]);
+
+  // ===== kk 2026-04-21 (Commit 12a): ラウンド開始バナー =====
+  // gameState.round が変化したタイミングで「第N回戦」バナーを 1.5s 表示。
+  // startGame 後の round=1 初回も lastIntroRoundRef=0 → 1 の遷移として捕捉できる。
+  useEffect(() => {
+    if (!gameState || screen !== 'playing') return;
+    if (gameState.phase === 'game_over') return;
+    const r = gameState.round;
+    if (r === lastIntroRoundRef.current) return;
+    lastIntroRoundRef.current = r;
+    setRoundIntroNumber(r);
+    const timer = window.setTimeout(() => setRoundIntroNumber(null), 1500);
+    return () => clearTimeout(timer);
+  }, [gameState?.round, gameState?.phase, screen]);
 
   // ===== kk 2026-04-21: FINISH 演出トリガー =====
   // 各ラウンド終了時 (cineStep === 'round_end') と試合終了時 (cineStep === 'game_over') に発動。
@@ -7232,6 +7252,63 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
           .active\:scale-95:active { transform: scale(0.95); }
         }
       `}</style>
+
+      {/* kk 2026-04-21 (Commit 12a): ラウンド開始バナー「第N回戦」1.5s */}
+      {roundIntroNumber !== null && (
+        <div
+          className="fixed inset-0 z-[75] flex items-center justify-center pointer-events-none"
+          style={{
+            background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.78) 70%)',
+            backdropFilter: 'blur(3px)',
+            animation: 'kcRoundIntroFade 1500ms ease-out forwards',
+          }}
+        >
+          <div className="text-center">
+            <p
+              className="kc-round-intro-text"
+              style={{
+                fontFamily: 'Georgia, "Times New Roman", serif',
+                fontSize: 'clamp(56px, 14vw, 140px)',
+                fontWeight: 900,
+                color: '#ffd700',
+                letterSpacing: '8px',
+                textShadow:
+                  '0 0 48px rgba(255,215,0,0.9), 0 0 96px rgba(255,215,0,0.5), 0 6px 16px rgba(0,0,0,0.95)',
+                lineHeight: 1.05,
+              }}
+            >
+              第{roundIntroNumber}回戦
+            </p>
+            <p
+              className="kc-round-intro-sub"
+              style={{
+                fontSize: 'clamp(16px, 3.5vw, 28px)',
+                fontWeight: 700,
+                color: 'rgba(255,215,0,0.8)',
+                letterSpacing: '4px',
+                marginTop: '12px',
+              }}
+            >
+              ROUND {roundIntroNumber}
+            </p>
+          </div>
+          <style>{`
+            @keyframes kcRoundIntroFade {
+              0%   { opacity: 0; }
+              15%  { opacity: 1; }
+              80%  { opacity: 1; }
+              100% { opacity: 0; }
+            }
+            @keyframes kcRoundIntroTextIn {
+              0%   { opacity: 0; transform: scale(0.5); letter-spacing: 60px; }
+              50%  { opacity: 1; transform: scale(1.1); letter-spacing: 12px; }
+              100% { opacity: 1; transform: scale(1); letter-spacing: 8px; }
+            }
+            .kc-round-intro-text { animation: kcRoundIntroTextIn 700ms cubic-bezier(0.2, 0.9, 0.3, 1.1) forwards; }
+            .kc-round-intro-sub  { animation: kcRoundIntroTextIn 700ms 100ms cubic-bezier(0.2, 0.9, 0.3, 1.1) backwards; }
+          `}</style>
+        </div>
+      )}
 
       {/* kk 2026-04-21: 各ラウンド終了 + 試合終了時の FINISH 演出（Manus finish_01_classic_elegant） */}
       <BattleFinishOverlay
