@@ -2515,7 +2515,24 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
             return;
           }
         }
-        console.warn('[KC] battle loop safety break reached');
+        // ループ 30 周超過 = 異常終了。UI を復旧させるため cineStep を 'idle' に戻す。
+        // これをしないと useEffect deps ([phase, cineStep]) が変化せず、AI 手番が
+        // フリーズしたまま復帰できない（「AI 処理が進行せずフリーズ」症状の直接原因）。
+        // 原因特定用に、抜ける直前の state を丸ごと dump しておく。
+        console.error('[KC] battle loop safety break reached (30-loop guard)', {
+          round: gameStateRef.current?.round,
+          subBattleCount: gameStateRef.current?.subBattleCount,
+          phase: gameStateRef.current?.phase,
+          flagHolder: gameStateRef.current?.flagHolder,
+          defenseCard: gameStateRef.current?.defenseCard?.name,
+          attackCurrentPower: gameStateRef.current?.attackCurrentPower,
+          attackRevealedNames: gameStateRef.current?.attackRevealed.map((c) => c.name),
+          playerDeckTop3: gameStateRef.current?.player.deck.slice(0, 3).map((c) => c.name),
+          aiDeckTop3: gameStateRef.current?.ai.deck.slice(0, 3).map((c) => c.name),
+          playerBench: gameStateRef.current?.player.bench.map((b) => `${b.name}×${b.count}`),
+          aiBench: gameStateRef.current?.ai.bench.map((b) => `${b.name}×${b.count}`),
+        });
+        if (!unmountedRef.current) setCineStep('idle');
       } finally {
         battleRunningRef.current = false;
         console.log('[KC] battle loop: END');
