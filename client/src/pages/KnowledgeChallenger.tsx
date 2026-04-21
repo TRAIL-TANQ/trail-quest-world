@@ -1123,6 +1123,15 @@ export default function KnowledgeChallenger({ pvpSession = null }: KnowledgeChal
     setShowBattleFinish(true);
   }, [cineStep, gameState?.round, gameState?.roundWinner, gameState?.winner]);
 
+  // ===== kk 2026-04-21 バグ修正 Safety guard =====
+  // cineStep が round_end / game_over から離れたら overlay を強制的に閉じる。
+  // overlay 自体のタイマも安定化済みだが、万一のリークで次ラウンドに被らないよう二重防御。
+  useEffect(() => {
+    if (!showBattleFinish) return;
+    if (cineStep === 'round_end' || cineStep === 'game_over') return;
+    setShowBattleFinish(false);
+  }, [cineStep, showBattleFinish]);
+
   // ===== Effect telop auto-clear (match animation duration) =====
   useEffect(() => {
     if (!gameState?.effectTelop) return;

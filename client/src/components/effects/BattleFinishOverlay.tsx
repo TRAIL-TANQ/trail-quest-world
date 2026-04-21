@@ -1,17 +1,22 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 /**
  * BattleFinishOverlay
- * kk 2026-04-21: バトル最終勝敗確定時の映画風 FINISH 演出。
+ * kk 2026-04-21: バトル最終勝敗確定 + 各ラウンド終了時の映画風 FINISH 演出。
  * Manus 納品の finish_01_classic_elegant.svg を使用。
  *
- * フロー（総尺 2.2 秒、タップでスキップ可）:
- *   flash   (0-200ms)    → 白フラッシュ
- *   finish  (200-1100ms) → FINISH 画像フェードイン + 拡大、ホールド
- *   result  (1100-1900ms) → WIN! / LOSE テキスト
- *   fadeout (1900-2200ms) → 全体透過 → onComplete
+ * フロー（総尺 1.8 秒、タップでスキップ可）:
+ *   flash   (0-150ms)    → 白フラッシュ
+ *   finish  (150-900ms)  → FINISH 画像フェードイン + 拡大、ホールド
+ *   result  (900-1550ms) → WIN! / LOSE テキスト
+ *   fadeout (1550-1800ms) → 全体透過 → onComplete
  *
- * 既存の cineStep='game_over' 保持時間 (FINAL_REVEAL_MS + 500 + 300 = 2300ms) 内に完了する。
+ * 実装上の注意（kk 2026-04-21 バグ修正）:
+ *   - onComplete は親側で毎レンダリング新しい関数参照になるため、ref に保持して
+ *     useEffect の deps から除外する。これがないと親の再レンダリング毎に timer が
+ *     リセットされ、overlay が次ラウンドまで残り続けるバグを引き起こす。
+ *
+ * 既存の cineStep='round_end' 保持時間 (約 3400ms) / 'game_over' (約 2300ms) 内に完了する。
  *
  * z-index は 80（TrophyBonus 等より上、モーダル 100 より下）。
  */
@@ -28,6 +33,12 @@ const FINISH_IMG_URL = '/images/effects/finish/finish_01_classic_elegant.svg';
 export function BattleFinishOverlay({ active, winner, onComplete }: BattleFinishOverlayProps) {
   const [stage, setStage] = useState<Stage>('flash');
 
+  // onComplete を ref に保持し、useEffect の deps から除外する（再レンダリング耐性）
+  const onCompleteRef = useRef(onComplete);
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
+
   useEffect(() => {
     if (!active) {
       setStage('flash');
@@ -35,17 +46,18 @@ export function BattleFinishOverlay({ active, winner, onComplete }: BattleFinish
     }
     setStage('flash');
     const timers: number[] = [];
-    timers.push(window.setTimeout(() => setStage('finish'), 200));
-    timers.push(window.setTimeout(() => setStage('result'), 1100));
-    timers.push(window.setTimeout(() => setStage('fadeout'), 1900));
+    timers.push(window.setTimeout(() => setStage('finish'), 150));
+    timers.push(window.setTimeout(() => setStage('result'), 900));
+    timers.push(window.setTimeout(() => setStage('fadeout'), 1550));
     timers.push(window.setTimeout(() => {
       setStage('done');
-      onComplete?.();
-    }, 2200));
+      onCompleteRef.current?.();
+    }, 1800));
     return () => {
       for (const t of timers) clearTimeout(t);
     };
-  }, [active, onComplete]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
 
   if (!active || stage === 'done') return null;
 
