@@ -1,6 +1,6 @@
 -- ======================================================================
 -- 0033_migrate_child_status_child_id_to_text.sql
--- Commit D.1 (Path A): child_status.child_id を uuid → text に統一
+-- Commit D.1 (Path F): child_status.child_id を uuid → text に統一
 --
 -- 背景:
 --   child_status テーブルは CREATE TABLE 文が git history に存在せず、
@@ -13,21 +13,28 @@
 --   (quizService.ts:273 の isUuid() ガードで静かに skip されていた)。
 --
 -- kk による 2026-04-21 診断結果:
---   - child_status 件数 = 0 (データロスなし、型変更は完全に安全)
---   - gacha_pulls.child_id の実データは text 形式 (例: "個別_さとる")
---   - child_status の child_id を参照する FK 制約は無い
+--   - child_status 件数     = 0 (データロスなし)
+--   - gacha_pulls.child_id  = text ("個別_さとる" のような論理 ID)
+--   - FK child_status_child_id_fkey = public.children(id) を参照
+--   - children テーブル     = 0 行、app コード参照ゼロ (orphan)
+--   - 他に children.id を参照する FK = なし
 --
--- 本 migration は schema drift を解消する最小変更。副作用ゼロ、
--- 市場機能 (0029-0032) が本番で動作するための前提条件。
+-- 方針: Path F (最小変更、ゼロリスク)
+--   - FK child_status_child_id_fkey を DROP (children が orphan なので参照整合性の意義なし)
+--   - child_status の RLS ポリシーを save → DROP → ALTER → recreate
+--   - child_status.child_id を text に変換
+--   - children テーブルは放置 (0 行、app 非参照、別 Issue で整理)
 --
 -- 適用履歴:
---   - 2026-04-21 初回実行: RLS ポリシーが child_id 列を参照していたため
---     "cannot alter type of a column used in a policy definition" エラー。
---     DO block でポリシーを保存 → DROP → ALTER → 再作成する実装に改訂。
---     (0023 の iteration パターンに倣う)
+--   - 2026-04-21 初回試行 (v1): "cannot alter type of a column used in a
+--     policy definition" エラー。RLS ポリシーが child_id を参照していたため。
+--   - 2026-04-21 再試行 (v2): RLS ポリシー save/restore 実装。今度は
+--     "foreign key constraint cannot be implemented" エラー (FK が uuid 参照)。
+--   - 2026-04-21 本版 (v3): FK DROP を追加。Path F 診断で children が
+--     orphan と確定したため FK 再作成は行わない。
 --
--- 関連 follow-up (別 Issue):
---   - children テーブル (診断で発見された生徒マスタ候補) の位置づけ整理
+-- 関連 follow-up (別 Issue、本 migration のスコープ外):
+--   - children テーブル自体の整理 (DROP するか、migration 管理下に置くか)
 --   - child_status の baseline migration (CREATE TABLE) 作成
 --   - quizService.ts:273 の isUuid() ガード撤廃
 --   - 既存プレイヤーの localStorage ALT → child_status.alt_points 移行
@@ -35,12 +42,13 @@
 
 set client_encoding = 'UTF8';
 
--- ---------- RLS ポリシーを保持したまま型変換 ----------
--- child_id 列を参照する RLS ポリシーがあると ALTER COLUMN TYPE できないため、
--- 既存ポリシーを JSONB に serialize → DROP → ALTER → 元の定義で CREATE POLICY し直す。
+-- ---------- FK + RLS ポリシーを退避してから型変換 ----------
+-- child_id 列を参照する FK と RLS ポリシーがあると ALTER COLUMN TYPE できないため、
+-- それらを先に DROP してから ALTER し、RLS ポリシーのみ元の定義で再作成する。
+-- FK は Path F の方針で再作成しない (children が orphan、参照整合性の実質意義なし)。
 --
 -- DO block 全体は 1 トランザクションで実行されるため、途中で失敗すれば
--- ポリシーと列型の両方が元の状態にロールバックされる。
+-- FK / ポリシー / 列型の全てが元の状態にロールバックされる。
 do $$
 declare
   v_policies  jsonb;
@@ -48,6 +56,11 @@ declare
   v_roles     text;
   v_create    text;
 begin
+  -- Step 0: 既知の FK を DROP (children.id への参照を外す)
+  alter table public.child_status
+    drop constraint if exists child_status_child_id_fkey;
+  raise notice '[0033] dropped FK if exists: child_status_child_id_fkey';
+
   -- Step 1: child_status の全ポリシーを JSONB として保存
   select jsonb_agg(
            jsonb_build_object(
@@ -80,7 +93,7 @@ begin
     alter column child_id type text using child_id::text;
   raise notice '[0033] child_status.child_id altered to text';
 
-  -- Step 4: 保存しておいたポリシーを再作成
+  -- Step 4: 保存しておいたポリシーを再作成 (FK は再作成しない)
   if v_policies is not null then
     for v_pol in
       select *
@@ -120,7 +133,7 @@ end $$;
 
 comment on column public.child_status.child_id is
   '論理 child_id (text)。他の全テーブルと統一。例: "個別_さとる" / "スターター_はるか"。'
-  '2026-04-21 に uuid → text へ変更 (0033)。';
+  '2026-04-21 に uuid → text へ変更 (0033 Path F: FK と RLS policy を退避してから ALTER)。';
 
 
 -- ---------- 確認クエリ (手動実行用) ----------
@@ -133,8 +146,15 @@ comment on column public.child_status.child_id is
 --    and column_name = 'child_id';
 -- -- 期待: data_type='text', udt_name='text'
 --
--- -- ポリシーが元通り再作成されたか確認
+-- -- FK が消えているか確認
+-- select conname, pg_get_constraintdef(oid)
+--   from pg_constraint c
+--   join pg_class t on t.oid = c.conrelid
+--  where t.relname = 'child_status' and c.contype = 'f';
+-- -- 期待: 0 行 (child_status_child_id_fkey は DROP 済み)
+--
+-- -- RLS ポリシーが元通り再作成されたか確認
 -- select policyname, cmd, roles, qual, with_check
 --   from pg_policies
 --  where schemaname = 'public' and tablename = 'child_status';
--- -- 期待: 実行前と同じ行が並ぶ (policyname / cmd / qual / with_check すべて一致)
+-- -- 期待: ALTER 前と同じ行が並ぶ (policyname / cmd / qual / with_check すべて一致)
