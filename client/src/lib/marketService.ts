@@ -5,13 +5,11 @@
  * feature (CARD_MARKET_SPEC.md v1.1).
  *
  * Responsibilities:
- *   - sellCard()                   → market_sell_card RPC (Commit C/C.1)
- *   - fetchMarketPrices()          → card_market_prices direct SELECT
- *   - fetchMyCardTransactions()    → fetch_my_card_transactions RPC
- *   - fetchOwnedCards()            → gacha_pulls aggregation (FIFO ownership)
- *   - formatSellErrorReason()      → Japanese UI error messages
- *
- * Buy-side (market_buy_card) lands in Commit E.
+ *   - sellCard() / buyCard()              → market_sell_card / market_buy_card RPCs
+ *   - fetchMarketPrices()                 → card_market_prices direct SELECT
+ *   - fetchMyCardTransactions()           → fetch_my_card_transactions RPC
+ *   - fetchOwnedCards()                   → gacha_pulls aggregation (FIFO ownership)
+ *   - formatSellErrorReason() / formatBuyErrorReason() → Japanese UI error messages
  */
 
 import { supabase } from './supabase';
@@ -64,6 +62,28 @@ export interface CardTransactionRow {
   created_at: string;
 }
 
+export type MarketBuyReason =
+  | 'child_id_required'
+  | 'card_id_required'
+  | 'child_not_found'
+  | 'daily_buy_limit'
+  | 'card_not_listed'
+  | 'insufficient_alt'
+  | 'rpc_error';
+
+export interface MarketBuyResult {
+  success: boolean;
+  reason?: MarketBuyReason;
+  buy_price?: number;
+  alt_balance_after?: number;
+  new_buy_price?: number;
+  new_sell_price?: number;
+  coefficient?: number;
+  net_demand?: number;
+  required_alt?: number;
+  current_alt?: number;
+}
+
 // ==========================================================================
 // Sell
 // ==========================================================================
@@ -89,6 +109,37 @@ export async function sellCard(
     return (data ?? { success: false, reason: 'rpc_error' }) as MarketSellResult;
   } catch (err) {
     console.error('[MarketService] sellCard threw:', err);
+    return { success: false, reason: 'rpc_error' };
+  }
+}
+
+// ==========================================================================
+// Buy
+// ==========================================================================
+
+/**
+ * Buy one copy of a card at the current market buy price.
+ * Server-side handles: FOR UPDATE locks, balance check, 100/day limit,
+ * gacha_pulls INSERT (source='shop_buy'), dynamic repricing, ±30% daily guard.
+ * Protected cards (NON_SELLABLE_CARD_IDS) remain purchasable — the restriction
+ * applies to selling only.
+ */
+export async function buyCard(
+  childId: string,
+  cardId: string,
+): Promise<MarketBuyResult> {
+  try {
+    const { data, error } = await supabase.rpc('market_buy_card', {
+      p_child_id: childId,
+      p_card_id: cardId,
+    });
+    if (error) {
+      console.error('[MarketService] buyCard RPC error:', error);
+      return { success: false, reason: 'rpc_error' };
+    }
+    return (data ?? { success: false, reason: 'rpc_error' }) as MarketBuyResult;
+  } catch (err) {
+    console.error('[MarketService] buyCard threw:', err);
     return { success: false, reason: 'rpc_error' };
   }
 }
@@ -185,4 +236,30 @@ export function priceDeltaPercent(sellPrice: number, basePrice: number): number 
   const baseSell = basePrice * 0.6;
   if (baseSell <= 0) return 0;
   return Math.round((sellPrice / baseSell - 1) * 100);
+}
+
+/** Difference percentage vs. the rarity-base buy price (for the buy-tab trend badge). */
+export function buyPriceDeltaPercent(buyPrice: number, basePrice: number): number {
+  if (basePrice <= 0) return 0;
+  return Math.round((buyPrice / basePrice - 1) * 100);
+}
+
+/** Japanese error message for the buy flow. */
+export function formatBuyErrorReason(reason?: MarketBuyReason): string {
+  switch (reason) {
+    case 'child_id_required':
+      return 'ユーザーIDが不明です';
+    case 'card_id_required':
+      return 'カードが選択されていません';
+    case 'child_not_found':
+      return 'ユーザー情報が見つかりません';
+    case 'daily_buy_limit':
+      return '1日の購入上限 (100枚) に達しました';
+    case 'card_not_listed':
+      return 'このカードは市場に登録されていません';
+    case 'insufficient_alt':
+      return 'ALT残高が不足しています';
+    default:
+      return '購入に失敗しました。通信をご確認ください';
+  }
 }
