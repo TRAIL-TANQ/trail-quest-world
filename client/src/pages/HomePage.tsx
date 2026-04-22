@@ -10,6 +10,7 @@ import { Link } from 'wouter';
 import { IMAGES, AVATAR_ITEMS } from '@/lib/constants';
 import { useUserStore, useMissionStore, useAltStore } from '@/lib/stores';
 import { calculateLevel } from '@/lib/level';
+import { fetchChildStatus } from '@/lib/quizService';
 import { fetchOverallRanking, type RankingEntry } from '@/lib/rankingService';
 import MenuButton from '@/components/ui/MenuButton';
 import { listTournaments, type Tournament } from '@/lib/tournamentService';
@@ -56,8 +57,25 @@ function MissionCompleteEffect({ mission, onDone }: { mission: { title: string; 
 
 export default function HomePage() {
   const user = useUserStore((s) => s.user);
+  const setUser = useUserStore((s) => s.setUser);
   const addTotalAlt = useUserStore((s) => s.addTotalAlt);
   const levelInfo = calculateLevel(user.totalAlt);
+
+  // ブラウザリロード時の ALT 同期。market RPC 経由の売買で DB 側の
+  // alt_points は正しく更新されているが、ストアへの再注入経路が欠損していて
+  // UI が 0 表示のまま残る不具合を塞ぐ (2026-04-22)。
+  useEffect(() => {
+    let cancelled = false;
+    fetchChildStatus(user.id).then((status) => {
+      if (cancelled || !status) return;
+      if (status.alt_points !== user.currentAlt) {
+        setUser({ ...user, currentAlt: status.alt_points, totalAlt: status.alt_points });
+      }
+    }).catch(() => { /* offline: keep store value */ });
+    return () => { cancelled = true; };
+    // user.id だけ依存。alt/totalAlt を依存に入れると再 fetch が走って無限ループ。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user.id]);
   const missions = useMissionStore((s) => s.missions);
   const claimReward = useMissionStore((s) => s.claimReward);
   const triggerEarnEffect = useAltStore((s) => s.triggerEarnEffect);
@@ -362,7 +380,7 @@ export default function HomePage() {
             icon="⚔️"
             title="2人対戦"
             subtitle="友達と対戦しよう"
-            gradient="linear-gradient(135deg, #b91c1c 0%, #7c3aed 50%, #1d4ed8 100%)"
+            gradient="linear-gradient(135deg, #2a2f3a 0%, #3a4250 50%, #4a5260 100%)"
           />
           <MenuButton
             href="/games/time-attack"

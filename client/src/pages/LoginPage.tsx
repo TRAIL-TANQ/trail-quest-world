@@ -13,6 +13,7 @@ import { useUserStore, useCollectionStore } from '@/lib/stores';
 import { IMAGES } from '@/lib/constants';
 import { saveAuth, getAuth } from '@/lib/auth';
 import { ensureChildStatus } from '@/lib/pinService';
+import { fetchChildStatus } from '@/lib/quizService';
 import { saveUserProfile } from '@/lib/userProfileService';
 import { COLLECTION_CARDS } from '@/lib/cardData';
 import {
@@ -75,7 +76,17 @@ export default function LoginPage() {
       // Supabase: child_status を ensure（失敗しても catch 内でスルー）
       await ensureChildStatus(childId);
       void saveUserProfile(childId, displayName, user.avatarType);
-      setUser({ ...user, id: childId, nickname: displayName });
+      // DB から ALT 残高を同期してストアに注入する。
+      // 以前はここでフェッチせず MOCK_USER のダミー値が残り続ける不具合があった。
+      const status = await fetchChildStatus(childId);
+      const alt = status?.alt_points ?? 0;
+      setUser({
+        ...user,
+        id: childId,
+        nickname: displayName,
+        currentAlt: alt,
+        totalAlt: alt,
+      });
       navigate('/');
     } catch {
       // 予期せぬ例外時もログインは継続（localStorage にauth済み）

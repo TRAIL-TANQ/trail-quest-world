@@ -17,7 +17,9 @@ interface UserState {
 
 const _auth = getAuth();
 // Guests start fresh every session: ALT=0, streak=0, level=1, no purchased avatars.
-// Registered users see MOCK_USER demo defaults until their real progress loads.
+// Registered users も ALT/totalAlt は 0 スタート。ログイン時と HomePage マウント時に
+// fetchChildStatus で DB から alt_points を同期注入する (2026-04-22)。
+// 以前は MOCK_USER.currentAlt=1240 のダミー値が表示に残り続ける不具合があった。
 const _initialUser = _auth.isGuest
   ? {
       ...MOCK_USER,
@@ -30,7 +32,13 @@ const _initialUser = _auth.isGuest
       purchasedAvatarIds: [],
       equippedAvatarId: null,
     }
-  : { ...MOCK_USER, id: _auth.childId, nickname: _auth.childName };
+  : {
+      ...MOCK_USER,
+      id: _auth.childId,
+      nickname: _auth.childName,
+      totalAlt: 0,
+      currentAlt: 0,
+    };
 
 export const useUserStore = create<UserState>((set, get) => ({
   user: _initialUser,
