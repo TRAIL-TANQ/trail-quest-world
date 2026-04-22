@@ -2,7 +2,7 @@
 
 **プロジェクト**: TRAIL QUEST WORLD (TQW)
 **機能名**: 勉強ゲーム強化 (4択モード + パネル破壊モード)
-**バージョン**: **v1.1** (2026-04-22 レビュー反映版)
+**バージョン**: **v1.2** (2026-04-22 Phase A 着手前追補)
 **作成日**: 2026-04-21 (v1.0)
 
 ---
@@ -13,6 +13,7 @@
 |-----|------------|---------|
 | 1.0 | 2026-04-21 | 初版 (kk 作成) |
 | 1.1 | 2026-04-22 | 7 論点レビュー反映: DB 設計改訂、ALT 統合方針、パネル生成アルゴリズム、教師ダッシュボードを Phase B に昇格、初期 60 問ルール |
+| 1.2 | 2026-04-22 | Phase A 着手前 3 点追補: A=問題マスタ作成ガイド (INSERT 雛形 + CSV フロー + 具体例 3 問)、B=error_pattern enum 確定 (11 種)、C=Phase A 完了検証 SQL |
 
 ---
 
@@ -234,13 +235,21 @@
 CREATE TABLE quiz_answer_logs (
   id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   child_id         TEXT        NOT NULL,
-  subject          TEXT        NOT NULL,
+  subject          TEXT        NOT NULL,   -- Phase A は 'math' 固定 (FU-015 で enum 化検討)
   mode             TEXT        NOT NULL CHECK (mode IN ('quiz_4choice', 'panel_break')),
   question_id      TEXT        NOT NULL,   -- quiz_questions.id or 動的生成 ID
   selected_answer  TEXT,
   is_correct       BOOLEAN     NOT NULL,
   response_time_ms INTEGER,
-  error_pattern    TEXT,                    -- NULL 可 (正解時、または分類不可時)
+  error_pattern    TEXT        CHECK (
+    error_pattern IS NULL
+    OR error_pattern IN (
+      'calculation_error', 'carry_forget', 'place_value_error',
+      'operation_order_error', 'sign_error', 'unit_conversion_error',
+      'fraction_misunderstanding', 'decimal_misunderstanding',
+      'misreading', 'time_out', 'other'
+    )
+  ),                                        -- v1.2: enum 固定 (§error_pattern enum 定義)
   created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_quiz_logs_child
@@ -307,15 +316,215 @@ CREATE POLICY pbs_anon_insert ON panel_break_sessions
 
 ### Seed 初期投入
 - Phase A 着手時、`migrations/0040_study_game_seed.sql` で **算数 4択 60 問** を `quiz_questions` に投入
-- 60 問の内訳 (目安): 初級 20 / 中級 25 / 上級 15
+- 60 問の内訳 (kk 最終確定, v1.2): 初級 20 / 中級 20 / 上級 20
 - 各問題は `wrong_answers` JSONB に 3 つの意味ある誤答を格納:
   ```json
   [
-    {"value": "340", "error_pattern": "20_multiply_miss"},
-    {"value": "380", "error_pattern": "4_multiply_miss"},
-    {"value": "410", "error_pattern": "place_value_miss"}
+    {"value": "340", "error_pattern": "calculation_error", "error_detail": "20 の掛け算ミス"},
+    {"value": "380", "error_pattern": "calculation_error", "error_detail": "4 の掛け算ミス"},
+    {"value": "410", "error_pattern": "place_value_error"}
   ]
   ```
+  - `error_pattern`: §error_pattern enum 定義 の 11 種から必ず選択 (固定 enum)
+  - `error_detail`: 任意のフリーテキスト (教師向け補足。quiz_answer_logs には記録されない)
+
+---
+
+## 🎲 error_pattern enum 定義 (v1.2 新設)
+
+### 設計意図
+誤答分類を **固定 enum 11 種** に統一。kk の問題作成時の迷いを排除し、`quiz_answer_logs` 集計時のグルーピングを確実にする。問題固有の詳細は `wrong_answers[].error_detail` (フリーテキスト) に残し、分類軸とは切り分ける。
+
+### enum 完全リスト
+
+| error_pattern | 日本語名 | 使用ケース (例) |
+|---|---|---|
+| `calculation_error` | 計算ミス | 加減乗除の単純ミス。繰り上がり/位取りに分類されない誤り全般 |
+| `carry_forget` | 繰り上がり/繰り下がり忘れ | 17+28 → 35 のように上位桁への加算を落とす |
+| `place_value_error` | 位取りミス | 15×24 → 410 のように桁数/位置を誤る |
+| `operation_order_error` | 四則演算順序ミス | 2+3×4 → 20 のように左から順に計算 |
+| `sign_error` | 符号ミス | マイナス/プラスの符号落とし、反転 |
+| `unit_conversion_error` | 単位換算ミス | m↔cm、分↔秒 の換算ミス |
+| `fraction_misunderstanding` | 分数の概念誤解 | 1/2+1/3 → 2/5 のように分母分子を直接加算 |
+| `decimal_misunderstanding` | 小数の概念誤解 | 0.1×0.1 → 0.1 のように小数の掛け算構造を誤る |
+| `misreading` | 問題文読み違い | 「ひき算」を「たし算」と読む、数値の読み飛ばし |
+| `time_out` | 時間切れで推測 | 制限時間超過による当てずっぽう (クライアントが自動付与) |
+| `other` | その他 | 上記いずれにも分類しにくい誤り。濫用は避ける |
+
+### TypeScript union type (client/src/lib/quizModeService.ts に定義予定)
+
+```ts
+export type ErrorPattern =
+  | 'calculation_error'
+  | 'carry_forget'
+  | 'place_value_error'
+  | 'operation_order_error'
+  | 'sign_error'
+  | 'unit_conversion_error'
+  | 'fraction_misunderstanding'
+  | 'decimal_misunderstanding'
+  | 'misreading'
+  | 'time_out'
+  | 'other';
+
+export const ERROR_PATTERN_LABELS: Record<ErrorPattern, string> = {
+  calculation_error:          '計算ミス',
+  carry_forget:               '繰り上がり忘れ',
+  place_value_error:          '位取りミス',
+  operation_order_error:      '四則演算順序ミス',
+  sign_error:                 '符号ミス',
+  unit_conversion_error:      '単位換算ミス',
+  fraction_misunderstanding:  '分数の概念誤解',
+  decimal_misunderstanding:   '小数の概念誤解',
+  misreading:                 '問題文読み違い',
+  time_out:                   '時間切れで推測',
+  other:                      'その他',
+};
+```
+
+### DB 側制約 (quiz_answer_logs.error_pattern)
+§DB スキーマ の CHECK 制約で enum を強制 (v1.2 で反映済)。DB レベルで逸脱を防ぐことで、集計クエリが壊れないことを保証する。
+
+### 拡張ポリシー
+- enum を増やす場合は必ず migration 経由 (DROP + ADD CHECK)
+- 追加は「十分な件数の `other` がその pattern に該当する」ことを確認してから
+- 濫用防止のため、Phase A 中は上記 11 種で固定
+
+---
+
+## 📝 問題マスタ作成ガイド (v1.2 新設)
+
+### 目的
+kk (または教材担当) が **算数 60 問** を迷わず作成できるよう、フォーマット / 命名規則 / 具体例 / 作業フローを固定する。
+
+### 推奨作業フロー
+
+```
+[1] kk: Google Sheets (or CSV) で 60 問作成
+     ↓ (カラム: id, difficulty, question_text, correct_answer,
+              wrong_1_value, wrong_1_pattern, wrong_1_detail,
+              wrong_2_value, wrong_2_pattern, wrong_2_detail,
+              wrong_3_value, wrong_3_pattern, wrong_3_detail,
+              explanation)
+
+[2] Claude Code: CSV → INSERT SQL 変換 (変換スクリプト or 手作業)
+
+[3] migrations/0040_study_game_seed.sql に書き込み
+
+[4] supabase db push (or migration apply) で本番投入
+
+[5] §Phase A 完了検証 SQL で投入件数を確認
+```
+
+**Supabase Studio の SQL Editor から直接 INSERT は禁止** (FU-012 教訓)。seed は必ず migration 経由。
+
+### id 命名規則
+- 形式: `<subject>_<mode>_<difficulty>_<連番3桁>`
+- 例:
+  - `math_q4_easy_001`
+  - `math_q4_medium_015`
+  - `math_q4_hard_020`
+- `q4` は quiz_4choice の省略。`pb` は panel_break の省略 (Phase C で使用)
+
+### wrong_answers[].error_pattern 命名規則
+- §error_pattern enum 定義 の **11 種から必ず選択** (固定 enum)
+- 問題固有の詳細は `error_detail` に書く (任意、フリーテキスト)
+- 3 つの誤答はできる限り **異なる error_pattern** にする (教育分析のため)
+
+### Google Sheets テンプレート (kk が入力)
+
+```
+id                    | difficulty | question_text     | correct_answer | w1_value | w1_pattern            | w1_detail        | w2_value | w2_pattern              | w2_detail         | w3_value | w3_pattern          | w3_detail        | explanation
+math_q4_easy_001      | easy       | 17 + 28 = ?       | 45             | 35       | carry_forget          | 繰り上がり忘れ    | 315      | place_value_error       | 3と15を並べた      | 43       | calculation_error   | 単純計算ミス       | 17+28 = (10+7)+(20+8) = 30+15 = 45
+math_q4_medium_001    | medium     | 15 × 24 = ?       | 360            | 340      | calculation_error     | 20の掛け算ミス    | 380      | calculation_error       | 4の掛け算ミス      | 410      | place_value_error   |                  | 15×24 = 15×(20+4) = 300+60 = 360
+math_q4_hard_001      | hard       | 3/4 + 1/6 = ?     | 11/12          | 4/10     | fraction_misunderstanding | 分母分子を直接加算 | 4/24    | fraction_misunderstanding | 通分できず分母を掛けた | 9/12    | calculation_error | 通分後の加算ミス    | 通分して 9/12 + 2/12 = 11/12
+```
+
+### INSERT SQL 雛形 (Claude Code が CSV から変換)
+
+```sql
+-- migrations/0040_study_game_seed.sql
+INSERT INTO quiz_questions (
+  id, subject, mode, difficulty,
+  question_text, correct_answer, wrong_answers, explanation
+) VALUES
+(
+  'math_q4_easy_001', 'math', 'quiz_4choice', 'easy',
+  '17 + 28 = ?', '45',
+  '[
+    {"value": "35",  "error_pattern": "carry_forget",        "error_detail": "繰り上がり忘れ"},
+    {"value": "315", "error_pattern": "place_value_error",   "error_detail": "3と15を並べた"},
+    {"value": "43",  "error_pattern": "calculation_error",   "error_detail": "単純計算ミス"}
+  ]'::jsonb,
+  '17+28 = (10+7)+(20+8) = 30+15 = 45'
+),
+(
+  'math_q4_medium_001', 'math', 'quiz_4choice', 'medium',
+  '15 × 24 = ?', '360',
+  '[
+    {"value": "340", "error_pattern": "calculation_error",   "error_detail": "20 の掛け算ミス"},
+    {"value": "380", "error_pattern": "calculation_error",   "error_detail": "4 の掛け算ミス"},
+    {"value": "410", "error_pattern": "place_value_error"}
+  ]'::jsonb,
+  '15×24 = 15×(20+4) = 300+60 = 360'
+),
+(
+  'math_q4_hard_001', 'math', 'quiz_4choice', 'hard',
+  '3/4 + 1/6 = ?', '11/12',
+  '[
+    {"value": "4/10", "error_pattern": "fraction_misunderstanding", "error_detail": "分母分子を直接加算"},
+    {"value": "4/24", "error_pattern": "fraction_misunderstanding", "error_detail": "通分できず分母を掛けた"},
+    {"value": "9/12", "error_pattern": "calculation_error",         "error_detail": "通分後の加算ミス"}
+  ]'::jsonb,
+  '通分して 9/12 + 2/12 = 11/12 (最小公倍数 12)'
+)
+-- ... 残り 57 問
+;
+```
+
+### 具体例 3 問 (各難易度 1 問、kk の参考資料)
+
+#### 例1: 初級 (easy) — 繰り上がりのある加算
+- **問題**: `17 + 28 = ?`
+- **正解**: `45`
+- **誤答 3 パターン**:
+  | 値 | error_pattern | error_detail |
+  |---|---|---|
+  | 35 | `carry_forget` | 繰り上がり忘れ (10+20=30, 7+8=15→5だけ取る) |
+  | 315 | `place_value_error` | 3と15を並べて書いた |
+  | 43 | `calculation_error` | 一の位単純ミス |
+- **解説**: 17+28 = (10+7)+(20+8) = 30+15 = 45
+
+#### 例2: 中級 (medium) — 2桁 × 2桁
+- **問題**: `15 × 24 = ?`
+- **正解**: `360`
+- **誤答 3 パターン**:
+  | 値 | error_pattern | error_detail |
+  |---|---|---|
+  | 340 | `calculation_error` | 20 の掛け算ミス |
+  | 380 | `calculation_error` | 4 の掛け算ミス |
+  | 410 | `place_value_error` | 位取りミス |
+- **解説**: 15×24 = 15×(20+4) = 300+60 = 360
+
+#### 例3: 上級 (hard) — 分数の加算 (通分)
+- **問題**: `3/4 + 1/6 = ?`
+- **正解**: `11/12`
+- **誤答 3 パターン**:
+  | 値 | error_pattern | error_detail |
+  |---|---|---|
+  | 4/10 | `fraction_misunderstanding` | 分母分子を直接加算 |
+  | 4/24 | `fraction_misunderstanding` | 通分できず分母を掛けた |
+  | 9/12 | `calculation_error` | 通分後の加算ミス |
+- **解説**: 最小公倍数 12 で通分 → 9/12 + 2/12 = 11/12
+
+### 作問時の 3 原則
+1. **誤答は教育的意味を持たせる**: ランダムな数字ではなく、実際の誤解パターンを表現する
+2. **3 つの誤答はできる限り異なる pattern にする**: 同じ pattern ばかりだと分析価値が下がる
+3. **正解が一目でわからない難易度設計**: easy でも暗算即答にならない難易度を選ぶ
+
+### kk 60 問作成の分担
+- **Claude Code**: CSV テンプレ提供 + seed migration の空テンプレ + CSV → INSERT 変換
+- **kk**: 60 問の問題文 / 正解 / 3 誤答 / error_pattern / explanation 作成 (Phase A 実装中の 1-3 日で並行)
 
 ---
 
@@ -478,6 +687,126 @@ export async function processStudyGameResult(params: {
 
 ---
 
+## 🧪 Phase A 完了検証 SQL (v1.2 新設)
+
+### 目的
+Phase A の成功条件を **手元で即座に検証できる SQL セット**。kk が Supabase SQL Editor に貼って確認する想定。
+Phase A で検証対象のテスト生徒 id は `個別_さとる` を例示 (実運用時は対象生徒 id を置換)。
+
+### 1. 問題マスタ seed 投入確認 (難易度別カウント)
+- **検証内容**: seed migration 投入後、算数 4択 60 問が難易度別 20/20/20 で入っているか
+- **期待値**: easy=20, medium=20, hard=20 (合計 60)
+
+```sql
+SELECT difficulty, COUNT(*) AS question_count
+FROM quiz_questions
+WHERE subject = 'math'
+  AND mode = 'quiz_4choice'
+  AND is_active = TRUE
+GROUP BY difficulty
+ORDER BY
+  CASE difficulty
+    WHEN 'easy' THEN 1
+    WHEN 'medium' THEN 2
+    WHEN 'hard' THEN 3
+    WHEN 'extreme' THEN 4
+  END;
+```
+
+### 2. 誤答ログ記録確認 (直近 10 件)
+- **検証内容**: 生徒が 4択に回答した後、`quiz_answer_logs` に必須カラムが埋まって記録されているか
+- **期待値**: `child_id`, `mode`, `question_id`, `is_correct` が欠損なし / `error_pattern` は誤答時のみ enum 値 / `response_time_ms` が正の整数
+
+```sql
+SELECT child_id, subject, mode, question_id, selected_answer,
+       is_correct, error_pattern, response_time_ms, created_at
+FROM quiz_answer_logs
+WHERE child_id = '個別_さとる'
+ORDER BY created_at DESC
+LIMIT 10;
+```
+
+### 3. 日次セッション / 正答率 (JST 基準)
+- **検証内容**: 1 セッション = 10 問として、日に何セッション完走したか + 正答率
+- **期待値**: 1 セッション当たり 10 行記録、正答率 0-100%
+
+```sql
+SELECT
+  DATE(created_at AT TIME ZONE 'Asia/Tokyo') AS jst_date,
+  COUNT(*)                                                  AS total_answers,
+  COUNT(*) FILTER (WHERE is_correct = TRUE)                 AS correct_count,
+  ROUND(
+    COUNT(*) FILTER (WHERE is_correct = TRUE)::numeric
+      / NULLIF(COUNT(*), 0) * 100, 1
+  ) AS accuracy_pct
+FROM quiz_answer_logs
+WHERE child_id = '個別_さとる'
+  AND mode = 'quiz_4choice'
+GROUP BY DATE(created_at AT TIME ZONE 'Asia/Tokyo')
+ORDER BY jst_date DESC;
+```
+
+**注意**: ALT の「1 日 3 回制限」は localStorage 側でカウントしており、DB からは直接検証できない。DB 側は「セッション履歴」として残る。3 回制限の動作確認は F12 DevTools の Application → LocalStorage で `alt_game_count_<childId>_quiz_4choice_<YYYY-MM-DD>` キーを見る。
+
+### 4. error_pattern 別 誤答集計 (教師ダッシュボード Phase B 前倒し検証)
+- **検証内容**: Phase B で UI 化する前に、集計クエリが想定通り動くか
+- **期待値**: enum 11 種のいずれかで降順に集計される
+
+```sql
+SELECT error_pattern,
+       COUNT(*) AS miss_count
+FROM quiz_answer_logs
+WHERE child_id = '個別_さとる'
+  AND is_correct = FALSE
+  AND error_pattern IS NOT NULL
+GROUP BY error_pattern
+ORDER BY miss_count DESC;
+```
+
+### 5. RLS 検証 (anon 権限の最小化確認)
+- **検証内容**: anon role で `quiz_answer_logs` を SELECT できないこと、`quiz_questions` を SELECT できること
+- **期待値**: (a) SELECT on quiz_answer_logs → 0 rows / permission denied, (b) SELECT on quiz_questions → 60 rows
+
+```sql
+-- Supabase Studio の SQL Editor でなく、anon キーで curl/fetch して確認:
+--   (a) SELECT * FROM quiz_answer_logs LIMIT 1;  -- 0 rows or permission denied であること
+--   (b) SELECT * FROM quiz_questions WHERE is_active = TRUE LIMIT 5;  -- 5 rows 返ること
+--   (c) INSERT INTO quiz_answer_logs (...) VALUES (...);  -- 成功すること
+-- curl 例:
+--   curl -H "apikey: <anon_key>" -H "Authorization: Bearer <anon_key>" \
+--     "https://<project>.supabase.co/rest/v1/quiz_answer_logs?limit=1"
+```
+
+### 6. error_pattern CHECK 制約の動作確認
+- **検証内容**: enum 外の値を INSERT しようとしてエラーになること
+- **期待値**: `ERROR: new row for relation "quiz_answer_logs" violates check constraint`
+
+```sql
+-- 失敗するはず
+INSERT INTO quiz_answer_logs (
+  child_id, subject, mode, question_id, selected_answer,
+  is_correct, response_time_ms, error_pattern
+) VALUES (
+  'test_child', 'math', 'quiz_4choice', 'math_q4_easy_001', '35',
+  FALSE, 5000, 'invalid_pattern_xxx'
+);
+-- → ERROR: violates check constraint
+```
+
+### 成功条件と SQL の対応表
+
+| Phase A 成功条件 | 検証 SQL |
+|---|---|
+| 算数4択で10問完走 | §3 日次セッション (1 日で total_answers = 10 以上) |
+| 誤答ログが error_pattern 込みで記録 | §2 直近 10 件 / §4 error_pattern 別集計 |
+| ALT 加算 / 日次制限 3 回が動作 | localStorage 直接確認 (DB では §3 で日別 row 数だけ確認) |
+| F12 Console エラーゼロ | ブラウザ DevTools 目視 |
+| seed 60 問投入 | §1 難易度別カウント |
+| RLS が最小権限で機能 | §5 anon 権限検証 |
+| enum 逸脱を DB レベルで拒否 | §6 CHECK 制約動作確認 |
+
+---
+
 ## ⚠️ リスク管理
 
 ### 技術
@@ -585,4 +914,21 @@ FOLLOW_UPS 化:
 
 ---
 
-**仕様書 以上 (v1.1)**
+## 📝 v1.2 変更反映サマリ
+
+Phase A 着手前の kk 追加依頼 3 点を以下セクションに反映:
+
+| 追補依頼 | 反映セクション |
+|---|---|
+| A. 問題マスタ 60 問の「フォーマット雛形」先出し | §問題マスタ作成ガイド (新設) — INSERT 雛形 / CSV テンプレ / 具体例 3 問 / 作業フロー |
+| B. 誤答パターン enum の完全リスト確定 | §error_pattern enum 定義 (新設) — 11 種固定 + TypeScript union + DB CHECK 制約 / §DB スキーマ の quiz_answer_logs CHECK 追加 / §Seed 初期投入 の JSONB 例更新 |
+| C. Phase A 完了検証 SQL 同梱 | §Phase A 完了検証 SQL (新設) — 6 クエリ + 成功条件との対応表 |
+
+その他の微修正:
+- 60 問の難易度内訳を 20/25/15 → **20/20/20** (kk 最終確定) に変更
+- `subject` カラムに Phase A 'math' 固定コメント追加 (FU-015 連動)
+- `wrong_answers[]` JSONB 構造に `error_detail` フィールド (任意、フリーテキスト) を明示
+
+---
+
+**仕様書 以上 (v1.2)**
