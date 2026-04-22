@@ -57,6 +57,7 @@ import {
 } from '@/lib/backgrounds';
 import ShopSellTabPage from '@/pages/ShopSellTabPage';
 import ShopBuyTabPage from '@/pages/ShopBuyTabPage';
+import ShopMarketInfoTabPage from '@/pages/ShopMarketInfoTabPage';
 
 // ===== 特別解放条件（レベル以外のロック）=====
 interface SpecialUnlockContext {
@@ -90,6 +91,7 @@ const shopTabs = [
   { id: 'item',   label: 'アイテム', emoji: '🎒', color: '#22c55e' },
   { id: 'buy',    label: '直販',     emoji: '🏪', color: '#06b6d4' },
   { id: 'sell',   label: '売却',     emoji: '💰', color: '#10b981' },
+  { id: 'market', label: '市場情報', emoji: '📊', color: '#f59e0b' },
 ];
 
 const titleEmojis = ['👑', '📚', '🌟'];
@@ -635,6 +637,9 @@ export default function ShopPage() {
         {activeTab === 'sell' && (
           <ShopSellTabPage onAltBalanceChange={setAltBalance} />
         )}
+
+        {/* ========== Market info tab (Commit F) ========== */}
+        {activeTab === 'market' && <ShopMarketInfoTabPage />}
 
         {/* ========== Legacy Title / Item tabs ========== */}
         {(activeTab === 'title' || activeTab === 'item') && (
