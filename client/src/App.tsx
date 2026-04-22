@@ -25,6 +25,7 @@ import GachaPage from "./pages/GachaPage";
 import RankingPage from "./pages/RankingPage";
 import CollectionPage from "./pages/CollectionPage";
 import ShopPage from "./pages/ShopPage";
+import MarketPage from "./pages/MarketPage";
 import MyPage from "./pages/MyPage";
 import ResultPage from "./pages/ResultPage";
 import LoginPage from "./pages/LoginPage";
@@ -85,6 +86,7 @@ function Router() {
             <Route path="/ranking" component={RankingPage} />
             <Route path="/collection" component={CollectionPage} />
             <Route path="/shop" component={ShopPage} />
+            <Route path="/market" component={MarketPage} />
             <Route path="/mypage" component={MyPage} />
             {/* Legacy routes → redirect to unified deck select */}
             <Route path="/games/quest-board"><Redirect to="/games/knowledge-challenger?screen=deck_select" /></Route>
