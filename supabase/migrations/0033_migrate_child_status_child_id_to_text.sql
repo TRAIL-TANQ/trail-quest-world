@@ -1,6 +1,6 @@
 -- ======================================================================
 -- 0033_migrate_child_status_child_id_to_text.sql
--- Commit D.1 (Path F): child_status.child_id を uuid → text に統一
+-- Commit D.1 (Path Z): child_status を DROP → text child_id で再作成
 --
 -- 背景:
 --   child_status テーブルは CREATE TABLE 文が git history に存在せず、
@@ -14,147 +14,119 @@
 --
 -- kk による 2026-04-21 診断結果:
 --   - child_status 件数     = 0 (データロスなし)
---   - gacha_pulls.child_id  = text ("個別_さとる" のような論理 ID)
+--   - children 件数         = 0、アプリコード参照ゼロ (orphan)
 --   - FK child_status_child_id_fkey = public.children(id) を参照
---   - children テーブル     = 0 行、app コード参照ゼロ (orphan)
---   - 他に children.id を参照する FK = なし
+--   - child_status の RLS ポリシー child_status_own は USING 句内で
+--     children(id) に対して uuid 比較を行っている (3 層の依存)
 --
--- 方針: Path F (最小変更、ゼロリスク)
---   - FK child_status_child_id_fkey を DROP (children が orphan なので参照整合性の意義なし)
---   - child_status の RLS ポリシーを save → DROP → ALTER → recreate
---   - child_status.child_id を text に変換
---   - children テーブルは放置 (0 行、app 非参照、別 Issue で整理)
+-- 適用履歴 (今回で 4 回目、複数段階の drift):
+--   - v1 (2026-04-21): ALTER COLUMN TYPE で
+--     "cannot alter type of a column used in a policy definition"
+--   - v2: RLS ポリシー save/restore 実装 →
+--     "foreign key constraint cannot be implemented"
+--   - v3: FK DROP 追加 →
+--     "operator does not exist: text = uuid"
+--     (ポリシー USING 句内の children(id) uuid 比較が残っていた)
+--   - v4 (本版、Path Z): DROP TABLE ... CASCADE で全依存を切り、
+--     text child_id で再作成。app が期待する 8 カラム構成で復元。
 --
--- 適用履歴:
---   - 2026-04-21 初回試行 (v1): "cannot alter type of a column used in a
---     policy definition" エラー。RLS ポリシーが child_id を参照していたため。
---   - 2026-04-21 再試行 (v2): RLS ポリシー save/restore 実装。今度は
---     "foreign key constraint cannot be implemented" エラー (FK が uuid 参照)。
---   - 2026-04-21 本版 (v3): FK DROP を追加。Path F 診断で children が
---     orphan と確定したため FK 再作成は行わない。
+-- Path Z を選んだ理由:
+--   - v1→v2→v3 と 3 段階で依存が発覚し、ALTER 方式は隠れた依存が残る
+--   - データロスゼロ (child_status は 0 行) なので DROP CASCADE 可
+--   - CREATE TABLE で schema を git 管理下に置ける (baseline 化)
+--   - Path F より 1 回で確実に終わる、Phase 1 最短距離
+--
+-- 復元カラム (adminDashboardService.ts:103 の SELECT 一覧を正とした):
+--   child_id / level / xp / alt_points / rating / wins / losses /
+--   created_at / updated_at
+--
+-- RLS 方針:
+--   gacha_pulls / user_profile / quest_progress 等の兄弟 text child_id
+--   テーブルと同じく DISABLE ROW LEVEL SECURITY。市場機能は
+--   SECURITY DEFINER RPC 経由、その他機能は anon 直読み書きという
+--   このプロジェクトの既存パターンを踏襲。
 --
 -- 関連 follow-up (別 Issue、本 migration のスコープ外):
---   - children テーブル自体の整理 (DROP するか、migration 管理下に置くか)
---   - child_status の baseline migration (CREATE TABLE) 作成
+--   - children テーブル (orphan) の整理 (DROP するか残すか)
+--   - child_status_own の代替ポリシー復活検討 (Supabase Auth 導入時)
 --   - quizService.ts:273 の isUuid() ガード撤廃
 --   - 既存プレイヤーの localStorage ALT → child_status.alt_points 移行
 -- ======================================================================
 
 set client_encoding = 'UTF8';
 
--- ---------- FK + RLS ポリシーを退避してから型変換 ----------
--- child_id 列を参照する FK と RLS ポリシーがあると ALTER COLUMN TYPE できないため、
--- それらを先に DROP してから ALTER し、RLS ポリシーのみ元の定義で再作成する。
--- FK は Path F の方針で再作成しない (children が orphan、参照整合性の実質意義なし)。
---
--- DO block 全体は 1 トランザクションで実行されるため、途中で失敗すれば
--- FK / ポリシー / 列型の全てが元の状態にロールバックされる。
-do $$
-declare
-  v_policies  jsonb;
-  v_pol       record;
-  v_roles     text;
-  v_create    text;
-begin
-  -- Step 0: 既知の FK を DROP (children.id への参照を外す)
-  alter table public.child_status
-    drop constraint if exists child_status_child_id_fkey;
-  raise notice '[0033] dropped FK if exists: child_status_child_id_fkey';
+-- ---------- Step 1: 既存 child_status を全依存ごと DROP ----------
+-- CASCADE で以下が一緒に消える:
+--   - FK child_status_child_id_fkey (children.id 参照)
+--   - RLS ポリシー child_status_own (USING 句で children(id) uuid 比較)
+--   - その他 child_status に依存する view / trigger / rule (あれば)
+-- child_status は 0 行のためデータロスなし。
+drop table if exists public.child_status cascade;
 
-  -- Step 1: child_status の全ポリシーを JSONB として保存
-  select jsonb_agg(
-           jsonb_build_object(
-             'policyname', policyname,
-             'cmd',        cmd,
-             'roles',      roles,
-             'qual',       qual,
-             'with_check', with_check
-           )
-         )
-    into v_policies
-    from pg_policies
-   where schemaname = 'public'
-     and tablename  = 'child_status';
 
-  -- Step 2: 既存ポリシーを DROP (型変換のブロッカーを解除)
-  if v_policies is not null then
-    for v_pol in
-      select *
-        from jsonb_to_recordset(v_policies)
-          as x(policyname text, cmd text, roles text[], qual text, with_check text)
-    loop
-      execute format('drop policy if exists %I on public.child_status', v_pol.policyname);
-      raise notice '[0033] dropped policy: %', v_pol.policyname;
-    end loop;
-  end if;
+-- ---------- Step 2: text child_id で child_status を再作成 ----------
+-- adminDashboardService.ts:103 の SELECT 一覧に合わせた 8 カラム +
+-- 整合性のための created_at / CHECK 制約。
+create table public.child_status (
+  child_id    text        primary key,
+  level       integer     not null default 1    check (level >= 1),
+  xp          integer     not null default 0    check (xp >= 0),
+  alt_points  integer     not null default 0    check (alt_points >= 0),
+  rating      integer     not null default 1000,
+  wins        integer     not null default 0    check (wins >= 0),
+  losses      integer     not null default 0    check (losses >= 0),
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
 
-  -- Step 3: 列型を変換 (uuid → text)
-  alter table public.child_status
-    alter column child_id type text using child_id::text;
-  raise notice '[0033] child_status.child_id altered to text';
-
-  -- Step 4: 保存しておいたポリシーを再作成 (FK は再作成しない)
-  if v_policies is not null then
-    for v_pol in
-      select *
-        from jsonb_to_recordset(v_policies)
-          as x(policyname text, cmd text, roles text[], qual text, with_check text)
-    loop
-      v_create := format('create policy %I on public.child_status', v_pol.policyname);
-
-      -- FOR <cmd> (ALL / SELECT / INSERT / UPDATE / DELETE)
-      if v_pol.cmd is not null then
-        v_create := v_create || ' for ' || v_pol.cmd;
-      end if;
-
-      -- TO <roles>
-      if v_pol.roles is not null and array_length(v_pol.roles, 1) > 0 then
-        select string_agg(quote_ident(r), ', ')
-          into v_roles
-          from unnest(v_pol.roles) as r;
-        v_create := v_create || ' to ' || v_roles;
-      end if;
-
-      -- USING (<qual>)
-      if v_pol.qual is not null then
-        v_create := v_create || ' using (' || v_pol.qual || ')';
-      end if;
-
-      -- WITH CHECK (<with_check>)
-      if v_pol.with_check is not null then
-        v_create := v_create || ' with check (' || v_pol.with_check || ')';
-      end if;
-
-      execute v_create;
-      raise notice '[0033] recreated policy: %', v_create;
-    end loop;
-  end if;
-end $$;
-
+comment on table public.child_status is
+  '生徒ごとのステータス (ALT/XP/level/rating/wins/losses)。'
+  '2026-04-21 Path Z で uuid → text に再構築 (0033 v4)。'
+  'RLS は他の text child_id テーブルと同じく disabled。';
 comment on column public.child_status.child_id is
-  '論理 child_id (text)。他の全テーブルと統一。例: "個別_さとる" / "スターター_はるか"。'
-  '2026-04-21 に uuid → text へ変更 (0033 Path F: FK と RLS policy を退避してから ALTER)。';
+  '論理 child_id (text)。他の全テーブル (gacha_pulls / card_transactions 等) と共通。'
+  '例: "個別_さとる" / "スターター_はるか"。';
+comment on column public.child_status.alt_points is 'ALT 残高 (市場機能の正本)';
+comment on column public.child_status.rating is 'バトルレーティング (Elo)、default 1000';
+
+
+-- ---------- Step 3: RLS disabled (兄弟テーブルと揃える) ----------
+-- gacha_pulls / user_profile / quest_progress / quiz_history / alt_game_scores
+-- 等は全て RLS DISABLE。Supabase Auth 未導入のためポリシーで enforce
+-- できない現状ではこれがプロジェクトの既存パターン。
+alter table public.child_status disable row level security;
+
+
+-- ---------- Step 4: 基本インデックス ----------
+-- rating / alt_points で降順ソート (ranking page) する既存クエリのため。
+-- 0 行でも pg_class 登録されていれば将来のパフォーマンスは担保される。
+create index if not exists idx_child_status_rating_desc
+  on public.child_status (rating desc);
+create index if not exists idx_child_status_alt_points_desc
+  on public.child_status (alt_points desc);
 
 
 -- ---------- 確認クエリ (手動実行用) ----------
 --
--- -- 型が text になったか確認
--- select column_name, data_type, udt_name
+-- -- (a) テーブル構造確認
+-- select column_name, data_type, column_default, is_nullable
 --   from information_schema.columns
---  where table_schema = 'public'
---    and table_name = 'child_status'
---    and column_name = 'child_id';
--- -- 期待: data_type='text', udt_name='text'
+--  where table_schema = 'public' and table_name = 'child_status'
+--  order by ordinal_position;
+-- -- 期待: 9 カラム、child_id=text、他は integer / timestamptz
 --
--- -- FK が消えているか確認
--- select conname, pg_get_constraintdef(oid)
---   from pg_constraint c
---   join pg_class t on t.oid = c.conrelid
---  where t.relname = 'child_status' and c.contype = 'f';
--- -- 期待: 0 行 (child_status_child_id_fkey は DROP 済み)
+-- -- (b) FK / ポリシーが残っていないか確認
+-- select conname from pg_constraint c join pg_class t on t.oid=c.conrelid
+--  where t.relname='child_status' and c.contype='f';
+-- -- 期待: 0 行
 --
--- -- RLS ポリシーが元通り再作成されたか確認
--- select policyname, cmd, roles, qual, with_check
---   from pg_policies
---  where schemaname = 'public' and tablename = 'child_status';
--- -- 期待: ALTER 前と同じ行が並ぶ (policyname / cmd / qual / with_check すべて一致)
+-- select policyname from pg_policies
+--  where schemaname='public' and tablename='child_status';
+-- -- 期待: 0 行
+--
+-- -- (c) text child_id でテスト INSERT (ロールバック前提)
+-- -- begin;
+-- --   insert into public.child_status (child_id) values ('個別_テスト');
+-- --   select * from public.child_status where child_id = '個別_テスト';
+-- -- rollback;
+-- -- 期待: 1 行、alt_points=0, level=1, rating=1000 等の default 値
