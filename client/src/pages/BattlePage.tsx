@@ -32,6 +32,7 @@ import {
 } from '@/lib/battleService';
 import type {
   BattleCardInstance,
+  BattleLeaderRow,
   BattleState,
   BattleWinner,
   BoardSlot,
@@ -126,7 +127,8 @@ export default function BattlePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAIThinking, setIsAIThinking] = useState(false);
-  const [leaderImageMap, setLeaderImageMap] = useState<Map<string, string>>(
+  // リーダー row を id でひく。image_url と life (最大ライフ) の両方をここから取る。
+  const [leaderRowMap, setLeaderRowMap] = useState<Map<string, BattleLeaderRow>>(
     new Map(),
   );
   const [selectedAttacker, setSelectedAttacker] =
@@ -151,13 +153,13 @@ export default function BattlePage() {
     let cancelled = false;
     (async () => {
       try {
-        // リーダー一覧を先に取得し、UI 用の imageUrl Map を構築
+        // リーダー一覧を先に取得し、UI 用の row Map を構築 (image_url + life 取得用)
         const leadersList = await fetchLeaders();
-        const lMap = new Map<string, string>();
+        const lMap = new Map<string, BattleLeaderRow>();
         for (const l of leadersList) {
-          lMap.set(l.id, l.image_url ?? '');
+          lMap.set(l.id, l);
         }
-        if (!cancelled) setLeaderImageMap(lMap);
+        if (!cancelled) setLeaderRowMap(lMap);
 
         // Pick AI opponent: any preset deck whose leader !== my leader, random choice.
         const presets = await fetchPresetDecks();
@@ -480,13 +482,24 @@ export default function BattlePage() {
   const canPlayerAct = isPlayerActing();
   const attackerSelected = selectedAttacker !== null;
 
+  // リーダー row からの派生値 (未ロード時は 3 にフォールバック)
+  const p1Row = leaderRowMap.get(p1.leader.id);
+  const p2Row = leaderRowMap.get(p2.leader.id);
+  const p1ImageUrl = p1Row?.image_url ?? '';
+  const p2ImageUrl = p2Row?.image_url ?? '';
+  const p1MaxLife = p1Row?.life ?? 3;
+  const p2MaxLife = p2Row?.life ?? 3;
+
   return (
     <div className="min-h-full px-2 pt-2 pb-4 text-white bg-black/40">
       {/* ====== 相手エリア ====== */}
       <OpponentPanel
         leader={p2.leader}
-        leaderImageUrl={leaderImageMap.get(p2.leader.id) ?? ''}
+        leaderImageUrl={p2ImageUrl}
+        currentCost={p2.currentCost}
+        maxCost={p2.maxCost}
         lifeCount={p2.lifeCards.length}
+        maxLife={p2MaxLife}
         handCount={p2.hand.length}
         deckCount={p2.deck.length}
         targetable={attackerSelected}
@@ -505,7 +518,7 @@ export default function BattlePage() {
         }
       />
 
-      {/* ====== 中央情報 ====== */}
+      {/* ====== 中央情報 (探究マナはリーダー欄に移動済) ====== */}
       <div className="flex items-center justify-between my-3 px-2 py-2 rounded-lg bg-white/5 border border-white/10">
         <div className="text-xs text-white/70">
           ターン <span className="text-white font-bold">{state.turn}</span>
@@ -515,17 +528,10 @@ export default function BattlePage() {
           </span>
         </div>
         <div className="text-xs">
-          探究マナ:{' '}
-          <span className="text-yellow-300 font-bold">
-            {p1.currentCost}
-          </span>
-          <span className="text-white/50">/{p1.maxCost}</span>
-        </div>
-        <div className="text-xs">
           {state.activePlayer === 'p1' ? (
-            <span className="text-green-400">あなたの番</span>
+            <span className="text-green-400 font-bold">あなたの番</span>
           ) : (
-            <span className="text-red-400">
+            <span className="text-red-400 font-bold">
               {isAIThinking ? '相手が考え中…' : '相手の番'}
             </span>
           )}
@@ -541,16 +547,17 @@ export default function BattlePage() {
         onSlotClick={(slot) => handleSelectAttacker(slot.card.instanceId)}
       />
 
-      {/* ====== 自分のリーダー / ライフ ====== */}
-      <div className="flex items-center gap-3 mt-2 px-2 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
+      {/* ====== 自分のリーダー / マナ / ライフ ====== */}
+      <div className="flex items-center gap-2 mt-2 px-2 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
         <LeaderBadge
           leader={p1.leader}
-          imageUrl={leaderImageMap.get(p1.leader.id) ?? ''}
+          imageUrl={p1ImageUrl}
           onClick={() => handleSelectAttacker('leader')}
           isSelected={selectedAttacker === 'leader'}
           canPlayerAct={canPlayerAct}
         />
-        <LifePips count={p1.lifeCards.length} max={3} color="yellow" />
+        <ManaDisplay current={p1.currentCost} max={p1.maxCost} />
+        <LifePips count={p1.lifeCards.length} max={p1MaxLife} color="yellow" />
         <div className="text-[10px] text-white/60 ml-auto">
           手札{p1.hand.length}・山札{p1.deck.length}
         </div>
@@ -615,7 +622,10 @@ export default function BattlePage() {
 function OpponentPanel({
   leader,
   leaderImageUrl,
+  currentCost,
+  maxCost,
   lifeCount,
+  maxLife,
   handCount,
   deckCount,
   targetable,
@@ -623,24 +633,42 @@ function OpponentPanel({
 }: {
   leader: LeaderState;
   leaderImageUrl: string;
+  currentCost: number;
+  maxCost: number;
   lifeCount: number;
+  maxLife: number;
   handCount: number;
   deckCount: number;
   targetable: boolean;
   onLeaderClick: () => void;
 }) {
   return (
-    <div className="flex items-center gap-3 px-2 py-2 rounded-lg bg-red-900/20 border border-red-500/30">
+    <div className="flex items-center gap-2 px-2 py-2 rounded-lg bg-red-900/20 border border-red-500/30">
       <LeaderBadge
         leader={leader}
         imageUrl={leaderImageUrl}
         onClick={onLeaderClick}
         targetable={targetable}
       />
-      <LifePips count={lifeCount} max={3} color="red" />
+      <ManaDisplay current={currentCost} max={maxCost} />
+      <LifePips count={lifeCount} max={maxLife} color="red" />
       <div className="text-[10px] text-white/60 ml-auto">
         手札{handCount}・山札{deckCount}
       </div>
+    </div>
+  );
+}
+
+/**
+ * 探究マナ表示 (現在値 / 最大値)。
+ * 💎 絵文字 + シアン系でマナ属性を示す。リーダー欄に配置。
+ */
+function ManaDisplay({ current, max }: { current: number; max: number }) {
+  return (
+    <div className="flex items-center gap-0.5 text-xs whitespace-nowrap">
+      <span className="text-sm leading-none">💎</span>
+      <span className="text-cyan-300 font-bold">{current}</span>
+      <span className="text-white/50">/{max}</span>
     </div>
   );
 }

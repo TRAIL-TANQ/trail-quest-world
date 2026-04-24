@@ -20,6 +20,26 @@ export type BattleColor =
 
 export type CardType = 'character' | 'event' | 'stage';
 
+/**
+ * ライフトリガー効果の種別 (v2.0-launch で追加)。
+ * デッキ 30 枚中 5 枚がトリガー持ち。リーダー命中時にめくれたライフカードが
+ * トリガーを持っていれば、手札へ戻る前に効果発動。
+ *
+ * - draw    : 防御側が 1 枚ドロー
+ * - mana    : 次ターンの防御側 maxCost を +2 (1 ターンのみ)
+ * - destroy : 攻撃側の場の最弱キャラ 1 体を破壊
+ * - defense : 今回の攻撃を無効化、ライフ減らない (カードは手札へ)
+ * - revive  : 防御側の墓地から 1 枚を手札に戻す
+ * - null    : トリガーなし (通常カード)
+ */
+export type TriggerType =
+  | 'draw'
+  | 'mana'
+  | 'destroy'
+  | 'defense'
+  | 'revive'
+  | null;
+
 export type BattleDifficulty = 'easy' | 'normal' | 'hard';
 
 export type BattlePhase = 'refresh' | 'draw' | 'cost' | 'main' | 'end';
@@ -54,6 +74,7 @@ export interface BattleCardMetaRow {
   color: BattleColor;
   is_leader: boolean;            // v2.0: false 固定
   effect_text: string | null;    // v2.0: null
+  trigger_type: TriggerType;     // v2.0-launch で追加、各デッキ 30 枚中 5 枚が非 null
   created_at: string;
 }
 
@@ -107,6 +128,7 @@ export interface BattleCardInstance {
   color: BattleColor;
   cardType: CardType;
   effectText: string | null;
+  triggerType: TriggerType;      // null = 通常カード (非トリガー)
 }
 
 /**
@@ -148,6 +170,8 @@ export interface PlayerState {
   currentCost: number;               // 残コスト
   maxCost: number;                   // = turn number、max 10
   hasDrawnThisTurn: boolean;
+  nextTurnManaBonus?: number;        // 'mana' トリガーが発動した時に +2、次ターンの
+                                     // cost フェーズで消費される。未定義/0 は効果なし。
 }
 
 /**
@@ -163,7 +187,9 @@ export type BattleEventType =
   | 'life_damaged'
   | 'card_destroyed'
   | 'turn_end'
-  | 'game_over';
+  | 'game_over'
+  | 'trigger_activated'   // ライフカードのトリガー効果発動
+  | 'defense_blocked';    // 'defense' トリガーにより攻撃無効化
 
 export interface BattleEvent {
   eventId: string;

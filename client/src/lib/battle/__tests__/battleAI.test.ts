@@ -30,6 +30,7 @@ function makeCard(
     defensePower: number;
     color: BattleColor;
     instanceId: string;
+    triggerType: BattleCardInstance['triggerType'];
   }> = {},
 ): BattleCardInstance {
   return {
@@ -43,6 +44,7 @@ function makeCard(
     color: opts.color ?? 'red',
     cardType: 'character',
     effectText: null,
+    triggerType: opts.triggerType ?? null,
   };
 }
 

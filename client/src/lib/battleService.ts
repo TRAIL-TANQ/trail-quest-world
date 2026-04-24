@@ -25,6 +25,7 @@ import type {
   BattleLeaderRow,
   BattleResult,
   BattleState,
+  TriggerType,
 } from './battle/battleTypes';
 
 // ---- カード名 / 画像 の lookup (cardData.ts = 既存 226 枚マスタから取得) ----
@@ -252,6 +253,9 @@ export function expandDeck(
       continue;
     }
     const display = getCardDisplay(dc.card_id);
+    // DB に trigger_type カラム未追加の状態でも安全に動くよう undefined → null に正規化
+    const triggerType =
+      (meta as { trigger_type?: TriggerType }).trigger_type ?? null;
     for (let i = 0; i < dc.count; i++) {
       out.push({
         instanceId: nanoid(10),
@@ -264,6 +268,7 @@ export function expandDeck(
         color: meta.color,
         cardType: meta.card_type,
         effectText: meta.effect_text,
+        triggerType,
       });
     }
   }

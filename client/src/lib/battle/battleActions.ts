@@ -373,17 +373,19 @@ function applyAttack(state: BattleState, action: AttackAction): ActionResult {
 
   // --- ダメージ処理 ---
   if (action.targetSource.kind === 'leader') {
-    // リーダーにヒット
-    if (
-      defenderPlayer.leader.life === 0 ||
-      defenderPlayer.lifeCards.length === 0
-    ) {
-      // ライフ 0 で被ダメージ → game_over
+    // リーダーにヒット (v2.0-launch 勝敗ルール明確化)
+    //   - シールド > 0: 1 枚消費して手札へ、leader.life = lifeCards.length で同期
+    //   - シールド == 0: リーダー破壊、attacker 勝利 (reason='leader_destroyed')
+    if (defenderPlayer.lifeCards.length === 0) {
       const winner = attackerSide;
+      console.log('[applyAttack] shield 0 + hit → leader destroyed', {
+        winner,
+        loser: defenderSide,
+      });
       const goEvent = makeEvent('game_over', state.turn, attackerSide, {
         winner,
         loser: defenderSide,
-        reason: 'life_depleted',
+        reason: 'leader_destroyed',
       });
       events.push(goEvent);
       const finalState = commit(workingState, state.log, events, {
@@ -392,12 +394,11 @@ function applyAttack(state: BattleState, action: AttackAction): ActionResult {
       });
       return { ok: true, newState: finalState, events };
     }
-    // 残ライフあり → ライフ 1 枚を手札へ移動
-    console.log('[applyAttack] applying leader damage', {
+    // シールドあり → 1 枚消費して手札へ
+    console.log('[applyAttack] shield consumed', {
       defenderSide,
-      lifeBefore: defenderPlayer.leader.life,
-      lifeAfter: defenderPlayer.leader.life - 1,
-      lifeCardsLenBefore: defenderPlayer.lifeCards.length,
+      shieldBefore: defenderPlayer.lifeCards.length,
+      shieldAfter: defenderPlayer.lifeCards.length - 1,
       handLenBefore: defenderPlayer.hand.length,
     });
     const topLife = defenderPlayer.lifeCards[0];
@@ -407,7 +408,7 @@ function applyAttack(state: BattleState, action: AttackAction): ActionResult {
       lifeCards: restLife,
       leader: {
         ...defenderPlayer.leader,
-        life: defenderPlayer.leader.life - 1,
+        life: restLife.length, // lifeCards.length との同期 (source of truth = lifeCards)
       },
       hand: [...defenderPlayer.hand, topLife],
     };

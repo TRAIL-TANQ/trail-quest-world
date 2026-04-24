@@ -37,6 +37,7 @@ function makeCard(
     defensePower: number;
     color: BattleColor;
     instanceId: string;
+    triggerType: BattleCardInstance['triggerType'];
   }> = {},
 ): BattleCardInstance {
   return {
@@ -50,6 +51,7 @@ function makeCard(
     color: opts.color ?? 'red',
     cardType: 'character',
     effectText: null,
+    triggerType: opts.triggerType ?? null,
   };
 }
 
@@ -361,11 +363,11 @@ describe('battleActions.applyAction (attack leader)', () => {
 });
 
 // ============================================================================
-// シナリオ 6: ライフ 0 + 被ダメージ → game_over
+// シナリオ 6: シールド 0 状態で突破成功 → game_over (勝敗ルール明確化 D4.3)
 // ============================================================================
 
-describe('battleActions.applyAction (attack when life is 0)', () => {
-  it('ライフ 0 (lifeCards 空) の状態で更にリーダーにヒット → winner が確定', () => {
+describe('battleActions.applyAction (shield 0 + breakthrough)', () => {
+  it('シールド 0 (lifeCards 空) の状態で突破成功 → attacker 勝利、reason=leader_destroyed', () => {
     const p1Leader = makeLeader('l_p1', { attackPower: 5 });
     const p2Leader = makeLeader('l_p2', { life: 0, defensePower: 3 });
     const attacker = makeCard('c_final', { attackPower: 5 });
@@ -386,7 +388,7 @@ describe('battleActions.applyAction (attack when life is 0)', () => {
           hasDrawnThisTurn: true,
         }),
         p2: makeEmptyPlayer('ai', p2Leader, {
-          // 手動で life=0 に上書き
+          // 手動で life=0 に上書き + lifeCards 空 = シールド 0
           leader: { ...leaderRowToState(p2Leader), life: 0 },
           lifeCards: [],
         }),
@@ -406,7 +408,10 @@ describe('battleActions.applyAction (attack when life is 0)', () => {
     if (result.ok) {
       expect(result.newState.winner).toBe('p1');
       expect(result.newState.endedAt).not.toBeNull();
-      expect(result.events.some((e) => e.type === 'game_over')).toBe(true);
+      const goEvent = result.events.find((e) => e.type === 'game_over');
+      expect(goEvent).toBeDefined();
+      expect(goEvent?.payload.reason).toBe('leader_destroyed');
+      expect(goEvent?.payload.winner).toBe('p1');
     }
   });
 });
