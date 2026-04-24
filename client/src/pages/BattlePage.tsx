@@ -3,19 +3,26 @@
  *
  * v2.0-launch: 最小完走版。AI は Easy 固定。マリガン自動 keep。
  *
- * D3 段階の実装スコープ:
+ * D4 段階の実装スコープ:
  *   - URL params から leaderId / deckId を読み取り、startBattle を呼ぶ
  *   - 初期 state を refresh→draw→cost→main まで自動進行
  *   - 手札 / 自分ボード / 相手ボード / ライフ / コストの可視化
- *   - エンドターン (end_turn) → AI ターン (runAITurn) の自動進行
- *   - 手札タップ / ボードタップ / 降参 などのインタラクションは D4 で追加
+ *   - エンドターン (end_turn) + AI ターン (runAITurn) 自動進行
+ *   - 手札タップで play_card (コスト判定 OK なら即発動)
+ *   - 自分キャラ/リーダータップでアタッカー選択 (視覚ハイライト)
+ *   - 敵キャラ (レスト中) / 敵リーダータップで attack
+ *   - 降参ボタン (確認ダイアログ → surrender)
+ *   - state.winner 確定で BattleResultModal 表示
+ *     - 勝利: 「やったね!」+ ALT +10 表示
+ *     - 敗北: 「つぎはがんばろう」+ ALT +2 表示
+ *     - [もう一度] /battle/select / [ホームへ] /
  */
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { getChildId } from '@/lib/auth';
 import { applyAction } from '@/lib/battle/battleActions';
 import { runAITurn } from '@/lib/battle/battleAI';
-import { advancePhase } from '@/lib/battle/battleEngine';
+import { advancePhase, BOARD_MAX_SLOTS } from '@/lib/battle/battleEngine';
 import {
   fetchLeaders,
   fetchPresetDecks,
@@ -26,9 +33,17 @@ import {
 import type {
   BattleCardInstance,
   BattleState,
+  BattleWinner,
   BoardSlot,
   LeaderState,
 } from '@/lib/battle/battleTypes';
+
+// アタッカー選択 ID の型: null=未選択 / 'leader'=リーダー / それ以外=character.instanceId
+type SelectedAttacker = null | 'leader' | string;
+
+// v2.0-launch 固定の ALT 報酬 (D5 で altGameService.processBattleResult に統合予定)
+const ALT_REWARD_WIN = 10;
+const ALT_REWARD_LOSE = 2;
 
 // ---- CardImage: 404 時に placeholder にフォールバックする <img> ラッパ -----
 
@@ -114,6 +129,8 @@ export default function BattlePage() {
   const [leaderImageMap, setLeaderImageMap] = useState<Map<string, string>>(
     new Map(),
   );
+  const [selectedAttacker, setSelectedAttacker] =
+    useState<SelectedAttacker>(null);
 
   // URL params
   const params = useMemo(() => {
@@ -255,6 +272,90 @@ export default function BattlePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
 
+  // --- プレイヤー操作可能かの判定 -------------------------------------------
+
+  function isPlayerActing(): boolean {
+    return Boolean(
+      state &&
+        !state.winner &&
+        state.activePlayer === 'p1' &&
+        state.phase === 'main' &&
+        !isAIThinking,
+    );
+  }
+
+  // --- 手札タップ: play_card --------------------------------------------------
+
+  function handlePlayCard(card: BattleCardInstance) {
+    if (!state || !isPlayerActing()) return;
+    if (state.players.p1.currentCost < card.cost) return;
+    if (state.players.p1.board.length >= BOARD_MAX_SLOTS) return;
+
+    const result = applyAction(state, {
+      type: 'play_card',
+      player: 'p1',
+      timestamp: new Date().toISOString(),
+      cardInstanceId: card.instanceId,
+    });
+    if (!result.ok) {
+      console.warn('[BattlePage] play_card failed:', result.code, result.reason);
+      return;
+    }
+    setState(result.newState);
+    setSelectedAttacker(null);
+  }
+
+  // --- 自キャラ/リーダータップ: アタッカー選択トグル -------------------------
+
+  function handleSelectAttacker(id: SelectedAttacker) {
+    if (!state || !isPlayerActing()) return;
+
+    // 選択可能か (レスト/サモニング病チェック)
+    if (id === 'leader') {
+      if (state.players.p1.leader.isRested) return;
+    } else if (id !== null) {
+      const slot = state.players.p1.board.find(
+        (s) => s.card.instanceId === id,
+      );
+      if (!slot || slot.isRested || !slot.canAttackThisTurn) return;
+    }
+
+    setSelectedAttacker((prev) => (prev === id ? null : id));
+  }
+
+  // --- 敵タップ: attack 実行 --------------------------------------------------
+
+  function handleAttackTarget(
+    target: { kind: 'leader' } | { kind: 'character'; instanceId: string },
+  ) {
+    if (!state || !isPlayerActing()) return;
+    if (selectedAttacker === null) return;
+
+    const attackerSource =
+      selectedAttacker === 'leader'
+        ? ({ kind: 'leader' } as const)
+        : ({ kind: 'character', instanceId: selectedAttacker } as const);
+
+    const result = applyAction(state, {
+      type: 'attack',
+      player: 'p1',
+      timestamp: new Date().toISOString(),
+      attackerSource,
+      targetSource: target,
+    });
+
+    // 成否を問わず、選択状態はクリア
+    setSelectedAttacker(null);
+
+    if (!result.ok) {
+      console.warn('[BattlePage] attack failed:', result.code, result.reason);
+      return;
+    }
+    setState(result.newState);
+  }
+
+  // --- エンドターン ------------------------------------------------------------
+
   function handleEndTurn() {
     if (!state || state.winner) return;
     if (state.activePlayer !== 'p1' || state.phase !== 'main') return;
@@ -268,6 +369,27 @@ export default function BattlePage() {
       return;
     }
     setState(result.newState);
+    setSelectedAttacker(null);
+  }
+
+  // --- 降参 --------------------------------------------------------------------
+
+  function handleSurrender() {
+    if (!state || state.winner) return;
+    if (!isPlayerActing()) return;
+    const ok = window.confirm('ほんとうに降参する？');
+    if (!ok) return;
+    const result = applyAction(state, {
+      type: 'surrender',
+      player: 'p1',
+      timestamp: new Date().toISOString(),
+    });
+    if (!result.ok) {
+      console.warn('[BattlePage] surrender failed:', result.code, result.reason);
+      return;
+    }
+    setState(result.newState);
+    setSelectedAttacker(null);
   }
 
   // ---- render --------------------------------------------------------------
@@ -297,6 +419,8 @@ export default function BattlePage() {
   const p1 = state.players.p1;
   const p2 = state.players.p2;
   const isPlayerTurn = state.activePlayer === 'p1' && !isAIThinking;
+  const canPlayerAct = isPlayerActing();
+  const attackerSelected = selectedAttacker !== null;
 
   return (
     <div className="min-h-full px-2 pt-2 pb-4 text-white bg-black/40">
@@ -307,8 +431,21 @@ export default function BattlePage() {
         lifeCount={p2.lifeCards.length}
         handCount={p2.hand.length}
         deckCount={p2.deck.length}
+        targetable={attackerSelected}
+        onLeaderClick={() => handleAttackTarget({ kind: 'leader' })}
       />
-      <BoardRow board={p2.board} isOwnSide={false} />
+      <BoardRow
+        board={p2.board}
+        isOwnSide={false}
+        selectedAttackerId={selectedAttacker}
+        canPlayerAct={canPlayerAct}
+        onSlotClick={(slot) =>
+          handleAttackTarget({
+            kind: 'character',
+            instanceId: slot.card.instanceId,
+          })
+        }
+      />
 
       {/* ====== 中央情報 ====== */}
       <div className="flex items-center justify-between my-3 px-2 py-2 rounded-lg bg-white/5 border border-white/10">
@@ -338,13 +475,22 @@ export default function BattlePage() {
       </div>
 
       {/* ====== 自分の場 ====== */}
-      <BoardRow board={p1.board} isOwnSide />
+      <BoardRow
+        board={p1.board}
+        isOwnSide
+        selectedAttackerId={selectedAttacker}
+        canPlayerAct={canPlayerAct}
+        onSlotClick={(slot) => handleSelectAttacker(slot.card.instanceId)}
+      />
 
       {/* ====== 自分のリーダー / ライフ ====== */}
       <div className="flex items-center gap-3 mt-2 px-2 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
         <LeaderBadge
           leader={p1.leader}
           imageUrl={leaderImageMap.get(p1.leader.id) ?? ''}
+          onClick={() => handleSelectAttacker('leader')}
+          isSelected={selectedAttacker === 'leader'}
+          canPlayerAct={canPlayerAct}
         />
         <LifePips count={p1.lifeCards.length} max={3} color="yellow" />
         <div className="text-[10px] text-white/60 ml-auto">
@@ -358,9 +504,20 @@ export default function BattlePage() {
           {p1.hand.length === 0 ? (
             <div className="text-white/40 text-xs py-4 px-2">手札なし</div>
           ) : (
-            p1.hand.map((card) => (
-              <HandCard key={card.instanceId} card={card} playable={false} />
-            ))
+            p1.hand.map((card) => {
+              const playable =
+                canPlayerAct &&
+                card.cost <= p1.currentCost &&
+                p1.board.length < BOARD_MAX_SLOTS;
+              return (
+                <HandCard
+                  key={card.instanceId}
+                  card={card}
+                  playable={playable}
+                  onPlay={() => handlePlayCard(card)}
+                />
+              );
+            })
           )}
         </div>
       </div>
@@ -369,19 +526,28 @@ export default function BattlePage() {
       <div className="mt-3 flex gap-2">
         <button
           onClick={handleEndTurn}
-          disabled={!isPlayerTurn}
+          disabled={!isPlayerTurn || Boolean(state.winner)}
           className="flex-1 py-3 rounded-lg font-bold text-base bg-yellow-500 text-black disabled:bg-white/10 disabled:text-white/40"
         >
           エンドターン
         </button>
         <button
-          disabled
-          className="px-4 py-3 rounded-lg text-sm bg-red-900/40 text-white/40 border border-red-500/20"
-          title="降参 (D4 で有効化)"
+          onClick={handleSurrender}
+          disabled={!canPlayerAct}
+          className="px-4 py-3 rounded-lg text-sm bg-red-900/60 text-white border border-red-500/40 disabled:bg-red-900/20 disabled:text-white/30 disabled:border-red-500/10"
         >
           降参
         </button>
       </div>
+
+      {/* ====== 勝敗モーダル ====== */}
+      {state.winner && (
+        <BattleResultModal
+          winner={state.winner}
+          onReplay={() => navigate('/battle/select')}
+          onHome={() => navigate('/')}
+        />
+      )}
     </div>
   );
 }
@@ -394,16 +560,25 @@ function OpponentPanel({
   lifeCount,
   handCount,
   deckCount,
+  targetable,
+  onLeaderClick,
 }: {
   leader: LeaderState;
   leaderImageUrl: string;
   lifeCount: number;
   handCount: number;
   deckCount: number;
+  targetable: boolean;
+  onLeaderClick: () => void;
 }) {
   return (
     <div className="flex items-center gap-3 px-2 py-2 rounded-lg bg-red-900/20 border border-red-500/30">
-      <LeaderBadge leader={leader} imageUrl={leaderImageUrl} />
+      <LeaderBadge
+        leader={leader}
+        imageUrl={leaderImageUrl}
+        onClick={onLeaderClick}
+        targetable={targetable}
+      />
       <LifePips count={lifeCount} max={3} color="red" />
       <div className="text-[10px] text-white/60 ml-auto">
         手札{handCount}・山札{deckCount}
@@ -415,12 +590,35 @@ function OpponentPanel({
 function LeaderBadge({
   leader,
   imageUrl,
+  onClick,
+  isSelected = false,
+  canPlayerAct = false,
+  targetable = false,
 }: {
   leader: LeaderState;
   imageUrl: string;
+  onClick?: () => void;
+  isSelected?: boolean;
+  canPlayerAct?: boolean;
+  targetable?: boolean;
 }) {
+  // 自リーダー: canPlayerAct && !rested で clickable
+  // 敵リーダー: targetable (= 自側で attacker 選択済み) で clickable
+  const clickable = Boolean(
+    onClick && (targetable || (canPlayerAct && !leader.isRested)),
+  );
+  const ringClass = isSelected
+    ? 'ring-4 ring-yellow-300'
+    : targetable
+      ? 'ring-2 ring-red-400 animate-pulse'
+      : '';
   return (
-    <div className="flex items-center gap-2">
+    <button
+      type="button"
+      onClick={clickable ? onClick : undefined}
+      disabled={!clickable}
+      className={`flex items-center gap-2 text-left rounded-lg ${clickable ? 'cursor-pointer' : 'cursor-default'} ${ringClass}`}
+    >
       <div className="w-12 h-12 rounded-lg overflow-hidden border border-white/20 bg-black/40 flex items-center justify-center">
         <LeaderImage
           src={imageUrl}
@@ -437,7 +635,7 @@ function LeaderBadge({
           {leader.isRested && <span className="ml-1 text-white/50">(rest)</span>}
         </div>
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -468,12 +666,20 @@ function LifePips({
 function BoardRow({
   board,
   isOwnSide,
+  selectedAttackerId,
+  canPlayerAct,
+  onSlotClick,
 }: {
   board: BoardSlot[];
   isOwnSide: boolean;
+  selectedAttackerId: SelectedAttacker;
+  canPlayerAct: boolean;
+  onSlotClick: (slot: BoardSlot) => void;
 }) {
   const slots: (BoardSlot | null)[] = [...board];
   while (slots.length < 5) slots.push(null);
+
+  const attackerActive = selectedAttackerId !== null;
 
   return (
     <div
@@ -482,22 +688,67 @@ function BoardRow({
       } border-white/10 py-2`}
     >
       {slots.map((slot, i) => (
-        <BoardCardSlot key={i} slot={slot} />
+        <BoardCardSlot
+          key={i}
+          slot={slot}
+          isOwnSide={isOwnSide}
+          isSelected={
+            isOwnSide &&
+            slot !== null &&
+            selectedAttackerId === slot.card.instanceId
+          }
+          canPlayerAct={canPlayerAct}
+          attackerActive={attackerActive}
+          onClick={slot ? () => onSlotClick(slot) : undefined}
+        />
       ))}
     </div>
   );
 }
 
-function BoardCardSlot({ slot }: { slot: BoardSlot | null }) {
+function BoardCardSlot({
+  slot,
+  isOwnSide,
+  isSelected,
+  canPlayerAct,
+  attackerActive,
+  onClick,
+}: {
+  slot: BoardSlot | null;
+  isOwnSide: boolean;
+  isSelected: boolean;
+  canPlayerAct: boolean;
+  attackerActive: boolean;
+  onClick?: () => void;
+}) {
   if (!slot) {
     return (
       <div className="flex-1 aspect-[3/4] rounded-md border border-dashed border-white/10 bg-black/20" />
     );
   }
 
+  // クリック可否:
+  //   自側: canPlayerAct かつ !rested かつ canAttack
+  //   敵側: attackerActive (自側で attacker 選択中) かつ (リーダー or rested char)
+  //         このコンポーネントは char スロット専用なので rested が要求される
+  const clickable = isOwnSide
+    ? canPlayerAct && !slot.isRested && slot.canAttackThisTurn
+    : attackerActive && slot.isRested;
+
+  const ringClass = isSelected
+    ? 'ring-4 ring-yellow-300'
+    : clickable && !isOwnSide
+      ? 'ring-2 ring-red-400 animate-pulse'
+      : clickable && isOwnSide
+        ? 'ring-1 ring-yellow-400/60 hover:ring-yellow-300'
+        : '';
+
   return (
-    <div
-      className="relative flex-1 aspect-[3/4] rounded-md overflow-hidden border border-yellow-400/40 bg-black/60 transition-transform"
+    <button
+      type="button"
+      onClick={clickable ? onClick : undefined}
+      disabled={!clickable}
+      className={`relative flex-1 aspect-[3/4] rounded-md overflow-hidden border border-yellow-400/40 bg-black/60 transition-transform ${ringClass} ${clickable ? 'cursor-pointer' : 'cursor-default'}`}
       style={{ transform: slot.isRested ? 'rotate(12deg)' : 'none' }}
     >
       <CardImage
@@ -517,6 +768,74 @@ function BoardCardSlot({ slot }: { slot: BoardSlot | null }) {
           sick
         </div>
       )}
+    </button>
+  );
+}
+
+// ---- 勝敗モーダル ---------------------------------------------------------
+
+function BattleResultModal({
+  winner,
+  onReplay,
+  onHome,
+}: {
+  winner: BattleWinner;
+  onReplay: () => void;
+  onHome: () => void;
+}) {
+  const won = winner === 'p1';
+  const title = won ? 'やったね!🏆' : 'つぎはがんばろう';
+  const altEarned = won ? ALT_REWARD_WIN : ALT_REWARD_LOSE;
+  const emoji = won ? '🎉' : '💪';
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.7)' }}
+    >
+      <div
+        className="w-full max-w-sm rounded-2xl p-6 text-center border-2"
+        style={{
+          background: won
+            ? 'linear-gradient(135deg, rgba(255,215,0,0.15), rgba(255,140,0,0.1))'
+            : 'linear-gradient(135deg, rgba(100,100,150,0.2), rgba(50,50,80,0.2))',
+          borderColor: won ? 'rgba(255,215,0,0.6)' : 'rgba(255,255,255,0.2)',
+          boxShadow: won
+            ? '0 0 30px rgba(255,215,0,0.4)'
+            : '0 0 20px rgba(0,0,0,0.5)',
+        }}
+      >
+        <div className="text-6xl mb-2">{emoji}</div>
+        <h2
+          className="text-2xl font-bold mb-4"
+          style={{
+            color: won ? 'var(--tqw-gold)' : '#fff',
+            textShadow: won ? '0 0 10px rgba(255,215,0,0.5)' : 'none',
+          }}
+        >
+          {title}
+        </h2>
+        <div className="my-4 px-4 py-3 rounded-lg bg-black/40 border border-yellow-500/30">
+          <div className="text-xs text-white/70 mb-1">獲得した ALT</div>
+          <div className="text-3xl font-bold text-yellow-300">
+            +{altEarned} <span className="text-sm">ALT</span>
+          </div>
+        </div>
+        <div className="flex flex-col gap-2 mt-6">
+          <button
+            onClick={onReplay}
+            className="w-full py-3 rounded-lg font-bold bg-yellow-500 text-black hover:bg-yellow-400"
+          >
+            もう一度
+          </button>
+          <button
+            onClick={onHome}
+            className="w-full py-3 rounded-lg font-bold bg-white/10 text-white border border-white/20 hover:bg-white/20"
+          >
+            ホームへ
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
