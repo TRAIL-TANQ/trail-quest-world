@@ -124,3 +124,147 @@ export async function finalizeAltGame(params: {
 
   return { altEarned, limited: !canEarn };
 }
+
+// ======================================================================
+// 勉強ゲーム (4択 / パネル破壊) セッション管理
+// ======================================================================
+//
+// 既存 AltGameType とは日次制限値が異なるため、別カウンタで管理する。
+//   quiz_4choice : 3 セッション / 日 (STUDY_GAME_SPEC v1.2 §ALT 報酬設定)
+//   panel_break  : 10 セッション / 日
+// ALT 加算の正本は child_status.alt_points。本ファイルはそのトランザクションと、
+// パネル破壊セッションの DB サマリ (panel_break_sessions) INSERT を担当する。
+// quiz_answer_logs の per-answer INSERT は quizModeService.submitAnswer 側の責務。
+
+export type StudyGameMode = 'quiz_4choice' | 'panel_break';
+
+export const STUDY_GAME_SESSION_LIMITS: Record<StudyGameMode, number> = {
+  quiz_4choice: 3,
+  panel_break: 10,
+};
+
+export const QUIZ_4CHOICE_REWARDS = {
+  CORRECT_ANSWER: 10,
+  PERFECT_BONUS: 20,
+} as const;
+
+function studyGameCountKey(childId: string, mode: StudyGameMode, date: string): string {
+  return `study_game_session_${childId}_${mode}_${date}`;
+}
+
+export function getStudyGameSessionCount(childId: string, mode: StudyGameMode): number {
+  try {
+    const raw = localStorage.getItem(studyGameCountKey(childId, mode, getTodayKeyJST()));
+    const n = raw ? parseInt(raw, 10) : 0;
+    return Number.isFinite(n) && n >= 0 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function getStudyGameSessionRemaining(childId: string, mode: StudyGameMode): number {
+  return Math.max(0, STUDY_GAME_SESSION_LIMITS[mode] - getStudyGameSessionCount(childId, mode));
+}
+
+export function canEarnStudyGameAlt(childId: string, mode: StudyGameMode): boolean {
+  return getStudyGameSessionRemaining(childId, mode) > 0;
+}
+
+function incrementStudyGameSessionCount(childId: string, mode: StudyGameMode): number {
+  try {
+    const key = studyGameCountKey(childId, mode, getTodayKeyJST());
+    const next = getStudyGameSessionCount(childId, mode) + 1;
+    localStorage.setItem(key, String(next));
+    return next;
+  } catch {
+    return getStudyGameSessionCount(childId, mode) + 1;
+  }
+}
+
+export interface PanelBreakSummary {
+  subject: string;
+  difficulty: 'easy' | 'medium' | 'hard' | 'extreme';
+  targetRule: string;
+  panelsDestroyed: number;
+  maxCombo: number;
+  totalScore: number;
+  durationSeconds: number;
+}
+
+export interface ProcessStudyGameResultParams {
+  childId: string;
+  mode: StudyGameMode;
+  /** quiz_4choice: 正解数 (0〜totalCount) / panel_break: 判定対象外、0 で OK */
+  correctCount: number;
+  /** quiz_4choice: 総問題数 (通常 10) / panel_break: 判定対象外、0 で OK */
+  totalCount: number;
+  /** panel_break 専用: セッションサマリ (panel_break_sessions に INSERT) */
+  panelBreak?: PanelBreakSummary;
+  /** panel_break 専用: クライアント計算済みの raw ALT (コンボ倍率反映済み) */
+  panelBreakRawAltEarned?: number;
+}
+
+/**
+ * 勉強ゲーム セッション完了時の統合処理。
+ *
+ * 1. 日次制限判定 (getStudyGameSessionRemaining > 0 か)
+ * 2. rawAltEarned を算出
+ *    - quiz_4choice: correctCount * 10 + (全問正解なら +20 ボーナス)
+ *    - panel_break:  panelBreakRawAltEarned (UI 計算) を採用
+ * 3. セッションカウント +1 (制限超過後も増やす → 以降の canEarn=false 維持)
+ * 4. 加算 ALT > 0 なら child_status.alt_points を更新
+ * 5. panel_break の場合、panel_break_sessions に INSERT
+ *
+ * quiz_answer_logs の per-answer INSERT は本関数の責務ではない。
+ * ゲスト/管理者/モニターは DB 書き込みをスキップ (既存 finalizeAltGame と同パターン)。
+ */
+export async function processStudyGameResult(
+  params: ProcessStudyGameResultParams,
+): Promise<{ altEarned: number; limited: boolean; rawAltEarned: number }> {
+  const { childId, mode, correctCount, totalCount, panelBreak, panelBreakRawAltEarned } = params;
+
+  const canEarn = canEarnStudyGameAlt(childId, mode);
+
+  let rawAltEarned = 0;
+  if (mode === 'quiz_4choice') {
+    const base = Math.max(0, correctCount) * QUIZ_4CHOICE_REWARDS.CORRECT_ANSWER;
+    const perfect =
+      totalCount > 0 && correctCount === totalCount ? QUIZ_4CHOICE_REWARDS.PERFECT_BONUS : 0;
+    rawAltEarned = base + perfect;
+  } else {
+    rawAltEarned = Math.max(0, Math.round(panelBreakRawAltEarned ?? 0));
+  }
+
+  const altEarned = canEarn ? rawAltEarned : 0;
+
+  incrementStudyGameSessionCount(childId, mode);
+
+  const skipDb = isGuest() || isAdmin() || isMonitor();
+
+  if (!skipDb && altEarned > 0) {
+    await updateChildStatus(childId, altEarned, 0);
+  }
+
+  if (!skipDb && mode === 'panel_break' && panelBreak) {
+    try {
+      const { error } = await supabase.from('panel_break_sessions').insert({
+        child_id: childId,
+        subject: panelBreak.subject,
+        difficulty: panelBreak.difficulty,
+        target_rule: panelBreak.targetRule,
+        panels_destroyed: Math.max(0, Math.round(panelBreak.panelsDestroyed)),
+        max_combo: Math.max(0, Math.round(panelBreak.maxCombo)),
+        total_score: Math.max(0, Math.round(panelBreak.totalScore)),
+        alt_earned: altEarned,
+        duration_seconds: Math.max(0, Math.round(panelBreak.durationSeconds)),
+      });
+      if (error) {
+        console.warn('[AltGameService] panel_break_sessions insert failed:', error.message);
+      }
+    } catch (err) {
+      console.warn('[AltGameService] processStudyGameResult (panel_break) threw:', err);
+    }
+  }
+
+  return { altEarned, limited: !canEarn, rawAltEarned };
+}
