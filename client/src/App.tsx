@@ -49,6 +49,7 @@ import DeckBuilderPage from "./pages/DeckBuilderPage";
 import PvPSetupPage from "./pages/PvPSetupPage";
 import PvPBattlePage from "./pages/PvPBattlePage";
 import TimeAttackPage from "./pages/TimeAttackPage";
+import LeaderSelectPage from "./pages/LeaderSelectPage";
 
 function Router() {
   return (
@@ -74,6 +75,9 @@ function Router() {
             <Route path="/alt-games/todofuken" component={TodofukenTouchPage} />
             <Route path="/alt-games/kenchou" component={KenchouQuizPage} />
             <Route path="/alt-games" component={AltGamesPage} />
+            {/* カードバトル v2 (v2.0-launch) */}
+            <Route path="/battle/select" component={LeaderSelectPage} />
+            <Route path="/battle"><Redirect to="/battle/select" /></Route>
             <Route path="/games/stages" component={StageSelectPage} />
             <Route path="/games/quiz/:deck/:difficulty" component={QuizPracticePage} />
             <Route path="/games/time-attack/play/:difficulty" component={TimeAttackPage} />
