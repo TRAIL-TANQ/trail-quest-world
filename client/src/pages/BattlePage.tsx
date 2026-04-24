@@ -13,12 +13,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { getChildId } from '@/lib/auth';
-import { COLLECTION_CARDS } from '@/lib/cardData';
 import { applyAction } from '@/lib/battle/battleActions';
 import { runAITurn } from '@/lib/battle/battleAI';
 import { advancePhase } from '@/lib/battle/battleEngine';
 import {
+  fetchLeaders,
   fetchPresetDecks,
+  resolveCardImage,
   startBattle,
   type PresetDeck,
 } from '@/lib/battleService';
@@ -29,13 +30,76 @@ import type {
   LeaderState,
 } from '@/lib/battle/battleTypes';
 
-// ---- lookup ---------------------------------------------------------------
+// ---- CardImage: 404 時に placeholder にフォールバックする <img> ラッパ -----
 
-const cardImageMap = new Map<string, string>();
-for (const c of COLLECTION_CARDS) {
-  cardImageMap.set(c.id, c.imageUrl);
+function CardImage({
+  cardId,
+  alt,
+  className,
+}: {
+  cardId: string;
+  alt: string;
+  className?: string;
+}) {
+  const [errored, setErrored] = useState(false);
+  const src = resolveCardImage(cardId);
+  if (errored || !src) {
+    return (
+      <div
+        className={`${className ?? ''} flex items-center justify-center text-[8px] leading-tight text-white/70 text-center p-1`}
+        style={{
+          background:
+            'linear-gradient(135deg, rgba(60,60,80,0.9), rgba(30,30,50,0.9))',
+        }}
+      >
+        {alt}
+      </div>
+    );
+  }
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className={className}
+      draggable={false}
+      onError={() => setErrored(true)}
+    />
+  );
 }
-const imageForCard = (cardId: string) => cardImageMap.get(cardId) ?? '';
+
+function LeaderImage({
+  src,
+  alt,
+  className,
+}: {
+  src: string;
+  alt: string;
+  className?: string;
+}) {
+  const [errored, setErrored] = useState(false);
+  if (errored || !src) {
+    return (
+      <div
+        className={`${className ?? ''} flex items-center justify-center text-[9px] text-white/60 text-center`}
+        style={{
+          background:
+            'linear-gradient(135deg, rgba(60,60,80,0.9), rgba(30,30,50,0.9))',
+        }}
+      >
+        {alt}
+      </div>
+    );
+  }
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className={className}
+      draggable={false}
+      onError={() => setErrored(true)}
+    />
+  );
+}
 
 // ---- component ------------------------------------------------------------
 
@@ -47,6 +111,9 @@ export default function BattlePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAIThinking, setIsAIThinking] = useState(false);
+  const [leaderImageMap, setLeaderImageMap] = useState<Map<string, string>>(
+    new Map(),
+  );
 
   // URL params
   const params = useMemo(() => {
@@ -67,6 +134,14 @@ export default function BattlePage() {
     let cancelled = false;
     (async () => {
       try {
+        // リーダー一覧を先に取得し、UI 用の imageUrl Map を構築
+        const leadersList = await fetchLeaders();
+        const lMap = new Map<string, string>();
+        for (const l of leadersList) {
+          lMap.set(l.id, l.image_url ?? '');
+        }
+        if (!cancelled) setLeaderImageMap(lMap);
+
         // Pick AI opponent: any preset deck whose leader !== my leader, random choice.
         const presets = await fetchPresetDecks();
         const candidates = presets.filter(
@@ -177,7 +252,13 @@ export default function BattlePage() {
   return (
     <div className="min-h-full px-2 pt-2 pb-4 text-white bg-black/40">
       {/* ====== 相手エリア ====== */}
-      <OpponentPanel leader={p2.leader} lifeCount={p2.lifeCards.length} handCount={p2.hand.length} deckCount={p2.deck.length} />
+      <OpponentPanel
+        leader={p2.leader}
+        leaderImageUrl={leaderImageMap.get(p2.leader.id) ?? ''}
+        lifeCount={p2.lifeCards.length}
+        handCount={p2.hand.length}
+        deckCount={p2.deck.length}
+      />
       <BoardRow board={p2.board} isOwnSide={false} />
 
       {/* ====== 中央情報 ====== */}
@@ -212,7 +293,10 @@ export default function BattlePage() {
 
       {/* ====== 自分のリーダー / ライフ ====== */}
       <div className="flex items-center gap-3 mt-2 px-2 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
-        <LeaderBadge leader={p1.leader} />
+        <LeaderBadge
+          leader={p1.leader}
+          imageUrl={leaderImageMap.get(p1.leader.id) ?? ''}
+        />
         <LifePips count={p1.lifeCards.length} max={3} color="yellow" />
         <div className="text-[10px] text-white/60 ml-auto">
           手札{p1.hand.length}・山札{p1.deck.length}
@@ -257,18 +341,20 @@ export default function BattlePage() {
 
 function OpponentPanel({
   leader,
+  leaderImageUrl,
   lifeCount,
   handCount,
   deckCount,
 }: {
   leader: LeaderState;
+  leaderImageUrl: string;
   lifeCount: number;
   handCount: number;
   deckCount: number;
 }) {
   return (
     <div className="flex items-center gap-3 px-2 py-2 rounded-lg bg-red-900/20 border border-red-500/30">
-      <LeaderBadge leader={leader} />
+      <LeaderBadge leader={leader} imageUrl={leaderImageUrl} />
       <LifePips count={lifeCount} max={3} color="red" />
       <div className="text-[10px] text-white/60 ml-auto">
         手札{handCount}・山札{deckCount}
@@ -277,18 +363,21 @@ function OpponentPanel({
   );
 }
 
-function LeaderBadge({ leader }: { leader: LeaderState }) {
-  const img = imageForCard(leader.id.replace(/^leader_/, '')) || '';
+function LeaderBadge({
+  leader,
+  imageUrl,
+}: {
+  leader: LeaderState;
+  imageUrl: string;
+}) {
   return (
     <div className="flex items-center gap-2">
-      <div
-        className="w-12 h-12 rounded-lg overflow-hidden border border-white/20 bg-black/40 flex items-center justify-center"
-      >
-        {img ? (
-          <img src={img} alt={leader.name} className="w-full h-full object-cover" />
-        ) : (
-          <span className="text-2xl">🎴</span>
-        )}
+      <div className="w-12 h-12 rounded-lg overflow-hidden border border-white/20 bg-black/40 flex items-center justify-center">
+        <LeaderImage
+          src={imageUrl}
+          alt={leader.name}
+          className="w-full h-full object-cover"
+        />
       </div>
       <div className="leading-tight">
         <div className="text-sm font-bold text-yellow-300 truncate max-w-[100px]">
@@ -356,21 +445,17 @@ function BoardCardSlot({ slot }: { slot: BoardSlot | null }) {
       <div className="flex-1 aspect-[3/4] rounded-md border border-dashed border-white/10 bg-black/20" />
     );
   }
-  const img = imageForCard(slot.card.cardId);
-  const rotateClass = slot.isRested ? 'rotate-12 opacity-80' : '';
 
   return (
     <div
-      className={`relative flex-1 aspect-[3/4] rounded-md overflow-hidden border border-yellow-400/40 bg-black/60 transition-transform ${rotateClass}`}
+      className="relative flex-1 aspect-[3/4] rounded-md overflow-hidden border border-yellow-400/40 bg-black/60 transition-transform"
       style={{ transform: slot.isRested ? 'rotate(12deg)' : 'none' }}
     >
-      {img ? (
-        <img src={img} alt={slot.card.name} className="w-full h-full object-cover" />
-      ) : (
-        <div className="w-full h-full flex items-center justify-center text-xs">
-          {slot.card.name}
-        </div>
-      )}
+      <CardImage
+        cardId={slot.card.cardId}
+        alt={slot.card.name}
+        className="w-full h-full object-cover"
+      />
       <div className="absolute top-0 left-0 bg-black/70 text-yellow-300 text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-br">
         {slot.card.cost}
       </div>
@@ -396,7 +481,6 @@ function HandCard({
   playable: boolean;
   onPlay?: () => void;
 }) {
-  const img = imageForCard(card.cardId);
   return (
     <button
       onClick={onPlay}
@@ -407,13 +491,11 @@ function HandCard({
           : 'border-white/20 opacity-90'
       }`}
     >
-      {img ? (
-        <img src={img} alt={card.name} className="w-full h-full object-cover" />
-      ) : (
-        <div className="w-full h-full flex items-center justify-center text-[10px] bg-black/60 text-white">
-          {card.name}
-        </div>
-      )}
+      <CardImage
+        cardId={card.cardId}
+        alt={card.name}
+        className="w-full h-full object-cover"
+      />
       <div className="absolute top-0 left-0 bg-black/80 text-yellow-300 text-[11px] font-bold w-5 h-5 flex items-center justify-center rounded-br">
         {card.cost}
       </div>
