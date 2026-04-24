@@ -32,6 +32,7 @@ const GAMES: Record<TabId, AltGameCard[]> = {
     { id: 'hikaku-battle',   name: '比較バトル',   icon: '⚡', altRange: '+1〜15 ALT', description: '大きい方をはやくタップ',       href: '/alt-games/hikaku-battle' },
     { id: 'bunsu-battle',    name: '分数バトル',   icon: '🔵', altRange: '+1〜25 ALT', description: '分数の足し引き掛け割り',       href: '/alt-games/bunsu-battle' },
     { id: 'shousuu-battle',  name: '小数バトル',   icon: '🟢', altRange: '+1〜25 ALT', description: '小数の計算をすばやく',         href: '/alt-games/shousuu-battle' },
+    { id: 'math-quiz-4choice', name: '4択クイズ', icon: '🎓', altRange: '+10〜120 ALT', description: '10問の4択で誤答ぶんせき', href: '/quiz/math/easy' },
   ],
   kokugo: [
     { id: 'kanji-flash',    name: '漢字フラッシュ',   icon: '📝', altRange: '+1〜25 ALT', description: '漢字の読みを4択',       href: '/alt-games/kanji-flash' },
