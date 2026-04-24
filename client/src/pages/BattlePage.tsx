@@ -308,19 +308,49 @@ export default function BattlePage() {
   // --- 自キャラ/リーダータップ: アタッカー選択トグル -------------------------
 
   function handleSelectAttacker(id: SelectedAttacker) {
-    if (!state || !isPlayerActing()) return;
+    console.log('[UI] handleSelectAttacker called', {
+      id,
+      currentSelection: selectedAttacker,
+      canAct: isPlayerActing(),
+      active: state?.activePlayer,
+      phase: state?.phase,
+      isAIThinking,
+      winner: state?.winner,
+    });
+
+    if (!state || !isPlayerActing()) {
+      console.log('[UI] handleSelectAttacker: blocked by isPlayerActing gate');
+      return;
+    }
 
     // 選択可能か (レスト/サモニング病チェック)
     if (id === 'leader') {
-      if (state.players.p1.leader.isRested) return;
+      if (state.players.p1.leader.isRested) {
+        console.log('[UI] handleSelectAttacker: leader rested, abort');
+        return;
+      }
     } else if (id !== null) {
       const slot = state.players.p1.board.find(
         (s) => s.card.instanceId === id,
       );
-      if (!slot || slot.isRested || !slot.canAttackThisTurn) return;
+      if (!slot || slot.isRested || !slot.canAttackThisTurn) {
+        console.log('[UI] handleSelectAttacker: char invalid', {
+          found: !!slot,
+          rested: slot?.isRested,
+          canAttack: slot?.canAttackThisTurn,
+        });
+        return;
+      }
     }
 
-    setSelectedAttacker((prev) => (prev === id ? null : id));
+    setSelectedAttacker((prev) => {
+      const next = prev === id ? null : id;
+      console.log('[UI] handleSelectAttacker: selection change', {
+        from: prev,
+        to: next,
+      });
+      return next;
+    });
   }
 
   // --- 敵タップ: attack 実行 --------------------------------------------------
@@ -328,13 +358,34 @@ export default function BattlePage() {
   function handleAttackTarget(
     target: { kind: 'leader' } | { kind: 'character'; instanceId: string },
   ) {
-    if (!state || !isPlayerActing()) return;
-    if (selectedAttacker === null) return;
+    console.log('[UI] handleAttackTarget called', {
+      target,
+      selectedAttacker,
+      canAct: isPlayerActing(),
+      active: state?.activePlayer,
+      phase: state?.phase,
+      isAIThinking,
+      winner: state?.winner,
+    });
+
+    if (!state || !isPlayerActing()) {
+      console.log('[UI] handleAttackTarget: blocked by isPlayerActing gate');
+      return;
+    }
+    if (selectedAttacker === null) {
+      console.log('[UI] handleAttackTarget: no attacker selected, abort');
+      return;
+    }
 
     const attackerSource =
       selectedAttacker === 'leader'
         ? ({ kind: 'leader' } as const)
         : ({ kind: 'character', instanceId: selectedAttacker } as const);
+
+    console.log('[UI] handleAttackTarget: calling applyAction', {
+      attackerSource,
+      targetSource: target,
+    });
 
     const result = applyAction(state, {
       type: 'attack',
@@ -342,6 +393,13 @@ export default function BattlePage() {
       timestamp: new Date().toISOString(),
       attackerSource,
       targetSource: target,
+    });
+
+    console.log('[UI] handleAttackTarget: applyAction result', {
+      ok: result.ok,
+      code: !result.ok ? result.code : undefined,
+      reason: !result.ok ? result.reason : undefined,
+      eventsCount: result.ok ? result.events.length : 0,
     });
 
     // 成否を問わず、選択状態はクリア
