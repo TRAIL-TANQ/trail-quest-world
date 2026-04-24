@@ -50,6 +50,7 @@ import PvPSetupPage from "./pages/PvPSetupPage";
 import PvPBattlePage from "./pages/PvPBattlePage";
 import TimeAttackPage from "./pages/TimeAttackPage";
 import LeaderSelectPage from "./pages/LeaderSelectPage";
+import BattlePage from "./pages/BattlePage";
 
 function Router() {
   return (
@@ -77,6 +78,7 @@ function Router() {
             <Route path="/alt-games" component={AltGamesPage} />
             {/* カードバトル v2 (v2.0-launch) */}
             <Route path="/battle/select" component={LeaderSelectPage} />
+            <Route path="/battle/play" component={BattlePage} />
             <Route path="/battle"><Redirect to="/battle/select" /></Route>
             <Route path="/games/stages" component={StageSelectPage} />
             <Route path="/games/quiz/:deck/:difficulty" component={QuizPracticePage} />
