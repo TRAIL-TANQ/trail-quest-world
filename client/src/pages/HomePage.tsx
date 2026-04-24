@@ -359,8 +359,20 @@ export default function HomePage() {
           </Link>
         )}
 
-        {/* メインエントリ: バトル / デッキクエスト / 2人対戦 / タイムアタック */}
+        {/* メインエントリ: カードバトル v2 (新) + タイムアタック
+            旧バトル系 (バトル / デッキクエスト / 2人対戦) は v2.0-launch で非表示。
+            ルート自体は残しているので URL 直打ちは動作する (brick-proof)。
+            v2.0-launch が安定稼働したら物理削除予定。 */}
         <div className="mb-6 flex flex-col" style={{ gap: 10 }}>
+          {/* 🎴 新カードバトル v2 — v2.0-launch 目玉機能、目立つゴールドで配置 */}
+          <MenuButton
+            href="/battle/select"
+            icon="🎴"
+            title="カードバトル"
+            subtitle="リーダーをえらんでたたかおう"
+            gradient="linear-gradient(135deg, #78530b 0%, #d4a500 50%, #ffd700 100%)"
+          />
+          {/* v2.0-launch: 旧バトル導線は一時非表示 (ルート /games/stages は生きている)
           <MenuButton
             href="/games/stages"
             icon="⚔️"
@@ -382,6 +394,7 @@ export default function HomePage() {
             subtitle="友達と対戦しよう"
             gradient="linear-gradient(135deg, #2a2f3a 0%, #3a4250 50%, #4a5260 100%)"
           />
+          */}
           <MenuButton
             href="/games/time-attack"
             icon="⚡"
