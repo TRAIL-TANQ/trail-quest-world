@@ -11,6 +11,8 @@ import { supabase } from './supabase';
 import { updateChildStatus } from './quizService';
 import { isGuest, isAdmin, isMonitor } from './auth';
 import { getTodayKeyJST } from './altDailyLimit';
+import { finishBattle } from './battleService';
+import type { BattleState, BattleWinner } from './battle/battleTypes';
 
 export type AltGameType =
   | 'keisan_battle'
@@ -123,4 +125,57 @@ export async function finalizeAltGame(params: {
   await saveAltGameScore({ childId, gameType, difficulty, score, maxLevel, maxCombo, altEarned });
 
   return { altEarned, limited: !canEarn };
+}
+
+// ============================================================================
+// カードバトル v2.0-launch 専用の結果処理
+// ============================================================================
+
+/**
+ * カードバトル v2 の ALT 配分定数。
+ * v2.0.1 以降でコンボ/ボス等の係数を導入する余地あり。
+ */
+export const ALT_BATTLE_WIN = 10;
+export const ALT_BATTLE_LOSE = 2;
+
+export interface ProcessBattleResultParams {
+  childId: string;
+  sessionId: number;       // synthetic (< 0) なら DB 書込をスキップ
+  winner: BattleWinner;    // 'p1' = プレイヤー勝ち / 'p2' = AI 勝ち / 'draw'
+  turnCount: number;
+  durationSeconds: number;
+  finalState: BattleState; // battle_sessions.state_snapshot へ保存
+}
+
+/**
+ * バトル終了時の統合処理 (v2.0-launch カードバトル専用)。
+ *
+ * 1. 勝敗から ALT を算出: 勝ち=ALT_BATTLE_WIN(10) / 負け/引き分け=ALT_BATTLE_LOSE(2)
+ * 2. child_status.alt_points を +ALT 更新 (updateChildStatus が
+ *    ゲスト/管理者/モニターの localStorage-only 分岐を内部で処理)
+ * 3. battle_sessions に winner / turn_count / duration_seconds /
+ *    alt_earned / state_snapshot を UPDATE (battleService.finishBattle 経由、
+ *    ゲスト/管理者/モニター/synthetic id は no-op)
+ *
+ * 注: AltGameType 系のデイリー 5 回制限とは独立。バトルには回数制限なし。
+ */
+export async function processBattleResult(
+  params: ProcessBattleResultParams,
+): Promise<{ altEarned: number }> {
+  const isWinner = params.winner === 'p1';
+  const altEarned = isWinner ? ALT_BATTLE_WIN : ALT_BATTLE_LOSE;
+
+  // ALT 残高 + level 更新 (updateChildStatus がゲスト/管理者分岐を吸収)
+  await updateChildStatus(params.childId, altEarned, 0);
+
+  // battle_sessions UPDATE (書込スキップ判定は finishBattle 内部)
+  await finishBattle(params.sessionId, {
+    winner: params.winner,
+    turnCount: params.turnCount,
+    durationSeconds: params.durationSeconds,
+    altEarned,
+    finalState: params.finalState,
+  });
+
+  return { altEarned };
 }

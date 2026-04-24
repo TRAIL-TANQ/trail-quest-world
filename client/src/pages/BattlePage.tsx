@@ -30,6 +30,11 @@ import {
   startBattle,
   type PresetDeck,
 } from '@/lib/battleService';
+import {
+  ALT_BATTLE_LOSE,
+  ALT_BATTLE_WIN,
+  processBattleResult,
+} from '@/lib/altGameService';
 import type {
   BattleCardInstance,
   BattleLeaderRow,
@@ -42,9 +47,8 @@ import type {
 // アタッカー選択 ID の型: null=未選択 / 'leader'=リーダー / それ以外=character.instanceId
 type SelectedAttacker = null | 'leader' | string;
 
-// v2.0-launch 固定の ALT 報酬 (D5 で altGameService.processBattleResult に統合予定)
-const ALT_REWARD_WIN = 10;
-const ALT_REWARD_LOSE = 2;
+// ALT 報酬の定数は altGameService で一元管理 (ALT_BATTLE_WIN / ALT_BATTLE_LOSE)。
+// ここでは processBattleResult() の戻り値を優先し、非同期完了前の fallback としてのみ使用。
 
 // ---- CardImage: 404 時に placeholder にフォールバックする <img> ラッパ -----
 
@@ -123,7 +127,7 @@ export default function BattlePage() {
   const [, navigate] = useLocation();
 
   const [state, setState] = useState<BattleState | null>(null);
-  const [, setSessionId] = useState<number | null>(null);
+  const [sessionId, setSessionId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAIThinking, setIsAIThinking] = useState(false);
@@ -133,6 +137,9 @@ export default function BattlePage() {
   );
   const [selectedAttacker, setSelectedAttacker] =
     useState<SelectedAttacker>(null);
+  // 勝敗確定後に processBattleResult() 経由で加算確定した ALT 量 (1 回のみ計算)。
+  // null = 未処理 or 処理中 → フォールバックとして ALT_BATTLE_WIN/LOSE を表示。
+  const [altEarnedResult, setAltEarnedResult] = useState<number | null>(null);
 
   // URL params
   const params = useMemo(() => {
@@ -203,6 +210,52 @@ export default function BattlePage() {
       cancelled = true;
     };
   }, [params.leaderId, params.deckId]);
+
+  // --- 勝敗確定時に ALT 加算 + battle_sessions UPDATE (1 回のみ) ---
+  useEffect(() => {
+    if (!state) return;
+    if (!state.winner) return;
+    if (altEarnedResult !== null) return; // 既に処理済み
+
+    const childId = getChildId();
+    const startedMs = new Date(state.startedAt).getTime();
+    const durationSeconds = Math.max(
+      0,
+      Math.floor((Date.now() - startedMs) / 1000),
+    );
+    const capturedSessionId = sessionId ?? -1;
+    const capturedWinner = state.winner;
+    const capturedTurnCount = state.turn;
+    const capturedState = state;
+
+    (async () => {
+      try {
+        console.log('[BattlePage] processBattleResult start', {
+          sessionId: capturedSessionId,
+          winner: capturedWinner,
+          turnCount: capturedTurnCount,
+          durationSeconds,
+        });
+        const { altEarned } = await processBattleResult({
+          childId,
+          sessionId: capturedSessionId,
+          winner: capturedWinner,
+          turnCount: capturedTurnCount,
+          durationSeconds,
+          finalState: capturedState,
+        });
+        console.log('[BattlePage] processBattleResult success', { altEarned });
+        setAltEarnedResult(altEarned);
+      } catch (e) {
+        console.warn('[BattlePage] processBattleResult failed, using fallback', e);
+        // フォールバック: 加算失敗時も UI は期待値を表示
+        setAltEarnedResult(
+          capturedWinner === 'p1' ? ALT_BATTLE_WIN : ALT_BATTLE_LOSE,
+        );
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state?.winner]);
 
   // AI turn trigger: activePlayer=='p2' になったら少し遅らせて runAITurn
   useEffect(() => {
@@ -609,6 +662,7 @@ export default function BattlePage() {
       {state.winner && (
         <BattleResultModal
           winner={state.winner}
+          altEarned={altEarnedResult}
           onReplay={() => navigate('/battle/select')}
           onHome={() => navigate('/')}
         />
@@ -862,17 +916,20 @@ function BoardCardSlot({
 
 function BattleResultModal({
   winner,
+  altEarned,
   onReplay,
   onHome,
 }: {
   winner: BattleWinner;
+  altEarned: number | null; // null = 処理中、値あり = 確定 ALT 量
   onReplay: () => void;
   onHome: () => void;
 }) {
   const won = winner === 'p1';
   const title = won ? 'やったね!🏆' : 'つぎはがんばろう';
-  const altEarned = won ? ALT_REWARD_WIN : ALT_REWARD_LOSE;
+  const displayAlt = altEarned ?? (won ? ALT_BATTLE_WIN : ALT_BATTLE_LOSE);
   const emoji = won ? '🎉' : '💪';
+  const confirming = altEarned === null; // まだ加算 API 未完了
 
   return (
     <div
@@ -904,8 +961,11 @@ function BattleResultModal({
         <div className="my-4 px-4 py-3 rounded-lg bg-black/40 border border-yellow-500/30">
           <div className="text-xs text-white/70 mb-1">獲得した ALT</div>
           <div className="text-3xl font-bold text-yellow-300">
-            +{altEarned} <span className="text-sm">ALT</span>
+            +{displayAlt} <span className="text-sm">ALT</span>
           </div>
+          {confirming && (
+            <div className="text-[10px] text-white/50 mt-1">加算中…</div>
+          )}
         </div>
         <div className="flex flex-col gap-2 mt-6">
           <button
