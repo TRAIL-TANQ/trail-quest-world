@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { applyAction } from '../battleActions';
 import {
   advancePhase,
+  calcManaForTurn,
   createInitialState,
   drawCard,
   leaderRowToState,
@@ -121,6 +122,7 @@ function makeState(overrides: Partial<BattleState> = {}): BattleState {
   return {
     sessionId: 's_test',
     turn: 1,
+    firstPlayer: 'p1',
     activePlayer: 'p1',
     phase: 'main',
     players: {
@@ -140,7 +142,7 @@ function makeState(overrides: Partial<BattleState> = {}): BattleState {
 // ============================================================================
 
 describe('battleEngine.createInitialState', () => {
-  it('正しい初期値 (turn=1, phase=refresh, life=3, hand=5, lifeCards=3, deck=22) を返す', () => {
+  it('正しい初期値 (turn=1, phase=refresh, life=3, hand=3, lifeCards=3, deck=24, firstPlayer=p1) を返す', () => {
     const leader = makeLeader('l1', { life: 3 });
     const state = createInitialState(
       'session_1',
@@ -157,23 +159,24 @@ describe('battleEngine.createInitialState', () => {
     expect(state.turn).toBe(1);
     expect(state.phase).toBe('refresh');
     expect(state.activePlayer).toBe('p1');
+    expect(state.firstPlayer).toBe('p1');
     expect(state.winner).toBeNull();
 
-    // p1: 手札 5 / ライフ 3 / デッキ 22 (= 30 - 3 - 5)
+    // p1: 手札 3 / ライフ 3 / デッキ 24 (= 30 - 3 - 3)
     expect(state.players.p1.leader.life).toBe(3);
     expect(state.players.p1.leader.attackPower).toBe(5);
     expect(state.players.p1.leader.defensePower).toBe(5);
-    expect(state.players.p1.hand).toHaveLength(5);
+    expect(state.players.p1.hand).toHaveLength(3);
     expect(state.players.p1.lifeCards).toHaveLength(3);
-    expect(state.players.p1.deck).toHaveLength(22);
+    expect(state.players.p1.deck).toHaveLength(24);
     expect(state.players.p1.board).toHaveLength(0);
     expect(state.players.p1.currentCost).toBe(0);
 
     // p2: AI, 同じ構造
     expect(state.players.p2.id).toBe('ai');
-    expect(state.players.p2.hand).toHaveLength(5);
+    expect(state.players.p2.hand).toHaveLength(3);
     expect(state.players.p2.lifeCards).toHaveLength(3);
-    expect(state.players.p2.deck).toHaveLength(22);
+    expect(state.players.p2.deck).toHaveLength(24);
 
     // game_start イベントが log 先頭にある
     expect(state.log[0]?.type).toBe('game_start');
@@ -200,14 +203,20 @@ describe('battleEngine.advancePhase (draw)', () => {
     // refresh → draw (refresh 処理が走り、phase='draw' になる。カード未ドロー)
     const afterRefresh = advancePhase(initial);
     expect(afterRefresh.phase).toBe('draw');
-    expect(afterRefresh.players.p1.deck).toHaveLength(22); // まだ引いてない
+    expect(afterRefresh.players.p1.deck).toHaveLength(24); // まだ引いてない
 
     // draw → cost (ドロー処理が走り、phase='cost' になる)
     const afterDraw = advancePhase(afterRefresh);
     expect(afterDraw.phase).toBe('cost');
-    expect(afterDraw.players.p1.deck).toHaveLength(21); // 22 - 1
-    expect(afterDraw.players.p1.hand).toHaveLength(6); // 5 + 1
+    expect(afterDraw.players.p1.deck).toHaveLength(23); // 24 - 1
+    expect(afterDraw.players.p1.hand).toHaveLength(4); // 3 + 1
     expect(afterDraw.players.p1.hasDrawnThisTurn).toBe(true);
+
+    // cost → main (探究マナ適用、p1 先攻 turn=1 → 1)
+    const afterCost = advancePhase(afterDraw);
+    expect(afterCost.phase).toBe('main');
+    expect(afterCost.players.p1.maxCost).toBe(1); // 先攻 turn1 = 1*2-1
+    expect(afterCost.players.p1.currentCost).toBe(1);
   });
 });
 
@@ -424,5 +433,30 @@ describe('battleEngine.drawCard (deck out)', () => {
         (e) => e.type === 'game_over' && e.payload.reason === 'deck_out',
       ),
     ).toBe(true);
+  });
+});
+
+// ============================================================================
+// シナリオ 8 (追加): 探究マナ推移 — 先攻/後攻で差分、上限 15
+// ============================================================================
+
+describe('battleEngine.calcManaForTurn', () => {
+  it('turn 1 先攻=1 / 後攻=2、turn 2 先攻=3 / 後攻=4', () => {
+    expect(calcManaForTurn(1, 'p1', 'p1')).toBe(1);
+    expect(calcManaForTurn(1, 'p2', 'p1')).toBe(2);
+    expect(calcManaForTurn(2, 'p1', 'p1')).toBe(3);
+    expect(calcManaForTurn(2, 'p2', 'p1')).toBe(4);
+  });
+
+  it('上限 15: turn 8 以降は両者 15 で cap', () => {
+    expect(calcManaForTurn(8, 'p1', 'p1')).toBe(15); // 8*2-1=15
+    expect(calcManaForTurn(8, 'p2', 'p1')).toBe(15); // 8*2=16 → cap 15
+    expect(calcManaForTurn(20, 'p1', 'p1')).toBe(15);
+    expect(calcManaForTurn(20, 'p2', 'p1')).toBe(15);
+  });
+
+  it('先攻/後攻の入れ替えにも追従 (firstPlayer=p2 の場合)', () => {
+    expect(calcManaForTurn(1, 'p2', 'p2')).toBe(1); // p2 が先攻
+    expect(calcManaForTurn(1, 'p1', 'p2')).toBe(2); // p1 が後攻
   });
 });

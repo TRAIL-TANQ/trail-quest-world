@@ -26,9 +26,29 @@ import type {
 
 // ---- 定数 ------------------------------------------------------------------
 
-export const INITIAL_HAND_SIZE = 5;
-export const MAX_COST = 10;
+export const INITIAL_HAND_SIZE = 3;       // v2.0-launch: 3 (旧 5)
+export const MAX_COST = 15;               // 探究マナの上限 (旧 10)
 export const BOARD_MAX_SLOTS = 5;
+
+// ---- マナ計算 --------------------------------------------------------------
+
+/**
+ * 各プレイヤーの、指定ターン開始時点で使える探究マナの最大値。
+ *
+ * 先攻: min(turn * 2 - 1, MAX_COST)
+ * 後攻: min(turn * 2,     MAX_COST)
+ *
+ * 結果、turn 1 は 1/2、turn 2 は 3/4、... turn 8 以降は先攻 15、turn 8 以降 後攻 15 (cap)。
+ */
+export function calcManaForTurn(
+  turn: number,
+  slot: PlayerSlot,
+  firstPlayer: PlayerSlot,
+): number {
+  const isFirst = slot === firstPlayer;
+  const base = isFirst ? turn * 2 - 1 : turn * 2;
+  return Math.min(base, MAX_COST);
+}
 
 // ---- 内部ヘルパー ----------------------------------------------------------
 
@@ -156,6 +176,7 @@ export function createInitialState(
   return {
     sessionId,
     turn: 1,
+    firstPlayer: 'p1',           // v2.0-launch 固定
     activePlayer: 'p1',
     phase: 'refresh',
     players: {
@@ -250,7 +271,8 @@ export function advancePhase(state: BattleState): BattleState {
 
     case 'cost': {
       const player = state.players[active];
-      const newMax = Math.min(state.turn, MAX_COST);
+      // 先攻/後攻で異なる: 先攻 = turn*2-1, 後攻 = turn*2 (上限 MAX_COST=15)
+      const newMax = calcManaForTurn(state.turn, active, state.firstPlayer);
       return {
         ...state,
         players: {

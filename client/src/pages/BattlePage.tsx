@@ -271,7 +271,7 @@ export default function BattlePage() {
           </span>
         </div>
         <div className="text-xs">
-          自分コスト:{' '}
+          探究マナ:{' '}
           <span className="text-yellow-300 font-bold">
             {p1.currentCost}
           </span>

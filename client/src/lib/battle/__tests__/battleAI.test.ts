@@ -96,6 +96,7 @@ function makeState(overrides: Partial<BattleState> = {}): BattleState {
   return {
     sessionId: 's_test',
     turn: 1,
+    firstPlayer: 'p1',
     activePlayer: 'p1',
     phase: 'main',
     players: {

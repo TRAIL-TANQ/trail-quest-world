@@ -179,7 +179,8 @@ export interface BattleEvent {
  */
 export interface BattleState {
   sessionId: string;                 // DB の battle_sessions.id (bigint を文字列化)
-  turn: number;                      // 1-indexed
+  turn: number;                      // 1-indexed (両者のターンを通したラウンド数)
+  firstPlayer: PlayerSlot;           // 先攻プレイヤー (マナ計算に使用)、v2.0-launch では 'p1' 固定
   activePlayer: PlayerSlot;
   phase: BattlePhase;
   players: {
