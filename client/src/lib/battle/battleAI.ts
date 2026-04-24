@@ -17,7 +17,7 @@
 // ============================================================================
 
 import { applyAction } from './battleActions';
-import { BOARD_MAX_SLOTS } from './battleEngine';
+import { advancePhase, BOARD_MAX_SLOTS } from './battleEngine';
 import type {
   AIThought,
   AttackAction,
@@ -27,6 +27,15 @@ import type {
   PlayCardAction,
   PlayerSlot,
 } from './battleTypes';
+
+// ---- デバッグ (D3.8 Hotfix 調査用、バグ解決後に false へ) ------------------
+const DEBUG_AI = true;
+function log(...args: unknown[]): void {
+  if (DEBUG_AI && typeof console !== 'undefined') {
+    // eslint-disable-next-line no-console
+    console.log('[AI]', ...args);
+  }
+}
 
 const MAX_ACTIONS_PER_TURN = 30;
 
@@ -114,13 +123,75 @@ export function chooseAIAction(
 }
 
 /**
+ * 強制 end_turn フォールバック: AI が進行不能な時に使う最終保険。
+ *
+ * 手段 1: applyAction(end_turn) を試す (phase=main の通常ケースに対応)
+ * 手段 2: それが失敗しても advancePhase を直接回して active player が
+ *         変わるまで進行 (phase 不整合でも強制通過できる)
+ *
+ * これで「AI が stuck で state が進まない」を構造的に排除する。
+ */
+function forceEndTurn(
+  state: BattleState,
+  aiSlot: PlayerSlot,
+): { state: BattleState; events: BattleEvent[] } {
+  log('forceEndTurn attempting', {
+    turn: state.turn,
+    phase: state.phase,
+    active: state.activePlayer,
+    winner: state.winner,
+  });
+
+  // --- 手段 1: 通常の end_turn アクション ---
+  const result = applyAction(state, {
+    type: 'end_turn',
+    player: aiSlot,
+    timestamp: new Date().toISOString(),
+  });
+  if (result.ok) {
+    log('forceEndTurn: applyAction(end_turn) success');
+    return { state: result.newState, events: result.events };
+  }
+  log(
+    'forceEndTurn: applyAction(end_turn) failed',
+    result.code,
+    result.reason,
+    '→ trying advancePhase cascade',
+  );
+
+  // --- 手段 2: advancePhase を直接回して activePlayer が変わるまで進める ---
+  let current = state;
+  const logStartLen = current.log.length;
+  let guard = 0;
+  while (current.activePlayer === aiSlot && !current.winner && guard++ < 30) {
+    const advanced = advancePhase(current);
+    if (advanced === current) {
+      log('forceEndTurn: advancePhase returned same state — truly stuck');
+      break;
+    }
+    current = advanced;
+  }
+  const events = current.log.slice(logStartLen);
+  log('forceEndTurn: advancePhase cascade finished', {
+    active: current.activePlayer,
+    phase: current.phase,
+    winner: current.winner,
+    steps: guard,
+  });
+  return { state: current, events };
+}
+
+/**
  * AI のターンを end_turn が成立するまで連続実行。
+ *
  * 停止条件:
  *   - end_turn アクションが成功
  *   - winner 確定
  *   - activePlayer が aiSlot から変わった (end_turn の結果として正常に発生)
- *   - applyAction が !ok を返した (想定外、防御的に即停止)
- *   - MAX_ACTIONS_PER_TURN = 30 を超過 (安全弁)
+ *   - applyAction が !ok を返した場合 → 強制 end_turn フォールバックで進行保証
+ *   - MAX_ACTIONS_PER_TURN = 30 を超過 (安全弁) → 強制 end_turn フォールバック
+ *
+ * これにより「AI が stuck して state が進まない」ケースを排除する。
  */
 export function runAITurn(
   state: BattleState,
@@ -129,25 +200,88 @@ export function runAITurn(
   let current = state;
   const events: BattleEvent[] = [];
 
+  log('runAITurn START', {
+    turn: state.turn,
+    active: state.activePlayer,
+    phase: state.phase,
+    handSize: state.players[aiSlot].hand.length,
+    boardSize: state.players[aiSlot].board.length,
+    leaderRested: state.players[aiSlot].leader.isRested,
+    cost: `${state.players[aiSlot].currentCost}/${state.players[aiSlot].maxCost}`,
+  });
+
+  let loopGuardTripped = false;
   for (let i = 0; i < MAX_ACTIONS_PER_TURN; i++) {
-    if (current.winner) break;
-    if (current.activePlayer !== aiSlot) break;
+    if (current.winner) {
+      log(`iter ${i}: winner=${current.winner} → break`);
+      break;
+    }
+    if (current.activePlayer !== aiSlot) {
+      log(`iter ${i}: active=${current.activePlayer} (not aiSlot) → break`);
+      break;
+    }
 
     const thought = chooseAIAction(current, aiSlot);
+    log(`iter ${i}: chose`, thought.chosenAction.type, '—', thought.reasoning);
+
     const result = applyAction(current, thought.chosenAction);
 
     if (!result.ok) {
-      // AI が合法でないアクションを出したら即停止 (想定外)
+      log(
+        `iter ${i}: applyAction FAILED`,
+        result.code,
+        result.reason,
+        '→ force end_turn fallback',
+      );
+      const forced = forceEndTurn(current, aiSlot);
+      current = forced.state;
+      events.push(...forced.events);
       break;
     }
 
     current = result.newState;
     events.push(...result.events);
 
-    if (thought.chosenAction.type === 'end_turn') break;
-    if (current.winner) break;
-    if (current.activePlayer !== aiSlot) break;
+    if (thought.chosenAction.type === 'end_turn') {
+      log(`iter ${i}: end_turn succeeded → break`);
+      break;
+    }
+    if (current.winner) {
+      log(`iter ${i}: winner=${current.winner} after action → break`);
+      break;
+    }
+    if (current.activePlayer !== aiSlot) {
+      log(`iter ${i}: active changed to ${current.activePlayer} → break`);
+      break;
+    }
+
+    if (i === MAX_ACTIONS_PER_TURN - 1) {
+      loopGuardTripped = true;
+    }
   }
+
+  // ループ上限に到達、または break 後も active が AI のままなら強制 end_turn
+  if (
+    loopGuardTripped ||
+    (!current.winner && current.activePlayer === aiSlot)
+  ) {
+    log(
+      'post-loop: still AI active (loopGuard=',
+      loopGuardTripped,
+      ') → force end_turn',
+    );
+    const forced = forceEndTurn(current, aiSlot);
+    current = forced.state;
+    events.push(...forced.events);
+  }
+
+  log('runAITurn END', {
+    finalActive: current.activePlayer,
+    finalTurn: current.turn,
+    finalPhase: current.phase,
+    winner: current.winner,
+    eventsCount: events.length,
+  });
 
   return { finalState: current, events };
 }

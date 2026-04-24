@@ -192,14 +192,63 @@ export default function BattlePage() {
     if (state.activePlayer !== 'p2') return;
     if (isAIThinking) return;
 
+    console.log('[BattlePage] AI turn start trigger', {
+      turn: state.turn,
+      phase: state.phase,
+      p2Hand: state.players.p2.hand.length,
+      p2Board: state.players.p2.board.length,
+    });
+
     setIsAIThinking(true);
-    const t = setTimeout(() => {
-      const { finalState } = runAITurn(state, 'p2');
-      setState(finalState);
+
+    // メインタイマー: 600ms 後に runAITurn 実行
+    const mainTimer = setTimeout(() => {
+      console.log('[BattlePage] AI main timer fired, invoking runAITurn');
+      const before = state;
+      const { finalState, events } = runAITurn(before, 'p2');
+      console.log('[BattlePage] runAITurn returned', {
+        sameRef: finalState === before,
+        activePlayer: finalState.activePlayer,
+        winner: finalState.winner,
+        eventsCount: events.length,
+      });
+
+      // state が変化していない (同一参照) 場合、React は再レンダーしない
+      // → 強制的に新しい参照で setState して useEffect を回す
+      if (finalState === before) {
+        console.warn('[BattlePage] AI returned same state — forcing new ref');
+        setState({ ...before });
+      } else {
+        setState(finalState);
+      }
       setIsAIThinking(false);
     }, 600);
+
+    // 保険タイマー (watchdog): 30 秒経っても進行しなければ強制 end_turn
+    const watchdog = setTimeout(() => {
+      console.error(
+        '[BattlePage] AI WATCHDOG TRIGGERED — AI did not finish in 30s, forcing end_turn',
+      );
+      const forced = applyAction(state, {
+        type: 'end_turn',
+        player: 'p2',
+        timestamp: new Date().toISOString(),
+      });
+      if (forced.ok) {
+        setState(forced.newState);
+      } else {
+        console.error(
+          '[BattlePage] watchdog force end_turn ALSO failed',
+          forced.code,
+          forced.reason,
+        );
+      }
+      setIsAIThinking(false);
+    }, 30_000);
+
     return () => {
-      clearTimeout(t);
+      clearTimeout(mainTimer);
+      clearTimeout(watchdog);
       setIsAIThinking(false);
     };
     // state は依存に含めるが、isAIThinking は含めない (ループ防止)
