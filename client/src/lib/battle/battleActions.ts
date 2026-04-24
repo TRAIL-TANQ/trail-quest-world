@@ -31,6 +31,7 @@ import type {
   ActionResultError,
   AttackAction,
   BattleAction,
+  BattleCardInstance,
   BattleEvent,
   BattleState,
   BoardSlot,
@@ -40,6 +41,7 @@ import type {
   PlayerSlot,
   PlayerState,
   SurrenderAction,
+  TriggerType,
 } from './battleTypes';
 
 // ---- エラーヘルパー --------------------------------------------------------
@@ -69,6 +71,163 @@ function commit(
     ...extras,
     log: [...originalLog, ...events],
   };
+}
+
+// ---- トリガー発動処理 (v2.0-launch Phase 2) -------------------------------
+
+/**
+ * ライフトリガーの効果適用結果。
+ * blocksAttack=true の時のみ、呼び出し側はシールド消費 / 手札移動を行わない。
+ */
+interface TriggerResult {
+  state: BattleState;
+  events: BattleEvent[];
+  blocksAttack: boolean;
+}
+
+/**
+ * リーダー被弾時、めくれたライフカードの triggerType に応じた効果を適用。
+ *
+ * 共通: 非 null の triggerType なら 'trigger_activated' イベントを 1 回発火。
+ * 効果別挙動:
+ *   - draw    : defender が deck top から 1 枚ドロー (空デッキは no-op)
+ *   - mana    : defender.nextTurnManaBonus += 2 (次ターン cost フェーズで消費)
+ *   - destroy : attacker の場で最小 attackPower のキャラを 1 体破壊 (空場は no-op)
+ *   - defense : シールド消費ゼロ、完全無効化 (blocksAttack=true を返す)
+ *   - revive  : defender.graveyard[0] を手札へ (空墓地は no-op)
+ *   - null    : no-op、events=[]
+ */
+function applyTriggerEffect(
+  state: BattleState,
+  triggerType: TriggerType,
+  attackerSide: PlayerSlot,
+  defenderSide: PlayerSlot,
+  triggeringCard: BattleCardInstance,
+): TriggerResult {
+  if (triggerType === null) {
+    return { state, events: [], blocksAttack: false };
+  }
+
+  const events: BattleEvent[] = [];
+  events.push(
+    makeEvent('trigger_activated', state.turn, defenderSide, {
+      type: triggerType,
+      cardId: triggeringCard.cardId,
+      instanceId: triggeringCard.instanceId,
+    }),
+  );
+
+  const defender = state.players[defenderSide];
+  const attacker = state.players[attackerSide];
+
+  switch (triggerType) {
+    case 'draw': {
+      if (defender.deck.length === 0) {
+        // 空デッキ: トリガー不発 (game_over にはしない、シールド消費は通常通り)
+        return { state, events, blocksAttack: false };
+      }
+      const drawn = defender.deck[0];
+      const newDefender: PlayerState = {
+        ...defender,
+        deck: defender.deck.slice(1),
+        hand: [...defender.hand, drawn],
+      };
+      return {
+        state: {
+          ...state,
+          players: { ...state.players, [defenderSide]: newDefender },
+        },
+        events,
+        blocksAttack: false,
+      };
+    }
+
+    case 'mana': {
+      const current = defender.nextTurnManaBonus ?? 0;
+      const newDefender: PlayerState = {
+        ...defender,
+        nextTurnManaBonus: current + 2,
+      };
+      return {
+        state: {
+          ...state,
+          players: { ...state.players, [defenderSide]: newDefender },
+        },
+        events,
+        blocksAttack: false,
+      };
+    }
+
+    case 'destroy': {
+      if (attacker.board.length === 0) {
+        return { state, events, blocksAttack: false };
+      }
+      // 最小 attackPower のスロットを選ぶ (同点は先頭)
+      let weakestIdx = 0;
+      let weakestPower = attacker.board[0].card.attackPower;
+      for (let i = 1; i < attacker.board.length; i++) {
+        if (attacker.board[i].card.attackPower < weakestPower) {
+          weakestPower = attacker.board[i].card.attackPower;
+          weakestIdx = i;
+        }
+      }
+      const destroyed = attacker.board[weakestIdx];
+      const newAttacker: PlayerState = {
+        ...attacker,
+        board: [
+          ...attacker.board.slice(0, weakestIdx),
+          ...attacker.board.slice(weakestIdx + 1),
+        ],
+        graveyard: [...attacker.graveyard, destroyed.card],
+      };
+      events.push(
+        makeEvent('card_destroyed', state.turn, defenderSide, {
+          lostBy: attackerSide,
+          cardId: destroyed.card.cardId,
+          instanceId: destroyed.card.instanceId,
+          source: 'trigger_destroy',
+        }),
+      );
+      return {
+        state: {
+          ...state,
+          players: { ...state.players, [attackerSide]: newAttacker },
+        },
+        events,
+        blocksAttack: false,
+      };
+    }
+
+    case 'defense': {
+      events.push(
+        makeEvent('defense_blocked', state.turn, defenderSide, {
+          cardId: triggeringCard.cardId,
+          instanceId: triggeringCard.instanceId,
+        }),
+      );
+      return { state, events, blocksAttack: true };
+    }
+
+    case 'revive': {
+      if (defender.graveyard.length === 0) {
+        return { state, events, blocksAttack: false };
+      }
+      const revived = defender.graveyard[0];
+      const newDefender: PlayerState = {
+        ...defender,
+        graveyard: defender.graveyard.slice(1),
+        hand: [...defender.hand, revived],
+      };
+      return {
+        state: {
+          ...state,
+          players: { ...state.players, [defenderSide]: newDefender },
+        },
+        events,
+        blocksAttack: false,
+      };
+    }
+  }
 }
 
 // ---- メインディスパッチャ --------------------------------------------------
@@ -373,9 +532,12 @@ function applyAttack(state: BattleState, action: AttackAction): ActionResult {
 
   // --- ダメージ処理 ---
   if (action.targetSource.kind === 'leader') {
-    // リーダーにヒット (v2.0-launch 勝敗ルール明確化)
-    //   - シールド > 0: 1 枚消費して手札へ、leader.life = lifeCards.length で同期
-    //   - シールド == 0: リーダー破壊、attacker 勝利 (reason='leader_destroyed')
+    // リーダーにヒット (v2.0-launch 勝敗ルール + Phase 2 トリガー)
+    //   - シールド 0: リーダー破壊、attacker 勝利 (reason='leader_destroyed')
+    //   - シールド > 0:
+    //       ライフカードのトリガー効果発動 (あれば)
+    //       defense トリガーなら攻撃完全無効化 (シールド消費ゼロ)
+    //       それ以外は通常通り 1 枚消費 → 手札へ、leader.life = lifeCards.length 同期
     if (defenderPlayer.lifeCards.length === 0) {
       const winner = attackerSide;
       console.log('[applyAttack] shield 0 + hit → leader destroyed', {
@@ -394,23 +556,46 @@ function applyAttack(state: BattleState, action: AttackAction): ActionResult {
       });
       return { ok: true, newState: finalState, events };
     }
-    // シールドあり → 1 枚消費して手札へ
+
+    // トリガー発動判定 (シールド消費前に評価)
+    const topLife = defenderPlayer.lifeCards[0];
+    const triggerResult = applyTriggerEffect(
+      workingState,
+      topLife.triggerType,
+      attackerSide,
+      defenderSide,
+      topLife,
+    );
+    let nextState = triggerResult.state;
+    events.push(...triggerResult.events);
+
+    if (triggerResult.blocksAttack) {
+      // defense: シールド消費ゼロ、完全無効化。手札にも移動しない。
+      console.log('[applyAttack] defense trigger blocked the attack', {
+        cardId: topLife.cardId,
+      });
+      const finalState = commit(nextState, state.log, events);
+      return { ok: true, newState: finalState, events };
+    }
+
+    // シールド消費 → 手札へ (defense 以外、trigger 後の state を起点に)
+    const nextDefender = nextState.players[defenderSide];
     console.log('[applyAttack] shield consumed', {
       defenderSide,
-      shieldBefore: defenderPlayer.lifeCards.length,
-      shieldAfter: defenderPlayer.lifeCards.length - 1,
-      handLenBefore: defenderPlayer.hand.length,
+      shieldBefore: nextDefender.lifeCards.length,
+      shieldAfter: nextDefender.lifeCards.length - 1,
+      handLenBefore: nextDefender.hand.length,
+      triggerType: topLife.triggerType,
     });
-    const topLife = defenderPlayer.lifeCards[0];
-    const restLife = defenderPlayer.lifeCards.slice(1);
+    const restLife = nextDefender.lifeCards.slice(1);
     const newDefender: PlayerState = {
-      ...defenderPlayer,
+      ...nextDefender,
       lifeCards: restLife,
       leader: {
-        ...defenderPlayer.leader,
-        life: restLife.length, // lifeCards.length との同期 (source of truth = lifeCards)
+        ...nextDefender.leader,
+        life: restLife.length,
       },
-      hand: [...defenderPlayer.hand, topLife],
+      hand: [...nextDefender.hand, topLife],
     };
     events.push(
       makeEvent('life_damaged', state.turn, attackerSide, {
@@ -420,11 +605,11 @@ function applyAttack(state: BattleState, action: AttackAction): ActionResult {
         instanceToHand: topLife.instanceId,
       }),
     );
-    workingState = {
-      ...workingState,
-      players: { ...workingState.players, [defenderSide]: newDefender },
+    nextState = {
+      ...nextState,
+      players: { ...nextState.players, [defenderSide]: newDefender },
     };
-    const finalState = commit(workingState, state.log, events);
+    const finalState = commit(nextState, state.log, events);
     return { ok: true, newState: finalState, events };
   } else {
     // キャラ破壊

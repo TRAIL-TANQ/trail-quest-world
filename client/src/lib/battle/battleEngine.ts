@@ -272,12 +272,20 @@ export function advancePhase(state: BattleState): BattleState {
     case 'cost': {
       const player = state.players[active];
       // 先攻/後攻で異なる: 先攻 = turn*2-1, 後攻 = turn*2 (上限 MAX_COST=15)
-      const newMax = calcManaForTurn(state.turn, active, state.firstPlayer);
+      const baseMax = calcManaForTurn(state.turn, active, state.firstPlayer);
+      // 'mana' トリガー由来のボーナスを合算して 1 ターンのみ反映 (上限 cap は外す)
+      const bonus = player.nextTurnManaBonus ?? 0;
+      const newMax = baseMax + bonus;
       return {
         ...state,
         players: {
           ...state.players,
-          [active]: { ...player, maxCost: newMax, currentCost: newMax },
+          [active]: {
+            ...player,
+            maxCost: newMax,
+            currentCost: newMax,
+            nextTurnManaBonus: 0, // ボーナスは 1 ターン消費
+          },
         },
         phase: 'main',
         log: [
@@ -285,6 +293,7 @@ export function advancePhase(state: BattleState): BattleState {
           makeEvent('phase_change', state.turn, active, {
             to: 'main',
             maxCost: newMax,
+            manaBonus: bonus,
           }),
         ],
       };
