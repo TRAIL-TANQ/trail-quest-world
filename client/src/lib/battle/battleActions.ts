@@ -227,6 +227,34 @@ function applyAttack(state: BattleState, action: AttackAction): ActionResult {
   const attackerPlayer = state.players[attackerSide];
   const defenderPlayer = state.players[defenderSide];
 
+  // [DEBUG] D4.2 攻撃バグ調査 — 値の型と実態を残す
+  console.log('[applyAttack] ENTRY', {
+    action: {
+      attackerSource: action.attackerSource,
+      targetSource: action.targetSource,
+      player: action.player,
+    },
+    activePlayer: state.activePlayer,
+    phase: state.phase,
+    attackerLeader: {
+      id: attackerPlayer.leader.id,
+      name: attackerPlayer.leader.name,
+      attackPower: attackerPlayer.leader.attackPower,
+      attackPowerType: typeof attackerPlayer.leader.attackPower,
+      defensePower: attackerPlayer.leader.defensePower,
+      isRested: attackerPlayer.leader.isRested,
+    },
+    defenderLeader: {
+      id: defenderPlayer.leader.id,
+      name: defenderPlayer.leader.name,
+      attackPower: defenderPlayer.leader.attackPower,
+      defensePower: defenderPlayer.leader.defensePower,
+      defensePowerType: typeof defenderPlayer.leader.defensePower,
+      life: defenderPlayer.leader.life,
+      lifeCardsLen: defenderPlayer.lifeCards.length,
+    },
+  });
+
   // --- アタッカー解決 ---
   let attackPower: number;
   let attackerName: string;
@@ -318,6 +346,16 @@ function applyAttack(state: BattleState, action: AttackAction): ActionResult {
 
   const success = attackPower >= defensePower;
 
+  // [DEBUG] D4.2
+  console.log('[applyAttack] power check', {
+    attackPower,
+    attackPowerType: typeof attackPower,
+    defensePower,
+    defensePowerType: typeof defensePower,
+    comparison: `${attackPower} >= ${defensePower}`,
+    success,
+  });
+
   events.push(
     makeEvent('attack_resolved', state.turn, attackerSide, {
       success,
@@ -328,6 +366,7 @@ function applyAttack(state: BattleState, action: AttackAction): ActionResult {
 
   if (!success) {
     // 攻撃失敗: アタッカーのレストのみ反映して終了
+    console.log('[applyAttack] FAILED (attack < defense), no damage applied');
     const finalState = commit(workingState, state.log, events);
     return { ok: true, newState: finalState, events };
   }
@@ -354,6 +393,13 @@ function applyAttack(state: BattleState, action: AttackAction): ActionResult {
       return { ok: true, newState: finalState, events };
     }
     // 残ライフあり → ライフ 1 枚を手札へ移動
+    console.log('[applyAttack] applying leader damage', {
+      defenderSide,
+      lifeBefore: defenderPlayer.leader.life,
+      lifeAfter: defenderPlayer.leader.life - 1,
+      lifeCardsLenBefore: defenderPlayer.lifeCards.length,
+      handLenBefore: defenderPlayer.hand.length,
+    });
     const topLife = defenderPlayer.lifeCards[0];
     const restLife = defenderPlayer.lifeCards.slice(1);
     const newDefender: PlayerState = {
