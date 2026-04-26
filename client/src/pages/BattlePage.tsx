@@ -130,6 +130,10 @@ function LeaderImage({
  * - once_only 装備が発動済 (`onceUsed=true`) なら半透明 + グレースケール
  *   + 中央に「使用済」オーバーレイ
  * - card=null なら何も描画しない (= 装備していない時は完全に非表示)
+ *
+ * Phase 6b-1.5: 共通 CardImage は 404 時に alt(=card.name) をテキストとして
+ * 画面に焼き込むため、装備アイコンでは使わない。直接 <img> + onError で
+ * 画像非表示にし、枠と「装」マークだけが残るようにする (cardId テキスト出ない)。
  */
 function EquipmentIcon({
   card,
@@ -140,18 +144,26 @@ function EquipmentIcon({
   onceUsed?: boolean;
   size?: 'sm' | 'md';
 }) {
+  const [imgErrored, setImgErrored] = useState(false);
   if (!card) return null;
   const widthClass = size === 'sm' ? 'w-9' : 'w-12';
+  const src = resolveCardImage(card.cardId);
+  const showImg = !imgErrored && Boolean(src);
   return (
     <div
       className={`relative ${widthClass} aspect-[3/4] rounded-md overflow-hidden border-2 border-yellow-400 shadow-[0_0_6px_rgba(255,215,0,0.4)] bg-black/40 flex-shrink-0`}
       title={`${card.name}${onceUsed ? ' (使用済)' : ''}`}
     >
-      <CardImage
-        cardId={card.cardId}
-        alt={card.name}
-        className={`w-full h-full object-cover ${onceUsed ? 'opacity-50 grayscale' : ''}`}
-      />
+      {showImg && (
+        <img
+          src={src}
+          alt=""
+          aria-hidden="true"
+          draggable={false}
+          onError={() => setImgErrored(true)}
+          className={`w-full h-full object-cover ${onceUsed ? 'opacity-50 grayscale' : ''}`}
+        />
+      )}
       <div className="absolute top-0 right-0 bg-yellow-500/90 text-black text-[8px] font-bold px-1 rounded-bl leading-tight">
         装
       </div>
