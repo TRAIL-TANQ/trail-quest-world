@@ -151,7 +151,8 @@ function makeState(
 ): BattleState {
   return {
     sessionId: 's_test',
-    turn: 2,
+    // Phase 6c-4: turn 1, 2 は両者攻撃ロック中のためデフォルトは 3 (=攻撃可能)
+    turn: 3,
     firstPlayer: 'p1',
     activePlayer: 'p1',
     phase: 'main',

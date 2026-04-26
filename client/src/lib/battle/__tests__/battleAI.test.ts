@@ -97,7 +97,9 @@ function makeState(overrides: Partial<BattleState> = {}): BattleState {
   const leader = makeLeader('l_default');
   return {
     sessionId: 's_test',
-    turn: 1,
+    // Phase 6c-4: turn 1, 2 は両者攻撃ロック中のためデフォルトは 3 (=攻撃可能)
+    // turn=1/2 を要する個別テストは override で上書きする
+    turn: 3,
     firstPlayer: 'p1',
     activePlayer: 'p1',
     phase: 'main',
@@ -258,7 +260,8 @@ describe('battleAI.runAITurn (full turn loop)', () => {
     const cheapCard = makeCard('cheap', { cost: 1 });
 
     const state = makeState({
-      turn: 2,
+      // Phase 6c-4: 攻撃解禁ターン 3 でテスト (元は turn 2 だったがロック導入で攻撃不可)
+      turn: 3,
       activePlayer: 'p2',
       phase: 'main',
       players: {
@@ -311,5 +314,55 @@ describe('battleAI.runAITurn (full turn loop)', () => {
     expect(finalState.players.p1.hand).toHaveLength(2);
     // p1 のデッキは 2 → 1 に
     expect(finalState.players.p1.deck).toHaveLength(1);
+  });
+});
+
+// ============================================================================
+// Phase 6c-4: 序盤 (turn 1, 2) は AI が attack を候補に選ばないこと
+// ============================================================================
+
+describe('battleAI.chooseAIAction (Phase 6c-4 early-turn lock)', () => {
+  it('turn 1: 攻撃しか選べない盤面でも attack ではなく end_turn を返す', () => {
+    const leader = makeLeader('l_ai');
+    const c5 = makeCard('card_5', { cost: 5 });
+    const state = makeState({
+      // 通常なら attack fallback が走る盤面
+      turn: 1,
+      activePlayer: 'p2',
+      phase: 'main',
+      players: {
+        p1: makeEmptyPlayer('u1', leader),
+        p2: makeEmptyPlayer('ai', leader, {
+          hand: [c5],
+          currentCost: 2,
+          maxCost: 2,
+        }),
+      },
+    });
+
+    const thought = chooseAIAction(state, 'p2');
+    // turn 1 は攻撃ロック中なので end_turn にフォールバック
+    expect(thought.chosenAction.type).toBe('end_turn');
+  });
+
+  it('turn 2: 同じく attack を返さず end_turn', () => {
+    const leader = makeLeader('l_ai');
+    const c5 = makeCard('card_5', { cost: 5 });
+    const state = makeState({
+      turn: 2,
+      activePlayer: 'p2',
+      phase: 'main',
+      players: {
+        p1: makeEmptyPlayer('u1', leader),
+        p2: makeEmptyPlayer('ai', leader, {
+          hand: [c5],
+          currentCost: 2,
+          maxCost: 2,
+        }),
+      },
+    });
+
+    const thought = chooseAIAction(state, 'p2');
+    expect(thought.chosenAction.type).toBe('end_turn');
   });
 });

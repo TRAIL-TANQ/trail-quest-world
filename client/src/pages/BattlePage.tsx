@@ -21,6 +21,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { getChildId } from '@/lib/auth';
 import {
+  ATTACK_UNLOCK_TURN,
   applyAction,
   resumeAttackWithCounter,
   resumeEventEffectWithTarget,
@@ -951,6 +952,11 @@ export default function BattlePage() {
       console.log('[UI] handleSelectAttacker: blocked by isPlayerActing gate');
       return;
     }
+    // Phase 6c-4: 序盤攻撃ロック中は attacker 選択させない
+    if (state.turn < ATTACK_UNLOCK_TURN) {
+      console.log('[UI] handleSelectAttacker: attack locked', { turn: state.turn });
+      return;
+    }
 
     // 選択可能か (レスト/サモニング病チェック)
     if (id === 'leader') {
@@ -999,6 +1005,11 @@ export default function BattlePage() {
 
     if (!state || !isPlayerActing()) {
       console.log('[UI] handleAttackTarget: blocked by isPlayerActing gate');
+      return;
+    }
+    // Phase 6c-4: 序盤攻撃ロック中は attack 実行も弾く (selectedAttacker は null のはず)
+    if (state.turn < ATTACK_UNLOCK_TURN) {
+      console.log('[UI] handleAttackTarget: attack locked', { turn: state.turn });
       return;
     }
     if (selectedAttacker === null) {
@@ -1171,6 +1182,18 @@ export default function BattlePage() {
           )}
         </div>
       </div>
+
+      {/* ====== Phase 6c-4: 序盤攻撃ロックバナー ====== */}
+      {state.turn < ATTACK_UNLOCK_TURN && !state.winner && (
+        <div className="mb-2 px-3 py-2 rounded-lg bg-amber-500/15 border border-amber-400/40 text-center">
+          <span className="text-amber-300 text-sm font-bold">
+            🔒 あと {ATTACK_UNLOCK_TURN - state.turn} ターンで攻撃できるよ
+          </span>
+          <div className="text-amber-200/70 text-[10px] mt-0.5">
+            最初の 2 ターンはお互い展開タイム
+          </div>
+        </div>
+      )}
 
       {/* ====== 自分の場 ====== */}
       <BoardRow

@@ -52,6 +52,10 @@ import type {
   TriggerType,
 } from './battleTypes';
 
+// v2.0.2 Phase 6c-4: ターン 1, 2 は両者攻撃不可 (子供向け TCG の展開保護)
+// turn は 1-indexed (state.turn=1 がゲーム最初のターン)。turn 3 から攻撃解禁。
+export const ATTACK_UNLOCK_TURN = 3;
+
 // v2.0.2 Phase 6b-3: 人間プレイヤー時に対象選択 UI を介したい effect_type
 const TARGET_SELECTION_REQUIRED: ReadonlySet<PendingTargetSelection['type']> =
   new Set<PendingTargetSelection['type']>([
@@ -1829,6 +1833,14 @@ function applyAttack(state: BattleState, action: AttackAction): ActionResult {
   }
   if (state.phase !== 'main') {
     return err('wrong_phase', 'メインフェイズでのみ攻撃できます');
+  }
+  // v2.0.2 Phase 6c-4: ターン 1, 2 は両者攻撃不可 (展開保護)
+  if (state.turn < ATTACK_UNLOCK_TURN) {
+    const remaining = ATTACK_UNLOCK_TURN - state.turn;
+    return err(
+      'attack_locked_early_turns',
+      `あと ${remaining} ターンで攻撃できるよ`,
+    );
   }
 
   const attackerSide = action.player;

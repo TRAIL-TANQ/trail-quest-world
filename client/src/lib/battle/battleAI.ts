@@ -16,7 +16,11 @@
 //   - runAITurn(state, aiSlot): { finalState, events }
 // ============================================================================
 
-import { applyAction, prepareAIAttack } from './battleActions';
+import {
+  ATTACK_UNLOCK_TURN,
+  applyAction,
+  prepareAIAttack,
+} from './battleActions';
 import { advancePhase, BOARD_MAX_SLOTS } from './battleEngine';
 import type {
   AIThought,
@@ -78,38 +82,41 @@ export function chooseAIAction(
   }
 
   // --- 2. アタック可能なリーダー / キャラで相手リーダーへ ---
-  if (!player.leader.isRested && player.leader.canAttackThisTurn) {
-    const action: AttackAction = {
-      type: 'attack',
-      player: aiSlot,
-      timestamp: now,
-      attackerSource: { kind: 'leader' },
-      targetSource: { kind: 'leader' },
-    };
-    return {
-      chosenAction: action,
-      confidence: 0.6,
-      reasoning: 'attack opponent leader with AI leader',
-    };
-  }
-
-  for (const slot of player.board) {
-    if (!slot.isRested && slot.canAttackThisTurn) {
+  // v2.0.2 Phase 6c-4: ターン 1, 2 は両者攻撃ロック中なので候補から除外
+  if (state.turn >= ATTACK_UNLOCK_TURN) {
+    if (!player.leader.isRested && player.leader.canAttackThisTurn) {
       const action: AttackAction = {
         type: 'attack',
         player: aiSlot,
         timestamp: now,
-        attackerSource: {
-          kind: 'character',
-          instanceId: slot.card.instanceId,
-        },
+        attackerSource: { kind: 'leader' },
         targetSource: { kind: 'leader' },
       };
       return {
         chosenAction: action,
         confidence: 0.6,
-        reasoning: `attack opponent leader with ${slot.card.cardId}`,
+        reasoning: 'attack opponent leader with AI leader',
       };
+    }
+
+    for (const slot of player.board) {
+      if (!slot.isRested && slot.canAttackThisTurn) {
+        const action: AttackAction = {
+          type: 'attack',
+          player: aiSlot,
+          timestamp: now,
+          attackerSource: {
+            kind: 'character',
+            instanceId: slot.card.instanceId,
+          },
+          targetSource: { kind: 'leader' },
+        };
+        return {
+          chosenAction: action,
+          confidence: 0.6,
+          reasoning: `attack opponent leader with ${slot.card.cardId}`,
+        };
+      }
     }
   }
 

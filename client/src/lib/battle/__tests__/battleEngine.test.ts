@@ -272,7 +272,9 @@ describe('battleActions.applyAction (attack summoning sickness)', () => {
     const leader = makeLeader('l1');
     const card = makeCard('c_summoning', { cost: 1, attackPower: 5 });
     const state = makeState({
-      turn: 1,
+      // Phase 6c-4: turn 3 から攻撃解禁。それ以前だと attack_locked_early_turns で
+      // 弾かれて summoning_sickness までたどり着かない
+      turn: 3,
       phase: 'main',
       players: {
         p1: makeEmptyPlayer('u1', leader, {
@@ -320,7 +322,8 @@ describe('battleActions.applyAction (attack leader)', () => {
     const lifeCard3 = makeCard('life_bot');
 
     const state = makeState({
-      turn: 2,
+      // Phase 6c-4: turn 3 から攻撃解禁
+      turn: 3,
       phase: 'main',
       players: {
         p1: makeEmptyPlayer('u1', p1Leader, {
@@ -463,5 +466,85 @@ describe('battleEngine.calcManaForTurn', () => {
   it('先攻/後攻の入れ替えにも追従 (firstPlayer=p2 の場合)', () => {
     expect(calcManaForTurn(1, 'p2', 'p2')).toBe(1); // p2 が先攻
     expect(calcManaForTurn(1, 'p1', 'p2')).toBe(2); // p1 が後攻
+  });
+});
+
+// ============================================================================
+// Phase 6c-4: 序盤攻撃ロック (turn 1, 2 は両者攻撃不可、turn 3 から解禁)
+// ============================================================================
+
+describe('Phase 6c-4: early-turn attack lock', () => {
+  function setupAttackable(turn: number): {
+    state: BattleState;
+    attackerId: string;
+  } {
+    const p1Leader = makeLeader('l_p1', { attackPower: 5 });
+    const p2Leader = makeLeader('l_p2', { defensePower: 3 });
+    const attacker = makeCard('c_attacker', { attackPower: 5 });
+    const state = makeState({
+      turn,
+      phase: 'main',
+      activePlayer: 'p1',
+      players: {
+        p1: makeEmptyPlayer('u1', p1Leader, {
+          board: [
+            {
+              card: attacker,
+              isRested: false,
+              canAttackThisTurn: true,
+              playedTurn: 1,
+            },
+          ],
+          hasDrawnThisTurn: true,
+        }),
+        p2: makeEmptyPlayer('ai', p2Leader, {
+          lifeCards: [
+            makeCard('l1'),
+            makeCard('l2'),
+            makeCard('l3'),
+          ],
+        }),
+      },
+    });
+    return { state, attackerId: attacker.instanceId };
+  }
+
+  function attackAction(attackerId: string): AttackAction {
+    return {
+      type: 'attack',
+      player: 'p1',
+      timestamp: '2026-04-25T00:00:00Z',
+      attackerSource: { kind: 'character', instanceId: attackerId },
+      targetSource: { kind: 'leader' },
+    };
+  }
+
+  it('turn 1 で attack を試みると attack_locked_early_turns エラー', () => {
+    const { state, attackerId } = setupAttackable(1);
+    const result = applyAction(state, attackAction(attackerId));
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe('attack_locked_early_turns');
+      expect(result.reason).toContain('2 ターン');
+    }
+  });
+
+  it('turn 2 で attack を試みると attack_locked_early_turns エラー', () => {
+    const { state, attackerId } = setupAttackable(2);
+    const result = applyAction(state, attackAction(attackerId));
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe('attack_locked_early_turns');
+      expect(result.reason).toContain('1 ターン');
+    }
+  });
+
+  it('turn 3 で attack が正常解決される (ライフ 1 減 + life_damaged 発火)', () => {
+    const { state, attackerId } = setupAttackable(3);
+    const result = applyAction(state, attackAction(attackerId));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.newState.players.p2.lifeCards).toHaveLength(2);
+    expect(result.events.some((e) => e.type === 'life_damaged')).toBe(true);
   });
 });
