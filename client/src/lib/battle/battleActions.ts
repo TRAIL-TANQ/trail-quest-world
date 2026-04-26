@@ -1915,6 +1915,20 @@ function applyAttack(state: BattleState, action: AttackAction): ActionResult {
     // リーダー防御は装備の def_bonus を反映
     defensePower = getEffectiveLeaderDef(defenderPlayer);
     targetName = defenderPlayer.leader.name;
+    // [DEBUG] Phase 6b-3.5 — 防御値の内訳を出して再発時の調査を早くする
+    const leaderDefBuffs = (defenderPlayer.tempBuffs ?? []).filter(
+      (b) => b.type === 'leader_def_bonus' && b.scope === 'leader',
+    );
+    console.log('[applyAttack] defense breakdown (leader)', {
+      total: defensePower,
+      base: defenderPlayer.leader.defensePower,
+      equipmentBonusDef: defenderPlayer.equipmentBonusDef ?? 0,
+      tempBuffs: leaderDefBuffs.map((b) => ({
+        value: b.value,
+        expiresAt: b.expiresAt,
+        createdTurn: b.createdTurn,
+      })),
+    });
   } else {
     const targetInstanceId = action.targetSource.instanceId;
     targetCharIdx = defenderPlayer.board.findIndex(

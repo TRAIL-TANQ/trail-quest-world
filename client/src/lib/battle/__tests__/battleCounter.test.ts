@@ -773,3 +773,168 @@ describe('AI attack with human counter window (Phase 6b-4)', () => {
     expect(p1.lifeCards).toHaveLength(1);
   });
 });
+
+// ============================================================================
+// Phase 6b-3.5 緊急回帰: 場プレイカウンターの 'this_turn' buff_leader_def が
+// 自ターン終了時に消えること (それまで 2 ラウンド残って相手の攻撃を弾いていた)
+// ============================================================================
+
+describe('Phase 6b-3.5: counter play_from_hand this_turn buff lifecycle', () => {
+  it('cn_great_wall_shield play_from_hand: this_turn def buff expires at own main->end', async () => {
+    const { advancePhase } = await import('../battleEngine');
+
+    // p1 が cn_great_wall_shield を場プレイ → 自リーダー def +2 (this_turn)
+    const p1Leader = makeLeader('l_p1', { defensePower: 5 });
+    const p2Leader = makeLeader('l_p2', { attackPower: 6 });
+    const wallShield = makeCounter('cn_great_wall_shield', {
+      cost: 3,
+      counterValue: 3,
+      eventEffectType: 'buff_leader_def',
+      eventEffectData: { def_bonus: 2, duration: 'this_turn' },
+    });
+    const state = makeState(
+      makeEmptyPlayer('u1', p1Leader, {
+        hand: [wallShield],
+        currentCost: 5,
+        lifeCards: [makeCard('l1'), makeCard('l2'), makeCard('l3')],
+      }),
+      makeEmptyPlayer('ai', p2Leader, {
+        isAI: true,
+        // p2 の draw phase に最低 1 枚必要 (空デッキは game_over)
+        deck: [makeCard('p2_d1'), makeCard('p2_d2')],
+      }),
+      { turn: 3, activePlayer: 'p1', phase: 'main' },
+    );
+
+    // play
+    const playResult = applyAction(state, {
+      type: 'play_card',
+      player: 'p1',
+      cardInstanceId: wallShield.instanceId,
+      timestamp: '2026-04-24T00:00:00Z',
+    });
+    expect(playResult.ok).toBe(true);
+    if (!playResult.ok) return;
+    // 発動直後は buff 1 件、scope='leader', value=2
+    const p1AfterPlay = playResult.newState.players.p1;
+    expect(p1AfterPlay.tempBuffs).toHaveLength(1);
+    expect(p1AfterPlay.tempBuffs[0].value).toBe(2);
+    expect(p1AfterPlay.tempBuffs[0].expiresAt).toBe('this_turn');
+
+    // p1 main → end で buff 消滅
+    const afterMainEnd = advancePhase(playResult.newState);
+    expect(afterMainEnd.phase).toBe('end');
+    expect(afterMainEnd.players.p1.tempBuffs).toHaveLength(0);
+
+    // 同じ state で end → refresh (active=p2, turn=3) → draw → cost → main
+    let s = afterMainEnd;
+    let guard = 0;
+    while (
+      !(s.activePlayer === 'p2' && s.phase === 'main') &&
+      !s.winner &&
+      guard++ < 10
+    ) {
+      s = advancePhase(s);
+    }
+    // p2 視点で p1 リーダー攻撃 → 6 >= 5 で成立 (buff が残っていれば 6 < 7 で失敗)
+    const attackResult = applyAction(s, {
+      type: 'attack',
+      player: 'p2',
+      attackerSource: { kind: 'leader' },
+      targetSource: { kind: 'leader' },
+      counterCardInstanceId: null, // 防御カウンターはなし
+      timestamp: '2026-04-24T00:00:00Z',
+    });
+    expect(attackResult.ok).toBe(true);
+    if (!attackResult.ok) return;
+    const resolved = attackResult.events.find(
+      (e) => e.type === 'attack_resolved',
+    );
+    expect((resolved!.payload as { success?: boolean }).success).toBe(true);
+    expect(
+      (resolved!.payload as { defensePower?: number }).defensePower,
+    ).toBe(5);
+    // p1 ライフが 1 枚減ってる (buff 残ってたら防がれてゼロ減)
+    expect(attackResult.newState.players.p1.lifeCards).toHaveLength(2);
+  });
+
+  it('attack-mode counter declaration does not poison subsequent defense calc', async () => {
+    const { advancePhase } = await import('../battleEngine');
+
+    // p1 atk=6 が p2 leader を狙う。p2 は cn_great_wall_shield を防御発動 → counter_value=3
+    // で 6<8 で阻止。重要: 防御発動は tempBuffs に積まないので、その後の p2 のターンで
+    // p1 が改めて p2 リーダーを attack した時、defense は base 5 のままになる。
+    const p1Leader = makeLeader('l_p1', { attackPower: 6 });
+    const p2Leader = makeLeader('l_p2', { defensePower: 5 });
+    const wallShield = makeCounter('cn_great_wall_shield', {
+      cost: 3,
+      counterValue: 3,
+      eventEffectType: 'buff_leader_def',
+      eventEffectData: { def_bonus: 2, duration: 'this_turn' },
+    });
+    const charAtt = makeCard('c_p1_att', {
+      instanceId: 'inst_p1_att',
+      attackPower: 6,
+    });
+    const state = makeState(
+      makeEmptyPlayer('u1', p1Leader, {
+        currentCost: 5,
+        board: [
+          {
+            card: charAtt,
+            isRested: false,
+            canAttackThisTurn: true,
+            playedTurn: 1,
+          },
+        ],
+      }),
+      makeEmptyPlayer('ai', p2Leader, {
+        isAI: true,
+        hand: [wallShield],
+        lifeCards: [makeCard('l1'), makeCard('l2'), makeCard('l3')],
+      }),
+      { turn: 3, activePlayer: 'p1', phase: 'main' },
+    );
+
+    // attack with counter declaration
+    const firstAtk = applyAction(state, {
+      type: 'attack',
+      player: 'p1',
+      attackerSource: { kind: 'leader' },
+      targetSource: { kind: 'leader' },
+      counterCardInstanceId: wallShield.instanceId,
+      timestamp: '2026-04-24T00:00:00Z',
+    });
+    expect(firstAtk.ok).toBe(true);
+    if (!firstAtk.ok) return;
+    // 防御成立、p2 tempBuffs に何も積まれていない
+    expect(firstAtk.newState.players.p2.tempBuffs).toHaveLength(0);
+    expect(firstAtk.newState.players.p2.lifeCards).toHaveLength(3);
+    // counterCard は p2 の手札 → 墓地
+    expect(firstAtk.newState.players.p2.graveyard.map((c) => c.cardId)).toContain(
+      'cn_great_wall_shield',
+    );
+
+    // 続けて board キャラで再攻撃 (アタッカー違うのでレスト関係ない)
+    const secondAtk = applyAction(firstAtk.newState, {
+      type: 'attack',
+      player: 'p1',
+      attackerSource: { kind: 'character', instanceId: 'inst_p1_att' },
+      targetSource: { kind: 'leader' },
+      counterCardInstanceId: null,
+      timestamp: '2026-04-24T00:00:00Z',
+    });
+    expect(secondAtk.ok).toBe(true);
+    if (!secondAtk.ok) return;
+    const resolved = secondAtk.events.find(
+      (e) => e.type === 'attack_resolved',
+    );
+    // 6 >= 5 で成立 (前回のカウンター発動で残留 buff があれば 6 < 7 で失敗)
+    expect((resolved!.payload as { success?: boolean }).success).toBe(true);
+    expect(
+      (resolved!.payload as { defensePower?: number }).defensePower,
+    ).toBe(5);
+    // 念のため未使用の不要な advancePhase は呼ばない (この場では state を進める必要なし)
+    void advancePhase;
+  });
+});

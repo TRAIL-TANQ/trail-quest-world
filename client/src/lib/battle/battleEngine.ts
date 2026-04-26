@@ -563,12 +563,46 @@ export function advancePhase(state: BattleState): BattleState {
     }
 
     case 'main': {
+      // v2.0.2 Phase 6b-3.5: 自ターン終了時に active プレイヤーの
+      // 'this_turn' tempBuffs を expire する。
+      //
+      // 背景: cost フェーズの expireTempBuffs は state.turn が増分された時しか
+      // 'this_turn' を消さないが、state.turn は p2 → p1 transition でしか増分
+      // しない。そのため p1 turn 3 main で発行した 'this_turn' buff が p2 turn 3
+      // に持ち越され、相手の攻撃ターンに作用する症状があった (cn_great_wall_shield
+      // 場プレイ後に防御値が 2 ラウンド残る等)。
+      //
+      // ここでは active player の tempBuffs から 'this_turn' のみを除去する。
+      // 相手プレイヤーの list に積まれた `this_turn` debuff (ev_river_flood 等)
+      // は active player の list ではないので touch せず、相手の next 攻撃で
+      // 正しく作用したのち、相手の main → end でこのロジックにより消滅する。
+      const activeP = state.players[active];
+      const beforeBuffs = activeP.tempBuffs ?? [];
+      const remaining = beforeBuffs.filter((b) => b.expiresAt !== 'this_turn');
+      const expiredCount = beforeBuffs.length - remaining.length;
+      const cleaned: BattleState =
+        expiredCount > 0
+          ? {
+              ...state,
+              players: {
+                ...state.players,
+                [active]: { ...activeP, tempBuffs: remaining },
+              },
+              log: [
+                ...state.log,
+                makeEvent('temp_buff_expired', state.turn, active, {
+                  reason: 'this_turn_main_end',
+                  expiredCount,
+                }),
+              ],
+            }
+          : state;
       return {
-        ...state,
+        ...cleaned,
         phase: 'end',
         log: [
-          ...state.log,
-          makeEvent('phase_change', state.turn, active, { to: 'end' }),
+          ...cleaned.log,
+          makeEvent('phase_change', cleaned.turn, active, { to: 'end' }),
         ],
       };
     }
