@@ -121,6 +121,49 @@ function LeaderImage({
   );
 }
 
+// ---- EquipmentIcon: リーダー隣に表示する装備カードアイコン (Phase 6b-1) -----
+
+/**
+ * 現在装備中のカードを縦長アイコン (w-12 aspect-[3/4]) で表示。
+ *
+ * - 右上に「装」マーク (gold/yellow)
+ * - once_only 装備が発動済 (`onceUsed=true`) なら半透明 + グレースケール
+ *   + 中央に「使用済」オーバーレイ
+ * - card=null なら何も描画しない (= 装備していない時は完全に非表示)
+ */
+function EquipmentIcon({
+  card,
+  onceUsed,
+  size = 'md',
+}: {
+  card: BattleCardInstance | null;
+  onceUsed?: boolean;
+  size?: 'sm' | 'md';
+}) {
+  if (!card) return null;
+  const widthClass = size === 'sm' ? 'w-9' : 'w-12';
+  return (
+    <div
+      className={`relative ${widthClass} aspect-[3/4] rounded-md overflow-hidden border-2 border-yellow-400 shadow-[0_0_6px_rgba(255,215,0,0.4)] bg-black/40 flex-shrink-0`}
+      title={`${card.name}${onceUsed ? ' (使用済)' : ''}`}
+    >
+      <CardImage
+        cardId={card.cardId}
+        alt={card.name}
+        className={`w-full h-full object-cover ${onceUsed ? 'opacity-50 grayscale' : ''}`}
+      />
+      <div className="absolute top-0 right-0 bg-yellow-500/90 text-black text-[8px] font-bold px-1 rounded-bl leading-tight">
+        装
+      </div>
+      {onceUsed && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/55">
+          <span className="text-white text-[9px] font-bold">使用済</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ---- component ------------------------------------------------------------
 
 export default function BattlePage() {
@@ -557,6 +600,10 @@ export default function BattlePage() {
         deckCount={p2.deck.length}
         targetable={attackerSelected}
         onLeaderClick={() => handleAttackTarget({ kind: 'leader' })}
+        equippedCard={p2.equippedCard}
+        equipmentOnceUsed={p2.equipmentOnceUsed}
+        equipmentBonusAtk={p2.equipmentBonusAtk}
+        equipmentBonusDef={p2.equipmentBonusDef}
       />
       <BoardRow
         board={p2.board}
@@ -608,6 +655,13 @@ export default function BattlePage() {
           onClick={() => handleSelectAttacker('leader')}
           isSelected={selectedAttacker === 'leader'}
           canPlayerAct={canPlayerAct}
+          equipmentBonusAtk={p1.equipmentBonusAtk}
+          equipmentBonusDef={p1.equipmentBonusDef}
+        />
+        <EquipmentIcon
+          card={p1.equippedCard}
+          onceUsed={p1.equipmentOnceUsed}
+          size="md"
         />
         <ManaDisplay current={p1.currentCost} max={p1.maxCost} />
         <LifePips count={p1.lifeCards.length} max={p1MaxLife} color="yellow" />
@@ -684,6 +738,10 @@ function OpponentPanel({
   deckCount,
   targetable,
   onLeaderClick,
+  equippedCard = null,
+  equipmentOnceUsed = false,
+  equipmentBonusAtk = 0,
+  equipmentBonusDef = 0,
 }: {
   leader: LeaderState;
   leaderImageUrl: string;
@@ -695,6 +753,11 @@ function OpponentPanel({
   deckCount: number;
   targetable: boolean;
   onLeaderClick: () => void;
+  /** Phase 6b-1: 相手の装備中カード (なければ null) */
+  equippedCard?: BattleCardInstance | null;
+  equipmentOnceUsed?: boolean;
+  equipmentBonusAtk?: number;
+  equipmentBonusDef?: number;
 }) {
   return (
     <div className="flex items-center gap-2 px-2 py-2 rounded-lg bg-red-900/20 border border-red-500/30">
@@ -703,6 +766,13 @@ function OpponentPanel({
         imageUrl={leaderImageUrl}
         onClick={onLeaderClick}
         targetable={targetable}
+        equipmentBonusAtk={equipmentBonusAtk}
+        equipmentBonusDef={equipmentBonusDef}
+      />
+      <EquipmentIcon
+        card={equippedCard}
+        onceUsed={equipmentOnceUsed}
+        size="sm"
       />
       <ManaDisplay current={currentCost} max={maxCost} />
       <LifePips count={lifeCount} max={maxLife} color="red" />
@@ -734,6 +804,8 @@ function LeaderBadge({
   isSelected = false,
   canPlayerAct = false,
   targetable = false,
+  equipmentBonusAtk = 0,
+  equipmentBonusDef = 0,
 }: {
   leader: LeaderState;
   imageUrl: string;
@@ -741,6 +813,10 @@ function LeaderBadge({
   isSelected?: boolean;
   canPlayerAct?: boolean;
   targetable?: boolean;
+  /** 装備による永続 atk 加算 (Phase 3)。0 の時は表示せず。 */
+  equipmentBonusAtk?: number;
+  /** 装備による永続 def 加算 (Phase 3)。0 の時は表示せず。 */
+  equipmentBonusDef?: number;
 }) {
   // 自リーダー: canPlayerAct && !rested で clickable
   // 敵リーダー: targetable (= 自側で attacker 選択済み) で clickable
@@ -771,7 +847,14 @@ function LeaderBadge({
           {leader.name}
         </div>
         <div className="text-[10px] text-white/70">
-          ⚔{leader.attackPower} 🛡{leader.defensePower}
+          ⚔{leader.attackPower}
+          {equipmentBonusAtk > 0 && (
+            <span className="text-yellow-300 font-bold">+{equipmentBonusAtk}</span>
+          )}{' '}
+          🛡{leader.defensePower}
+          {equipmentBonusDef > 0 && (
+            <span className="text-yellow-300 font-bold">+{equipmentBonusDef}</span>
+          )}
           {leader.isRested && <span className="ml-1 text-white/50">(rest)</span>}
         </div>
       </div>
