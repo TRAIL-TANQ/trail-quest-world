@@ -256,6 +256,9 @@ export function expandDeck(
     // DB に trigger_type カラム未追加の状態でも安全に動くよう undefined → null に正規化
     const triggerType =
       (meta as { trigger_type?: TriggerType }).trigger_type ?? null;
+    // v2.0.2 追加カラム: counter_value / equipment_* / event_* も
+    // 旧 DB スキーマで undefined になり得るためデフォルト値で補完
+    const m = meta as BattleCardMetaRow;
     for (let i = 0; i < dc.count; i++) {
       out.push({
         instanceId: nanoid(10),
@@ -266,9 +269,15 @@ export function expandDeck(
         attackPower: meta.attack_power,
         defensePower: meta.defense_power,
         color: meta.color,
-        cardType: meta.card_type,
+        cardType: meta.card_type ?? 'character',
         effectText: meta.effect_text,
         triggerType,
+        counterValue: m.counter_value ?? 0,
+        equipmentTargetLeaderId: m.equipment_target_leader_id ?? null,
+        equipmentEffectType: m.equipment_effect_type ?? null,
+        equipmentEffectData: m.equipment_effect_data ?? null,
+        eventEffectType: (m.event_effect_type as string | null | undefined) ?? null,
+        eventEffectData: m.event_effect_data ?? null,
       });
     }
   }

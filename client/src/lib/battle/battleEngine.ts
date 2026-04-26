@@ -222,6 +222,14 @@ function dealPlayer(
     currentCost: 0,
     maxCost: 0,
     hasDrawnThisTurn: false,
+    // v2.0.2 追加フィールド: Phase 3 以降で本格的に使用
+    equippedCard: null,
+    equipmentBonusAtk: 0,
+    equipmentBonusDef: 0,
+    maxHandSize: 99,
+    tempBuffs: [],
+    cantPlayCharsThisTurn: false,
+    equipmentOnceUsed: false,
   };
 }
 

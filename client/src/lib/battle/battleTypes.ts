@@ -18,7 +18,45 @@ export type BattleColor =
   | 'black'
   | 'colorless';
 
-export type CardType = 'character' | 'event' | 'stage';
+export type CardType = 'character' | 'equipment' | 'event' | 'counter' | 'stage';
+// 'stage' は将来用に予約 (現在未使用)
+
+/**
+ * 装備カードの効果発動タイミング種別 (v2.0.2 で追加)。
+ *
+ * - permanent : 場に出ている間ずっと効果適用 (atk/def 加算など)
+ * - per_turn  : 自ターン開始時など、毎ターン一度発動
+ * - once_only : 一度だけ発動 (PlayerState.equipmentOnceUsed で管理)
+ */
+export type EquipmentEffectType = 'permanent' | 'per_turn' | 'once_only';
+
+/**
+ * イベント / カウンターカードの効果種別 (v2.0.2 で追加)。
+ * DB 投入済 (battle_cards_meta.event_effect_type) の全種を列挙。
+ * 末尾 5 種 (draw〜reveal_opponent_hand) はカウンターカードのプレイ時効果用。
+ * 将来追加に備え BattleCardMetaRow / BattleCardInstance では string も許容する。
+ */
+export type EventEffectType =
+  | 'buff_my_chars_atk'
+  | 'destroy_enemy_char'
+  | 'both_draw_self_extra'
+  | 'reveal_then_discard'
+  | 'scry_then_pick'
+  | 'draw_and_buff'
+  | 'debuff_all_enemies_atk'
+  | 'rest_release_all_my_chars'
+  | 'heal_life'
+  | 'buff_leader_def'
+  | 'rest_all_chars'
+  | 'opponent_cant_play_chars'
+  | 'destroy_low_cost_chars'
+  | 'reveal_opponent_hand_all'
+  | 'draw'
+  | 'peek_top_deck'
+  | 'revive_from_graveyard'
+  | 'draw_then_discard'
+  | 'rest_release_one'
+  | 'reveal_opponent_hand';
 
 /**
  * ライフトリガー効果の種別 (v2.0-launch で追加)。
@@ -66,7 +104,7 @@ export interface BattleLeaderRow {
 
 export interface BattleCardMetaRow {
   card_id: string;
-  card_type: CardType;           // v2.0: 全て 'character'
+  card_type: CardType;           // v2.0.2: 'character' / 'equipment' / 'event' / 'counter'
   cost: number;                  // 1-10
   power: number;                 // (廃止予定、後方互換のため残存、後日 DROP)
   attack_power: number;          // 1-12 (1/1000スケール、v2.0-launch)
@@ -75,6 +113,13 @@ export interface BattleCardMetaRow {
   is_leader: boolean;            // v2.0: false 固定
   effect_text: string | null;    // v2.0: null
   trigger_type: TriggerType;     // v2.0-launch で追加、各デッキ 30 枚中 5 枚が非 null
+  // ---- v2.0.2 追加 (equipment / counter / event カード用) ------------------
+  counter_value: number;                                     // 0-5、カウンターカードのみ非 0
+  equipment_target_leader_id?: string | null;                // 'leader_napoleon' 等、装備カード専用
+  equipment_effect_type?: EquipmentEffectType | null;
+  equipment_effect_data?: Record<string, any> | null;
+  event_effect_type?: EventEffectType | string | null;       // string も許容 (将来拡張)
+  event_effect_data?: Record<string, any> | null;
   created_at: string;
 }
 
@@ -129,6 +174,13 @@ export interface BattleCardInstance {
   cardType: CardType;
   effectText: string | null;
   triggerType: TriggerType;      // null = 通常カード (非トリガー)
+  // ---- v2.0.2 追加 (equipment / counter / event カード用) ------------------
+  counterValue: number;                                      // 0-5、カウンターカードのみ非 0
+  equipmentTargetLeaderId?: string | null;                   // 装備カードの専用リーダー
+  equipmentEffectType?: EquipmentEffectType | null;
+  equipmentEffectData?: Record<string, any> | null;
+  eventEffectType?: string | null;                           // EventEffectType を許容、将来拡張で string も
+  eventEffectData?: Record<string, any> | null;
 }
 
 /**
@@ -157,6 +209,38 @@ export interface LeaderState {
 }
 
 /**
+ * 一時バフ / デバフ (v2.0.2)。
+ * イベントカードや装備カードによる時限効果を表現する。
+ *
+ * scope:
+ *   - all_my_chars     : 自分の場の全キャラ
+ *   - leader           : 自分のリーダー
+ *   - 1_char           : 単体 (targetInstanceId 必須)
+ *   - all_enemies      : 相手の場の全キャラ
+ *   - opponent_self    : 相手プレイヤー自身のフラグ (cantPlayCharsThisTurn 等)
+ *
+ * expiresAt:
+ *   - this_turn                       : 現ターン終了時に消滅
+ *   - next_opponent_turn_end          : 相手の次ターン終了時に消滅
+ *   - until_next_opponent_turn_end    : 相手が次に動き終えるまで持続
+ */
+export interface TempBuff {
+  id: string;
+  type:
+    | 'atk_bonus'
+    | 'def_bonus'
+    | 'leader_def_bonus'
+    | 'leader_atk_bonus'
+    | 'opponent_cant_play_chars'
+    | 'all_enemies_atk_debuff';
+  value: number;
+  scope: 'all_my_chars' | 'leader' | '1_char' | 'all_enemies' | 'opponent_self';
+  targetInstanceId?: string;
+  expiresAt: 'this_turn' | 'next_opponent_turn_end' | 'until_next_opponent_turn_end';
+  createdTurn: number;
+}
+
+/**
  * プレイヤー1人のフル state
  */
 export interface PlayerState {
@@ -172,6 +256,14 @@ export interface PlayerState {
   hasDrawnThisTurn: boolean;
   nextTurnManaBonus?: number;        // 'mana' トリガーが発動した時に +2、次ターンの
                                      // cost フェーズで消費される。未定義/0 は効果なし。
+  // ---- v2.0.2 追加 (装備 / カウンター / イベント) -------------------------
+  equippedCard: BattleCardInstance | null;   // 現在装備中のカード (1 枚まで)
+  equipmentBonusAtk: number;                 // 装備による永続 atk 加算 (default 0)
+  equipmentBonusDef: number;                 // 装備による永続 def 加算 (default 0)
+  maxHandSize: number;                       // 手札上限 (default 99 = 実質無制限)
+  tempBuffs: TempBuff[];                     // 時限バフ / デバフリスト
+  cantPlayCharsThisTurn: boolean;            // 相手のイベントで封じられた時 true
+  equipmentOnceUsed: boolean;                // once_only 装備が発動済みか
 }
 
 /**
@@ -188,8 +280,14 @@ export type BattleEventType =
   | 'card_destroyed'
   | 'turn_end'
   | 'game_over'
-  | 'trigger_activated'   // ライフカードのトリガー効果発動
-  | 'defense_blocked';    // 'defense' トリガーにより攻撃無効化
+  | 'trigger_activated'    // ライフカードのトリガー効果発動
+  | 'defense_blocked'      // 'defense' トリガーにより攻撃無効化
+  // ---- v2.0.2 追加 ------------------------------------------------------
+  | 'equipment_played'     // 装備カードを場に出した
+  | 'event_played'         // イベントカードをプレイ・効果適用
+  | 'counter_used'         // カウンターカードを攻撃時に発動
+  | 'temp_buff_applied'    // 時限バフ適用
+  | 'temp_buff_expired';   // 時限バフ消滅
 
 export interface BattleEvent {
   eventId: string;
@@ -258,6 +356,11 @@ export interface AttackAction extends BattleActionBase {
   targetSource:
     | { kind: 'leader' }
     | { kind: 'character'; instanceId: string };
+  /**
+   * 防御側がカウンターカードを切る場合の手札 instanceId (v2.0.2)。
+   * 未指定 = カウンター無し。指定された場合は applyAttack で被ダメ計算前に発動。
+   */
+  counterCardInstanceId?: string;
 }
 
 export interface EndTurnAction extends BattleActionBase {
