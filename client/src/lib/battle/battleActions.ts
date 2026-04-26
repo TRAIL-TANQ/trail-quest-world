@@ -345,11 +345,7 @@ function applyPlayCard(
     case 'equipment':
       return applyPlayEquipment(state, action, card, handIdx);
     case 'event':
-      // Phase 5 で実装
-      return err(
-        'not_implemented_yet',
-        'イベントカードはまだ実装されていません',
-      );
+      return applyPlayEvent(state, action, card, handIdx);
     case 'counter':
       // カウンターは「場プレイモード」(主動) と「攻撃時の防御モード」の二刀流。
       // 主動プレイは Phase 4 の applyPlayCounter で event_effect_type に従って発動。
@@ -621,7 +617,7 @@ function applyPlayCounter(
   const originalLogLen = state.log.length;
 
   // 効果発動 (墓地追加前: 自分自身を revive_from_graveyard で蘇生不可)
-  const afterEffect = executeCounterPlayEffect(afterRemoval, action.player, card);
+  const afterEffect = executeEventEffect(afterRemoval, action.player, card);
 
   // 効果発動の結果デッキ切れ等で game_over してたら早期 return
   if (afterEffect.winner) {
@@ -647,12 +643,15 @@ function applyPlayCounter(
 }
 
 /**
- * カウンターカードのプレイ時効果 (event_effect_type 10 種をカバー)。
+ * イベントカード / カウンターカードのプレイ時効果ディスパッチャ (v2.0.2)。
  *
- * 各効果は state を受け取り、log にイベントを追加した新しい state を返す。
- * applyPlayCounter は戻り値の log 差分を events として呼び出し元へ返す。
+ * 仕様:
+ *   - state を受け取り、log にイベントを追加した新しい state を返す (pure)
+ *   - 21 種の event_effect_type をカバー (Phase 4 + Phase 5)
+ *   - 呼び出し側 (applyPlayCounter / applyPlayEvent) は戻り値 state.log の
+ *     差分を events として ActionResult に詰める
  */
-function executeCounterPlayEffect(
+function executeEventEffect(
   state: BattleState,
   slot: PlayerSlot,
   card: BattleCardInstance,
@@ -870,28 +869,37 @@ function executeCounterPlayEffect(
 
     case 'buff_leader_def': {
       const value = typeof data.def_bonus === 'number' ? data.def_bonus : 2;
+      // duration: 'until_next_opponent_turn_end' (ev_great_wall_build 等) と
+      // それ以外 (this_turn) を分岐
+      const expiresAt: TempBuff['expiresAt'] =
+        data.duration === 'until_next_opponent_turn_end'
+          ? 'until_next_opponent_turn_end'
+          : data.duration === 'next_opponent_turn_end'
+            ? 'next_opponent_turn_end'
+            : 'this_turn';
       const player = state.players[slot];
       const buff: TempBuff = {
         id: nanoid(10),
         type: 'leader_def_bonus',
         value,
         scope: 'leader',
-        expiresAt: 'this_turn',
+        expiresAt,
         createdTurn: state.turn,
       };
       return {
         ...state,
         players: {
           ...state.players,
-          [slot]: { ...player, tempBuffs: [...player.tempBuffs, buff] },
+          [slot]: { ...player, tempBuffs: [...(player.tempBuffs ?? []), buff] },
         },
         log: [
           ...state.log,
           makeEvent('temp_buff_applied', state.turn, slot, {
-            source: 'counter_play',
+            source: 'event_play',
             cardId: card.cardId,
             effectKind: 'buff_leader_def',
             value,
+            expiresAt,
             buffId: buff.id,
           }),
         ],
@@ -913,12 +921,12 @@ function executeCounterPlayEffect(
         ...state,
         players: {
           ...state.players,
-          [slot]: { ...player, tempBuffs: [...player.tempBuffs, buff] },
+          [slot]: { ...player, tempBuffs: [...(player.tempBuffs ?? []), buff] },
         },
         log: [
           ...state.log,
           makeEvent('temp_buff_applied', state.turn, slot, {
-            source: 'counter_play',
+            source: 'event_play',
             cardId: card.cardId,
             effectKind: 'buff_my_chars_atk',
             value,
@@ -928,14 +936,448 @@ function executeCounterPlayEffect(
       };
     }
 
+    // ---- v2.0.2 Phase 5 新規 11 種 ----------------------------------------
+
+    case 'destroy_enemy_char': {
+      // ev_honnoji 等: 敵キャラ 1 体を強制破壊 (UI 選択は Phase 6)
+      const opponent = state.players[opponentSlot];
+      if (opponent.board.length === 0) return state;
+      const targetIdx = 0; // 簡易: 先頭スロットを破壊
+      const target = opponent.board[targetIdx];
+      return {
+        ...state,
+        players: {
+          ...state.players,
+          [opponentSlot]: {
+            ...opponent,
+            board: [
+              ...opponent.board.slice(0, targetIdx),
+              ...opponent.board.slice(targetIdx + 1),
+            ],
+            graveyard: [...opponent.graveyard, target.card],
+          },
+        },
+        log: [
+          ...state.log,
+          makeEvent('card_destroyed', state.turn, slot, {
+            source: 'event_play',
+            cardId: card.cardId,
+            effectKind: 'destroy_enemy_char',
+            destroyedCardId: target.card.cardId,
+            destroyedInstanceId: target.card.instanceId,
+          }),
+        ],
+      };
+    }
+
+    case 'both_draw_self_extra': {
+      // ev_renaissance: 両者 N 枚ドロー、自分はさらに +M 枚
+      const bothCount =
+        typeof data.both_count === 'number' ? data.both_count : 2;
+      const selfExtra =
+        typeof data.self_extra === 'number' ? data.self_extra : 1;
+      let next: BattleState = state;
+      next = drawCard(next, slot, bothCount);
+      if (next.winner) return next;
+      next = drawCard(next, opponentSlot, bothCount);
+      if (next.winner) return next;
+      next = drawCard(next, slot, selfExtra);
+      if (next.winner) return next;
+      return {
+        ...next,
+        log: [
+          ...next.log,
+          makeEvent('temp_buff_applied', state.turn, slot, {
+            source: 'event_play',
+            cardId: card.cardId,
+            effectKind: 'both_draw_self_extra',
+            bothCount,
+            selfExtra,
+          }),
+        ],
+      };
+    }
+
+    case 'reveal_then_discard': {
+      // ev_heliocentric 等: 相手手札 1 枚見て 1 枚捨てさせる (簡易: 先頭)
+      const opponent = state.players[opponentSlot];
+      if (opponent.hand.length === 0) return state;
+      const target = opponent.hand[0];
+      return {
+        ...state,
+        players: {
+          ...state.players,
+          [opponentSlot]: {
+            ...opponent,
+            hand: opponent.hand.slice(1),
+            graveyard: [...opponent.graveyard, target],
+          },
+        },
+        log: [
+          ...state.log,
+          makeEvent('temp_buff_applied', state.turn, slot, {
+            source: 'event_play',
+            cardId: card.cardId,
+            effectKind: 'reveal_then_discard',
+            discardedCardId: target.cardId,
+          }),
+        ],
+      };
+    }
+
+    case 'scry_then_pick': {
+      // ev_genji_writing: 山札上 N 枚を見て M 枚を手札に、残りはデッキ上に戻す
+      const scryCount = typeof data.scry === 'number' ? data.scry : 3;
+      const pickCount = typeof data.pick === 'number' ? data.pick : 1;
+      const player = state.players[slot];
+      if (player.deck.length === 0) return state;
+      const peekedAll = player.deck.slice(0, scryCount);
+      const picked = peekedAll.slice(0, pickCount);
+      const returned = peekedAll.slice(pickCount);
+      const restDeck = player.deck.slice(peekedAll.length);
+      // returned は山札 top に戻す (順序維持)
+      const newDeck = [...returned, ...restDeck];
+      return {
+        ...state,
+        players: {
+          ...state.players,
+          [slot]: {
+            ...player,
+            deck: newDeck,
+            hand: [...player.hand, ...picked],
+          },
+        },
+        log: [
+          ...state.log,
+          makeEvent('temp_buff_applied', state.turn, slot, {
+            source: 'event_play',
+            cardId: card.cardId,
+            effectKind: 'scry_then_pick',
+            pickedCardIds: picked.map((c) => c.cardId),
+            returnedCount: returned.length,
+          }),
+        ],
+      };
+    }
+
+    case 'draw_and_buff': {
+      // ev_pillow_morning: 1 ドロー + 自分の場のキャラ 1 体に atk +N (this_turn)
+      const drawCount = typeof data.draw === 'number' ? data.draw : 1;
+      const atkBonus = typeof data.atk_bonus === 'number' ? data.atk_bonus : 2;
+      let next: BattleState = drawCard(state, slot, drawCount);
+      if (next.winner) return next;
+      const player = next.players[slot];
+      if (player.board.length === 0) {
+        // 場にキャラがいなければドローのみ
+        return {
+          ...next,
+          log: [
+            ...next.log,
+            makeEvent('temp_buff_applied', state.turn, slot, {
+              source: 'event_play',
+              cardId: card.cardId,
+              effectKind: 'draw_and_buff',
+              drawn: drawCount,
+              buffApplied: false,
+            }),
+          ],
+        };
+      }
+      const targetSlot = player.board[0]; // 簡易: 先頭スロット
+      const buff: TempBuff = {
+        id: nanoid(10),
+        type: 'atk_bonus',
+        value: atkBonus,
+        scope: '1_char',
+        targetInstanceId: targetSlot.card.instanceId,
+        expiresAt: 'this_turn',
+        createdTurn: state.turn,
+      };
+      return {
+        ...next,
+        players: {
+          ...next.players,
+          [slot]: {
+            ...player,
+            tempBuffs: [...(player.tempBuffs ?? []), buff],
+          },
+        },
+        log: [
+          ...next.log,
+          makeEvent('temp_buff_applied', state.turn, slot, {
+            source: 'event_play',
+            cardId: card.cardId,
+            effectKind: 'draw_and_buff',
+            drawn: drawCount,
+            atkBonus,
+            targetInstanceId: targetSlot.card.instanceId,
+            buffId: buff.id,
+          }),
+        ],
+      };
+    }
+
+    case 'debuff_all_enemies_atk': {
+      // ev_river_flood 等: 敵キャラ全員 atk -N (this_turn)
+      // 実装方針: 相手プレイヤーの tempBuffs に scope='all_my_chars' で
+      // value=負数 を仕込む (getEffectiveCharAtk が player.tempBuffs を見るので
+      // 相手側からみたキャラの atk が下がる)
+      const debuff = typeof data.atk_debuff === 'number' ? data.atk_debuff : 1;
+      const opponent = state.players[opponentSlot];
+      const buff: TempBuff = {
+        id: nanoid(10),
+        type: 'atk_bonus', // 同じ atk_bonus type でマイナス値
+        value: -Math.abs(debuff),
+        scope: 'all_my_chars',
+        expiresAt: 'this_turn',
+        createdTurn: state.turn,
+      };
+      return {
+        ...state,
+        players: {
+          ...state.players,
+          [opponentSlot]: {
+            ...opponent,
+            tempBuffs: [...(opponent.tempBuffs ?? []), buff],
+          },
+        },
+        log: [
+          ...state.log,
+          makeEvent('temp_buff_applied', state.turn, slot, {
+            source: 'event_play',
+            cardId: card.cardId,
+            effectKind: 'debuff_all_enemies_atk',
+            value: -Math.abs(debuff),
+            buffId: buff.id,
+          }),
+        ],
+      };
+    }
+
+    case 'rest_release_all_my_chars': {
+      // ev_moonlight_hunt 等: 自分のキャラ全員のレスト解除
+      const player = state.players[slot];
+      if (player.board.length === 0) return state;
+      return {
+        ...state,
+        players: {
+          ...state.players,
+          [slot]: {
+            ...player,
+            board: player.board.map((s) => ({ ...s, isRested: false })),
+          },
+        },
+        log: [
+          ...state.log,
+          makeEvent('temp_buff_applied', state.turn, slot, {
+            source: 'event_play',
+            cardId: card.cardId,
+            effectKind: 'rest_release_all_my_chars',
+            count: player.board.length,
+          }),
+        ],
+      };
+    }
+
+    case 'rest_all_chars': {
+      // ev_great_storm 等: 両者キャラ全員レスト
+      const player = state.players[slot];
+      const opponent = state.players[opponentSlot];
+      return {
+        ...state,
+        players: {
+          ...state.players,
+          [slot]: {
+            ...player,
+            board: player.board.map((s) => ({ ...s, isRested: true })),
+          },
+          [opponentSlot]: {
+            ...opponent,
+            board: opponent.board.map((s) => ({ ...s, isRested: true })),
+          },
+        },
+        log: [
+          ...state.log,
+          makeEvent('temp_buff_applied', state.turn, slot, {
+            source: 'event_play',
+            cardId: card.cardId,
+            effectKind: 'rest_all_chars',
+            myCount: player.board.length,
+            enemyCount: opponent.board.length,
+          }),
+        ],
+      };
+    }
+
+    case 'opponent_cant_play_chars': {
+      // ev_lunar_eclipse 等: 相手はこのターン キャラを場に出せない
+      // 相手 PlayerState のフラグを直接立てる (advancePhase の end で false に戻す)
+      const opponent = state.players[opponentSlot];
+      return {
+        ...state,
+        players: {
+          ...state.players,
+          [opponentSlot]: { ...opponent, cantPlayCharsThisTurn: true },
+        },
+        log: [
+          ...state.log,
+          makeEvent('temp_buff_applied', state.turn, slot, {
+            source: 'event_play',
+            cardId: card.cardId,
+            effectKind: 'opponent_cant_play_chars',
+          }),
+        ],
+      };
+    }
+
+    case 'destroy_low_cost_chars': {
+      // ev_earthquake_global: 両者の cost <= max_cost のキャラを全破壊
+      const maxCost = typeof data.max_cost === 'number' ? data.max_cost : 3;
+      const player = state.players[slot];
+      const opponent = state.players[opponentSlot];
+
+      const partition = (
+        boardSlots: typeof player.board,
+      ): { survivors: typeof player.board; destroyed: BattleCardInstance[] } => {
+        const survivors: typeof player.board = [];
+        const destroyed: BattleCardInstance[] = [];
+        for (const s of boardSlots) {
+          if (s.card.cost <= maxCost) destroyed.push(s.card);
+          else survivors.push(s);
+        }
+        return { survivors, destroyed };
+      };
+
+      const myParts = partition(player.board);
+      const enemyParts = partition(opponent.board);
+
+      const newPlayer: PlayerState = {
+        ...player,
+        board: myParts.survivors,
+        graveyard: [...player.graveyard, ...myParts.destroyed],
+      };
+      const newOpponent: PlayerState = {
+        ...opponent,
+        board: enemyParts.survivors,
+        graveyard: [...opponent.graveyard, ...enemyParts.destroyed],
+      };
+
+      return {
+        ...state,
+        players: {
+          ...state.players,
+          [slot]: newPlayer,
+          [opponentSlot]: newOpponent,
+        },
+        log: [
+          ...state.log,
+          makeEvent('temp_buff_applied', state.turn, slot, {
+            source: 'event_play',
+            cardId: card.cardId,
+            effectKind: 'destroy_low_cost_chars',
+            maxCost,
+            myDestroyedIds: myParts.destroyed.map((c) => c.cardId),
+            enemyDestroyedIds: enemyParts.destroyed.map((c) => c.cardId),
+          }),
+        ],
+      };
+    }
+
+    case 'reveal_opponent_hand_all': {
+      // ev_scout 等: 相手手札を全部見る (UI 表示用イベント)
+      const opponent = state.players[opponentSlot];
+      return {
+        ...state,
+        log: [
+          ...state.log,
+          makeEvent('temp_buff_applied', state.turn, slot, {
+            source: 'event_play',
+            cardId: card.cardId,
+            effectKind: 'reveal_opponent_hand_all',
+            revealedCardIds: opponent.hand.map((c) => c.cardId),
+          }),
+        ],
+      };
+    }
+
     default: {
       console.warn(
-        '[executeCounterPlayEffect] unknown effect type:',
+        '[executeEventEffect] unknown effect type:',
         effectType,
       );
       return state;
     }
   }
+}
+
+// ---- play_card: event (主動プレイ, v2.0.2 Phase 5) ------------------------
+
+/**
+ * イベントカードを手札からプレイ。即時効果発動 → 墓地末尾追加。
+ *
+ * カウンターと違い、攻撃時の防御モードは持たない (常にメインフェイズ主動プレイ)。
+ * カウンターの「場プレイモード」と本関数は実質同じ流れだが、ログに発火する
+ * メインイベント種別 ('event_played' vs 'counter_used') を分けて扱う。
+ */
+function applyPlayEvent(
+  state: BattleState,
+  action: PlayCardAction,
+  card: BattleCardInstance,
+  handIdx: number,
+): ActionResult {
+  const p = state.players[action.player];
+
+  // 手札除去 + コスト消費
+  const newHand = [
+    ...p.hand.slice(0, handIdx),
+    ...p.hand.slice(handIdx + 1),
+  ];
+  const afterRemoval: BattleState = {
+    ...state,
+    players: {
+      ...state.players,
+      [action.player]: {
+        ...p,
+        hand: newHand,
+        currentCost: p.currentCost - card.cost,
+      },
+    },
+    log: [
+      ...state.log,
+      makeEvent('event_played', state.turn, action.player, {
+        cardId: card.cardId,
+        instanceId: card.instanceId,
+        cost: card.cost,
+        effectType: card.eventEffectType ?? null,
+      }),
+    ],
+  };
+
+  const originalLogLen = state.log.length;
+
+  // 効果発動 (墓地追加前)
+  const afterEffect = executeEventEffect(afterRemoval, action.player, card);
+
+  if (afterEffect.winner) {
+    const events = afterEffect.log.slice(originalLogLen);
+    return { ok: true, newState: afterEffect, events };
+  }
+
+  // 墓地末尾へ追加
+  const finalPlayerState = afterEffect.players[action.player];
+  const finalState: BattleState = {
+    ...afterEffect,
+    players: {
+      ...afterEffect.players,
+      [action.player]: {
+        ...finalPlayerState,
+        graveyard: [...finalPlayerState.graveyard, card],
+      },
+    },
+  };
+
+  const events = finalState.log.slice(originalLogLen);
+  return { ok: true, newState: finalState, events };
 }
 
 // ---- attack ----------------------------------------------------------------

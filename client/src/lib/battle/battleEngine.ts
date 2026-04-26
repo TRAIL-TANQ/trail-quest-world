@@ -314,13 +314,15 @@ export function getEffectiveCharDef(
 
 /**
  * cost フェーズで両プレイヤーの tempBuffs を expire する。
- * `expiresAt === 'this_turn'` で `createdTurn < currentTurn` のものをドロップ。
  *
- * 効果:
- *   - 自分発行 'this_turn' buff (createdTurn=N) → 次の自分ターン (turn=N+2) cost で消滅
- *   - 相手発行 'this_turn' buff (createdTurn=N) → 次のターン (turn=N+1) cost で消滅
+ * 削除条件 (expiresAt 別):
+ *   - 'this_turn'                       : createdTurn < currentTurn でドロップ
+ *   - 'next_opponent_turn_end'          : currentTurn >= createdTurn + 2 でドロップ
+ *   - 'until_next_opponent_turn_end'    : currentTurn >= createdTurn + 2 でドロップ
  *
- * 'next_opponent_turn_end' / 'until_next_opponent_turn_end' は Phase 5 で対応。
+ * 自分発行の 'this_turn' は次の自分ターン cost で消滅 (1 ラウンド限定)。
+ * 'until_next_opponent_turn_end' は次の相手ターンが終わるまで持続するので
+ * 自分発行から 2 ラウンド後の自ターン cost (createdTurn+2) で消える。
  */
 export function expireTempBuffs(
   player: PlayerState,
@@ -331,6 +333,18 @@ export function expireTempBuffs(
   if (buffs.length === 0) return player;
   const filtered = buffs.filter((b) => {
     if (b.expiresAt === 'this_turn' && b.createdTurn < currentTurn) {
+      return false;
+    }
+    if (
+      b.expiresAt === 'next_opponent_turn_end' &&
+      currentTurn >= b.createdTurn + 2
+    ) {
+      return false;
+    }
+    if (
+      b.expiresAt === 'until_next_opponent_turn_end' &&
+      currentTurn >= b.createdTurn + 2
+    ) {
       return false;
     }
     return true;
@@ -492,8 +506,18 @@ export function advancePhase(state: BattleState): BattleState {
       const next = otherPlayer(active);
       // ラウンド完了 (p2 → p1 に戻る) で turn++
       const nextTurn = active === 'p2' ? state.turn + 1 : state.turn;
+      // v2.0.2 Phase 5: ターン終了時に active プレイヤーの
+      // cantPlayCharsThisTurn フラグを false にリセット (ev_lunar_eclipse 等)
+      const activePlayerState = state.players[active];
+      const resetActivePlayer = activePlayerState.cantPlayCharsThisTurn
+        ? { ...activePlayerState, cantPlayCharsThisTurn: false }
+        : activePlayerState;
       return {
         ...state,
+        players: {
+          ...state.players,
+          [active]: resetActivePlayer,
+        },
         activePlayer: next,
         turn: nextTurn,
         phase: 'refresh',
