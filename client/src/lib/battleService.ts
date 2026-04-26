@@ -151,6 +151,47 @@ const CARD_IMAGE_OVERRIDES: Record<string, string> = {
   card_earthquake: '/images/cards/great-wall.png', // 適切な代替なし
   card_sun: '/images/cards/sunflower.png', // 近似
   card_moon: '/images/cards/moonlight-howl.png', // 近似
+
+  // ---- v2.0.2 Phase 6b-1.6: 装備カード 10 枚 -------------------------------
+  eq_napoleon_bicorne: '/images/cards/napoleon-bicorne.png', // Manus 新規
+  eq_nobunaga_matchlock: '/images/cards/gun.png', // 既存流用
+  eq_davinci_codex: '/images/cards/research-notes.png', // 既存流用
+  eq_galileo_telescope: '/images/cards/telescope.png', // 既存流用
+  eq_murasaki_genji: '/images/cards/tale-of-genji.png', // 既存流用
+  eq_seishonagon_pillowbook: '/images/cards/makura-no-soshi.png', // 既存流用
+  eq_amazon_blessing: '/images/cards/amazon-blessing.png', // Manus 新規
+  eq_wolf_howl: '/images/cards/moonlight-howl.png', // 既存流用
+  eq_jeanne_holysword: '/images/cards/holy-sword.png', // 既存流用
+  eq_qin_wallstone: '/images/cards/great-wall.png', // 既存流用 (始皇帝デッキ共有)
+
+  // ---- v2.0.2 Phase 6b-1.6: カウンターカード 10 枚 -------------------------
+  cn_warriors_oath: '/images/cards/war-banner.png',
+  cn_matchlock_wall: '/images/cards/nagashino-formation.png',
+  cn_universal_diagram: '/images/cards/blueprint.png',
+  cn_observers_eye: '/images/cards/microscope.png',
+  cn_tale_shield: '/images/cards/lily-shield.png',
+  cn_witty_words: '/images/cards/fude.png',
+  cn_river_guardian: '/images/cards/anaconda.png',
+  cn_pack_unity: '/images/cards/pack-law.png',
+  cn_sacred_blessing: '/images/cards/prayer-light.png',
+  cn_great_wall_shield: '/images/cards/great-wall.png', // 始皇帝デッキ世界観共有
+
+  // ---- v2.0.2 Phase 6b-1.6: イベントカード 15 枚 ---------------------------
+  ev_waterloo: '/images/cards/waterloo.png',
+  ev_honnoji: '/images/cards/honnoji.png',
+  ev_renaissance: '/images/cards/mona-lisa.png', // 流用
+  ev_heliocentric: '/images/cards/heliocentric.png',
+  ev_genji_writing: '/images/cards/waka.png', // 流用
+  ev_pillow_morning: '/images/cards/paper.png', // 流用
+  ev_river_flood: '/images/cards/amazon-river.png', // 流用
+  ev_moonlight_hunt: '/images/cards/howl.png', // 流用
+  ev_jeanne_oracle: '/images/cards/saint-jeanne.png', // 流用
+  ev_great_wall_build: '/images/cards/great-wall.png', // 始皇帝デッキ共有
+  ev_great_storm: '/images/cards/wind-tunnel.png', // 流用
+  ev_lunar_eclipse: '/images/cards/lunar-eclipse.png', // Manus 新規
+  ev_spring_arrival: '/images/cards/spring-arrival.png', // Manus 新規
+  ev_earthquake_global: '/images/cards/earthquake-global.png', // Manus 新規
+  ev_scout: '/images/cards/ashigaru.png', // 流用
 };
 
 /**
