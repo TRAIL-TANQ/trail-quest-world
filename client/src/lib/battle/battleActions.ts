@@ -20,9 +20,11 @@
 // 制約: pure 関数。入力 state 不変、新 state を返す。
 // ============================================================================
 
+import { nanoid } from 'nanoid';
 import {
   BOARD_MAX_SLOTS,
   advancePhase,
+  drawCard,
   getEffectiveCharAtk,
   getEffectiveLeaderAtk,
   getEffectiveLeaderDef,
@@ -44,6 +46,7 @@ import type {
   PlayerSlot,
   PlayerState,
   SurrenderAction,
+  TempBuff,
   TriggerType,
 } from './battleTypes';
 
@@ -348,11 +351,9 @@ function applyPlayCard(
         'イベントカードはまだ実装されていません',
       );
     case 'counter':
-      // カウンターカードは attack action 経由で発動 (Phase 4)
-      return err(
-        'wrong_phase',
-        'カウンターカードはメインフェイズではプレイできません',
-      );
+      // カウンターは「場プレイモード」(主動) と「攻撃時の防御モード」の二刀流。
+      // 主動プレイは Phase 4 の applyPlayCounter で event_effect_type に従って発動。
+      return applyPlayCounter(state, action, card, handIdx);
     case 'stage':
       return err('not_implemented_yet', 'ステージカードは未実装です');
     default:
@@ -569,6 +570,374 @@ function applyOnceOnlyEquipmentEffect(
   return { player: p, events };
 }
 
+// ---- play_card: counter (主動プレイモード, v2.0.2 Phase 4) ----------------
+
+/**
+ * カウンターカードを手札からプレイ (場プレイモード)。
+ *
+ * フロー:
+ *   1. cost 消費 + 手札除去
+ *   2. eventEffectType に従って効果発動 (executeCounterPlayEffect)
+ *   3. カウンターカードを墓地末尾に追加
+ *
+ * カウンターカードのもう一方のモード (攻撃時の防御発動) は applyAttack 側で
+ * action.counterCardInstanceId を介して処理される。
+ */
+function applyPlayCounter(
+  state: BattleState,
+  action: PlayCardAction,
+  card: BattleCardInstance,
+  handIdx: number,
+): ActionResult {
+  const p = state.players[action.player];
+
+  // 手札除去 + コスト消費
+  const newHand = [
+    ...p.hand.slice(0, handIdx),
+    ...p.hand.slice(handIdx + 1),
+  ];
+  const afterRemoval: BattleState = {
+    ...state,
+    players: {
+      ...state.players,
+      [action.player]: {
+        ...p,
+        hand: newHand,
+        currentCost: p.currentCost - card.cost,
+      },
+    },
+    log: [
+      ...state.log,
+      makeEvent('counter_used', state.turn, action.player, {
+        cardId: card.cardId,
+        instanceId: card.instanceId,
+        cost: card.cost,
+        effectType: card.eventEffectType ?? null,
+        mode: 'play_from_hand',
+      }),
+    ],
+  };
+
+  const originalLogLen = state.log.length;
+
+  // 効果発動 (墓地追加前: 自分自身を revive_from_graveyard で蘇生不可)
+  const afterEffect = executeCounterPlayEffect(afterRemoval, action.player, card);
+
+  // 効果発動の結果デッキ切れ等で game_over してたら早期 return
+  if (afterEffect.winner) {
+    const events = afterEffect.log.slice(originalLogLen);
+    return { ok: true, newState: afterEffect, events };
+  }
+
+  // 墓地末尾へ追加
+  const finalPlayerState = afterEffect.players[action.player];
+  const finalState: BattleState = {
+    ...afterEffect,
+    players: {
+      ...afterEffect.players,
+      [action.player]: {
+        ...finalPlayerState,
+        graveyard: [...finalPlayerState.graveyard, card],
+      },
+    },
+  };
+
+  const events = finalState.log.slice(originalLogLen);
+  return { ok: true, newState: finalState, events };
+}
+
+/**
+ * カウンターカードのプレイ時効果 (event_effect_type 10 種をカバー)。
+ *
+ * 各効果は state を受け取り、log にイベントを追加した新しい state を返す。
+ * applyPlayCounter は戻り値の log 差分を events として呼び出し元へ返す。
+ */
+function executeCounterPlayEffect(
+  state: BattleState,
+  slot: PlayerSlot,
+  card: BattleCardInstance,
+): BattleState {
+  const data = (card.eventEffectData ?? {}) as Record<string, unknown>;
+  const effectType = card.eventEffectType ?? null;
+  const opponentSlot: PlayerSlot = otherPlayer(slot);
+
+  switch (effectType) {
+    case 'draw': {
+      const count = typeof data.count === 'number' ? data.count : 1;
+      const next = drawCard(state, slot, count);
+      if (next.winner) return next;
+      return {
+        ...next,
+        log: [
+          ...next.log,
+          makeEvent('temp_buff_applied', state.turn, slot, {
+            source: 'counter_play',
+            cardId: card.cardId,
+            effectKind: 'draw',
+            count,
+          }),
+        ],
+      };
+    }
+
+    case 'reveal_opponent_hand': {
+      const opponent = state.players[opponentSlot];
+      const count =
+        typeof data.reveal_count === 'number'
+          ? data.reveal_count
+          : typeof data.count === 'number'
+            ? data.count
+            : 1;
+      const revealed = opponent.hand.slice(
+        0,
+        Math.min(count, opponent.hand.length),
+      );
+      return {
+        ...state,
+        log: [
+          ...state.log,
+          makeEvent('temp_buff_applied', state.turn, slot, {
+            source: 'counter_play',
+            cardId: card.cardId,
+            effectKind: 'reveal_opponent_hand',
+            revealedCardIds: revealed.map((c) => c.cardId),
+          }),
+        ],
+      };
+    }
+
+    case 'peek_top_deck': {
+      const player = state.players[slot];
+      const count = typeof data.count === 'number' ? data.count : 1;
+      const peeked = player.deck.slice(0, Math.min(count, player.deck.length));
+      return {
+        ...state,
+        log: [
+          ...state.log,
+          makeEvent('temp_buff_applied', state.turn, slot, {
+            source: 'counter_play',
+            cardId: card.cardId,
+            effectKind: 'peek_top_deck',
+            peekedCardIds: peeked.map((c) => c.cardId),
+          }),
+        ],
+      };
+    }
+
+    case 'revive_from_graveyard': {
+      const player = state.players[slot];
+      if (player.graveyard.length === 0) return state;
+      const revived = player.graveyard[0];
+      return {
+        ...state,
+        players: {
+          ...state.players,
+          [slot]: {
+            ...player,
+            graveyard: player.graveyard.slice(1),
+            hand: [...player.hand, revived],
+          },
+        },
+        log: [
+          ...state.log,
+          makeEvent('temp_buff_applied', state.turn, slot, {
+            source: 'counter_play',
+            cardId: card.cardId,
+            effectKind: 'revive_from_graveyard',
+            revivedCardId: revived.cardId,
+            revivedInstanceId: revived.instanceId,
+          }),
+        ],
+      };
+    }
+
+    case 'draw_then_discard': {
+      const drawCount = typeof data.draw === 'number' ? data.draw : 1;
+      const next = drawCard(state, slot, drawCount);
+      if (next.winner) return next;
+      const player = next.players[slot];
+      if (player.hand.length === 0) {
+        return {
+          ...next,
+          log: [
+            ...next.log,
+            makeEvent('temp_buff_applied', state.turn, slot, {
+              source: 'counter_play',
+              cardId: card.cardId,
+              effectKind: 'draw_then_discard',
+              drawn: drawCount,
+              discardedCardId: null,
+            }),
+          ],
+        };
+      }
+      // 簡易: 手札の先頭を捨てる (UI 選択は Phase 6)
+      const discarded = player.hand[0];
+      return {
+        ...next,
+        players: {
+          ...next.players,
+          [slot]: {
+            ...player,
+            hand: player.hand.slice(1),
+            graveyard: [...player.graveyard, discarded],
+          },
+        },
+        log: [
+          ...next.log,
+          makeEvent('temp_buff_applied', state.turn, slot, {
+            source: 'counter_play',
+            cardId: card.cardId,
+            effectKind: 'draw_then_discard',
+            drawn: drawCount,
+            discardedCardId: discarded.cardId,
+          }),
+        ],
+      };
+    }
+
+    case 'heal_life': {
+      // ライフ回復: deck 先頭を lifeCards 末尾に積み直す (デッキ切れは無効)
+      const amount =
+        typeof data.life_bonus === 'number'
+          ? data.life_bonus
+          : typeof data.count === 'number'
+            ? data.count
+            : 1;
+      let working: BattleState = state;
+      let healed = 0;
+      for (let i = 0; i < amount; i++) {
+        const player = working.players[slot];
+        if (player.deck.length === 0) break;
+        const top = player.deck[0];
+        working = {
+          ...working,
+          players: {
+            ...working.players,
+            [slot]: {
+              ...player,
+              deck: player.deck.slice(1),
+              lifeCards: [...player.lifeCards, top],
+              leader: { ...player.leader, life: player.leader.life + 1 },
+            },
+          },
+        };
+        healed++;
+      }
+      return {
+        ...working,
+        log: [
+          ...working.log,
+          makeEvent('temp_buff_applied', state.turn, slot, {
+            source: 'counter_play',
+            cardId: card.cardId,
+            effectKind: 'heal_life',
+            requested: amount,
+            healed,
+          }),
+        ],
+      };
+    }
+
+    case 'rest_release_one': {
+      const player = state.players[slot];
+      const restedIdx = player.board.findIndex((s) => s.isRested);
+      if (restedIdx < 0) return state;
+      const target = player.board[restedIdx];
+      return {
+        ...state,
+        players: {
+          ...state.players,
+          [slot]: {
+            ...player,
+            board: player.board.map((s, i) =>
+              i === restedIdx ? { ...s, isRested: false } : s,
+            ),
+          },
+        },
+        log: [
+          ...state.log,
+          makeEvent('temp_buff_applied', state.turn, slot, {
+            source: 'counter_play',
+            cardId: card.cardId,
+            effectKind: 'rest_release_one',
+            targetCardId: target.card.cardId,
+            targetInstanceId: target.card.instanceId,
+          }),
+        ],
+      };
+    }
+
+    case 'buff_leader_def': {
+      const value = typeof data.def_bonus === 'number' ? data.def_bonus : 2;
+      const player = state.players[slot];
+      const buff: TempBuff = {
+        id: nanoid(10),
+        type: 'leader_def_bonus',
+        value,
+        scope: 'leader',
+        expiresAt: 'this_turn',
+        createdTurn: state.turn,
+      };
+      return {
+        ...state,
+        players: {
+          ...state.players,
+          [slot]: { ...player, tempBuffs: [...player.tempBuffs, buff] },
+        },
+        log: [
+          ...state.log,
+          makeEvent('temp_buff_applied', state.turn, slot, {
+            source: 'counter_play',
+            cardId: card.cardId,
+            effectKind: 'buff_leader_def',
+            value,
+            buffId: buff.id,
+          }),
+        ],
+      };
+    }
+
+    case 'buff_my_chars_atk': {
+      const value = typeof data.atk_bonus === 'number' ? data.atk_bonus : 1;
+      const player = state.players[slot];
+      const buff: TempBuff = {
+        id: nanoid(10),
+        type: 'atk_bonus',
+        value,
+        scope: 'all_my_chars',
+        expiresAt: 'this_turn',
+        createdTurn: state.turn,
+      };
+      return {
+        ...state,
+        players: {
+          ...state.players,
+          [slot]: { ...player, tempBuffs: [...player.tempBuffs, buff] },
+        },
+        log: [
+          ...state.log,
+          makeEvent('temp_buff_applied', state.turn, slot, {
+            source: 'counter_play',
+            cardId: card.cardId,
+            effectKind: 'buff_my_chars_atk',
+            value,
+            buffId: buff.id,
+          }),
+        ],
+      };
+    }
+
+    default: {
+      console.warn(
+        '[executeCounterPlayEffect] unknown effect type:',
+        effectType,
+      );
+      return state;
+    }
+  }
+}
+
 // ---- attack ----------------------------------------------------------------
 
 function applyAttack(state: BattleState, action: AttackAction): ActionResult {
@@ -702,6 +1071,57 @@ function applyAttack(state: BattleState, action: AttackAction): ActionResult {
     ...state,
     players: { ...state.players, [attackerSide]: restedAttackerState },
   };
+
+  // v2.0.2 Phase 4: 防御側のカウンター発動処理
+  // counterCardInstanceId が指定されたら手札から該当カウンターカードを取り、
+  // counterValue を defensePower に加算 → 手札→墓地に移動 → counter_used イベント発火。
+  if (action.counterCardInstanceId) {
+    const defenderForCounter = workingState.players[defenderSide];
+    const counterIdx = defenderForCounter.hand.findIndex(
+      (c) => c.instanceId === action.counterCardInstanceId,
+    );
+    if (counterIdx < 0) {
+      return err(
+        'card_not_in_hand',
+        '指定されたカウンターカードが防御側の手札にありません',
+      );
+    }
+    const counterCard = defenderForCounter.hand[counterIdx];
+    if (counterCard.cardType !== 'counter') {
+      return err(
+        'invalid_target',
+        '指定カードはカウンターカードではありません',
+      );
+    }
+    const counterValue = counterCard.counterValue ?? 0;
+    defensePower += counterValue;
+    const newDefenderHand = [
+      ...defenderForCounter.hand.slice(0, counterIdx),
+      ...defenderForCounter.hand.slice(counterIdx + 1),
+    ];
+    const newDefenderForCounter: PlayerState = {
+      ...defenderForCounter,
+      hand: newDefenderHand,
+      graveyard: [...defenderForCounter.graveyard, counterCard],
+    };
+    workingState = {
+      ...workingState,
+      players: {
+        ...workingState.players,
+        [defenderSide]: newDefenderForCounter,
+      },
+    };
+    events.push(
+      makeEvent('counter_used', state.turn, defenderSide, {
+        cardId: counterCard.cardId,
+        instanceId: counterCard.instanceId,
+        counterValue,
+        addedDefense: counterValue,
+        newDefensePower: defensePower,
+        mode: 'declared_on_attack',
+      }),
+    );
+  }
 
   const success = attackPower >= defensePower;
 

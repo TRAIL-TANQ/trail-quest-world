@@ -234,42 +234,109 @@ function dealPlayer(
   };
 }
 
-// ---- v2.0.2: 装備ボーナスを反映した実効値の計算ヘルパー --------------------
+// ---- v2.0.2: 装備ボーナス + tempBuffs を反映した実効値の計算ヘルパー -------
 
 /**
- * リーダーの実効攻撃力 = base + 装備による永続 atk 加算。
- * (一時バフは Phase 5 で tempBuffs を取り込む)
+ * リーダーの実効攻撃力 = base + 装備 atk 加算 + tempBuffs(leader_atk_bonus)。
  */
 export function getEffectiveLeaderAtk(player: PlayerState): number {
-  return player.leader.attackPower + (player.equipmentBonusAtk ?? 0);
+  let atk = player.leader.attackPower + (player.equipmentBonusAtk ?? 0);
+  for (const buff of player.tempBuffs ?? []) {
+    if (buff.type === 'leader_atk_bonus' && buff.scope === 'leader') {
+      atk += buff.value;
+    }
+  }
+  return atk;
 }
 
 /**
- * リーダーの実効防御力 = base + 装備による永続 def 加算。
+ * リーダーの実効防御力 = base + 装備 def 加算 + tempBuffs(leader_def_bonus)。
  */
 export function getEffectiveLeaderDef(player: PlayerState): number {
-  return player.leader.defensePower + (player.equipmentBonusDef ?? 0);
+  let def = player.leader.defensePower + (player.equipmentBonusDef ?? 0);
+  for (const buff of player.tempBuffs ?? []) {
+    if (buff.type === 'leader_def_bonus' && buff.scope === 'leader') {
+      def += buff.value;
+    }
+  }
+  return def;
 }
 
 /**
- * 味方キャラの実効攻撃力 = base + 装備による全体 atk 加算。
- * (味方キャラには装備の def 加算は乗らない仕様)
+ * 味方キャラの実効攻撃力 = base + 装備 ally_atk + tempBuffs(atk_bonus)。
+ * scope='all_my_chars' は全キャラに、scope='1_char' は targetInstanceId 一致時のみ。
+ * 'all_enemies_atk_debuff' (Phase 5) は相手キャラの実効攻撃力を計算する側で扱う。
  */
 export function getEffectiveCharAtk(
   player: PlayerState,
   card: BattleCardInstance,
 ): number {
-  return card.attackPower + (player.equipmentBonusAllyAtk ?? 0);
+  let atk = card.attackPower + (player.equipmentBonusAllyAtk ?? 0);
+  for (const buff of player.tempBuffs ?? []) {
+    if (buff.type === 'atk_bonus' && buff.scope === 'all_my_chars') {
+      atk += buff.value;
+    }
+    if (
+      buff.type === 'atk_bonus' &&
+      buff.scope === '1_char' &&
+      buff.targetInstanceId === card.instanceId
+    ) {
+      atk += buff.value;
+    }
+  }
+  return atk;
 }
 
 /**
- * 味方キャラの実効防御力 = base (装備 def 加算は乗らない)。
+ * 味方キャラの実効防御力 = base + tempBuffs(def_bonus)。Phase 4 では buff 種別なし。
  */
 export function getEffectiveCharDef(
-  _player: PlayerState,
+  player: PlayerState,
   card: BattleCardInstance,
 ): number {
-  return card.defensePower;
+  let def = card.defensePower;
+  for (const buff of player.tempBuffs ?? []) {
+    if (buff.type === 'def_bonus' && buff.scope === 'all_my_chars') {
+      def += buff.value;
+    }
+    if (
+      buff.type === 'def_bonus' &&
+      buff.scope === '1_char' &&
+      buff.targetInstanceId === card.instanceId
+    ) {
+      def += buff.value;
+    }
+  }
+  return def;
+}
+
+// ---- v2.0.2 Phase 4: tempBuffs の expire 処理 ------------------------------
+
+/**
+ * cost フェーズで両プレイヤーの tempBuffs を expire する。
+ * `expiresAt === 'this_turn'` で `createdTurn < currentTurn` のものをドロップ。
+ *
+ * 効果:
+ *   - 自分発行 'this_turn' buff (createdTurn=N) → 次の自分ターン (turn=N+2) cost で消滅
+ *   - 相手発行 'this_turn' buff (createdTurn=N) → 次のターン (turn=N+1) cost で消滅
+ *
+ * 'next_opponent_turn_end' / 'until_next_opponent_turn_end' は Phase 5 で対応。
+ */
+export function expireTempBuffs(
+  player: PlayerState,
+  currentTurn: number,
+): PlayerState {
+  // 旧テストや legacy state で tempBuffs 未設定 (undefined) の場合の防御
+  const buffs = player.tempBuffs ?? [];
+  if (buffs.length === 0) return player;
+  const filtered = buffs.filter((b) => {
+    if (b.expiresAt === 'this_turn' && b.createdTurn < currentTurn) {
+      return false;
+    }
+    return true;
+  });
+  if (filtered.length === buffs.length) return player;
+  return { ...player, tempBuffs: filtered };
 }
 
 // ---- v2.0.2: per_turn 装備のコストフェーズ発動 -----------------------------
@@ -369,16 +436,24 @@ export function advancePhase(state: BattleState): BattleState {
     }
 
     case 'cost': {
-      const player = state.players[active];
+      // v2.0.2 Phase 4: tempBuffs を両プレイヤー expire
+      const expP1 = expireTempBuffs(state.players.p1, state.turn);
+      const expP2 = expireTempBuffs(state.players.p2, state.turn);
+      const tempExpired: BattleState =
+        expP1 !== state.players.p1 || expP2 !== state.players.p2
+          ? { ...state, players: { p1: expP1, p2: expP2 } }
+          : state;
+
+      const player = tempExpired.players[active];
       // 先攻/後攻で異なる: 先攻 = turn*2-1, 後攻 = turn*2 (上限 MAX_COST=15)
-      const baseMax = calcManaForTurn(state.turn, active, state.firstPlayer);
+      const baseMax = calcManaForTurn(tempExpired.turn, active, tempExpired.firstPlayer);
       // 'mana' トリガー由来のボーナスを合算して 1 ターンのみ反映 (上限 cap は外す)
       const bonus = player.nextTurnManaBonus ?? 0;
       const newMax = baseMax + bonus;
       const afterCost: BattleState = {
-        ...state,
+        ...tempExpired,
         players: {
-          ...state.players,
+          ...tempExpired.players,
           [active]: {
             ...player,
             maxCost: newMax,
@@ -387,8 +462,8 @@ export function advancePhase(state: BattleState): BattleState {
           },
         },
         log: [
-          ...state.log,
-          makeEvent('phase_change', state.turn, active, {
+          ...tempExpired.log,
+          makeEvent('phase_change', tempExpired.turn, active, {
             to: 'main',
             maxCost: newMax,
             manaBonus: bonus,
