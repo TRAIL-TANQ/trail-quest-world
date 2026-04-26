@@ -17,7 +17,7 @@
  *     - 敗北: 「つぎはがんばろう」+ ALT +2 表示
  *     - [もう一度] /battle/select / [ホームへ] /
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { getChildId } from '@/lib/auth';
 import { applyAction } from '@/lib/battle/battleActions';
@@ -176,6 +176,83 @@ function EquipmentIcon({
   );
 }
 
+// ---- EventBanner: イベント / カウンター場プレイ時の中央バナー (Phase 6b-2) ---
+
+interface EventBannerData {
+  cardId: string;
+  cardName: string;
+  effectText: string;
+  type: 'event' | 'counter';
+  /** mount 毎にユニークな key にして再アニメーションを起こさせる */
+  key: number;
+}
+
+function EventBanner({
+  data,
+  onDismiss,
+}: {
+  data: EventBannerData | null;
+  onDismiss: () => void;
+}) {
+  // バナー表示後 1500ms で自動消去 (CSS animation 終了と同期)
+  useEffect(() => {
+    if (!data) return;
+    const t = setTimeout(onDismiss, 1500);
+    return () => clearTimeout(t);
+  }, [data, onDismiss]);
+
+  if (!data) return null;
+
+  const icon = data.type === 'event' ? '⚡' : '🛡';
+  const accentClass =
+    data.type === 'event'
+      ? 'from-purple-600/95 to-blue-700/95'
+      : 'from-amber-600/95 to-yellow-700/95';
+
+  return (
+    <div
+      key={data.key}
+      className={`fixed top-1/3 left-1/2 z-50 px-6 py-4 rounded-xl bg-gradient-to-r ${accentClass} shadow-2xl border-2 border-white/30 backdrop-blur-sm pointer-events-none animate-event-banner`}
+      style={{ minWidth: '280px', maxWidth: '90vw' }}
+    >
+      <div className="flex items-center gap-3">
+        <span className="text-3xl leading-none">{icon}</span>
+        <div className="flex-1">
+          <div className="text-white font-bold text-lg leading-tight">
+            {data.cardName}
+          </div>
+          {data.effectText && (
+            <div className="text-white/90 text-sm mt-0.5 leading-snug">
+              {data.effectText}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * BattleState 内のすべての場所 (graveyard / hand / deck / lifeCards / board /
+ * equippedCard) から cardId 一致の BattleCardInstance を探して返す。
+ * バナー表示時に直近プレイされた card.name / effectText を取り出すための
+ * ヘルパ。最初にヒットしたインスタンスを返す (graveyard を優先)。
+ */
+function findCardInstance(
+  state: BattleState,
+  cardId: string,
+): BattleCardInstance | null {
+  for (const p of [state.players.p1, state.players.p2]) {
+    for (const c of p.graveyard) if (c.cardId === cardId) return c;
+    for (const c of p.hand) if (c.cardId === cardId) return c;
+    for (const c of p.deck) if (c.cardId === cardId) return c;
+    for (const c of p.lifeCards) if (c.cardId === cardId) return c;
+    for (const s of p.board) if (s.card.cardId === cardId) return s.card;
+    if (p.equippedCard?.cardId === cardId) return p.equippedCard;
+  }
+  return null;
+}
+
 // ---- component ------------------------------------------------------------
 
 export default function BattlePage() {
@@ -195,6 +272,13 @@ export default function BattlePage() {
   // 勝敗確定後に processBattleResult() 経由で加算確定した ALT 量 (1 回のみ計算)。
   // null = 未処理 or 処理中 → フォールバックとして ALT_BATTLE_WIN/LOSE を表示。
   const [altEarnedResult, setAltEarnedResult] = useState<number | null>(null);
+
+  // Phase 6b-2: イベント / カウンター場プレイ時の中央バナー
+  const [activeBanner, setActiveBanner] = useState<EventBannerData | null>(
+    null,
+  );
+  // 直前まで処理済みの state.log.length (これ未満は処理済とみなす)
+  const lastSeenLogLenRef = useRef(0);
 
   // URL params
   const params = useMemo(() => {
@@ -311,6 +395,53 @@ export default function BattlePage() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state?.winner]);
+
+  // Phase 6b-2: state.log を監視し、新規追加された 'event_played' /
+  // 'counter_used' (mode='play_from_hand') を検出してバナーを表示。
+  // attack 時のカウンター発動 (mode='declared_on_attack' / 'ai_auto') は
+  // バナー対象外 (戦闘演出と別レイヤで扱う想定)。
+  useEffect(() => {
+    if (!state) {
+      lastSeenLogLenRef.current = 0;
+      return;
+    }
+    const log = state.log;
+    if (log.length <= lastSeenLogLenRef.current) {
+      lastSeenLogLenRef.current = log.length;
+      return;
+    }
+    const newEvents = log.slice(lastSeenLogLenRef.current);
+    lastSeenLogLenRef.current = log.length;
+
+    // 新規イベント中で最後のバナー対象を採用
+    for (let i = newEvents.length - 1; i >= 0; i--) {
+      const evt = newEvents[i];
+      let bannerType: EventBannerData['type'] | null = null;
+      if (evt.type === 'event_played') {
+        bannerType = 'event';
+      } else if (
+        evt.type === 'counter_used' &&
+        (evt.payload as { mode?: string }).mode === 'play_from_hand'
+      ) {
+        bannerType = 'counter';
+      }
+      if (!bannerType) continue;
+
+      const cardId = (evt.payload as { cardId?: string }).cardId;
+      if (!cardId) continue;
+      const card = findCardInstance(state, cardId);
+      if (!card) continue;
+
+      setActiveBanner({
+        cardId,
+        cardName: card.name,
+        effectText: card.effectText ?? '',
+        type: bannerType,
+        key: Date.now(), // 連続発火時の再アニメ trigger
+      });
+      break;
+    }
+  }, [state]);
 
   // AI turn trigger: activePlayer=='p2' になったら少し遅らせて runAITurn
   useEffect(() => {
@@ -733,6 +864,12 @@ export default function BattlePage() {
           onHome={() => navigate('/')}
         />
       )}
+
+      {/* ====== Phase 6b-2: イベント / カウンター場プレイ バナー ====== */}
+      <EventBanner
+        data={activeBanner}
+        onDismiss={() => setActiveBanner(null)}
+      />
     </div>
   );
 }
