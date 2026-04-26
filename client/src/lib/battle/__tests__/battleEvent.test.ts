@@ -13,7 +13,10 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { applyAction } from '../battleActions';
+import {
+  applyAction,
+  resumeEventEffectWithTarget,
+} from '../battleActions';
 import {
   expireTempBuffs,
   getEffectiveCharAtk,
@@ -213,7 +216,7 @@ describe('event cards (Phase 5)', () => {
     expect(result.events.some((e) => e.type === 'event_played')).toBe(true);
   });
 
-  it('destroy_enemy_char destroys opponent board head slot', () => {
+  it('destroy_enemy_char destroys opponent board head slot (AI immediate path)', () => {
     const p1Leader = makeLeader('l_p1');
     const p2Leader = makeLeader('l_p2');
     const target = makeCard('c_target', { instanceId: 'inst_target' });
@@ -221,8 +224,14 @@ describe('event cards (Phase 5)', () => {
     const event = makeEvent('ev_honnoji', {
       eventEffectType: 'destroy_enemy_char',
     });
+    // Phase 6b-3: 人間プレイヤーは pendingTargetSelection に保留されるので、
+    // 即時実行 (先頭スロット破壊) を検証するこのテストでは isAI: true を立てる。
     const state = makeState(
-      makeEmptyPlayer('u1', p1Leader, { hand: [event], currentCost: 5 }),
+      makeEmptyPlayer('u1', p1Leader, {
+        isAI: true,
+        hand: [event],
+        currentCost: 5,
+      }),
       makeEmptyPlayer('ai', p2Leader, {
         board: [
           { card: target, isRested: false, canAttackThisTurn: true, playedTurn: 1 },
@@ -466,5 +475,277 @@ describe('event cards (Phase 5)', () => {
     expect(p2.tempBuffs[0].value).toBe(-2);
     // p2 視点でキャラの effective atk = 6 - 2 = 4
     expect(getEffectiveCharAtk(p2, enemyChar)).toBe(4);
+  });
+});
+
+// ============================================================================
+// Phase 6b-3: 対象選択 UI 関連
+// ============================================================================
+
+describe('Phase 6b-3: target selection UI', () => {
+  it('destroy_enemy_char: human player → pendingTargetSelection set', () => {
+    const p1Leader = makeLeader('l_p1');
+    const p2Leader = makeLeader('l_p2');
+    const target = makeCard('c_target', { instanceId: 'inst_target' });
+    const survivor = makeCard('c_survivor', { instanceId: 'inst_survivor' });
+    const event = makeEvent('ev_honnoji', {
+      eventEffectType: 'destroy_enemy_char',
+    });
+    const state = makeState(
+      // isAI 未指定 → human 扱い
+      makeEmptyPlayer('u1', p1Leader, { hand: [event], currentCost: 5 }),
+      makeEmptyPlayer('ai', p2Leader, {
+        isAI: true,
+        board: [
+          {
+            card: target,
+            isRested: false,
+            canAttackThisTurn: true,
+            playedTurn: 1,
+          },
+          {
+            card: survivor,
+            isRested: false,
+            canAttackThisTurn: true,
+            playedTurn: 1,
+          },
+        ],
+      }),
+    );
+
+    const result = applyAction(state, {
+      type: 'play_card',
+      player: 'p1',
+      cardInstanceId: event.instanceId,
+      timestamp: '2026-04-24T00:00:00Z',
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // pending がセットされる
+    expect(result.newState.pendingTargetSelection).not.toBeNull();
+    const pending = result.newState.pendingTargetSelection!;
+    expect(pending.type).toBe('destroy_enemy_char');
+    expect(pending.cardInstanceId).toBe(event.instanceId);
+    expect(pending.candidates).toEqual(['inst_target', 'inst_survivor']);
+    // コスト消費は完了 (event.cost=2, currentCost=5 → 3)
+    expect(result.newState.players.p1.currentCost).toBe(3);
+    // カードはまだ手札に残っている
+    expect(
+      result.newState.players.p1.hand.find(
+        (c) => c.instanceId === event.instanceId,
+      ),
+    ).toBeDefined();
+    // 相手 board / graveyard はまだ変化なし
+    expect(result.newState.players.p2.board).toHaveLength(2);
+    expect(result.newState.players.p2.graveyard).toHaveLength(0);
+  });
+
+  it('destroy_enemy_char: resumeEventEffectWithTarget destroys chosen card', () => {
+    const p1Leader = makeLeader('l_p1');
+    const p2Leader = makeLeader('l_p2');
+    const target = makeCard('c_target', { instanceId: 'inst_target' });
+    const survivor = makeCard('c_survivor', { instanceId: 'inst_survivor' });
+    const event = makeEvent('ev_honnoji', {
+      eventEffectType: 'destroy_enemy_char',
+    });
+    const initial = makeState(
+      makeEmptyPlayer('u1', p1Leader, { hand: [event], currentCost: 5 }),
+      makeEmptyPlayer('ai', p2Leader, {
+        isAI: true,
+        board: [
+          {
+            card: target,
+            isRested: false,
+            canAttackThisTurn: true,
+            playedTurn: 1,
+          },
+          {
+            card: survivor,
+            isRested: false,
+            canAttackThisTurn: true,
+            playedTurn: 1,
+          },
+        ],
+      }),
+    );
+
+    const playResult = applyAction(initial, {
+      type: 'play_card',
+      player: 'p1',
+      cardInstanceId: event.instanceId,
+      timestamp: '2026-04-24T00:00:00Z',
+    });
+    expect(playResult.ok).toBe(true);
+    if (!playResult.ok) return;
+
+    // 2 枚目 (survivor) を選択
+    const resumed = resumeEventEffectWithTarget(playResult.newState, {
+      targetInstanceId: 'inst_survivor',
+    });
+    expect(resumed.ok).toBe(true);
+    if (!resumed.ok) return;
+    expect(resumed.newState.pendingTargetSelection).toBeNull();
+    const p1 = resumed.newState.players.p1;
+    const p2 = resumed.newState.players.p2;
+    // survivor 破壊、target は残る
+    expect(p2.board.map((s) => s.card.cardId)).toEqual(['c_target']);
+    expect(p2.graveyard.map((c) => c.cardId)).toEqual(['c_survivor']);
+    // 発動カードは hand → graveyard
+    expect(p1.hand.find((c) => c.instanceId === event.instanceId)).toBeUndefined();
+    expect(p1.graveyard.map((c) => c.cardId)).toEqual(['ev_honnoji']);
+  });
+
+  it('resumeEventEffectWithTarget: invalid targetInstanceId returns invalid_target', () => {
+    const p1Leader = makeLeader('l_p1');
+    const p2Leader = makeLeader('l_p2');
+    const target = makeCard('c_target', { instanceId: 'inst_target' });
+    const event = makeEvent('ev_honnoji', {
+      eventEffectType: 'destroy_enemy_char',
+    });
+    const initial = makeState(
+      makeEmptyPlayer('u1', p1Leader, { hand: [event], currentCost: 5 }),
+      makeEmptyPlayer('ai', p2Leader, {
+        isAI: true,
+        board: [
+          {
+            card: target,
+            isRested: false,
+            canAttackThisTurn: true,
+            playedTurn: 1,
+          },
+        ],
+      }),
+    );
+    const playResult = applyAction(initial, {
+      type: 'play_card',
+      player: 'p1',
+      cardInstanceId: event.instanceId,
+      timestamp: '2026-04-24T00:00:00Z',
+    });
+    if (!playResult.ok) return;
+
+    const resumed = resumeEventEffectWithTarget(playResult.newState, {
+      targetInstanceId: 'inst_nonexistent',
+    });
+    expect(resumed.ok).toBe(false);
+    if (resumed.ok) return;
+    expect(resumed.code).toBe('invalid_target');
+  });
+
+  it('destroy_enemy_char: human player with empty enemy board → no_valid_targets', () => {
+    const p1Leader = makeLeader('l_p1');
+    const p2Leader = makeLeader('l_p2');
+    const event = makeEvent('ev_honnoji', {
+      eventEffectType: 'destroy_enemy_char',
+    });
+    const state = makeState(
+      makeEmptyPlayer('u1', p1Leader, { hand: [event], currentCost: 5 }),
+      makeEmptyPlayer('ai', p2Leader, { isAI: true }),
+    );
+    const result = applyAction(state, {
+      type: 'play_card',
+      player: 'p1',
+      cardInstanceId: event.instanceId,
+      timestamp: '2026-04-24T00:00:00Z',
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.code).toBe('no_valid_targets');
+  });
+
+  it('scry_then_pick: peeked snapshot stored, resume preserves remaining order', () => {
+    const p1Leader = makeLeader('l_p1');
+    const p2Leader = makeLeader('l_p2');
+    const event = makeEvent('ev_genji_writing', {
+      eventEffectType: 'scry_then_pick',
+      eventEffectData: { scry: 3, pick: 1 },
+    });
+    const top1 = makeCard('c_top1', { instanceId: 'inst_top1' });
+    const top2 = makeCard('c_top2', { instanceId: 'inst_top2' });
+    const top3 = makeCard('c_top3', { instanceId: 'inst_top3' });
+    const top4 = makeCard('c_top4', { instanceId: 'inst_top4' });
+    const state = makeState(
+      makeEmptyPlayer('u1', p1Leader, {
+        hand: [event],
+        deck: [top1, top2, top3, top4],
+        currentCost: 5,
+      }),
+      makeEmptyPlayer('ai', p2Leader, { isAI: true }),
+    );
+    const playResult = applyAction(state, {
+      type: 'play_card',
+      player: 'p1',
+      cardInstanceId: event.instanceId,
+      timestamp: '2026-04-24T00:00:00Z',
+    });
+    expect(playResult.ok).toBe(true);
+    if (!playResult.ok) return;
+    const pending = playResult.newState.pendingTargetSelection!;
+    expect(pending.type).toBe('scry_then_pick');
+    expect(pending.context?.peekedCards?.map((c) => c.cardId)).toEqual([
+      'c_top1',
+      'c_top2',
+      'c_top3',
+    ]);
+    // デッキはまだ変化なし (resume 時に splice する)
+    expect(playResult.newState.players.p1.deck).toHaveLength(4);
+
+    // 真ん中 (top2) を手札へ
+    const resumed = resumeEventEffectWithTarget(playResult.newState, {
+      targetInstanceId: 'inst_top2',
+    });
+    expect(resumed.ok).toBe(true);
+    if (!resumed.ok) return;
+    const p1 = resumed.newState.players.p1;
+    // 手札: 元のイベント (墓地行き) は除き、選んだ top2 が増える
+    expect(p1.hand.map((c) => c.cardId)).toEqual(['c_top2']);
+    // 山札 top: top1 → top3 → top4 (元の順序維持)
+    expect(p1.deck.map((c) => c.cardId)).toEqual([
+      'c_top1',
+      'c_top3',
+      'c_top4',
+    ]);
+    expect(p1.graveyard.map((c) => c.cardId)).toEqual(['ev_genji_writing']);
+  });
+
+  it('AI player: destroy_enemy_char skips pause, runs immediate path', () => {
+    const p1Leader = makeLeader('l_p1');
+    const p2Leader = makeLeader('l_p2');
+    const target = makeCard('c_target', { instanceId: 'inst_target' });
+    const event = makeEvent('ev_honnoji', {
+      eventEffectType: 'destroy_enemy_char',
+    });
+    // 攻撃側 (p1) が AI → pause せず即時実行
+    const state = makeState(
+      makeEmptyPlayer('u1', p1Leader, {
+        isAI: true,
+        hand: [event],
+        currentCost: 5,
+      }),
+      makeEmptyPlayer('ai', p2Leader, {
+        board: [
+          {
+            card: target,
+            isRested: false,
+            canAttackThisTurn: true,
+            playedTurn: 1,
+          },
+        ],
+      }),
+    );
+    const result = applyAction(state, {
+      type: 'play_card',
+      player: 'p1',
+      cardInstanceId: event.instanceId,
+      timestamp: '2026-04-24T00:00:00Z',
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.newState.pendingTargetSelection ?? null).toBeNull();
+    expect(result.newState.players.p2.board).toHaveLength(0);
+    expect(result.newState.players.p2.graveyard.map((c) => c.cardId)).toEqual([
+      'c_target',
+    ]);
   });
 });

@@ -327,6 +327,40 @@ export interface BattleState {
    * 選択させ、resumeAttackWithCounter で再実行する。null/undefined = 保留なし。
    */
   pendingAttack?: AttackAction | null;
+  /**
+   * v2.0.2 Phase 6b-3: 人間がイベント / カウンターで対象選択必須の効果
+   * (destroy_enemy_char / reveal_then_discard / scry_then_pick / draw_and_buff)
+   * をプレイした際、効果発動を保留して UI に対象を選ばせる為の中間状態。
+   * resumeEventEffectWithTarget で確定発動 → null に戻す。AI プレイヤーは
+   * 即時実行 (従来動作) なのでこの field を使わない。null/undefined = 保留なし。
+   */
+  pendingTargetSelection?: PendingTargetSelection | null;
+}
+
+/**
+ * v2.0.2 Phase 6b-3: 人間プレイヤーの対象選択待ち中間状態。
+ *
+ *   - destroy_enemy_char  : 敵 board の破壊対象キャラ instanceId を選ぶ
+ *   - reveal_then_discard : 相手手札から捨てさせる cardInstanceId を選ぶ
+ *   - scry_then_pick      : 山札 top 3 (peekedCards) から手札に加える 1 枚を選ぶ
+ *   - draw_and_buff       : 自 board の atk +N 対象キャラ instanceId を選ぶ
+ *
+ * cardInstanceId / cost / handIdx は resume 時にカードを墓地送りする為に保持。
+ * peekedCards (scry のみ) は resume 時に山札へ戻す為に保持。
+ */
+export interface PendingTargetSelection {
+  type:
+    | 'destroy_enemy_char'
+    | 'reveal_then_discard'
+    | 'scry_then_pick'
+    | 'draw_and_buff';
+  cardInstanceId: string;
+  cardId: string;
+  player: PlayerSlot;
+  candidates: string[];
+  context?: {
+    peekedCards?: BattleCardInstance[];
+  };
 }
 
 /**
@@ -422,6 +456,9 @@ export interface ActionResultError {
     | 'already_equipped'         // 既に他の装備が付いている
     | 'leader_mismatch'          // 装備が別リーダー専用
     | 'not_implemented_yet'      // event / counter は Phase 4-5 で実装
+    // ---- v2.0.2 Phase 6b-3 対象選択 UI 関連 ------------------------------
+    | 'no_valid_targets'         // 効果対象が 0 件 (例: destroy_enemy_char で敵キャラ 0 体)
+    | 'no_pending_selection'     // resume を呼んだが pendingTargetSelection が無い
     | 'internal_error';
 }
 

@@ -23,6 +23,7 @@ import { getChildId } from '@/lib/auth';
 import {
   applyAction,
   resumeAttackWithCounter,
+  resumeEventEffectWithTarget,
 } from '@/lib/battle/battleActions';
 import { runAITurn } from '@/lib/battle/battleAI';
 import { advancePhase, BOARD_MAX_SLOTS } from '@/lib/battle/battleEngine';
@@ -46,6 +47,7 @@ import type {
   BattleWinner,
   BoardSlot,
   LeaderState,
+  PendingTargetSelection,
   PlayerSlot,
 } from '@/lib/battle/battleTypes';
 
@@ -412,6 +414,105 @@ function CounterDeclareModal({
   );
 }
 
+// ---- TargetSelectionModal: 人間プレイヤーの対象選択 (Phase 6b-3) -----------
+
+/**
+ * イベント / カウンターカードのうち対象選択必須効果が pending 状態の時、
+ * 人間プレイヤーに対象を選ばせるモーダル。
+ *
+ * - destroy_enemy_char  : 敵 board のキャラを 1 枚選んで破壊
+ * - reveal_then_discard : 相手手札を公開し、1 枚選んで捨てさせる
+ * - scry_then_pick      : 山札 top 3 (peekedCards) から 1 枚を手札へ
+ * - draw_and_buff       : 自 board のキャラを 1 枚選んで atk +N
+ *
+ * 事前バリデーションで「対象 0 件」は applyPlayEvent 側で弾かれるため、
+ * このモーダルが表示される時点で必ず 1 枚以上の候補がある。
+ * モーダル外側クリックでは閉じない (pending 状態は対象選択でしか解除されない)。
+ */
+function TargetSelectionModal({
+  state,
+  onSelect,
+}: {
+  state: BattleState;
+  onSelect: (targetInstanceId: string) => void;
+}) {
+  const pending = state.pendingTargetSelection;
+  if (!pending) return null;
+
+  const title: Record<PendingTargetSelection['type'], string> = {
+    destroy_enemy_char: '破壊するキャラを選んで！',
+    reveal_then_discard: '捨てさせるカードを選んで！',
+    scry_then_pick: '手札に加える 1 枚を選んで！',
+    draw_and_buff: '攻撃力を上げるキャラを選んで！',
+  };
+
+  // 候補となる BattleCardInstance を解決
+  const me = state.players[pending.player];
+  const opponent = state.players[pending.player === 'p1' ? 'p2' : 'p1'];
+
+  let candidateCards: BattleCardInstance[] = [];
+  if (pending.type === 'destroy_enemy_char') {
+    candidateCards = opponent.board
+      .filter((s) => pending.candidates.includes(s.card.instanceId))
+      .map((s) => s.card);
+  } else if (pending.type === 'reveal_then_discard') {
+    candidateCards = opponent.hand.filter((c) =>
+      pending.candidates.includes(c.instanceId),
+    );
+  } else if (pending.type === 'scry_then_pick') {
+    candidateCards = pending.context?.peekedCards ?? [];
+  } else if (pending.type === 'draw_and_buff') {
+    candidateCards = me.board
+      .filter((s) => pending.candidates.includes(s.card.instanceId))
+      .map((s) => s.card);
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-gradient-to-br from-slate-900 to-blue-950 border-2 border-yellow-500 rounded-xl shadow-2xl max-w-2xl w-full p-5 max-h-[90vh] overflow-y-auto">
+        <h2 className="text-yellow-400 text-xl font-bold mb-3 text-center">
+          🎯 {title[pending.type]}
+        </h2>
+        <div className="text-white/80 text-xs mb-3 text-center">
+          発動カード: <span className="text-yellow-200 font-bold">{pending.cardId}</span>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          {candidateCards.map((card) => (
+            <button
+              key={card.instanceId}
+              onClick={() => onSelect(card.instanceId)}
+              className="border-2 rounded-lg p-2 text-left transition-all bg-slate-800/60 hover:bg-amber-700/60 border-slate-500 hover:border-amber-400"
+            >
+              <div className="flex items-center gap-2">
+                <div className="w-12 aspect-[3/4] rounded overflow-hidden border border-white/20 bg-black/40 flex-shrink-0">
+                  <CardImage
+                    cardId={card.cardId}
+                    alt={card.name}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-yellow-300 font-bold text-sm truncate">
+                    {card.name}
+                  </div>
+                  <div className="text-white/70 text-xs leading-tight">
+                    {card.cardType === 'character' && (
+                      <>⚔{card.attackPower} 🛡{card.defensePower}</>
+                    )}
+                    {card.cardType !== 'character' && (
+                      <span className="text-white/60">cost {card.cost}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ---- component ------------------------------------------------------------
 
 export default function BattlePage() {
@@ -687,6 +788,9 @@ export default function BattlePage() {
     if (isAIThinking) return;
     // Phase 6b-4: 人間のカウンター宣言待ちなら AI を起動しない
     if (state.pendingAttack) return;
+    // Phase 6b-3: 人間の対象選択待ちなら AI を起動しない
+    // (pending は人間プレイヤーが発動した時にしかセットされないが、念のため)
+    if (state.pendingTargetSelection) return;
 
     console.log('[BattlePage] AI turn start trigger', {
       turn: state.turn,
@@ -759,11 +863,33 @@ export default function BattlePage() {
         !state.winner &&
         state.activePlayer === 'p1' &&
         state.phase === 'main' &&
-        !isAIThinking,
+        !isAIThinking &&
+        !state.pendingTargetSelection,
     );
   }
 
   // --- Phase 6b-4: カウンター宣言モーダルでの選択処理 -------------------------
+
+  // --- Phase 6b-3: 対象選択モーダルでの選択処理 ----------------------------
+
+  function handleTargetSelect(targetInstanceId: string) {
+    if (!state) return;
+    if (!state.pendingTargetSelection) return;
+    console.log('[BattlePage] handleTargetSelect', {
+      type: state.pendingTargetSelection.type,
+      targetInstanceId,
+    });
+    const result = resumeEventEffectWithTarget(state, { targetInstanceId });
+    if (!result.ok) {
+      console.warn(
+        '[BattlePage] resumeEventEffectWithTarget failed:',
+        result.code,
+        result.reason,
+      );
+      return;
+    }
+    setState(result.newState);
+  }
 
   function handleCounterChoice(counterCardInstanceId: string | null) {
     if (!state) return;
@@ -1156,6 +1282,11 @@ export default function BattlePage() {
           defenderSlot="p1"
           onSelect={handleCounterChoice}
         />
+      )}
+
+      {/* ====== Phase 6b-3: 人間プレイヤー対象選択モーダル ====== */}
+      {state.pendingTargetSelection && (
+        <TargetSelectionModal state={state} onSelect={handleTargetSelect} />
       )}
     </div>
   );

@@ -43,6 +43,7 @@ import type {
   BoardSlot,
   EndTurnAction,
   MulliganAction,
+  PendingTargetSelection,
   PlayCardAction,
   PlayerSlot,
   PlayerState,
@@ -50,6 +51,15 @@ import type {
   TempBuff,
   TriggerType,
 } from './battleTypes';
+
+// v2.0.2 Phase 6b-3: 人間プレイヤー時に対象選択 UI を介したい effect_type
+const TARGET_SELECTION_REQUIRED: ReadonlySet<PendingTargetSelection['type']> =
+  new Set<PendingTargetSelection['type']>([
+    'destroy_enemy_char',
+    'reveal_then_discard',
+    'scry_then_pick',
+    'draw_and_buff',
+  ]);
 
 // ---- エラーヘルパー --------------------------------------------------------
 
@@ -249,6 +259,14 @@ export function applyAction(
 ): ActionResult {
   if (state.winner) {
     return err('game_already_over', 'ゲームは既に終了しています');
+  }
+  // v2.0.2 Phase 6b-3: 対象選択モーダル表示中は他のアクションを受け付けない
+  // (resumeEventEffectWithTarget 経由でしか進めない)
+  if (state.pendingTargetSelection) {
+    return err(
+      'wrong_phase',
+      'カードの対象を選んでください',
+    );
   }
 
   switch (action.type) {
@@ -1327,6 +1345,25 @@ function applyPlayEvent(
   handIdx: number,
 ): ActionResult {
   const p = state.players[action.player];
+  const isAIPlayer = p.isAI === true || p.id === 'ai';
+  const effectType = card.eventEffectType ?? null;
+
+  // v2.0.2 Phase 6b-3: 人間 + 対象選択必須 effect は pending に保留
+  if (
+    !isAIPlayer &&
+    typeof effectType === 'string' &&
+    TARGET_SELECTION_REQUIRED.has(
+      effectType as PendingTargetSelection['type'],
+    )
+  ) {
+    return applyPlayEventWithSelection(
+      state,
+      action,
+      card,
+      handIdx,
+      effectType as PendingTargetSelection['type'],
+    );
+  }
 
   // 手札除去 + コスト消費
   const newHand = [
@@ -1379,6 +1416,409 @@ function applyPlayEvent(
 
   const events = finalState.log.slice(originalLogLen);
   return { ok: true, newState: finalState, events };
+}
+
+// ---- v2.0.2 Phase 6b-3: 対象選択を伴うイベントカードの保留処理 ----------
+
+/**
+ * 対象選択必須効果をプレイした際の候補 instanceId 配列を返す。
+ * 候補が 0 件なら空配列。
+ *
+ *   - destroy_enemy_char  : 相手 board キャラ全件
+ *   - reveal_then_discard : 相手 hand 全件
+ *   - scry_then_pick      : 自 deck top の peeked カード instanceId 全件
+ *   - draw_and_buff       : 自 board キャラ全件 (場が空でもドローはするが、
+ *                           pause せず即時実行する: 後段で分岐)
+ */
+function collectTargetCandidates(
+  state: BattleState,
+  player: PlayerSlot,
+  type: PendingTargetSelection['type'],
+  scryCount: number,
+): { candidates: string[]; peekedCards?: BattleCardInstance[] } {
+  const me = state.players[player];
+  const opponent = state.players[otherPlayer(player)];
+  switch (type) {
+    case 'destroy_enemy_char':
+      return { candidates: opponent.board.map((s) => s.card.instanceId) };
+    case 'reveal_then_discard':
+      return { candidates: opponent.hand.map((c) => c.instanceId) };
+    case 'scry_then_pick': {
+      const peeked = me.deck.slice(0, Math.min(scryCount, me.deck.length));
+      return {
+        candidates: peeked.map((c) => c.instanceId),
+        peekedCards: peeked,
+      };
+    }
+    case 'draw_and_buff':
+      return { candidates: me.board.map((s) => s.card.instanceId) };
+  }
+}
+
+/**
+ * 人間プレイヤーが対象選択必須効果をプレイした時の保留処理。
+ *
+ * フロー:
+ *   1. 候補を集める。0 件なら 'no_valid_targets' で弾く
+ *      (例外: draw_and_buff は board が空でも「ドローのみ」で即時実行)
+ *   2. コスト消費 + pendingTargetSelection セット
+ *      (カードは hand に残す。resume 時に hand から graveyard へ移す)
+ *   3. event_played ログを発火 (UI バナー用)
+ */
+function applyPlayEventWithSelection(
+  state: BattleState,
+  action: PlayCardAction,
+  card: BattleCardInstance,
+  handIdx: number,
+  type: PendingTargetSelection['type'],
+): ActionResult {
+  const p = state.players[action.player];
+  const data = (card.eventEffectData ?? {}) as Record<string, unknown>;
+  const scryCount = typeof data.scry === 'number' ? data.scry : 3;
+
+  const { candidates, peekedCards } = collectTargetCandidates(
+    state,
+    action.player,
+    type,
+    scryCount,
+  );
+
+  // draw_and_buff: 自 board が空でも「ドローのみ」のフォールバックを取りたいので
+  // pause せず即時実行に回す (executeEventEffect 側の既存実装が buffApplied=false を
+  // 返す)。
+  if (candidates.length === 0) {
+    if (type === 'draw_and_buff') {
+      // 即時パスへフォールバック (人間でも board 空時はドローのみ)
+      return applyPlayEventImmediate(state, action, card, handIdx);
+    }
+    return err('no_valid_targets', 'このカードの対象がいません');
+  }
+
+  // コスト消費 + pending セット (hand はそのまま、resume で除去 → 墓地へ)
+  const pending: PendingTargetSelection = {
+    type,
+    cardInstanceId: card.instanceId,
+    cardId: card.cardId,
+    player: action.player,
+    candidates,
+    context: peekedCards ? { peekedCards } : undefined,
+  };
+
+  const playEvent = makeEvent('event_played', state.turn, action.player, {
+    cardId: card.cardId,
+    instanceId: card.instanceId,
+    cost: card.cost,
+    effectType: type,
+    pendingTargetSelection: true,
+  });
+
+  const newState: BattleState = {
+    ...state,
+    players: {
+      ...state.players,
+      [action.player]: {
+        ...p,
+        currentCost: p.currentCost - card.cost,
+      },
+    },
+    pendingTargetSelection: pending,
+    log: [...state.log, playEvent],
+  };
+
+  return { ok: true, newState, events: [playEvent] };
+}
+
+/**
+ * AI / 即時パス用に旧 applyPlayEvent 本体を抽出したヘルパ。
+ * (人間 + draw_and_buff で board 空のフォールバックでも使う)
+ */
+function applyPlayEventImmediate(
+  state: BattleState,
+  action: PlayCardAction,
+  card: BattleCardInstance,
+  handIdx: number,
+): ActionResult {
+  const p = state.players[action.player];
+  const newHand = [
+    ...p.hand.slice(0, handIdx),
+    ...p.hand.slice(handIdx + 1),
+  ];
+  const afterRemoval: BattleState = {
+    ...state,
+    players: {
+      ...state.players,
+      [action.player]: {
+        ...p,
+        hand: newHand,
+        currentCost: p.currentCost - card.cost,
+      },
+    },
+    log: [
+      ...state.log,
+      makeEvent('event_played', state.turn, action.player, {
+        cardId: card.cardId,
+        instanceId: card.instanceId,
+        cost: card.cost,
+        effectType: card.eventEffectType ?? null,
+      }),
+    ],
+  };
+  const originalLogLen = state.log.length;
+  const afterEffect = executeEventEffect(afterRemoval, action.player, card);
+  if (afterEffect.winner) {
+    const events = afterEffect.log.slice(originalLogLen);
+    return { ok: true, newState: afterEffect, events };
+  }
+  const finalPlayerState = afterEffect.players[action.player];
+  const finalState: BattleState = {
+    ...afterEffect,
+    players: {
+      ...afterEffect.players,
+      [action.player]: {
+        ...finalPlayerState,
+        graveyard: [...finalPlayerState.graveyard, card],
+      },
+    },
+  };
+  const events = finalState.log.slice(originalLogLen);
+  return { ok: true, newState: finalState, events };
+}
+
+/**
+ * 対象選択 pending → 効果適用本体。
+ * pending.candidates に含まれない targetInstanceId は invalid_target で弾く。
+ * 戻り値は新 state + 今回追加されたイベント差分。
+ */
+function executeEventEffectWithTarget(
+  state: BattleState,
+  pending: PendingTargetSelection,
+  targetInstanceId: string,
+  card: BattleCardInstance,
+): ActionResult {
+  if (!pending.candidates.includes(targetInstanceId)) {
+    return err('invalid_target', '選択されたカードは対象として無効です');
+  }
+
+  const slot = pending.player;
+  const opponentSlot = otherPlayer(slot);
+  const data = (card.eventEffectData ?? {}) as Record<string, unknown>;
+  const originalLogLen = state.log.length;
+
+  switch (pending.type) {
+    case 'destroy_enemy_char': {
+      const opponent = state.players[opponentSlot];
+      const targetIdx = opponent.board.findIndex(
+        (s) => s.card.instanceId === targetInstanceId,
+      );
+      if (targetIdx < 0) {
+        return err('invalid_target', '対象キャラが場にいません');
+      }
+      const target = opponent.board[targetIdx];
+      const newOpponent: PlayerState = {
+        ...opponent,
+        board: [
+          ...opponent.board.slice(0, targetIdx),
+          ...opponent.board.slice(targetIdx + 1),
+        ],
+        graveyard: [...opponent.graveyard, target.card],
+      };
+      const ev = makeEvent('card_destroyed', state.turn, slot, {
+        source: 'event_play',
+        cardId: card.cardId,
+        effectKind: 'destroy_enemy_char',
+        destroyedCardId: target.card.cardId,
+        destroyedInstanceId: target.card.instanceId,
+        chosenBy: 'human',
+      });
+      const newState: BattleState = {
+        ...state,
+        players: { ...state.players, [opponentSlot]: newOpponent },
+        log: [...state.log, ev],
+      };
+      return { ok: true, newState, events: newState.log.slice(originalLogLen) };
+    }
+
+    case 'reveal_then_discard': {
+      const opponent = state.players[opponentSlot];
+      const targetIdx = opponent.hand.findIndex(
+        (c) => c.instanceId === targetInstanceId,
+      );
+      if (targetIdx < 0) {
+        return err('invalid_target', '対象カードが手札にありません');
+      }
+      const target = opponent.hand[targetIdx];
+      const newOpponent: PlayerState = {
+        ...opponent,
+        hand: [
+          ...opponent.hand.slice(0, targetIdx),
+          ...opponent.hand.slice(targetIdx + 1),
+        ],
+        graveyard: [...opponent.graveyard, target],
+      };
+      const ev = makeEvent('temp_buff_applied', state.turn, slot, {
+        source: 'event_play',
+        cardId: card.cardId,
+        effectKind: 'reveal_then_discard',
+        discardedCardId: target.cardId,
+        chosenBy: 'human',
+      });
+      const newState: BattleState = {
+        ...state,
+        players: { ...state.players, [opponentSlot]: newOpponent },
+        log: [...state.log, ev],
+      };
+      return { ok: true, newState, events: newState.log.slice(originalLogLen) };
+    }
+
+    case 'scry_then_pick': {
+      const player = state.players[slot];
+      const peeked = pending.context?.peekedCards ?? [];
+      const pickIdx = peeked.findIndex(
+        (c) => c.instanceId === targetInstanceId,
+      );
+      if (pickIdx < 0) {
+        return err('invalid_target', '選択カードはピーク対象にありません');
+      }
+      const picked = peeked[pickIdx];
+      const remaining = [
+        ...peeked.slice(0, pickIdx),
+        ...peeked.slice(pickIdx + 1),
+      ];
+      // 山札 top から peeked.length 枚を取り除き、残り (remaining) を元の順序で先頭に戻す
+      const restDeck = player.deck.slice(peeked.length);
+      const newDeck = [...remaining, ...restDeck];
+      const newPlayer: PlayerState = {
+        ...player,
+        deck: newDeck,
+        hand: [...player.hand, picked],
+      };
+      const ev = makeEvent('temp_buff_applied', state.turn, slot, {
+        source: 'event_play',
+        cardId: card.cardId,
+        effectKind: 'scry_then_pick',
+        pickedCardIds: [picked.cardId],
+        returnedCount: remaining.length,
+        chosenBy: 'human',
+      });
+      const newState: BattleState = {
+        ...state,
+        players: { ...state.players, [slot]: newPlayer },
+        log: [...state.log, ev],
+      };
+      return { ok: true, newState, events: newState.log.slice(originalLogLen) };
+    }
+
+    case 'draw_and_buff': {
+      const drawCount = typeof data.draw === 'number' ? data.draw : 1;
+      const atkBonus = typeof data.atk_bonus === 'number' ? data.atk_bonus : 2;
+      let next: BattleState = drawCard(state, slot, drawCount);
+      if (next.winner) {
+        return {
+          ok: true,
+          newState: next,
+          events: next.log.slice(originalLogLen),
+        };
+      }
+      const player = next.players[slot];
+      const targetIdx = player.board.findIndex(
+        (s) => s.card.instanceId === targetInstanceId,
+      );
+      if (targetIdx < 0) {
+        return err('invalid_target', '対象キャラが場にいません');
+      }
+      const buff: TempBuff = {
+        id: nanoid(10),
+        type: 'atk_bonus',
+        value: atkBonus,
+        scope: '1_char',
+        targetInstanceId,
+        expiresAt: 'this_turn',
+        createdTurn: state.turn,
+      };
+      const newPlayer: PlayerState = {
+        ...player,
+        tempBuffs: [...(player.tempBuffs ?? []), buff],
+      };
+      const ev = makeEvent('temp_buff_applied', state.turn, slot, {
+        source: 'event_play',
+        cardId: card.cardId,
+        effectKind: 'draw_and_buff',
+        drawn: drawCount,
+        atkBonus,
+        targetInstanceId,
+        buffId: buff.id,
+        chosenBy: 'human',
+      });
+      const newState: BattleState = {
+        ...next,
+        players: { ...next.players, [slot]: newPlayer },
+        log: [...next.log, ev],
+      };
+      return { ok: true, newState, events: newState.log.slice(originalLogLen) };
+    }
+  }
+}
+
+/**
+ * 保留中の対象選択を確定して効果を発動する。
+ *
+ *   - selection.targetInstanceId : 選んだ対象 (pending.candidates のいずれか)
+ *
+ * フロー:
+ *   1. pending を取り出して null クリア
+ *   2. executeEventEffectWithTarget で効果適用
+ *   3. 元カードを hand → graveyard へ移動 (winner が確定していなければ)
+ */
+export function resumeEventEffectWithTarget(
+  state: BattleState,
+  selection: { targetInstanceId: string },
+): ActionResult {
+  const pending = state.pendingTargetSelection;
+  if (!pending) {
+    return err('no_pending_selection', '保留中の対象選択がありません');
+  }
+
+  const player = state.players[pending.player];
+  const handIdx = player.hand.findIndex(
+    (c) => c.instanceId === pending.cardInstanceId,
+  );
+  if (handIdx < 0) {
+    return err('internal_error', '保留中のカードが手札に見つかりません');
+  }
+  const card = player.hand[handIdx];
+
+  const cleared: BattleState = { ...state, pendingTargetSelection: null };
+  const result = executeEventEffectWithTarget(
+    cleared,
+    pending,
+    selection.targetInstanceId,
+    card,
+  );
+  if (!result.ok) return result;
+
+  if (result.newState.winner) {
+    return result;
+  }
+
+  // hand → graveyard
+  const finalPlayerState = result.newState.players[pending.player];
+  const newHand = [
+    ...finalPlayerState.hand.slice(0, handIdx),
+    ...finalPlayerState.hand.slice(handIdx + 1),
+  ];
+  const finalState: BattleState = {
+    ...result.newState,
+    players: {
+      ...result.newState.players,
+      [pending.player]: {
+        ...finalPlayerState,
+        hand: newHand,
+        graveyard: [...finalPlayerState.graveyard, card],
+      },
+    },
+  };
+
+  return { ok: true, newState: finalState, events: result.events };
 }
 
 // ---- attack ----------------------------------------------------------------
