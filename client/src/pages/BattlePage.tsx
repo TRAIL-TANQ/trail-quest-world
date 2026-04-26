@@ -31,6 +31,7 @@ import { advancePhase, BOARD_MAX_SLOTS } from '@/lib/battle/battleEngine';
 import {
   fetchLeaders,
   fetchPresetDecks,
+  getCardName,
   resolveCardImage,
   startBattle,
   type PresetDeck,
@@ -770,7 +771,10 @@ function TargetSelectionModal({
           🎯 {title[pending.type]}
         </h2>
         <div className="text-white/80 text-xs mb-3 text-center">
-          発動カード: <span className="text-yellow-200 font-bold">{pending.cardId}</span>
+          発動カード:{' '}
+          <span className="text-yellow-200 font-bold">
+            {getCardName(pending.cardId)}
+          </span>
         </div>
         <div className="grid grid-cols-2 gap-2">
           {candidateCards.map((card) => (

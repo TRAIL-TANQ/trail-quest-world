@@ -28,7 +28,193 @@ import type {
   TriggerType,
 } from './battle/battleTypes';
 
+// ---- カード日本語名マスタ (Phase 6c-1) ------------------------------------
+//
+// battle_cards_meta テーブルには name カラムが存在しないため、TS 側で
+// cardId → 日本語表示名の対応を一括登録する。expandDeck() がこのマップを
+// 参照して BattleCardInstance.name を Japanese で初期化するので、UI 側は
+// `card.name` をそのまま描画すれば日本語が出る。
+//
+// 構成:
+//   - キャラクターカード (card_*)        : ~95 件 (CARD_IMAGE_OVERRIDES に対応)
+//   - 装備カード (eq_*)                  : 10 件 (Phase 6b-1.6 / 0041 seed)
+//   - カウンターカード (cn_*)             : 10 件 (Phase 6b-1.6 / 0042 seed)
+//   - イベントカード (ev_*)               : 15 件 (Phase 6b-1.6 / 0043 seed)
+//
+// 未登録 cardId は getCardName() で cardId 文字列がそのまま返される
+// (デバッグしやすさ優先)。
+
+export const CARD_NAME_MAP: Record<string, string> = {
+  // ===== ナポレオン系 =====
+  card_napoleon: 'ナポレオン',
+  card_cannon: '大砲',
+  card_waterloo: 'ワーテルローの戦い',
+  card_austerlitz: 'アウステルリッツの戦い',
+  card_napoleon_code: 'ナポレオン法典',
+  card_arc_de_triomphe: '凱旋門',
+
+  // ===== 信長系 =====
+  card_nobunaga: '織田信長',
+  card_oda_nobunaga: '織田信長',
+  card_akechi_mitsuhide: '明智光秀',
+  card_honnoji: '本能寺',
+  card_mikka_tenka: '三日天下',
+  card_atsumori: '敦盛',
+  card_nagashino_formation: '長篠の三段撃ち',
+  card_azuchi_castle: '安土城',
+  card_rakuichi: '楽市楽座',
+  card_ashigaru: '足軽',
+  card_nanban_trade: '南蛮貿易',
+  card_tennouzan: '天王山',
+  card_hideyoshi: '羽柴秀吉',
+  card_rikyu: '千利休',
+  card_atago_hyakuin: '愛宕百韻',
+
+  // ===== ダ・ヴィンチ系 =====
+  card_davinci: 'レオナルド・ダ・ヴィンチ',
+  card_leonardo: 'レオナルド・ダ・ヴィンチ',
+  card_universal_genius: '万能の天才',
+  card_mona_lisa: 'モナ・リザ',
+  card_last_supper: '最後の晩餐',
+  card_flying_machine: '空飛ぶ機械',
+  card_blueprint: '設計図',
+  card_anatomy: '解剖学',
+  card_mirror_writing: '鏡文字',
+
+  // ===== ガリレオ系 =====
+  card_galileo: 'ガリレオ・ガリレイ',
+  card_telescope: '望遠鏡',
+  card_earth_moves: 'それでも地球は動く',
+  card_geocentric: '天動説',
+  card_heliocentric: '地動説',
+
+  // ===== 紫式部系 =====
+  card_murasaki: '紫式部',
+  card_genji_monogatari: '源氏物語',
+  card_tale_of_genji: '源氏物語',
+  card_junihitoe: '十二単',
+  card_waka: '和歌',
+  card_fude: '筆',
+
+  // ===== 清少納言系 =====
+  card_sei_shonagon: '清少納言',
+  card_makura_no_soshi: '枕草子',
+  card_paper: '紙',
+
+  // ===== アマゾン系 =====
+  card_amazon: 'アマゾン川',
+  card_amazon_river: 'アマゾン川',
+  card_anaconda: 'アナコンダ',
+  card_anaconda_hunter: 'アナコンダハンター',
+  card_giant_snake: '大蛇',
+  card_giant_serpent: '大蛇',
+  card_poison_frog: 'ヤドクガエル',
+  card_piranha: 'ピラニア',
+  card_jaguar: 'ジャガー',
+  card_pink_dolphin: 'ピンクイルカ',
+  card_hummingbird: 'ハチドリ',
+  card_tropical_forest: '熱帯雨林',
+
+  // ===== オオカミ系 =====
+  card_wolf: 'オオカミ',
+  card_howl: '遠吠え',
+  card_moonlight_howl: '月夜の遠吠え',
+  card_pack_law: '群れの掟',
+  card_territory: 'なわばり',
+  card_lone_wolf: '一匹狼',
+  card_lion: 'ライオン',
+  card_elephant_africa: 'アフリカゾウ',
+  card_african_elephant: 'アフリカゾウ',
+
+  // ===== ジャンヌ系 =====
+  card_jeanne: 'ジャンヌ・ダルク',
+  card_jeanne_saint: '聖女ジャンヌ',
+  card_saint_jeanne: '聖女ジャンヌ',
+  card_burning_stake: '火刑台',
+  card_prayer_light: '祈りの光',
+  card_holy_banner: '聖なる旗',
+  card_holy_sword: '聖剣',
+  card_war_banner: '戦旗',
+  card_lily_shield: '百合の盾',
+  card_bible: '聖書',
+  card_cross: '十字架',
+  card_templar: 'テンプル騎士',
+
+  // ===== 始皇帝系 =====
+  card_qin_shi_huang: '始皇帝',
+  card_emperor_qin: '始皇帝',
+  card_terracotta_army: '兵馬俑',
+  card_terracotta: '兵馬俑',
+  card_qin_soldier: '秦の兵士',
+  card_great_wall: '万里の長城',
+  card_book_burning: '焚書',
+  card_imperial_decree: '皇帝の勅令',
+  card_gunpowder: '火薬',
+
+  // ===== 汎用 =====
+  card_soldier_musket: 'マスケット兵',
+  card_cavalry: '騎兵',
+  card_typhoon: '台風',
+  card_earthquake: '大地震',
+  card_sun: '太陽',
+  card_moon: '月',
+
+  // ===== v2.0.2 装備カード 10 枚 (0041 seed) =====
+  eq_napoleon_bicorne: 'ナポレオンの三角帽',
+  eq_nobunaga_matchlock: '信長の火縄銃',
+  eq_davinci_codex: 'ダ・ヴィンチの万能手帳',
+  eq_galileo_telescope: 'ガリレオの望遠鏡',
+  eq_murasaki_genji: '紫式部の源氏物語',
+  eq_seishonagon_pillowbook: '清少納言の枕草子',
+  eq_amazon_blessing: '大河の祝福',
+  eq_wolf_howl: '月夜の遠吠え',
+  eq_jeanne_holysword: 'ジャンヌの聖剣',
+  eq_qin_wallstone: '万里の長城の石',
+
+  // ===== v2.0.2 カウンターカード 10 枚 (0042 seed) =====
+  cn_warriors_oath: '戦士の誓い',
+  cn_matchlock_wall: '火縄銃の防壁',
+  cn_universal_diagram: '万能図解',
+  cn_observers_eye: '観測者の眼',
+  cn_tale_shield: '物語の盾',
+  cn_witty_words: '機知の言葉',
+  cn_river_guardian: '大河の守護者',
+  cn_pack_unity: '群れの結束',
+  cn_sacred_blessing: '聖なる祝福',
+  cn_great_wall_shield: '万里の長城の盾',
+
+  // ===== v2.0.2 イベントカード 15 枚 (0043 seed) =====
+  ev_waterloo: 'ワーテルロー',
+  ev_honnoji: '本能寺の変',
+  ev_renaissance: 'ルネサンス',
+  ev_heliocentric: '地動説',
+  ev_genji_writing: '源氏物語の執筆',
+  ev_pillow_morning: '春はあけぼの',
+  ev_river_flood: '大河の氾濫',
+  ev_moonlight_hunt: '月夜の狩り',
+  ev_jeanne_oracle: 'ジャンヌの託宣',
+  ev_great_wall_build: '万里の長城建設',
+  ev_great_storm: '大嵐',
+  ev_lunar_eclipse: '月蝕',
+  ev_spring_arrival: '春の訪れ',
+  ev_earthquake_global: '大地震',
+  ev_scout: '物見',
+};
+
+/**
+ * cardId を日本語表示名へ解決。未登録 cardId は cardId 文字列をそのまま返す
+ * (Phase 6c-1)。BattleCardInstance.name の初期化と、cardId を直接 UI 表示
+ * している箇所 (TargetSelectionModal の発動カードラベル等) で使用。
+ */
+export function getCardName(cardId: string): string {
+  return CARD_NAME_MAP[cardId] ?? cardId;
+}
+
 // ---- カード名 / 画像 の lookup (cardData.ts = 既存 226 枚マスタから取得) ----
+//
+// 旧 226 枚マスタに登録済の card-001 系 ID は cardData の name/imageUrl を
+// 使う。battle 系の card_*/eq_*/cn_*/ev_* はマスタに存在しないので、
+// CARD_NAME_MAP 経由の getCardName でフォールバックする。
 
 let cardDisplayCache: Map<string, { name: string; imageUrl: string }> | null = null;
 function getCardDisplay(cardId: string): { name: string; imageUrl: string } {
@@ -38,7 +224,9 @@ function getCardDisplay(cardId: string): { name: string; imageUrl: string } {
       cardDisplayCache.set(c.id, { name: c.name, imageUrl: c.imageUrl });
     }
   }
-  return cardDisplayCache.get(cardId) ?? { name: cardId, imageUrl: '' };
+  return (
+    cardDisplayCache.get(cardId) ?? { name: getCardName(cardId), imageUrl: '' }
+  );
 }
 
 // ---- v2.0-launch カード画像解決 --------------------------------------------
