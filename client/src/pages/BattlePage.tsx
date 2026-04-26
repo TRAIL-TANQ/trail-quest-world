@@ -58,40 +58,49 @@ type SelectedAttacker = null | 'leader' | string;
 // ALT 報酬の定数は altGameService で一元管理 (ALT_BATTLE_WIN / ALT_BATTLE_LOSE)。
 // ここでは processBattleResult() の戻り値を優先し、非同期完了前の fallback としてのみ使用。
 
-// ---- CardImage: 404 時に placeholder にフォールバックする <img> ラッパ -----
+// ---- CardFallback: 画像未登録/404 時の placeholder (Phase 6c-7) ----------
 
-function CardImage({
-  cardId,
-  alt,
+/**
+ * resolveCardImage が src を返せない (マッピング未登録 / 404) ときに
+ * 描画するカード placeholder。
+ *
+ * デザイン (子供向け):
+ *   - gold border (border-yellow-400)
+ *   - 中央に種別アイコン (装備=⚙、カウンター=🛡、イベント=✨、キャラ=⚔、ステージ=🌐)
+ *   - 下部に小さく card.name (alt 焼き込みではなく独立したテキスト帯として配置)
+ *
+ * 使い方は Phase 6b-1.5 で EquipmentIcon が確立したパターンに準拠:
+ * 各消費側コンポーネントが独自に useState(imgErrored) と <img onError> を持ち、
+ * 画像不可と判定したら本コンポーネントを返す。共通の CardImage ラッパは廃止。
+ */
+function CardFallback({
+  card,
   className,
 }: {
-  cardId: string;
-  alt: string;
+  card: BattleCardInstance;
   className?: string;
 }) {
-  const [errored, setErrored] = useState(false);
-  const src = resolveCardImage(cardId);
-  if (errored || !src) {
-    return (
-      <div
-        className={`${className ?? ''} flex items-center justify-center text-[8px] leading-tight text-white/70 text-center p-1`}
-        style={{
-          background:
-            'linear-gradient(135deg, rgba(60,60,80,0.9), rgba(30,30,50,0.9))',
-        }}
-      >
-        {alt}
-      </div>
-    );
-  }
+  const icon =
+    card.cardType === 'equipment'
+      ? '⚙'
+      : card.cardType === 'counter'
+        ? '🛡'
+        : card.cardType === 'event'
+          ? '✨'
+          : card.cardType === 'stage'
+            ? '🌐'
+            : '⚔';
   return (
-    <img
-      src={src}
-      alt={alt}
-      className={className}
-      draggable={false}
-      onError={() => setErrored(true)}
-    />
+    <div
+      className={`${className ?? ''} relative flex flex-col border-2 border-yellow-400/80 bg-gradient-to-br from-slate-800/95 to-slate-900/95`}
+    >
+      <div className="flex-1 flex items-center justify-center text-2xl text-yellow-200/85 leading-none select-none">
+        {icon}
+      </div>
+      <div className="bg-black/70 text-[8px] leading-tight text-yellow-100 text-center px-0.5 py-[2px] truncate">
+        {card.name}
+      </div>
+    </div>
   );
 }
 
@@ -479,38 +488,71 @@ function TargetSelectionModal({
         </div>
         <div className="grid grid-cols-2 gap-2">
           {candidateCards.map((card) => (
-            <button
+            <TargetCandidateButton
               key={card.instanceId}
-              onClick={() => onSelect(card.instanceId)}
-              className="border-2 rounded-lg p-2 text-left transition-all bg-slate-800/60 hover:bg-amber-700/60 border-slate-500 hover:border-amber-400"
-            >
-              <div className="flex items-center gap-2">
-                <div className="w-12 aspect-[3/4] rounded overflow-hidden border border-white/20 bg-black/40 flex-shrink-0">
-                  <CardImage
-                    cardId={card.cardId}
-                    alt={card.name}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-yellow-300 font-bold text-sm truncate">
-                    {card.name}
-                  </div>
-                  <div className="text-white/70 text-xs leading-tight">
-                    {card.cardType === 'character' && (
-                      <>⚔{card.attackPower} 🛡{card.defensePower}</>
-                    )}
-                    {card.cardType !== 'character' && (
-                      <span className="text-white/60">cost {card.cost}</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </button>
+              card={card}
+              onSelect={onSelect}
+            />
           ))}
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Phase 6c-7: TargetSelectionModal の候補ボタン。
+ * Phase 6b-1.5 のパターン (独自 img + onError + imgErrored state) を踏襲し、
+ * 画像取得不可時は CardFallback を表示。
+ *
+ * map 内で hooks を呼べないため、必ず単一カード単位の独立コンポーネントとして
+ * 切り出す必要がある。
+ */
+function TargetCandidateButton({
+  card,
+  onSelect,
+}: {
+  card: BattleCardInstance;
+  onSelect: (instanceId: string) => void;
+}) {
+  const [imgErrored, setImgErrored] = useState(false);
+  const src = resolveCardImage(card.cardId);
+  const showImg = !imgErrored && Boolean(src);
+  return (
+    <button
+      onClick={() => onSelect(card.instanceId)}
+      className="border-2 rounded-lg p-2 text-left transition-all bg-slate-800/60 hover:bg-amber-700/60 border-slate-500 hover:border-amber-400"
+    >
+      <div className="flex items-center gap-2">
+        <div className="w-12 aspect-[3/4] rounded overflow-hidden bg-black/40 flex-shrink-0">
+          {showImg ? (
+            <img
+              src={src!}
+              alt=""
+              aria-hidden="true"
+              draggable={false}
+              onError={() => setImgErrored(true)}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <CardFallback card={card} className="w-full h-full" />
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-yellow-300 font-bold text-sm truncate">
+            {card.name}
+          </div>
+          <div className="text-white/70 text-xs leading-tight">
+            {card.cardType === 'character' && (
+              <>⚔{card.attackPower} 🛡{card.defensePower}</>
+            )}
+            {card.cardType !== 'character' && (
+              <span className="text-white/60">cost {card.cost}</span>
+            )}
+          </div>
+        </div>
+      </div>
+    </button>
   );
 }
 
@@ -1598,6 +1640,11 @@ function BoardCardSlot({
   isTargeted?: boolean;
   attackResult?: AttackAnimation['result'];
 }) {
+  // Phase 6c-7: 独自 img + onError + imgErrored state (slot=null 時も hook 順序維持)
+  const [imgErrored, setImgErrored] = useState(false);
+  const src = slot ? resolveCardImage(slot.card.cardId) : '';
+  const showImg = slot ? !imgErrored && Boolean(src) : false;
+
   if (!slot) {
     return (
       <div className="flex-1 aspect-[3/4] rounded-md border border-dashed border-white/10 bg-black/20" />
@@ -1638,11 +1685,18 @@ function BoardCardSlot({
       className={`relative flex-1 aspect-[3/4] rounded-md overflow-hidden border border-yellow-400/40 bg-black/60 transition-transform ${ringClass} ${animClass} ${clickable ? 'cursor-pointer' : 'cursor-default'}`}
       style={{ transform: slot.isRested ? 'rotate(12deg)' : 'none' }}
     >
-      <CardImage
-        cardId={slot.card.cardId}
-        alt={slot.card.name}
-        className="w-full h-full object-cover"
-      />
+      {showImg ? (
+        <img
+          src={src}
+          alt=""
+          aria-hidden="true"
+          draggable={false}
+          onError={() => setImgErrored(true)}
+          className="w-full h-full object-cover"
+        />
+      ) : (
+        <CardFallback card={slot.card} className="w-full h-full" />
+      )}
       <div className="absolute top-0 left-0 bg-black/70 text-yellow-300 text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-br">
         {slot.card.cost}
       </div>
@@ -1742,6 +1796,11 @@ function HandCard({
   playable: boolean;
   onPlay?: () => void;
 }) {
+  // Phase 6c-7: 共通 CardImage は廃止、Phase 6b-1.5 の EquipmentIcon パターン
+  // (独自 img + onError + imgErrored state) を踏襲。画像取得不可時は CardFallback。
+  const [imgErrored, setImgErrored] = useState(false);
+  const src = resolveCardImage(card.cardId);
+  const showImg = !imgErrored && Boolean(src);
   return (
     <button
       onClick={onPlay}
@@ -1752,11 +1811,18 @@ function HandCard({
           : 'border-white/20 opacity-90'
       }`}
     >
-      <CardImage
-        cardId={card.cardId}
-        alt={card.name}
-        className="w-full h-full object-cover"
-      />
+      {showImg ? (
+        <img
+          src={src!}
+          alt=""
+          aria-hidden="true"
+          draggable={false}
+          onError={() => setImgErrored(true)}
+          className="w-full h-full object-cover"
+        />
+      ) : (
+        <CardFallback card={card} className="w-full h-full" />
+      )}
       <div className="absolute top-0 left-0 bg-black/80 text-yellow-300 text-[11px] font-bold w-5 h-5 flex items-center justify-center rounded-br">
         {card.cost}
       </div>
