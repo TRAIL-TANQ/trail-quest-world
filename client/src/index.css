@@ -508,6 +508,32 @@
     30%  { opacity: 1; transform: scale(1.1); filter: brightness(2); }
     100% { opacity: 0; transform: scale(0.7); filter: brightness(0.5); }
   }
+  /* Phase 6c-5: 攻防対面表示バナー (2200ms フェード IN/OUT 両端) */
+  @keyframes attackResolution {
+    0%   { opacity: 0; transform: scale(0.85); }
+    10%  { opacity: 1; transform: scale(1); }
+    90%  { opacity: 1; transform: scale(1); }
+    100% { opacity: 0; transform: scale(1.05); }
+  }
+  /* Phase 6c-5: 結果ラベル (ヒット！/ふせいだ！等) のポップ */
+  @keyframes resultLabelPop {
+    0%   { opacity: 0; transform: translate(-50%, 0) scale(0.5); }
+    20%  { opacity: 1; transform: translate(-50%, 0) scale(1.2); }
+    40%  { transform: translate(-50%, 0) scale(1); }
+    100% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  }
+  /* Phase 6c-5: counter 成功時の防御カード差し替え flip 演出 */
+  @keyframes counterReveal {
+    0%   { opacity: 0; transform: rotateY(180deg) scale(0.85); }
+    60%  { opacity: 1; transform: rotateY(0deg)   scale(1.08); }
+    100% { opacity: 1; transform: rotateY(0deg)   scale(1); }
+  }
+  /* Phase 6c-5: 攻撃 ↔ 防御の矢印が左→右に光る */
+  @keyframes resolutionArrow {
+    0%   { opacity: 0.4; transform: translateX(-6px); }
+    50%  { opacity: 1;   transform: translateX(6px);  }
+    100% { opacity: 0.4; transform: translateX(-6px); }
+  }
 
   .animate-float { animation: float 3s ease-in-out infinite; }
   .animate-pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
@@ -520,6 +546,11 @@
   .animate-target-shake    { animation: target-shake 300ms ease-out; }
   .animate-target-block    { animation: target-block 500ms ease-out; }
   .animate-target-destroy  { animation: target-destroy 600ms ease-out; }
+  /* Phase 6c-5 attack resolution banner */
+  .animate-attackResolution { animation: attackResolution 2200ms ease-out forwards; }
+  .animate-resultLabelPop   { animation: resultLabelPop 400ms ease-out forwards; }
+  .animate-counterReveal    { animation: counterReveal 500ms ease-out forwards; }
+  .animate-resolutionArrow  { animation: resolutionArrow 800ms ease-in-out infinite; }
   .animate-shimmer {
     background: linear-gradient(90deg, transparent 0%, oklch(1 0 0 / 0.1) 50%, transparent 100%);
     background-size: 200% 100%;

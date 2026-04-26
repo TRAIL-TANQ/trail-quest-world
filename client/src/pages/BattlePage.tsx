@@ -295,6 +295,292 @@ function findCardInstance(
   return null;
 }
 
+/**
+ * instanceId 一致で BattleCardInstance を探して返す (Phase 6c-5)。
+ * 攻撃直後のスナップショットでは攻撃側キャラはレストで board に残り、
+ * 破壊された防御キャラは graveyard、消費されたカウンターも graveyard、
+ * defense トリガーは lifeCards に残る — いずれも本関数で発見可能。
+ */
+function findInstanceById(
+  state: BattleState,
+  instanceId: string,
+): BattleCardInstance | null {
+  for (const p of [state.players.p1, state.players.p2]) {
+    for (const c of p.graveyard) if (c.instanceId === instanceId) return c;
+    for (const c of p.hand) if (c.instanceId === instanceId) return c;
+    for (const c of p.deck) if (c.instanceId === instanceId) return c;
+    for (const c of p.lifeCards) if (c.instanceId === instanceId) return c;
+    for (const s of p.board) if (s.card.instanceId === instanceId) return s.card;
+    if (p.equippedCard?.instanceId === instanceId) return p.equippedCard;
+  }
+  return null;
+}
+
+// ---- AttackResolutionBanner: 攻防対面表示バナー (Phase 6c-5) -------------
+
+/**
+ * 攻撃時に画面中央へ「攻撃カード ↔ 防御カード」を 1.5 倍サイズで対面表示する
+ * 演出。Phase 6b-5 の battlefield アニメ (lunge/shake/block/destroy) と
+ * 並行で動かし、子供にも誰が誰を攻撃したかと結果が直感的に伝わるようにする。
+ *
+ *   Phase A (0-800ms)   : 双方カード + 値 + 中央矢印
+ *   Phase B (800-2000ms): 結果オーバーレイ追加
+ *     - hit       : 防御カードに ❌ + 「ヒット！」赤
+ *     - blocked   : 防御カードに 🛡 + 「ふせいだ！」青
+ *     - counter   : 防御カードを counter カード画像に flip 切替 + 「カウンター成功！」金
+ *     - trigger   : 防御カード上に trigger カード重ね表示 + 「トリガー！」紫
+ *     - destroyed : 防御カード フェード暗転 + 「破壊！」赤
+ *   T=2000ms から 200ms フェードアウトして消去。
+ */
+
+type ResolutionCardData =
+  | { kind: 'leader'; leaderId: string; name: string; imageUrl: string }
+  | { kind: 'card'; instance: BattleCardInstance };
+
+type AttackResultKind = 'hit' | 'blocked' | 'counter' | 'trigger' | 'destroyed';
+
+interface AttackScene {
+  phase: 'A' | 'B';
+  attackerCard: ResolutionCardData;
+  defenderCard: ResolutionCardData;
+  attackPower: number;
+  defensePower: number;
+  result: AttackResultKind;
+  /** counter 成功時、phase B で防御カード位置に切り替えるカウンターカード */
+  counterCard?: BattleCardInstance;
+  /** defense トリガー発動時、防御カード上に重ねるトリガーカード */
+  triggerCard?: BattleCardInstance;
+  /** 連続攻撃時の再アニメ key */
+  key: number;
+}
+
+/**
+ * attack_declared payload の attacker/target 情報から ResolutionCardData を構築。
+ * leader はまだ場にいるので state から直引き、character は instanceId で
+ * findInstanceById を使う。失敗時はカードプレースホルダを synthesize して
+ * 名前だけ表示できるようにする (CardFallback 経由)。
+ */
+function makeResolutionCardData(
+  state: BattleState,
+  side: PlayerSlot,
+  kind: 'leader' | 'character',
+  instanceId: string | undefined,
+  fallbackName: string,
+  leaderRowMap: Map<string, BattleLeaderRow>,
+): ResolutionCardData {
+  if (kind === 'leader') {
+    const leader = state.players[side].leader;
+    return {
+      kind: 'leader',
+      leaderId: leader.id,
+      name: leader.name,
+      imageUrl: leaderRowMap.get(leader.id)?.image_url ?? '',
+    };
+  }
+  const inst = instanceId ? findInstanceById(state, instanceId) : null;
+  if (inst) return { kind: 'card', instance: inst };
+  return {
+    kind: 'card',
+    instance: {
+      instanceId: instanceId ?? 'unknown',
+      cardId: 'unknown',
+      name: fallbackName,
+      cost: 0,
+      power: 0,
+      attackPower: 0,
+      defensePower: 0,
+      color: 'colorless',
+      cardType: 'character',
+      effectText: null,
+      triggerType: null,
+      counterValue: 0,
+    },
+  };
+}
+
+function ResolutionCardDisplay({
+  card,
+  value,
+  icon,
+  overlay,
+  triggerCard,
+  counterFlip,
+}: {
+  card: ResolutionCardData;
+  value: number;
+  icon: string;
+  overlay?: AttackResultKind;
+  triggerCard?: BattleCardInstance;
+  counterFlip?: boolean;
+}) {
+  const [imgErrored, setImgErrored] = useState(false);
+  const [trigImgErrored, setTrigImgErrored] = useState(false);
+
+  const src =
+    card.kind === 'leader'
+      ? card.imageUrl
+      : resolveCardImage(card.instance.cardId);
+  const showImg = !imgErrored && Boolean(src);
+
+  const trigSrc = triggerCard ? resolveCardImage(triggerCard.cardId) : '';
+  const showTrigImg = Boolean(triggerCard) && !trigImgErrored && Boolean(trigSrc);
+
+  // CardFallback は BattleCardInstance を要求するため leader は同形 placeholder に変換
+  const fallbackInstance: BattleCardInstance =
+    card.kind === 'card'
+      ? card.instance
+      : {
+          instanceId: card.leaderId,
+          cardId: card.leaderId,
+          name: card.name,
+          cost: 0,
+          power: 0,
+          attackPower: 0,
+          defensePower: 0,
+          color: 'colorless',
+          cardType: 'character',
+          effectText: null,
+          triggerType: null,
+          counterValue: 0,
+        };
+
+  return (
+    <div className="relative">
+      <div
+        className={`relative w-28 sm:w-32 aspect-[3/4] rounded-lg overflow-hidden border-2 border-yellow-400/70 bg-black/60 shadow-[0_8px_24px_rgba(0,0,0,0.7)] ${
+          counterFlip ? 'animate-counterReveal' : ''
+        } ${overlay === 'destroyed' ? 'animate-target-destroy' : ''}`}
+      >
+        {showImg ? (
+          <img
+            src={src}
+            alt=""
+            aria-hidden="true"
+            draggable={false}
+            onError={() => setImgErrored(true)}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <CardFallback card={fallbackInstance} className="w-full h-full" />
+        )}
+
+        {triggerCard && (
+          <div className="absolute inset-0 flex items-center justify-center bg-purple-900/55 backdrop-blur-[1px]">
+            <div className="w-20 aspect-[3/4] rounded-md overflow-hidden border-2 border-purple-300 shadow-[0_0_12px_rgba(192,132,252,0.7)]">
+              {showTrigImg ? (
+                <img
+                  src={trigSrc}
+                  alt=""
+                  aria-hidden="true"
+                  draggable={false}
+                  onError={() => setTrigImgErrored(true)}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <CardFallback card={triggerCard} className="w-full h-full" />
+              )}
+            </div>
+          </div>
+        )}
+
+        {overlay === 'hit' && (
+          <div className="absolute inset-0 flex items-center justify-center bg-red-900/40">
+            <span className="text-7xl drop-shadow-[0_0_8px_rgba(0,0,0,0.8)]">
+              ❌
+            </span>
+          </div>
+        )}
+        {overlay === 'blocked' && (
+          <div className="absolute inset-0 flex items-center justify-center bg-blue-900/40">
+            <span className="text-6xl drop-shadow-[0_0_8px_rgba(0,0,0,0.8)]">
+              🛡
+            </span>
+          </div>
+        )}
+      </div>
+
+      <div className="absolute -bottom-7 left-0 right-0 text-center pointer-events-none">
+        <span className="inline-block px-2 py-0.5 rounded-md bg-black/85 text-xl font-extrabold text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
+          {icon} {value}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function ResolutionArrowIndicator() {
+  return (
+    <span className="text-5xl text-yellow-300 drop-shadow-[0_0_10px_rgba(255,215,0,0.9)] animate-resolutionArrow leading-none select-none">
+      →
+    </span>
+  );
+}
+
+function ResolutionResultLabel({ result }: { result: AttackResultKind }) {
+  const config: Record<AttackResultKind, { text: string; color: string }> = {
+    hit: { text: 'ヒット！', color: 'text-red-400' },
+    blocked: { text: 'ふせいだ！', color: 'text-blue-300' },
+    counter: { text: 'カウンター成功！', color: 'text-yellow-300' },
+    trigger: { text: 'トリガー！', color: 'text-purple-300' },
+    destroyed: { text: '破壊！', color: 'text-red-500' },
+  };
+  const { text, color } = config[result];
+  return (
+    <div
+      className={`absolute -top-16 left-1/2 ${color} font-extrabold text-4xl sm:text-5xl tracking-wider animate-resultLabelPop whitespace-nowrap [text-shadow:_0_0_10px_rgba(0,0,0,0.9),_0_2px_6px_rgba(0,0,0,0.9)]`}
+    >
+      {text}
+    </div>
+  );
+}
+
+function AttackResolutionBanner({ scene }: { scene: AttackScene | null }) {
+  if (!scene) return null;
+
+  const phaseB = scene.phase === 'B';
+  // counter 成功時は phase B で防御カードを差し替え (flip アニメと連動)
+  const displayDefender: ResolutionCardData =
+    phaseB && scene.result === 'counter' && scene.counterCard
+      ? { kind: 'card', instance: scene.counterCard }
+      : scene.defenderCard;
+
+  const defenderOverlay: AttackResultKind | undefined = phaseB
+    ? scene.result
+    : undefined;
+
+  // displayDefender の identity が変わると ResolutionCardDisplay が remount され、
+  // counterFlip / animate-target-destroy などのアニメが再起動する。
+  const defenderKey =
+    displayDefender.kind === 'card'
+      ? displayDefender.instance.instanceId
+      : `leader_${displayDefender.leaderId}`;
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/55 backdrop-blur-sm pointer-events-none px-4">
+      <div className="relative flex items-center justify-center gap-4 sm:gap-6 animate-attackResolution">
+        <ResolutionCardDisplay
+          card={scene.attackerCard}
+          value={scene.attackPower}
+          icon="⚔"
+        />
+        <ResolutionArrowIndicator />
+        <ResolutionCardDisplay
+          key={defenderKey}
+          card={displayDefender}
+          value={scene.defensePower}
+          icon="🛡"
+          overlay={defenderOverlay}
+          triggerCard={
+            phaseB && scene.result === 'trigger' ? scene.triggerCard : undefined
+          }
+          counterFlip={phaseB && scene.result === 'counter'}
+        />
+        {phaseB && <ResolutionResultLabel result={scene.result} />}
+      </div>
+    </div>
+  );
+}
+
 // ---- CounterDeclareModal: 人間防御カウンター宣言 (Phase 6b-4) -------------
 
 /**
@@ -587,6 +873,12 @@ export default function BattlePage() {
   const [attackAnim, setAttackAnim] = useState<AttackAnimation | null>(null);
   const lastAttackLogLenRef = useRef(0);
 
+  // Phase 6c-5: 攻防対面表示バナー (Phase A 800ms / Phase B 1200ms / fadeout 200ms)
+  const [resolutionScene, setResolutionScene] = useState<AttackScene | null>(
+    null,
+  );
+  const lastResolutionLogLenRef = useRef(0);
+
   // URL params
   const params = useMemo(() => {
     const sp = new URLSearchParams(window.location.search);
@@ -822,6 +1114,148 @@ export default function BattlePage() {
     const t = setTimeout(() => setAttackAnim(null), 600);
     return () => clearTimeout(t);
   }, [attackAnim]);
+
+  // Phase 6c-5: state.log を監視し、attack_declared を起点に攻防対面シーンを構築。
+  // 同 batch 内に attack_declared 以降の関連イベント (counter_used /
+  // attack_resolved / defense_blocked / card_destroyed / life_damaged /
+  // game_over) を順に解釈して result を確定し、scene にスナップショット。
+  useEffect(() => {
+    if (!state) {
+      lastResolutionLogLenRef.current = 0;
+      return;
+    }
+    const log = state.log;
+    if (log.length <= lastResolutionLogLenRef.current) {
+      lastResolutionLogLenRef.current = log.length;
+      return;
+    }
+    const newEvents = log.slice(lastResolutionLogLenRef.current);
+    lastResolutionLogLenRef.current = log.length;
+
+    let declaredIdx = -1;
+    for (let i = newEvents.length - 1; i >= 0; i--) {
+      if (newEvents[i].type === 'attack_declared') {
+        declaredIdx = i;
+        break;
+      }
+    }
+    if (declaredIdx < 0) return;
+
+    const declared = newEvents[declaredIdx];
+    const declP = declared.payload as Record<string, unknown>;
+
+    let triggerHappened = false;
+    let counterDeclared = false;
+    let charDestroyed = false;
+    let lifeDamaged = false;
+    let leaderDestroyed = false;
+    let success = true;
+    let counterInstanceId: string | undefined;
+    let triggerInstanceId: string | undefined;
+
+    for (let i = declaredIdx + 1; i < newEvents.length; i++) {
+      const evt = newEvents[i];
+      if (evt.type === 'attack_declared') break; // 次の attack に切り替わる
+      if (evt.type === 'counter_used') {
+        const p = evt.payload as { mode?: string; instanceId?: string };
+        if (p.mode === 'declared_on_attack' && p.instanceId) {
+          counterDeclared = true;
+          counterInstanceId = p.instanceId;
+        }
+      } else if (evt.type === 'attack_resolved') {
+        const p = evt.payload as { success?: boolean };
+        success = p.success === true;
+      } else if (evt.type === 'defense_blocked') {
+        const p = evt.payload as { instanceId?: string };
+        triggerHappened = true;
+        triggerInstanceId = p.instanceId;
+      } else if (evt.type === 'card_destroyed') {
+        const p = evt.payload as { source?: string };
+        if (p.source !== 'trigger_destroy') charDestroyed = true;
+      } else if (evt.type === 'life_damaged') {
+        lifeDamaged = true;
+      } else if (evt.type === 'game_over') {
+        const p = evt.payload as { reason?: string };
+        if (p.reason === 'leader_destroyed') leaderDestroyed = true;
+      }
+    }
+
+    let result: AttackResultKind;
+    if (triggerHappened) result = 'trigger';
+    else if (counterDeclared && !success) result = 'counter';
+    else if (charDestroyed) result = 'destroyed';
+    else if (lifeDamaged || leaderDestroyed) result = 'hit';
+    else if (!success) result = 'blocked';
+    else result = 'hit';
+
+    const attackerSide = declP.attackerSide as PlayerSlot;
+    const attackerKind = declP.attackerKind as 'leader' | 'character';
+    const attackerInstanceId = declP.attackerInstanceId as string | undefined;
+    const attackerName = (declP.attackerName as string) ?? '?';
+    const targetSide = declP.targetSide as PlayerSlot;
+    const targetKind = declP.targetKind as 'leader' | 'character';
+    const targetInstanceId = declP.targetInstanceId as string | undefined;
+    const targetName = (declP.targetName as string) ?? '?';
+    const attackPower = (declP.attackPower as number) ?? 0;
+    const defensePower = (declP.defensePower as number) ?? 0;
+
+    const attackerCard = makeResolutionCardData(
+      state,
+      attackerSide,
+      attackerKind,
+      attackerInstanceId,
+      attackerName,
+      leaderRowMap,
+    );
+    const defenderCard = makeResolutionCardData(
+      state,
+      targetSide,
+      targetKind,
+      targetInstanceId,
+      targetName,
+      leaderRowMap,
+    );
+    const counterCard = counterInstanceId
+      ? findInstanceById(state, counterInstanceId) ?? undefined
+      : undefined;
+    const triggerCard = triggerInstanceId
+      ? findInstanceById(state, triggerInstanceId) ?? undefined
+      : undefined;
+
+    setResolutionScene({
+      phase: 'A',
+      attackerCard,
+      defenderCard,
+      attackPower,
+      defensePower,
+      result,
+      counterCard,
+      triggerCard,
+      key: Date.now(),
+    });
+  }, [state, leaderRowMap]);
+
+  // Phase 6c-5: 800ms で Phase A → B、2200ms で消去。
+  // resolutionScene.key を依存にして、新 attack 到来で必ず両 timer をリセットする。
+  useEffect(() => {
+    if (!resolutionScene) return;
+    const sceneKey = resolutionScene.key;
+    const phaseTimer = setTimeout(() => {
+      setResolutionScene((prev) =>
+        prev && prev.key === sceneKey ? { ...prev, phase: 'B' } : prev,
+      );
+    }, 800);
+    const clearTimer = setTimeout(() => {
+      setResolutionScene((prev) =>
+        prev && prev.key === sceneKey ? null : prev,
+      );
+    }, 2200);
+    return () => {
+      clearTimeout(phaseTimer);
+      clearTimeout(clearTimer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resolutionScene?.key]);
 
   // AI turn trigger: activePlayer=='p2' になったら少し遅らせて runAITurn
   useEffect(() => {
@@ -1339,6 +1773,9 @@ export default function BattlePage() {
         data={activeBanner}
         onDismiss={() => setActiveBanner(null)}
       />
+
+      {/* ====== Phase 6c-5: 攻防対面表示バナー ====== */}
+      <AttackResolutionBanner scene={resolutionScene} />
 
       {/* ====== Phase 6b-4: 人間防御カウンター宣言モーダル ====== */}
       {state.pendingAttack && (
