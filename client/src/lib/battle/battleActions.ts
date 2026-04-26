@@ -1498,12 +1498,24 @@ function applyAttack(state: BattleState, action: AttackAction): ActionResult {
   const events: BattleEvent[] = [];
 
   // attack_declared
+  // v2.0.2 Phase 6b-5: フロントエンドのアタックアニメーション用に
+  // attackerSide / targetSide / *InstanceId (character の場合のみ) を追記
   events.push(
     makeEvent('attack_declared', state.turn, attackerSide, {
+      attackerSide,
       attackerKind: action.attackerSource.kind,
+      attackerInstanceId:
+        action.attackerSource.kind === 'character'
+          ? action.attackerSource.instanceId
+          : undefined,
       attackerName,
       attackPower,
+      targetSide: defenderSide,
       targetKind: action.targetSource.kind,
+      targetInstanceId:
+        action.targetSource.kind === 'character'
+          ? action.targetSource.instanceId
+          : undefined,
       targetName,
       defensePower,
     }),

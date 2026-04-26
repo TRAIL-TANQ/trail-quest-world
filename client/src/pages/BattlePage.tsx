@@ -237,6 +237,31 @@ function EventBanner({
   );
 }
 
+// ---- AttackAnimation: 誰が誰を攻撃したかの視覚演出 (Phase 6b-5) -----------
+
+/**
+ * 直近の attack イベント情報を保持。state.log の差分から構築され、
+ * 600ms 後に自動クリアされる。LeaderBadge / BoardCardSlot で
+ * isAttacking / isTargeted / result を判定して該当 anim class を当てる。
+ */
+interface AttackAnimation {
+  attackerSide: PlayerSlot;
+  attackerKind: 'leader' | 'character';
+  attackerInstanceId?: string;
+  targetSide: PlayerSlot;
+  targetKind: 'leader' | 'character';
+  targetInstanceId?: string;
+  /**
+   * - pending   : attack_declared のみ (続報待ち、UI では shake 扱い)
+   * - blocked   : attack_resolved.success === false or defense_blocked
+   * - hit       : life_damaged (リーダーへヒット, シールド消費)
+   * - destroyed : card_destroyed or game_over (リーダー破壊)
+   */
+  result: 'pending' | 'blocked' | 'hit' | 'destroyed';
+  /** 同じ attacker→target が連続した時に再アニメ起動するための key */
+  key: number;
+}
+
 /**
  * BattleState 内のすべての場所 (graveyard / hand / deck / lifeCards / board /
  * equippedCard) から cardId 一致の BattleCardInstance を探して返す。
@@ -414,6 +439,10 @@ export default function BattlePage() {
   // 直前まで処理済みの state.log.length (これ未満は処理済とみなす)
   const lastSeenLogLenRef = useRef(0);
 
+  // Phase 6b-5: 直近の攻撃アニメーション (600ms で自動クリア)
+  const [attackAnim, setAttackAnim] = useState<AttackAnimation | null>(null);
+  const lastAttackLogLenRef = useRef(0);
+
   // URL params
   const params = useMemo(() => {
     const sp = new URLSearchParams(window.location.search);
@@ -576,6 +605,79 @@ export default function BattlePage() {
       break;
     }
   }, [state]);
+
+  // Phase 6b-5: state.log を監視し、attack_declared を起点にアニメ state を構築。
+  // 後続の attack_resolved / defense_blocked / life_damaged / card_destroyed /
+  // game_over (leader_destroyed) で result を確定させる。同 batch (1 setState)
+  // 内に複数 attack があった場合は最後のものを採用 (Easy AI では稀)。
+  useEffect(() => {
+    if (!state) {
+      lastAttackLogLenRef.current = 0;
+      return;
+    }
+    const log = state.log;
+    if (log.length <= lastAttackLogLenRef.current) {
+      lastAttackLogLenRef.current = log.length;
+      return;
+    }
+    const newEvents = log.slice(lastAttackLogLenRef.current);
+    lastAttackLogLenRef.current = log.length;
+
+    let declared:
+      | {
+          attackerSide: PlayerSlot;
+          attackerKind: 'leader' | 'character';
+          attackerInstanceId?: string;
+          targetSide: PlayerSlot;
+          targetKind: 'leader' | 'character';
+          targetInstanceId?: string;
+        }
+      | null = null;
+    let result: AttackAnimation['result'] = 'pending';
+
+    for (const evt of newEvents) {
+      if (evt.type === 'attack_declared') {
+        const p = evt.payload as Record<string, unknown>;
+        declared = {
+          attackerSide: p.attackerSide as PlayerSlot,
+          attackerKind: p.attackerKind as 'leader' | 'character',
+          attackerInstanceId: p.attackerInstanceId as string | undefined,
+          targetSide: p.targetSide as PlayerSlot,
+          targetKind: p.targetKind as 'leader' | 'character',
+          targetInstanceId: p.targetInstanceId as string | undefined,
+        };
+        result = 'pending';
+      } else if (declared) {
+        if (evt.type === 'attack_resolved') {
+          const success = (evt.payload as { success?: boolean }).success;
+          if (success === false) result = 'blocked';
+        } else if (evt.type === 'defense_blocked') {
+          result = 'blocked';
+        } else if (evt.type === 'card_destroyed') {
+          // applyAttack 由来の card 破壊 (キャラへの攻撃成功)
+          // 別経路 (event_play や trigger) も同 type だが、
+          // attack_declared 直近では基本攻撃の結果と判定して問題なし
+          result = 'destroyed';
+        } else if (evt.type === 'life_damaged') {
+          result = 'hit';
+        } else if (evt.type === 'game_over') {
+          const reason = (evt.payload as { reason?: string }).reason;
+          if (reason === 'leader_destroyed') result = 'destroyed';
+        }
+      }
+    }
+
+    if (declared) {
+      setAttackAnim({ ...declared, result, key: Date.now() });
+    }
+  }, [state]);
+
+  // Phase 6b-5: attackAnim を 600ms で自動クリア (CSS animation 終了と同期)
+  useEffect(() => {
+    if (!attackAnim) return;
+    const t = setTimeout(() => setAttackAnim(null), 600);
+    return () => clearTimeout(t);
+  }, [attackAnim]);
 
   // AI turn trigger: activePlayer=='p2' になったら少し遅らせて runAITurn
   useEffect(() => {
@@ -907,6 +1009,7 @@ export default function BattlePage() {
         equipmentOnceUsed={p2.equipmentOnceUsed}
         equipmentBonusAtk={p2.equipmentBonusAtk}
         equipmentBonusDef={p2.equipmentBonusDef}
+        attackAnim={attackAnim}
       />
       <BoardRow
         board={p2.board}
@@ -919,6 +1022,8 @@ export default function BattlePage() {
             instanceId: slot.card.instanceId,
           })
         }
+        side="p2"
+        attackAnim={attackAnim}
       />
 
       {/* ====== 中央情報 (探究マナはリーダー欄に移動済) ====== */}
@@ -948,6 +1053,8 @@ export default function BattlePage() {
         selectedAttackerId={selectedAttacker}
         canPlayerAct={canPlayerAct}
         onSlotClick={(slot) => handleSelectAttacker(slot.card.instanceId)}
+        side="p1"
+        attackAnim={attackAnim}
       />
 
       {/* ====== 自分のリーダー / マナ / ライフ ====== */}
@@ -960,6 +1067,17 @@ export default function BattlePage() {
           canPlayerAct={canPlayerAct}
           equipmentBonusAtk={p1.equipmentBonusAtk}
           equipmentBonusDef={p1.equipmentBonusDef}
+          isAttacking={Boolean(
+            attackAnim &&
+              attackAnim.attackerSide === 'p1' &&
+              attackAnim.attackerKind === 'leader',
+          )}
+          isTargeted={Boolean(
+            attackAnim &&
+              attackAnim.targetSide === 'p1' &&
+              attackAnim.targetKind === 'leader',
+          )}
+          attackResult={attackAnim?.result}
         />
         <EquipmentIcon
           card={p1.equippedCard}
@@ -1060,6 +1178,7 @@ function OpponentPanel({
   equipmentOnceUsed = false,
   equipmentBonusAtk = 0,
   equipmentBonusDef = 0,
+  attackAnim = null,
 }: {
   leader: LeaderState;
   leaderImageUrl: string;
@@ -1076,7 +1195,19 @@ function OpponentPanel({
   equipmentOnceUsed?: boolean;
   equipmentBonusAtk?: number;
   equipmentBonusDef?: number;
+  /** Phase 6b-5: p2 (相手) リーダーへの攻撃アニメ判定用 */
+  attackAnim?: AttackAnimation | null;
 }) {
+  const isAttacking = Boolean(
+    attackAnim &&
+      attackAnim.attackerSide === 'p2' &&
+      attackAnim.attackerKind === 'leader',
+  );
+  const isTargeted = Boolean(
+    attackAnim &&
+      attackAnim.targetSide === 'p2' &&
+      attackAnim.targetKind === 'leader',
+  );
   return (
     <div className="flex items-center gap-2 px-2 py-2 rounded-lg bg-red-900/20 border border-red-500/30">
       <LeaderBadge
@@ -1086,6 +1217,9 @@ function OpponentPanel({
         targetable={targetable}
         equipmentBonusAtk={equipmentBonusAtk}
         equipmentBonusDef={equipmentBonusDef}
+        isAttacking={isAttacking}
+        isTargeted={isTargeted}
+        attackResult={attackAnim?.result}
       />
       <EquipmentIcon
         card={equippedCard}
@@ -1124,6 +1258,9 @@ function LeaderBadge({
   targetable = false,
   equipmentBonusAtk = 0,
   equipmentBonusDef = 0,
+  isAttacking = false,
+  isTargeted = false,
+  attackResult,
 }: {
   leader: LeaderState;
   imageUrl: string;
@@ -1135,6 +1272,11 @@ function LeaderBadge({
   equipmentBonusAtk?: number;
   /** 装備による永続 def 加算 (Phase 3)。0 の時は表示せず。 */
   equipmentBonusDef?: number;
+  /** Phase 6b-5: このリーダーが現在攻撃中なら lunge アニメーション */
+  isAttacking?: boolean;
+  /** Phase 6b-5: このリーダーが現在攻撃対象なら shake/block/destroy のいずれか */
+  isTargeted?: boolean;
+  attackResult?: AttackAnimation['result'];
 }) {
   // 自リーダー: canPlayerAct && !rested で clickable
   // 敵リーダー: targetable (= 自側で attacker 選択済み) で clickable
@@ -1146,12 +1288,21 @@ function LeaderBadge({
     : targetable
       ? 'ring-2 ring-red-400 animate-pulse'
       : '';
+  const animClass = isAttacking
+    ? 'animate-attacker-lunge'
+    : isTargeted
+      ? attackResult === 'blocked'
+        ? 'animate-target-block'
+        : attackResult === 'destroyed'
+          ? 'animate-target-destroy'
+          : 'animate-target-shake'
+      : '';
   return (
     <button
       type="button"
       onClick={clickable ? onClick : undefined}
       disabled={!clickable}
-      className={`flex items-center gap-2 text-left rounded-lg ${clickable ? 'cursor-pointer' : 'cursor-default'} ${ringClass}`}
+      className={`flex items-center gap-2 text-left rounded-lg ${clickable ? 'cursor-pointer' : 'cursor-default'} ${ringClass} ${animClass}`}
     >
       <div className="w-12 h-12 rounded-lg overflow-hidden border border-white/20 bg-black/40 flex items-center justify-center">
         <LeaderImage
@@ -1210,12 +1361,17 @@ function BoardRow({
   selectedAttackerId,
   canPlayerAct,
   onSlotClick,
+  side,
+  attackAnim,
 }: {
   board: BoardSlot[];
   isOwnSide: boolean;
   selectedAttackerId: SelectedAttacker;
   canPlayerAct: boolean;
   onSlotClick: (slot: BoardSlot) => void;
+  /** Phase 6b-5: 'p1' or 'p2' (side 判定で attackAnim を絞る) */
+  side: PlayerSlot;
+  attackAnim?: AttackAnimation | null;
 }) {
   const slots: (BoardSlot | null)[] = [...board];
   while (slots.length < 5) slots.push(null);
@@ -1228,21 +1384,40 @@ function BoardRow({
         isOwnSide ? 'border-t' : 'border-b'
       } border-white/10 py-2`}
     >
-      {slots.map((slot, i) => (
-        <BoardCardSlot
-          key={i}
-          slot={slot}
-          isOwnSide={isOwnSide}
-          isSelected={
-            isOwnSide &&
-            slot !== null &&
-            selectedAttackerId === slot.card.instanceId
-          }
-          canPlayerAct={canPlayerAct}
-          attackerActive={attackerActive}
-          onClick={slot ? () => onSlotClick(slot) : undefined}
-        />
-      ))}
+      {slots.map((slot, i) => {
+        const isAttacking = Boolean(
+          slot &&
+            attackAnim &&
+            attackAnim.attackerSide === side &&
+            attackAnim.attackerKind === 'character' &&
+            attackAnim.attackerInstanceId === slot.card.instanceId,
+        );
+        const isTargeted = Boolean(
+          slot &&
+            attackAnim &&
+            attackAnim.targetSide === side &&
+            attackAnim.targetKind === 'character' &&
+            attackAnim.targetInstanceId === slot.card.instanceId,
+        );
+        return (
+          <BoardCardSlot
+            key={i}
+            slot={slot}
+            isOwnSide={isOwnSide}
+            isSelected={
+              isOwnSide &&
+              slot !== null &&
+              selectedAttackerId === slot.card.instanceId
+            }
+            canPlayerAct={canPlayerAct}
+            attackerActive={attackerActive}
+            onClick={slot ? () => onSlotClick(slot) : undefined}
+            isAttacking={isAttacking}
+            isTargeted={isTargeted}
+            attackResult={attackAnim?.result}
+          />
+        );
+      })}
     </div>
   );
 }
@@ -1254,6 +1429,9 @@ function BoardCardSlot({
   canPlayerAct,
   attackerActive,
   onClick,
+  isAttacking = false,
+  isTargeted = false,
+  attackResult,
 }: {
   slot: BoardSlot | null;
   isOwnSide: boolean;
@@ -1261,6 +1439,10 @@ function BoardCardSlot({
   canPlayerAct: boolean;
   attackerActive: boolean;
   onClick?: () => void;
+  /** Phase 6b-5 */
+  isAttacking?: boolean;
+  isTargeted?: boolean;
+  attackResult?: AttackAnimation['result'];
 }) {
   if (!slot) {
     return (
@@ -1284,12 +1466,22 @@ function BoardCardSlot({
         ? 'ring-1 ring-yellow-400/60 hover:ring-yellow-300'
         : '';
 
+  const animClass = isAttacking
+    ? 'animate-attacker-lunge'
+    : isTargeted
+      ? attackResult === 'blocked'
+        ? 'animate-target-block'
+        : attackResult === 'destroyed'
+          ? 'animate-target-destroy'
+          : 'animate-target-shake'
+      : '';
+
   return (
     <button
       type="button"
       onClick={clickable ? onClick : undefined}
       disabled={!clickable}
-      className={`relative flex-1 aspect-[3/4] rounded-md overflow-hidden border border-yellow-400/40 bg-black/60 transition-transform ${ringClass} ${clickable ? 'cursor-pointer' : 'cursor-default'}`}
+      className={`relative flex-1 aspect-[3/4] rounded-md overflow-hidden border border-yellow-400/40 bg-black/60 transition-transform ${ringClass} ${animClass} ${clickable ? 'cursor-pointer' : 'cursor-default'}`}
       style={{ transform: slot.isRested ? 'rotate(12deg)' : 'none' }}
     >
       <CardImage
