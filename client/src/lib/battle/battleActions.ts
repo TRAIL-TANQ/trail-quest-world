@@ -24,6 +24,7 @@ import { nanoid } from 'nanoid';
 import {
   BOARD_MAX_SLOTS,
   advancePhase,
+  decideCounterUse,
   drawCard,
   getEffectiveCharAtk,
   getEffectiveLeaderAtk,
@@ -1514,13 +1515,38 @@ function applyAttack(state: BattleState, action: AttackAction): ActionResult {
     players: { ...state.players, [attackerSide]: restedAttackerState },
   };
 
+  // v2.0.2 Phase 6a: AI 防御側の自動カウンター判定
+  // counterCardInstanceId が undefined (= 未指定) の場合に限り、防御側 AI が
+  // 切るべきと判断したら decideCounterUse の戻り値を採用する。
+  //   - undefined : 未指定 → AI が判断 (人間 vs AI 戦の AI 防御で発動)
+  //   - null      : 人間が「切らない」と明示 → AI 判断もスキップ
+  //   - string    : 既決 (人間 UI 選択 or 別経路で決定済) → そのまま採用
+  let effectiveCounterId: string | null | undefined =
+    action.counterCardInstanceId;
+  if (effectiveCounterId === undefined) {
+    const defenderRaw = workingState.players[defenderSide];
+    const defenderIsAI = defenderRaw.isAI === true || defenderRaw.id === 'ai';
+    if (defenderIsAI) {
+      const aiPick = decideCounterUse(workingState, action, defenderSide);
+      if (aiPick) {
+        effectiveCounterId = aiPick;
+        events.push(
+          makeEvent('counter_used', state.turn, defenderSide, {
+            decidedBy: 'ai_auto',
+            chosenInstanceId: aiPick,
+          }),
+        );
+      }
+    }
+  }
+
   // v2.0.2 Phase 4: 防御側のカウンター発動処理
-  // counterCardInstanceId が指定されたら手札から該当カウンターカードを取り、
+  // effectiveCounterId が指定されたら手札から該当カウンターカードを取り、
   // counterValue を defensePower に加算 → 手札→墓地に移動 → counter_used イベント発火。
-  if (action.counterCardInstanceId) {
+  if (effectiveCounterId) {
     const defenderForCounter = workingState.players[defenderSide];
     const counterIdx = defenderForCounter.hand.findIndex(
-      (c) => c.instanceId === action.counterCardInstanceId,
+      (c) => c.instanceId === effectiveCounterId,
     );
     if (counterIdx < 0) {
       return err(

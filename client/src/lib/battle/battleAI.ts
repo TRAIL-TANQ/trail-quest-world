@@ -17,13 +17,7 @@
 // ============================================================================
 
 import { applyAction } from './battleActions';
-import {
-  advancePhase,
-  BOARD_MAX_SLOTS,
-  getEffectiveCharAtk,
-  getEffectiveLeaderAtk,
-  getEffectiveLeaderDef,
-} from './battleEngine';
+import { advancePhase, BOARD_MAX_SLOTS } from './battleEngine';
 import type {
   AIThought,
   AttackAction,
@@ -33,6 +27,10 @@ import type {
   PlayCardAction,
   PlayerSlot,
 } from './battleTypes';
+
+// v2.0.2 Phase 6a: decideCounterUse は battleEngine.ts に移動 (循環依存回避)。
+// 旧経路 (battleAI から import) との後方互換のため、battleEngine から re-export する。
+export { decideCounterUse } from './battleEngine';
 
 // ---- デバッグ (D3.8 Hotfix 調査用、バグ解決後に false へ) ------------------
 const DEBUG_AI = true;
@@ -292,72 +290,3 @@ export function runAITurn(
   return { finalState: current, events };
 }
 
-// ---- v2.0.2 Phase 4: 防御側 AI のカウンター発動判断 ------------------------
-
-/**
- * AI が防御側として、攻撃を受けた時にカウンターカードを切るかを判断する。
- *
- * 発動条件 (Easy AI ポリシー):
- *   1. 自分の手札にカウンターカードがある
- *   2. 攻撃対象が自リーダー (キャラ被弾は無視、ライフ削られないため)
- *   3. 自リーダーのライフが残 2 以下 (危険ライン)
- *   4. counter_value を加算しないと突破される (effAtk >= effDef)、かつ
- *      加算すれば突破を阻止できる (effAtk < effDef + counter_value)
- *
- * 候補が複数ある場合は「必要 counter_value 以上で最小値」のカードを選ぶ
- * (もったいない使いを避ける)。
- *
- * 戻り値: 切るカウンターカードの instanceId、切らないなら null。
- *
- * 注意: AI vs AI 戦は現状なく、人間 vs AI 戦の人間アタッカー時は UI 側
- * (Phase 6) でカウンター宣言モーダルを呼ぶ。本関数は Phase 4 ではテスト
- * 用に export するだけで、attack action 構築には自動組み込みしない。
- */
-export function decideCounterUse(
-  state: BattleState,
-  attackAction: AttackAction,
-  defenderSlot: PlayerSlot,
-): string | null {
-  const defender = state.players[defenderSlot];
-
-  // 1. カウンターカードが手札にあるか
-  const counters = defender.hand.filter((c) => c.cardType === 'counter');
-  if (counters.length === 0) return null;
-
-  // 2. 攻撃対象がリーダーか
-  if (attackAction.targetSource.kind !== 'leader') return null;
-
-  // 3. リーダーライフ残量チェック (lifeCards.length が現在ライフ)
-  if (defender.lifeCards.length > 2) return null;
-
-  // 4. attacker 側の effective attack を計算
-  const attackerSlot: PlayerSlot = attackAction.player;
-  const attacker = state.players[attackerSlot];
-  let effAtk: number;
-  if (attackAction.attackerSource.kind === 'leader') {
-    effAtk = getEffectiveLeaderAtk(attacker);
-  } else {
-    const attInstanceId = attackAction.attackerSource.instanceId;
-    const slotInst = attacker.board.find(
-      (s) => s.card.instanceId === attInstanceId,
-    );
-    if (!slotInst) return null;
-    effAtk = getEffectiveCharAtk(attacker, slotInst.card);
-  }
-
-  const effDef = getEffectiveLeaderDef(defender);
-
-  // カウンターなしで防げる場合は使う必要なし
-  if (effAtk < effDef) return null;
-
-  // 必要な counter_value (effAtk < effDef + cv に持ち込む)
-  const needed = effAtk - effDef + 1;
-  if (needed <= 0) return null;
-
-  // 必要 counter_value 以上で最小値の候補を選ぶ
-  const candidates = counters
-    .filter((c) => (c.counterValue ?? 0) >= needed)
-    .sort((a, b) => (a.counterValue ?? 0) - (b.counterValue ?? 0));
-
-  return candidates[0]?.instanceId ?? null;
-}

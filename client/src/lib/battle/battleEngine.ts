@@ -13,6 +13,7 @@
 
 import { nanoid } from 'nanoid';
 import type {
+  AttackAction,
   BattleCardInstance,
   BattleDifficulty,
   BattleEvent,
@@ -213,6 +214,7 @@ function dealPlayer(
 
   return {
     id,
+    isAI: id === 'ai', // v2.0.2 Phase 6a: AI 判別 (current 仕様: id='ai' の側が AI)
     leader: leaderRowToState(leader),
     hand,
     deck,
@@ -308,6 +310,75 @@ export function getEffectiveCharDef(
     }
   }
   return def;
+}
+
+// ---- v2.0.2 Phase 4 / 6a: 防御側 AI のカウンター発動判断 -------------------
+
+/**
+ * AI が防御側として、攻撃を受けた時にカウンターカードを切るかを判断する。
+ *
+ * 発動条件 (Easy AI ポリシー):
+ *   1. 自分の手札にカウンターカードがある
+ *   2. 攻撃対象が自リーダー (キャラ被弾は無視、ライフ削られないため)
+ *   3. 自リーダーのライフが残 2 以下 (危険ライン)
+ *   4. counter_value を加算しないと突破される (effAtk >= effDef)、かつ
+ *      加算すれば突破を阻止できる (effAtk < effDef + counter_value)
+ *
+ * 候補が複数ある場合は「必要 counter_value 以上で最小値」のカードを選ぶ
+ * (もったいない使いを避ける)。
+ *
+ * 戻り値: 切るカウンターカードの instanceId、切らないなら null。
+ *
+ * Phase 6a で battleAI.ts → battleEngine.ts に移動 (battleActions からの
+ * 利用で循環依存を避けるため)。後方互換のため battleAI.ts から re-export 済。
+ */
+export function decideCounterUse(
+  state: BattleState,
+  attackAction: AttackAction,
+  defenderSlot: PlayerSlot,
+): string | null {
+  const defender = state.players[defenderSlot];
+
+  // 1. カウンターカードが手札にあるか
+  const counters = defender.hand.filter((c) => c.cardType === 'counter');
+  if (counters.length === 0) return null;
+
+  // 2. 攻撃対象がリーダーか
+  if (attackAction.targetSource.kind !== 'leader') return null;
+
+  // 3. リーダーライフ残量チェック (lifeCards.length が現在ライフ)
+  if (defender.lifeCards.length > 2) return null;
+
+  // 4. attacker 側の effective attack を計算
+  const attackerSlot: PlayerSlot = attackAction.player;
+  const attacker = state.players[attackerSlot];
+  let effAtk: number;
+  if (attackAction.attackerSource.kind === 'leader') {
+    effAtk = getEffectiveLeaderAtk(attacker);
+  } else {
+    const attInstanceId = attackAction.attackerSource.instanceId;
+    const slotInst = attacker.board.find(
+      (s) => s.card.instanceId === attInstanceId,
+    );
+    if (!slotInst) return null;
+    effAtk = getEffectiveCharAtk(attacker, slotInst.card);
+  }
+
+  const effDef = getEffectiveLeaderDef(defender);
+
+  // カウンターなしで防げる場合は使う必要なし
+  if (effAtk < effDef) return null;
+
+  // 必要な counter_value (effAtk < effDef + cv に持ち込む)
+  const needed = effAtk - effDef + 1;
+  if (needed <= 0) return null;
+
+  // 必要 counter_value 以上で最小値の候補を選ぶ
+  const candidates = counters
+    .filter((c) => (c.counterValue ?? 0) >= needed)
+    .sort((a, b) => (a.counterValue ?? 0) - (b.counterValue ?? 0));
+
+  return candidates[0]?.instanceId ?? null;
 }
 
 // ---- v2.0.2 Phase 4: tempBuffs の expire 処理 ------------------------------

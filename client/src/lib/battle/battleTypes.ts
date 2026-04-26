@@ -245,6 +245,11 @@ export interface TempBuff {
  */
 export interface PlayerState {
   id: string;                        // child_id or 'ai'
+  /**
+   * AI 判別フラグ (v2.0.2 Phase 6a)。default: false (人間)。
+   * 旧 state では未設定 (undefined)。互換のため id==='ai' でも AI 扱いされる。
+   */
+  isAI?: boolean;
   leader: LeaderState;
   hand: BattleCardInstance[];        // UI 順序
   deck: BattleCardInstance[];        // 山札、[0] = top
@@ -359,9 +364,15 @@ export interface AttackAction extends BattleActionBase {
     | { kind: 'character'; instanceId: string };
   /**
    * 防御側がカウンターカードを切る場合の手札 instanceId (v2.0.2)。
-   * 未指定 = カウンター無し。指定された場合は applyAttack で被ダメ計算前に発動。
+   *
+   * セマンティクス (Phase 6a):
+   *   - undefined : 未指定。防御側が AI なら applyAttack 内で
+   *                 decideCounterUse により自動判定される。
+   *   - null      : 人間が「カウンターしない」を明示。AI 自動判定もスキップ。
+   *   - string    : 既に指定済 (人間 UI が選択 or AI が事前決定済)。
+   *                 該当カードを手札→墓地、counter_value を defensePower に加算。
    */
-  counterCardInstanceId?: string;
+  counterCardInstanceId?: string | null;
 }
 
 export interface EndTurnAction extends BattleActionBase {

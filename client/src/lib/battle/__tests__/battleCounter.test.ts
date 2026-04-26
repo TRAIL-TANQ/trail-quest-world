@@ -429,3 +429,148 @@ describe('counter cards (Phase 4)', () => {
     }
   });
 });
+
+// ============================================================================
+// Phase 6a: AI 防御カウンター自動統合テスト
+// ============================================================================
+
+describe('AI counter defense integration (Phase 6a)', () => {
+  it('AI defender auto-declares counter when life <= 2 and attack is lethal', () => {
+    // p1 (人間アタッカー) leader atk=7
+    // p2 (AI 防御) leader def=5, 残ライフ 2、cv=3 のカウンター持ち
+    // → counterCardInstanceId 未指定でも applyAttack 内で自動セットされ阻止される
+    const p1Leader = makeLeader('l_p1', { attackPower: 7 });
+    const p2Leader = makeLeader('l_p2', { defensePower: 5 });
+    const aiCounter = makeCounter('cn_ai_counter', {
+      instanceId: 'inst_ai_counter',
+      counterValue: 3,
+    });
+    const state = makeState(
+      makeEmptyPlayer('u1', p1Leader),
+      makeEmptyPlayer('ai', p2Leader, {
+        isAI: true,
+        hand: [aiCounter],
+        lifeCards: [makeCard('l1'), makeCard('l2')], // 残 2 (=危険)
+      }),
+    );
+
+    const action: AttackAction = {
+      type: 'attack',
+      player: 'p1',
+      attackerSource: { kind: 'leader' },
+      targetSource: { kind: 'leader' },
+      // counterCardInstanceId 意図的に未指定 (undefined)
+      timestamp: '2026-04-24T00:00:00Z',
+    };
+    const result = applyAction(state, action);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const resolved = result.events.find((e) => e.type === 'attack_resolved');
+    expect((resolved!.payload as { success?: boolean }).success).toBe(false);
+    // AI が自動でカウンターを発動した event_played
+    const autoEvt = result.events.find(
+      (e) =>
+        e.type === 'counter_used' &&
+        (e.payload as { decidedBy?: string }).decidedBy === 'ai_auto',
+    );
+    expect(autoEvt).toBeTruthy();
+    // カウンターは defender 墓地へ移動
+    const p2 = result.newState.players.p2;
+    expect(p2.hand).toHaveLength(0);
+    expect(p2.graveyard.map((c) => c.cardId)).toContain('cn_ai_counter');
+  });
+
+  it('AI defender does NOT counter when life > 2', () => {
+    // 残ライフ 4 (危険ラインじゃない) → AI は温存、突破される
+    const p1Leader = makeLeader('l_p1', { attackPower: 7 });
+    const p2Leader = makeLeader('l_p2', { defensePower: 5 });
+    const aiCounter = makeCounter('cn_ai_counter', {
+      instanceId: 'inst_ai_counter',
+      counterValue: 3,
+    });
+    const state = makeState(
+      makeEmptyPlayer('u1', p1Leader),
+      makeEmptyPlayer('ai', p2Leader, {
+        isAI: true,
+        hand: [aiCounter],
+        lifeCards: [
+          makeCard('l1'),
+          makeCard('l2'),
+          makeCard('l3'),
+          makeCard('l4'),
+        ], // 残 4 = 安全
+      }),
+    );
+
+    const action: AttackAction = {
+      type: 'attack',
+      player: 'p1',
+      attackerSource: { kind: 'leader' },
+      targetSource: { kind: 'leader' },
+      timestamp: '2026-04-24T00:00:00Z',
+    };
+    const result = applyAction(state, action);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const resolved = result.events.find((e) => e.type === 'attack_resolved');
+    expect((resolved!.payload as { success?: boolean }).success).toBe(true);
+    // AI 自動カウンターは発動しない
+    const autoEvt = result.events.find(
+      (e) =>
+        e.type === 'counter_used' &&
+        (e.payload as { decidedBy?: string }).decidedBy === 'ai_auto',
+    );
+    expect(autoEvt).toBeUndefined();
+    // カウンターは温存 (defender 手札に残る)
+    const p2 = result.newState.players.p2;
+    expect(p2.hand.map((c) => c.cardId)).toContain('cn_ai_counter');
+    expect(p2.graveyard.map((c) => c.cardId)).not.toContain('cn_ai_counter');
+  });
+
+  it('AI defender does NOT counter when caller explicitly passes (null)', () => {
+    // 同じ状況 (life=2, cv=3 持ち) でも、攻撃側が counterCardInstanceId: null を
+    // 明示的に渡せば AI 自動判定はスキップされる (= 人間意思の尊重)
+    const p1Leader = makeLeader('l_p1', { attackPower: 7 });
+    const p2Leader = makeLeader('l_p2', { defensePower: 5 });
+    const aiCounter = makeCounter('cn_ai_counter', {
+      instanceId: 'inst_ai_counter',
+      counterValue: 3,
+    });
+    const state = makeState(
+      makeEmptyPlayer('u1', p1Leader),
+      makeEmptyPlayer('ai', p2Leader, {
+        isAI: true,
+        hand: [aiCounter],
+        lifeCards: [makeCard('l1'), makeCard('l2')], // 残 2 (本来なら AI 発動)
+      }),
+    );
+
+    const action: AttackAction = {
+      type: 'attack',
+      player: 'p1',
+      attackerSource: { kind: 'leader' },
+      targetSource: { kind: 'leader' },
+      counterCardInstanceId: null, // 明示パス
+      timestamp: '2026-04-24T00:00:00Z',
+    };
+    const result = applyAction(state, action);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // 攻撃成立: 7 >= 5
+    const resolved = result.events.find((e) => e.type === 'attack_resolved');
+    expect((resolved!.payload as { success?: boolean }).success).toBe(true);
+    // AI 自動カウンターはスキップされた
+    const autoEvt = result.events.find(
+      (e) =>
+        e.type === 'counter_used' &&
+        (e.payload as { decidedBy?: string }).decidedBy === 'ai_auto',
+    );
+    expect(autoEvt).toBeUndefined();
+    // カウンターは依然手札に
+    const p2 = result.newState.players.p2;
+    expect(p2.hand.map((c) => c.cardId)).toContain('cn_ai_counter');
+  });
+});
