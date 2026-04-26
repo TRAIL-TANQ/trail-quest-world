@@ -16,7 +16,7 @@
 //   - runAITurn(state, aiSlot): { finalState, events }
 // ============================================================================
 
-import { applyAction } from './battleActions';
+import { applyAction, prepareAIAttack } from './battleActions';
 import { advancePhase, BOARD_MAX_SLOTS } from './battleEngine';
 import type {
   AIThought,
@@ -228,7 +228,12 @@ export function runAITurn(
     const thought = chooseAIAction(current, aiSlot);
     log(`iter ${i}: chose`, thought.chosenAction.type, '—', thought.reasoning);
 
-    const result = applyAction(current, thought.chosenAction);
+    // v2.0.2 Phase 6b-4: 攻撃は prepareAIAttack で処理 (人間防御 + counter 持ち
+    // の場合は pendingAttack をセットして pause、それ以外は applyAction 透過)
+    const result =
+      thought.chosenAction.type === 'attack'
+        ? prepareAIAttack(current, thought.chosenAction)
+        : applyAction(current, thought.chosenAction);
 
     if (!result.ok) {
       log(
@@ -245,6 +250,12 @@ export function runAITurn(
 
     current = result.newState;
     events.push(...result.events);
+
+    // v2.0.2 Phase 6b-4: pendingAttack がセットされたら pause
+    if (current.pendingAttack) {
+      log(`iter ${i}: pendingAttack set → pause runAITurn (await human counter)`);
+      break;
+    }
 
     if (thought.chosenAction.type === 'end_turn') {
       log(`iter ${i}: end_turn succeeded → break`);
@@ -265,9 +276,11 @@ export function runAITurn(
   }
 
   // ループ上限に到達、または break 後も active が AI のままなら強制 end_turn
+  // ただし pendingAttack で意図的 pause している場合は強制終了せず人間入力を待つ
   if (
-    loopGuardTripped ||
-    (!current.winner && current.activePlayer === aiSlot)
+    !current.pendingAttack &&
+    (loopGuardTripped ||
+      (!current.winner && current.activePlayer === aiSlot))
   ) {
     log(
       'post-loop: still AI active (loopGuard=',

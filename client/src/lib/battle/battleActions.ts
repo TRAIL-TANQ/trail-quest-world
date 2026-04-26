@@ -1784,3 +1784,69 @@ function applySurrender(
   };
   return { ok: true, newState, events: [event] };
 }
+
+// ---- v2.0.2 Phase 6b-4: 人間カウンター宣言ウィンドウ ---------------------
+
+/**
+ * AI 攻撃を applyAction にかける前段の判定。
+ * 防御側が人間 (id !== 'ai' かつ isAI !== true) で、手札にカウンター
+ * カードがあり、かつ counterCardInstanceId が undefined (= 未指定) の場合のみ
+ * `pendingAttack` をセットして applyAction を保留する (UI で人間に選ばせる)。
+ *
+ * 上記条件を満たさない場合は通常通り applyAction を実行 (透過パススルー)。
+ * runAITurn は attack action でこの関数を applyAction の代わりに呼ぶ。
+ *
+ * 戻り値の newState.pendingAttack が非 null/undefined なら caller (runAITurn)
+ * は pause を検知してループを break する。
+ */
+export function prepareAIAttack(
+  state: BattleState,
+  action: AttackAction,
+): ActionResult {
+  if (state.winner) {
+    return { ok: false, code: 'game_already_over', reason: 'ゲームは既に終了しています' };
+  }
+
+  const defenderSide = otherPlayer(action.player);
+  const defender = state.players[defenderSide];
+  const defenderIsHuman = !(defender.isAI === true || defender.id === 'ai');
+  const hasCounterInHand = defender.hand.some((c) => c.cardType === 'counter');
+  const counterUndecided = action.counterCardInstanceId === undefined;
+
+  if (defenderIsHuman && hasCounterInHand && counterUndecided) {
+    // 人間の判断待ち: pendingAttack をセット、applyAction はスキップ
+    return {
+      ok: true,
+      newState: { ...state, pendingAttack: action },
+      events: [],
+    };
+  }
+
+  // 即実行 (AI 防御の自動判定 / counter 未所持 / 既決 などすべて applyAction で処理)
+  return applyAction(state, action);
+}
+
+/**
+ * 保留中の AI 攻撃を、人間の選択結果と共に再実行する。
+ *
+ *   - counterCardInstanceId === string : そのカウンターを切る
+ *   - counterCardInstanceId === null   : カウンターしないと明示
+ *
+ * pendingAttack を null にクリアしてから applyAction で attack 再開。
+ */
+export function resumeAttackWithCounter(
+  state: BattleState,
+  counterCardInstanceId: string | null,
+): ActionResult {
+  const pending = state.pendingAttack;
+  if (!pending) {
+    return {
+      ok: false,
+      code: 'internal_error',
+      reason: '保留中の攻撃がありません',
+    };
+  }
+  const cleared: BattleState = { ...state, pendingAttack: null };
+  const resumedAction: AttackAction = { ...pending, counterCardInstanceId };
+  return applyAction(cleared, resumedAction);
+}

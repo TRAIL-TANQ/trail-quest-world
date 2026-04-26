@@ -321,6 +321,12 @@ export interface BattleState {
   winner: BattleWinner | null;
   startedAt: string;
   endedAt: string | null;
+  /**
+   * v2.0.2 Phase 6b-4: AI 攻撃時に防御側が人間 + 手札カウンターあり + 未指定の
+   * 場合に保留される AttackAction。UI が CounterDeclareModal を出して人間に
+   * 選択させ、resumeAttackWithCounter で再実行する。null/undefined = 保留なし。
+   */
+  pendingAttack?: AttackAction | null;
 }
 
 /**

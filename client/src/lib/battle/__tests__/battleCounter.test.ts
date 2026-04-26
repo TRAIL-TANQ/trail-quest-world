@@ -12,7 +12,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { decideCounterUse } from '../battleAI';
-import { applyAction } from '../battleActions';
+import {
+  applyAction,
+  prepareAIAttack,
+  resumeAttackWithCounter,
+} from '../battleActions';
 import { leaderRowToState } from '../battleEngine';
 import type {
   AttackAction,
@@ -572,5 +576,200 @@ describe('AI counter defense integration (Phase 6a)', () => {
     // カウンターは依然手札に
     const p2 = result.newState.players.p2;
     expect(p2.hand.map((c) => c.cardId)).toContain('cn_ai_counter');
+  });
+});
+
+// ============================================================================
+// Phase 6b-4: 人間防御カウンター宣言ウィンドウ (prepareAIAttack / resume)
+// ============================================================================
+
+describe('AI attack with human counter window (Phase 6b-4)', () => {
+  it('prepareAIAttack sets pendingAttack when defender is human with counter', () => {
+    // p2 (AI) → p1 (人間) リーダー攻撃。p1 はカウンター持ち。
+    const p1Leader = makeLeader('l_p1', { defensePower: 5 });
+    const p2Leader = makeLeader('l_p2', { attackPower: 7 });
+    const counterCard = makeCounter('cn_p1_counter', {
+      instanceId: 'inst_p1_counter',
+      counterValue: 3,
+    });
+    const state = makeState(
+      makeEmptyPlayer('u1', p1Leader, {
+        hand: [counterCard],
+        lifeCards: [makeCard('l1'), makeCard('l2')],
+      }),
+      makeEmptyPlayer('ai', p2Leader, { isAI: true }),
+      { activePlayer: 'p2' },
+    );
+
+    const action: AttackAction = {
+      type: 'attack',
+      player: 'p2',
+      attackerSource: { kind: 'leader' },
+      targetSource: { kind: 'leader' },
+      timestamp: '2026-04-24T00:00:00Z',
+    };
+    const result = prepareAIAttack(state, action);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // pendingAttack がセットされ、まだ attack は実行されていない
+    expect(result.newState.pendingAttack).toBeTruthy();
+    expect(result.newState.pendingAttack?.player).toBe('p2');
+    expect(result.events).toHaveLength(0);
+    // p1 のライフは変わらず (攻撃未実行)
+    expect(result.newState.players.p1.lifeCards).toHaveLength(2);
+    // p1 のカウンターはまだ手札に
+    expect(result.newState.players.p1.hand).toHaveLength(1);
+  });
+
+  it('prepareAIAttack runs immediately when defender is AI', () => {
+    // p1 (人間) → p2 (AI) 攻撃。AI 防御はそもそも本フェーズの対象外で即時実行。
+    const p1Leader = makeLeader('l_p1', { attackPower: 7 });
+    const p2Leader = makeLeader('l_p2', { defensePower: 5 });
+    const aiCounter = makeCounter('cn_ai_counter', {
+      instanceId: 'inst_ai_counter',
+      counterValue: 3,
+    });
+    const state = makeState(
+      makeEmptyPlayer('u1', p1Leader),
+      makeEmptyPlayer('ai', p2Leader, {
+        isAI: true,
+        hand: [aiCounter],
+        lifeCards: [makeCard('l1')],
+      }),
+    );
+
+    const action: AttackAction = {
+      type: 'attack',
+      player: 'p1',
+      attackerSource: { kind: 'leader' },
+      targetSource: { kind: 'leader' },
+      timestamp: '2026-04-24T00:00:00Z',
+    };
+    const result = prepareAIAttack(state, action);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // pendingAttack はセットされない (AI 防御は applyAction 直行)
+    expect(result.newState.pendingAttack ?? null).toBeNull();
+    // attack イベントが発生している (即時実行された証拠)
+    expect(
+      result.events.some((e) => e.type === 'attack_resolved'),
+    ).toBe(true);
+  });
+
+  it('prepareAIAttack runs immediately when human has no counter card', () => {
+    // p2 (AI) → p1 (人間) 攻撃。p1 は counter を持ってない → ペンディング不要。
+    const p1Leader = makeLeader('l_p1', { defensePower: 5 });
+    const p2Leader = makeLeader('l_p2', { attackPower: 7 });
+    const state = makeState(
+      makeEmptyPlayer('u1', p1Leader, {
+        hand: [makeCard('c_random')], // 普通のキャラのみ
+        lifeCards: [makeCard('l1'), makeCard('l2')],
+      }),
+      makeEmptyPlayer('ai', p2Leader, { isAI: true }),
+      { activePlayer: 'p2' },
+    );
+
+    const action: AttackAction = {
+      type: 'attack',
+      player: 'p2',
+      attackerSource: { kind: 'leader' },
+      targetSource: { kind: 'leader' },
+      timestamp: '2026-04-24T00:00:00Z',
+    };
+    const result = prepareAIAttack(state, action);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.newState.pendingAttack ?? null).toBeNull();
+    expect(
+      result.events.some((e) => e.type === 'attack_resolved'),
+    ).toBe(true);
+    // ライフは 1 減 (突破成立)
+    expect(result.newState.players.p1.lifeCards).toHaveLength(1);
+  });
+
+  it('resumeAttackWithCounter applies counter card and clears pendingAttack', () => {
+    // pendingAttack を持った state を作り、人間が counter を選んだケース
+    const p1Leader = makeLeader('l_p1', { defensePower: 5 });
+    const p2Leader = makeLeader('l_p2', { attackPower: 7 });
+    const counterCard = makeCounter('cn_block', {
+      instanceId: 'inst_block',
+      counterValue: 3,
+    });
+    const lifeCard = makeCard('l1');
+    const pending: AttackAction = {
+      type: 'attack',
+      player: 'p2',
+      attackerSource: { kind: 'leader' },
+      targetSource: { kind: 'leader' },
+      timestamp: '2026-04-24T00:00:00Z',
+    };
+    const state = makeState(
+      makeEmptyPlayer('u1', p1Leader, {
+        hand: [counterCard],
+        lifeCards: [lifeCard],
+      }),
+      makeEmptyPlayer('ai', p2Leader, { isAI: true }),
+      { activePlayer: 'p2', pendingAttack: pending },
+    );
+
+    const result = resumeAttackWithCounter(state, counterCard.instanceId);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // pendingAttack はクリア
+    expect(result.newState.pendingAttack ?? null).toBeNull();
+    // 攻撃阻止: 7 vs 5+3=8 → 防御成功
+    const resolved = result.events.find((e) => e.type === 'attack_resolved');
+    expect((resolved!.payload as { success?: boolean }).success).toBe(false);
+    // counter は墓地、手札から消える
+    const p1 = result.newState.players.p1;
+    expect(p1.hand.map((c) => c.cardId)).not.toContain('cn_block');
+    expect(p1.graveyard.map((c) => c.cardId)).toContain('cn_block');
+    // ライフは消費されてない
+    expect(p1.lifeCards).toHaveLength(1);
+  });
+
+  it('resumeAttackWithCounter with null skips counter and runs attack normally', () => {
+    // 人間が「カウンターしない」を選んだケース
+    const p1Leader = makeLeader('l_p1', { defensePower: 5 });
+    const p2Leader = makeLeader('l_p2', { attackPower: 7 });
+    const counterCard = makeCounter('cn_unused', {
+      instanceId: 'inst_unused',
+      counterValue: 3,
+    });
+    const lifeCard = makeCard('l1');
+    const pending: AttackAction = {
+      type: 'attack',
+      player: 'p2',
+      attackerSource: { kind: 'leader' },
+      targetSource: { kind: 'leader' },
+      timestamp: '2026-04-24T00:00:00Z',
+    };
+    const state = makeState(
+      makeEmptyPlayer('u1', p1Leader, {
+        hand: [counterCard],
+        lifeCards: [lifeCard, makeCard('l2')],
+      }),
+      makeEmptyPlayer('ai', p2Leader, { isAI: true }),
+      { activePlayer: 'p2', pendingAttack: pending },
+    );
+
+    const result = resumeAttackWithCounter(state, null);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.newState.pendingAttack ?? null).toBeNull();
+    // 攻撃成立: 7 >= 5
+    const resolved = result.events.find((e) => e.type === 'attack_resolved');
+    expect((resolved!.payload as { success?: boolean }).success).toBe(true);
+    // counter は依然手札に (使ってない)
+    const p1 = result.newState.players.p1;
+    expect(p1.hand.map((c) => c.cardId)).toContain('cn_unused');
+    expect(p1.graveyard.map((c) => c.cardId)).not.toContain('cn_unused');
+    // ライフは 1 減
+    expect(p1.lifeCards).toHaveLength(1);
   });
 });

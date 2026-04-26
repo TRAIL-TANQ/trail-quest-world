@@ -20,7 +20,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { getChildId } from '@/lib/auth';
-import { applyAction } from '@/lib/battle/battleActions';
+import {
+  applyAction,
+  resumeAttackWithCounter,
+} from '@/lib/battle/battleActions';
 import { runAITurn } from '@/lib/battle/battleAI';
 import { advancePhase, BOARD_MAX_SLOTS } from '@/lib/battle/battleEngine';
 import {
@@ -36,12 +39,14 @@ import {
   processBattleResult,
 } from '@/lib/altGameService';
 import type {
+  AttackAction,
   BattleCardInstance,
   BattleLeaderRow,
   BattleState,
   BattleWinner,
   BoardSlot,
   LeaderState,
+  PlayerSlot,
 } from '@/lib/battle/battleTypes';
 
 // アタッカー選択 ID の型: null=未選択 / 'leader'=リーダー / それ以外=character.instanceId
@@ -253,6 +258,135 @@ function findCardInstance(
   return null;
 }
 
+// ---- CounterDeclareModal: 人間防御カウンター宣言 (Phase 6b-4) -------------
+
+/**
+ * AI 攻撃時に人間プレイヤーへカウンター宣言を促すモーダル。
+ *
+ * `state.pendingAttack` 経由で attacker / target / 双方の値を取り、
+ * 手札のカウンターカードを候補ボタンとして並べる。
+ * 「カウンターしない」ボタンも常に提示し、ユーザは必ずどちらかを選ぶ
+ * (モーダルの外側クリックでは閉じない pointer-events 設計)。
+ */
+function CounterDeclareModal({
+  state,
+  defenderSlot,
+  onSelect,
+}: {
+  state: BattleState;
+  defenderSlot: PlayerSlot;
+  onSelect: (counterCardInstanceId: string | null) => void;
+}) {
+  const pending = state.pendingAttack;
+  if (!pending) return null;
+
+  const attackerSlot = pending.player;
+  const attackerPlayer = state.players[attackerSlot];
+  const defenderPlayer = state.players[defenderSlot];
+
+  // attacker info
+  let attackerName = '?';
+  let attackPower = 0;
+  if (pending.attackerSource.kind === 'leader') {
+    attackerName = attackerPlayer.leader.name;
+    attackPower =
+      attackerPlayer.leader.attackPower +
+      (attackerPlayer.equipmentBonusAtk ?? 0);
+  } else {
+    const attInstanceId = pending.attackerSource.instanceId;
+    const slot = attackerPlayer.board.find(
+      (s) => s.card.instanceId === attInstanceId,
+    );
+    if (slot) {
+      attackerName = slot.card.name;
+      attackPower =
+        slot.card.attackPower + (attackerPlayer.equipmentBonusAllyAtk ?? 0);
+    }
+  }
+
+  // target info
+  let targetName = '?';
+  let defensePower = 0;
+  if (pending.targetSource.kind === 'leader') {
+    targetName = defenderPlayer.leader.name;
+    defensePower =
+      defenderPlayer.leader.defensePower +
+      (defenderPlayer.equipmentBonusDef ?? 0);
+  } else {
+    const slot = defenderPlayer.board.find(
+      (s) =>
+        pending.targetSource.kind === 'character' &&
+        s.card.instanceId === pending.targetSource.instanceId,
+    );
+    if (slot) {
+      targetName = slot.card.name;
+      defensePower = slot.card.defensePower;
+    }
+  }
+
+  const counterCards = defenderPlayer.hand.filter(
+    (c) => c.cardType === 'counter',
+  );
+
+  return (
+    <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-gradient-to-br from-slate-900 to-blue-950 border-2 border-yellow-500 rounded-xl shadow-2xl max-w-2xl w-full p-5 max-h-[90vh] overflow-y-auto">
+        <h2 className="text-yellow-400 text-xl font-bold mb-3 text-center">
+          ⚔ カウンター宣言
+        </h2>
+        <div className="bg-black/40 rounded-lg p-3 mb-3 text-center">
+          <div className="text-white text-sm">
+            <span className="text-red-400 font-bold">{attackerName}</span>
+            <span className="text-white/60"> ⚔{attackPower} </span>
+            <span className="text-xl mx-2">→</span>
+            <span className="text-blue-400 font-bold">{targetName}</span>
+            <span className="text-white/60"> 🛡{defensePower}</span>
+          </div>
+        </div>
+        <div className="text-white/80 text-xs mb-2">
+          手札のカウンターカードを選んで防御値に上乗せできます
+        </div>
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          {counterCards.map((card) => {
+            const cv = card.counterValue ?? 0;
+            const newDef = defensePower + cv;
+            const blocks = attackPower < newDef;
+            return (
+              <button
+                key={card.instanceId}
+                onClick={() => onSelect(card.instanceId)}
+                className={`border-2 rounded-lg p-2 text-left transition-all ${
+                  blocks
+                    ? 'bg-amber-700/50 hover:bg-amber-600/70 border-amber-400'
+                    : 'bg-slate-800/50 hover:bg-slate-700/70 border-slate-500'
+                }`}
+              >
+                <div className="text-yellow-300 font-bold text-sm truncate">
+                  {card.name}
+                </div>
+                <div className="text-white/80 text-xs">
+                  +{cv} 防御 → 🛡{newDef}
+                </div>
+                {blocks && (
+                  <div className="text-green-400 text-xs font-bold mt-0.5">
+                    攻撃を防げる
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        <button
+          onClick={() => onSelect(null)}
+          className="w-full py-2 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg transition-all text-sm"
+        >
+          カウンターしない
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ---- component ------------------------------------------------------------
 
 export default function BattlePage() {
@@ -449,6 +583,8 @@ export default function BattlePage() {
     if (state.winner) return;
     if (state.activePlayer !== 'p2') return;
     if (isAIThinking) return;
+    // Phase 6b-4: 人間のカウンター宣言待ちなら AI を起動しない
+    if (state.pendingAttack) return;
 
     console.log('[BattlePage] AI turn start trigger', {
       turn: state.turn,
@@ -523,6 +659,30 @@ export default function BattlePage() {
         state.phase === 'main' &&
         !isAIThinking,
     );
+  }
+
+  // --- Phase 6b-4: カウンター宣言モーダルでの選択処理 -------------------------
+
+  function handleCounterChoice(counterCardInstanceId: string | null) {
+    if (!state) return;
+    if (!state.pendingAttack) return;
+    console.log('[BattlePage] handleCounterChoice', {
+      pendingAttacker: state.pendingAttack.player,
+      choice: counterCardInstanceId === null ? 'pass' : 'use_counter',
+      counterCardInstanceId,
+    });
+    const result = resumeAttackWithCounter(state, counterCardInstanceId);
+    if (!result.ok) {
+      console.warn(
+        '[BattlePage] resumeAttackWithCounter failed:',
+        result.code,
+        result.reason,
+      );
+      return;
+    }
+    setState(result.newState);
+    // 攻撃が解決し pendingAttack は null。activePlayer が 'p2' のままなら
+    // useEffect が再発火して runAITurn が次のアクションを進める。
   }
 
   // --- 手札タップ: play_card --------------------------------------------------
@@ -870,6 +1030,15 @@ export default function BattlePage() {
         data={activeBanner}
         onDismiss={() => setActiveBanner(null)}
       />
+
+      {/* ====== Phase 6b-4: 人間防御カウンター宣言モーダル ====== */}
+      {state.pendingAttack && (
+        <CounterDeclareModal
+          state={state}
+          defenderSlot="p1"
+          onSelect={handleCounterChoice}
+        />
+      )}
     </div>
   );
 }
