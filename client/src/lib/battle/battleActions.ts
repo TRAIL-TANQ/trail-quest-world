@@ -23,6 +23,9 @@
 import {
   BOARD_MAX_SLOTS,
   advancePhase,
+  getEffectiveCharAtk,
+  getEffectiveLeaderAtk,
+  getEffectiveLeaderDef,
   makeEvent,
   shuffleDeck,
 } from './battleEngine';
@@ -331,8 +334,50 @@ function applyPlayCard(
       `コストが不足 (所持 ${p.currentCost} / 必要 ${card.cost})`,
     );
   }
+
+  // v2.0.2: cardType でディスパッチ
+  switch (card.cardType) {
+    case 'character':
+      return applyPlayCharacter(state, action, card, handIdx);
+    case 'equipment':
+      return applyPlayEquipment(state, action, card, handIdx);
+    case 'event':
+      // Phase 5 で実装
+      return err(
+        'not_implemented_yet',
+        'イベントカードはまだ実装されていません',
+      );
+    case 'counter':
+      // カウンターカードは attack action 経由で発動 (Phase 4)
+      return err(
+        'wrong_phase',
+        'カウンターカードはメインフェイズではプレイできません',
+      );
+    case 'stage':
+      return err('not_implemented_yet', 'ステージカードは未実装です');
+    default:
+      return err('internal_error', `不明なカードタイプ: ${card.cardType}`);
+  }
+}
+
+// ---- play_card: character (既存ロジック) ----------------------------------
+
+function applyPlayCharacter(
+  state: BattleState,
+  action: PlayCardAction,
+  card: BattleCardInstance,
+  handIdx: number,
+): ActionResult {
+  const p = state.players[action.player];
+
   if (p.board.length >= BOARD_MAX_SLOTS) {
     return err('board_full', `場はすでに ${BOARD_MAX_SLOTS} 体埋まっています`);
+  }
+  if (p.cantPlayCharsThisTurn) {
+    return err(
+      'wrong_phase',
+      '相手のイベントによりこのターンはキャラを出せません',
+    );
   }
 
   const newHand = [
@@ -369,6 +414,159 @@ function applyPlayCard(
   );
 
   return { ok: true, newState, events: [event] };
+}
+
+// ---- play_card: equipment (v2.0.2 Phase 3) --------------------------------
+
+/**
+ * 装備カードをプレイ。
+ *
+ * バリデーション:
+ *   - 既に装備中なら 'already_equipped'
+ *   - equipmentTargetLeaderId と自リーダー id が違うなら 'leader_mismatch'
+ *
+ * 効果:
+ *   - permanent : equipmentBonusAtk/Def/AllyAtk/maxHandSize に加算
+ *   - per_turn  : 装備時は no-op (cost フェーズで毎ターン発動)
+ *   - once_only : 装備時に 1 回だけ発動 (Phase 3 では revive_from_graveyard のみ対応)
+ *                 equipmentOnceUsed = true をセット
+ *
+ * リーダー破壊時の自動廃棄は不要 (リーダー破壊 = 敗北 = ゲーム終了)。
+ */
+function applyPlayEquipment(
+  state: BattleState,
+  action: PlayCardAction,
+  card: BattleCardInstance,
+  handIdx: number,
+): ActionResult {
+  const p = state.players[action.player];
+
+  if (p.equippedCard) {
+    return err(
+      'already_equipped',
+      'すでに装備カードが付いています (1 リーダー 1 装備)',
+    );
+  }
+
+  if (
+    card.equipmentTargetLeaderId &&
+    card.equipmentTargetLeaderId !== p.leader.id
+  ) {
+    return err(
+      'leader_mismatch',
+      `この装備は ${card.equipmentTargetLeaderId} 専用です`,
+    );
+  }
+
+  // 手札から除去 + コスト消費 + equippedCard セット
+  const newHand = [
+    ...p.hand.slice(0, handIdx),
+    ...p.hand.slice(handIdx + 1),
+  ];
+  let newPlayer: PlayerState = {
+    ...p,
+    hand: newHand,
+    equippedCard: card,
+    currentCost: p.currentCost - card.cost,
+  };
+
+  const events: BattleEvent[] = [];
+
+  // permanent ボーナス加算
+  if (card.equipmentEffectType === 'permanent') {
+    const data = (card.equipmentEffectData ?? {}) as Record<string, unknown>;
+    let { equipmentBonusAtk, equipmentBonusDef, equipmentBonusAllyAtk, maxHandSize } =
+      newPlayer;
+    if (typeof data.atk_bonus === 'number') {
+      equipmentBonusAtk += data.atk_bonus;
+    }
+    if (typeof data.def_bonus === 'number') {
+      equipmentBonusDef += data.def_bonus;
+    }
+    if (typeof data.ally_atk_bonus === 'number') {
+      equipmentBonusAllyAtk += data.ally_atk_bonus;
+    }
+    if (typeof data.max_hand_bonus === 'number') {
+      maxHandSize += data.max_hand_bonus;
+    }
+    newPlayer = {
+      ...newPlayer,
+      equipmentBonusAtk,
+      equipmentBonusDef,
+      equipmentBonusAllyAtk,
+      maxHandSize,
+    };
+  }
+
+  // once_only 即時発動
+  if (card.equipmentEffectType === 'once_only') {
+    const onceResult = applyOnceOnlyEquipmentEffect(
+      newPlayer,
+      card,
+      state.turn,
+      action.player,
+    );
+    newPlayer = { ...onceResult.player, equipmentOnceUsed: true };
+    events.push(...onceResult.events);
+  }
+
+  // per_turn は装備時には何もしない (advancePhase('cost') の applyPerTurnEquipmentEffect 経由)
+
+  // メインイベントは先頭に置く
+  const playEvent = makeEvent('equipment_played', state.turn, action.player, {
+    cardId: card.cardId,
+    instanceId: card.instanceId,
+    cost: card.cost,
+    effectType: card.equipmentEffectType ?? null,
+    leaderId: p.leader.id,
+  });
+  events.unshift(playEvent);
+
+  const newState = commit(
+    { ...state, players: { ...state.players, [action.player]: newPlayer } },
+    state.log,
+    events,
+  );
+
+  return { ok: true, newState, events };
+}
+
+/**
+ * once_only 装備の即時効果適用。
+ * Phase 3 対応: revive_from_graveyard (墓地 top → 手札)。
+ * その他の once_only データは将来拡張で追加。
+ */
+function applyOnceOnlyEquipmentEffect(
+  player: PlayerState,
+  card: BattleCardInstance,
+  turn: number,
+  playerSlot: PlayerSlot,
+): { player: PlayerState; events: BattleEvent[] } {
+  const data = (card.equipmentEffectData ?? {}) as Record<string, unknown>;
+  const events: BattleEvent[] = [];
+  let p = player;
+
+  if (data.revive_from_graveyard) {
+    if (p.graveyard.length > 0) {
+      const revived = p.graveyard[0];
+      p = {
+        ...p,
+        graveyard: p.graveyard.slice(1),
+        hand: [...p.hand, revived],
+      };
+      events.push(
+        makeEvent('temp_buff_applied', turn, playerSlot, {
+          source: 'equipment_once_only',
+          equipmentCardId: card.cardId,
+          effectKind: 'revive_from_graveyard',
+          revivedCardId: revived.cardId,
+          revivedInstanceId: revived.instanceId,
+        }),
+      );
+    }
+  }
+
+  return { player: p, events };
 }
 
 // ---- attack ----------------------------------------------------------------
@@ -423,8 +621,8 @@ function applyAttack(state: BattleState, action: AttackAction): ActionResult {
     if (attackerPlayer.leader.isRested) {
       return err('already_rested', 'リーダーはすでにレスト状態です');
     }
-    // リーダーはサモニング病なし
-    attackPower = attackerPlayer.leader.attackPower;
+    // リーダーはサモニング病なし、装備の atk_bonus を反映
+    attackPower = getEffectiveLeaderAtk(attackerPlayer);
     attackerName = attackerPlayer.leader.name;
     restedAttackerState = {
       ...attackerPlayer,
@@ -445,7 +643,8 @@ function applyAttack(state: BattleState, action: AttackAction): ActionResult {
     if (!slot.canAttackThisTurn) {
       return err('summoning_sickness', 'そのキャラは召喚酔い中で攻撃できません');
     }
-    attackPower = slot.card.attackPower;
+    // キャラ攻撃時は装備の ally_atk_bonus を反映
+    attackPower = getEffectiveCharAtk(attackerPlayer, slot.card);
     attackerName = slot.card.name;
     restedAttackerState = {
       ...attackerPlayer,
@@ -461,7 +660,8 @@ function applyAttack(state: BattleState, action: AttackAction): ActionResult {
   let targetCharIdx = -1; // キャラターゲット時のみ有効
 
   if (action.targetSource.kind === 'leader') {
-    defensePower = defenderPlayer.leader.defensePower;
+    // リーダー防御は装備の def_bonus を反映
+    defensePower = getEffectiveLeaderDef(defenderPlayer);
     targetName = defenderPlayer.leader.name;
   } else {
     const targetInstanceId = action.targetSource.instanceId;

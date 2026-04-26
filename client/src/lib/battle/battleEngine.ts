@@ -226,11 +226,102 @@ function dealPlayer(
     equippedCard: null,
     equipmentBonusAtk: 0,
     equipmentBonusDef: 0,
+    equipmentBonusAllyAtk: 0,
     maxHandSize: 99,
     tempBuffs: [],
     cantPlayCharsThisTurn: false,
     equipmentOnceUsed: false,
   };
+}
+
+// ---- v2.0.2: 装備ボーナスを反映した実効値の計算ヘルパー --------------------
+
+/**
+ * リーダーの実効攻撃力 = base + 装備による永続 atk 加算。
+ * (一時バフは Phase 5 で tempBuffs を取り込む)
+ */
+export function getEffectiveLeaderAtk(player: PlayerState): number {
+  return player.leader.attackPower + (player.equipmentBonusAtk ?? 0);
+}
+
+/**
+ * リーダーの実効防御力 = base + 装備による永続 def 加算。
+ */
+export function getEffectiveLeaderDef(player: PlayerState): number {
+  return player.leader.defensePower + (player.equipmentBonusDef ?? 0);
+}
+
+/**
+ * 味方キャラの実効攻撃力 = base + 装備による全体 atk 加算。
+ * (味方キャラには装備の def 加算は乗らない仕様)
+ */
+export function getEffectiveCharAtk(
+  player: PlayerState,
+  card: BattleCardInstance,
+): number {
+  return card.attackPower + (player.equipmentBonusAllyAtk ?? 0);
+}
+
+/**
+ * 味方キャラの実効防御力 = base (装備 def 加算は乗らない)。
+ */
+export function getEffectiveCharDef(
+  _player: PlayerState,
+  card: BattleCardInstance,
+): number {
+  return card.defensePower;
+}
+
+// ---- v2.0.2: per_turn 装備のコストフェーズ発動 -----------------------------
+
+/**
+ * per_turn 装備の効果を cost フェーズ開始時に適用。
+ *
+ * 対応する equipmentEffectData キー (Phase 3):
+ *   - draw_per_turn:           N 枚ドロー (デッキ切れ時は game_over)
+ *   - reveal_opponent_hand:    相手手札を N 枚見る (UI 用に events を発行のみ)
+ *
+ * 効果が無いカードや、stub データ形式の場合は no-op。
+ */
+export function applyPerTurnEquipmentEffect(
+  state: BattleState,
+  active: PlayerSlot,
+): BattleState {
+  const player = state.players[active];
+  const card = player.equippedCard;
+  if (!card || card.equipmentEffectType !== 'per_turn') return state;
+
+  const data = (card.equipmentEffectData ?? {}) as Record<string, unknown>;
+  let next: BattleState = state;
+
+  if (typeof data.draw_per_turn === 'number' && data.draw_per_turn > 0) {
+    next = drawCard(next, active, data.draw_per_turn);
+    if (next.winner) return next;
+  }
+
+  if (
+    typeof data.reveal_opponent_hand === 'number' &&
+    data.reveal_opponent_hand > 0
+  ) {
+    const opponentSlot: PlayerSlot = active === 'p1' ? 'p2' : 'p1';
+    const opponent = next.players[opponentSlot];
+    const revealCount = Math.min(data.reveal_opponent_hand, opponent.hand.length);
+    const revealed = opponent.hand.slice(0, revealCount);
+    next = {
+      ...next,
+      log: [
+        ...next.log,
+        makeEvent('temp_buff_applied', next.turn, active, {
+          source: 'equipment_per_turn',
+          equipmentCardId: card.cardId,
+          revealKind: 'reveal_opponent_hand',
+          revealedCardIds: revealed.map((c) => c.cardId),
+        }),
+      ],
+    };
+  }
+
+  return next;
 }
 
 /**
@@ -284,7 +375,7 @@ export function advancePhase(state: BattleState): BattleState {
       // 'mana' トリガー由来のボーナスを合算して 1 ターンのみ反映 (上限 cap は外す)
       const bonus = player.nextTurnManaBonus ?? 0;
       const newMax = baseMax + bonus;
-      return {
+      const afterCost: BattleState = {
         ...state,
         players: {
           ...state.players,
@@ -295,7 +386,6 @@ export function advancePhase(state: BattleState): BattleState {
             nextTurnManaBonus: 0, // ボーナスは 1 ターン消費
           },
         },
-        phase: 'main',
         log: [
           ...state.log,
           makeEvent('phase_change', state.turn, active, {
@@ -305,6 +395,11 @@ export function advancePhase(state: BattleState): BattleState {
           }),
         ],
       };
+      // v2.0.2: per_turn 装備の効果を cost フェーズ完了時に発動
+      const afterEquip = applyPerTurnEquipmentEffect(afterCost, active);
+      // per_turn 装備の draw_per_turn でデッキ切れ → game_over
+      if (afterEquip.winner) return afterEquip;
+      return { ...afterEquip, phase: 'main' };
     }
 
     case 'main': {

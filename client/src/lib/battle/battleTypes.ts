@@ -258,8 +258,9 @@ export interface PlayerState {
                                      // cost フェーズで消費される。未定義/0 は効果なし。
   // ---- v2.0.2 追加 (装備 / カウンター / イベント) -------------------------
   equippedCard: BattleCardInstance | null;   // 現在装備中のカード (1 枚まで)
-  equipmentBonusAtk: number;                 // 装備による永続 atk 加算 (default 0)
-  equipmentBonusDef: number;                 // 装備による永続 def 加算 (default 0)
+  equipmentBonusAtk: number;                 // 装備によるリーダー永続 atk 加算 (default 0)
+  equipmentBonusDef: number;                 // 装備によるリーダー永続 def 加算 (default 0)
+  equipmentBonusAllyAtk: number;             // 装備による味方キャラ全体 atk 加算 (default 0)
   maxHandSize: number;                       // 手札上限 (default 99 = 実質無制限)
   tempBuffs: TempBuff[];                     // 時限バフ / デバフリスト
   cantPlayCharsThisTurn: boolean;            // 相手のイベントで封じられた時 true
@@ -400,6 +401,10 @@ export interface ActionResultError {
     | 'summoning_sickness'
     | 'already_rested'
     | 'game_already_over'
+    // ---- v2.0.2 装備 / カウンター / イベント関連 -------------------------
+    | 'already_equipped'         // 既に他の装備が付いている
+    | 'leader_mismatch'          // 装備が別リーダー専用
+    | 'not_implemented_yet'      // event / counter は Phase 4-5 で実装
     | 'internal_error';
 }
 
