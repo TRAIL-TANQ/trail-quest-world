@@ -48,6 +48,7 @@ import type {
   BattleState,
   BattleWinner,
   BoardSlot,
+  CardType,
   LeaderState,
   PendingTargetSelection,
   PlayerSlot,
@@ -58,6 +59,86 @@ type SelectedAttacker = null | 'leader' | string;
 
 // ALT 報酬の定数は altGameService で一元管理 (ALT_BATTLE_WIN / ALT_BATTLE_LOSE)。
 // ここでは processBattleResult() の戻り値を優先し、非同期完了前の fallback としてのみ使用。
+
+// ---- Phase 6c-2: カード種別別のスタイル / リボン -------------------------
+//
+// 手札 (HandCard) と CardFallback の両方で使う種別カラーテーマ。
+//
+//   character : neutral (slate, リボン無し) — 既存の見た目を維持
+//   equipment : gold (装備アイコン Phase 6b-1 と統一)
+//   counter   : blue (Phase 6c-5「ふせいだ！」の青と統一)
+//   event     : purple (EventBanner Phase 6b-2 の紫と統一)
+//   stage     : v2 では未使用、neutral プレースホルダ
+//
+// 子供向けに「色＋漢字一文字リボン」の二重表現で見分けやすくする。
+//   装 (equipment) / 盾 (counter) / 事 (event)
+
+const CARD_TYPE_STYLES: Record<
+  CardType,
+  {
+    /** HandCard 外枠 (border 太さ + 色) */
+    border: string;
+    /** HandCard 背景 tint (薄め) */
+    bg: string;
+    /** HandCard グロウ (色強調) */
+    glow: string;
+    /** リボン背景色 */
+    ribbonBg: string;
+    /** リボン文字 (空文字 = リボン非表示) */
+    ribbonLabel: string;
+    /** CardFallback 外枠色 (border-2) */
+    fallbackBorder: string;
+    /** CardFallback 種別アイコン色 */
+    fallbackIconColor: string;
+  }
+> = {
+  character: {
+    border: 'border border-slate-300/50',
+    bg: '',
+    glow: '',
+    ribbonBg: '',
+    ribbonLabel: '',
+    fallbackBorder: 'border-yellow-400/80', // 既存維持 (battlefield 画像 404 回帰防止)
+    fallbackIconColor: 'text-yellow-200/85',
+  },
+  equipment: {
+    border: 'border-2 border-yellow-400',
+    bg: 'bg-yellow-950/25',
+    glow: 'shadow-[0_0_10px_rgba(250,204,21,0.45)]',
+    ribbonBg: 'bg-yellow-500',
+    ribbonLabel: '装',
+    fallbackBorder: 'border-yellow-300',
+    fallbackIconColor: 'text-yellow-200/90',
+  },
+  counter: {
+    border: 'border-2 border-blue-400',
+    bg: 'bg-blue-950/30',
+    glow: 'shadow-[0_0_10px_rgba(96,165,250,0.5)]',
+    ribbonBg: 'bg-blue-500',
+    ribbonLabel: '盾',
+    fallbackBorder: 'border-blue-400',
+    fallbackIconColor: 'text-blue-200/90',
+  },
+  event: {
+    border: 'border-2 border-purple-400',
+    bg: 'bg-purple-950/30',
+    glow: 'shadow-[0_0_10px_rgba(192,132,252,0.5)]',
+    ribbonBg: 'bg-purple-500',
+    ribbonLabel: '事',
+    fallbackBorder: 'border-purple-400',
+    fallbackIconColor: 'text-purple-200/90',
+  },
+  stage: {
+    // 将来用 (現状未使用)
+    border: 'border border-slate-400/50',
+    bg: '',
+    glow: '',
+    ribbonBg: 'bg-slate-500',
+    ribbonLabel: '場',
+    fallbackBorder: 'border-slate-400',
+    fallbackIconColor: 'text-slate-200/85',
+  },
+};
 
 // ---- CardFallback: 画像未登録/404 時の placeholder (Phase 6c-7) ----------
 
@@ -91,11 +172,16 @@ function CardFallback({
           : card.cardType === 'stage'
             ? '🌐'
             : '⚔';
+  // Phase 6c-2: 種別別の枠色 / アイコン色を CARD_TYPE_STYLES から拾う。
+  // character は既存 yellow-400 を維持 (battlefield 画像 404 時の回帰防止)。
+  const style = CARD_TYPE_STYLES[card.cardType];
   return (
     <div
-      className={`${className ?? ''} relative flex flex-col border-2 border-yellow-400/80 bg-gradient-to-br from-slate-800/95 to-slate-900/95`}
+      className={`${className ?? ''} relative flex flex-col border-2 ${style.fallbackBorder} bg-gradient-to-br from-slate-800/95 to-slate-900/95`}
     >
-      <div className="flex-1 flex items-center justify-center text-2xl text-yellow-200/85 leading-none select-none">
+      <div
+        className={`flex-1 flex items-center justify-center text-2xl ${style.fallbackIconColor} leading-none select-none`}
+      >
         {icon}
       </div>
       <div className="bg-black/70 text-[8px] leading-tight text-yellow-100 text-center px-0.5 py-[2px] truncate">
@@ -2242,15 +2328,21 @@ function HandCard({
   const [imgErrored, setImgErrored] = useState(false);
   const src = resolveCardImage(card.cardId);
   const showImg = !imgErrored && Boolean(src);
+  // Phase 6c-2: 種別ベースの枠色 / 背景 / グロウ + 右上リボン。
+  // playable 時はその上に黄色のリング + 明度ブースト + 既定グロウを重ねる。
+  const style = CARD_TYPE_STYLES[card.cardType];
+  const isCharacter = card.cardType === 'character';
+  const playableExtras = playable
+    ? `ring-2 ring-yellow-300 brightness-110 ${
+        style.glow || 'shadow-[0_0_8px_rgba(255,215,0,0.5)]'
+      }`
+    : `opacity-85 ${style.glow}`;
   return (
     <button
       onClick={onPlay}
       disabled={!playable}
-      className={`relative w-20 aspect-[3/4] rounded-md overflow-hidden border flex-shrink-0 ${
-        playable
-          ? 'border-yellow-400 shadow-[0_0_8px_rgba(255,215,0,0.5)]'
-          : 'border-white/20 opacity-90'
-      }`}
+      title={card.name}
+      className={`relative w-20 aspect-[3/4] rounded-md overflow-hidden flex-shrink-0 ${style.border} ${style.bg} ${playableExtras}`}
     >
       {showImg ? (
         <img
@@ -2264,13 +2356,25 @@ function HandCard({
       ) : (
         <CardFallback card={card} className="w-full h-full" />
       )}
+      {/* cost (top-left) — 既存配置を維持 */}
       <div className="absolute top-0 left-0 bg-black/80 text-yellow-300 text-[11px] font-bold w-5 h-5 flex items-center justify-center rounded-br">
         {card.cost}
       </div>
-      <div className="absolute bottom-0 right-0 bg-black/80 text-[9px] text-white px-1 flex gap-1">
-        <span className="text-red-300">⚔{card.attackPower}</span>
-        <span className="text-blue-300">🛡{card.defensePower}</span>
-      </div>
+      {/* 種別リボン (top-right) — character はリボン無し */}
+      {style.ribbonLabel && (
+        <div
+          className={`absolute top-0 right-0 ${style.ribbonBg} text-white text-[10px] font-bold leading-none px-1.5 py-[3px] rounded-bl-md shadow`}
+        >
+          {style.ribbonLabel}
+        </div>
+      )}
+      {/* atk/def (キャラのみ — 装備/カウンター/イベントは 0/0 で意味なし) */}
+      {isCharacter && (
+        <div className="absolute bottom-0 right-0 bg-black/80 text-[9px] text-white px-1 flex gap-1">
+          <span className="text-red-300">⚔{card.attackPower}</span>
+          <span className="text-blue-300">🛡{card.defensePower}</span>
+        </div>
+      )}
     </button>
   );
 }
