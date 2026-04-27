@@ -7,6 +7,8 @@ import { Link, useLocation, useRoute } from 'wouter';
 import { getQuizPoolForMode, shuffleQuizChoices, type QuestQuiz } from '@/lib/questQuizData';
 import { loadQuestProgress, isDeckUnlocked, isDeckAvailable, DECK_KEYS, type DeckKey, type QuestDifficulty } from '@/lib/questProgress';
 import { useUserStore } from '@/lib/stores';
+// playError は Phase MG-2 で不正解 SFX を撤廃した後も dead import として残置
+// (再導入コスト低減のため、MG-1 の wrongStreak state 残置と同じ方針)。
 import { playSuccess, playError, playDefeat, playTap } from '@/lib/sfx';
 import { supabase } from '@/lib/supabase';
 import { fetchChildStatus } from '@/lib/quizService';
@@ -124,6 +126,9 @@ export default function TimeAttackPage() {
   const [timeLeft, setTimeLeft] = useState(30);
   const [selected, setSelected] = useState<number | null>(null);
   const [showFeedback, setShowFeedback] = useState(false);
+  // Phase MG-2: 不正解タップしたインデックスを蓄積。グレーアウト表示と
+  // 再タップ無効化のためだけに使う。次の正解タップで [] にリセットされる。
+  const [wrongTaps, setWrongTaps] = useState<number[]>([]);
   const [isNewBest, setIsNewBest] = useState(false);
   const [comboFlash, setComboFlash] = useState<string | null>(null);
 
@@ -151,6 +156,7 @@ export default function TimeAttackPage() {
     setShowFeedback(false);
     setIsNewBest(false);
     setComboFlash(null);
+    setWrongTaps([]);
     earnAlt.current = dailyCount < DAILY_LIMIT;
     savedRef.current = false;
     setPhase('playing');
@@ -209,14 +215,22 @@ export default function TimeAttackPage() {
     }
   }, [phase, userId, difficulty, score, totalAttempted, maxCombo, altEarned, addTotalAlt]);
 
+  // Phase MG-2: 「失敗体験を作らない」原則を 4 択タップにも適用。
+  //   - 正解タップ: 従来通り (300ms フィードバック → 次の問題)
+  //   - 不正解タップ: silent — playError も setTimeout も鳴らさず、問題も進めない。
+  //     コンボのみリセット (案 B、Bunsu/Keisan/Shousuu の give-up と整合)、
+  //     当該選択肢はグレーアウトして再タップ無効化、他選択肢は引き続きタップ可。
+  //   - totalAttempted は正解時のみインクリメント。結果画面の正答率は
+  //     基本 100% で表示され、子供への失敗フィードバックを出さない。
   const handleAnswer = useCallback((idx: number) => {
     if (selected !== null || !q || phase !== 'playing') return;
-    setSelected(idx);
-    setShowFeedback(true);
-    setTotalAttempted((t) => t + 1);
+    if (wrongTaps.includes(idx)) return; // 既にグレーアウトされた選択肢は無反応
 
     const isCorrect = idx === q.correctIndex;
     if (isCorrect) {
+      setSelected(idx);
+      setShowFeedback(true);
+      setTotalAttempted((t) => t + 1);
       playSuccess();
       setScore((s) => s + 1);
       const newCombo = combo + 1;
@@ -235,6 +249,7 @@ export default function TimeAttackPage() {
         setSelected(null);
         setShowFeedback(false);
         setComboFlash(null);
+        setWrongTaps([]);
         setQIndex((i) => {
           const next = i + 1;
           if (next >= pool.length) { setPool(shuffle(pool)); return 0; }
@@ -242,19 +257,13 @@ export default function TimeAttackPage() {
         });
       }, 300);
     } else {
-      playError();
+      // 不正解: silent。コンボのみ犠牲にし、当該ボタンを wrongTaps に追加して
+      // 以降のタップを無視する。問題は進めない (子供がリズムで連打しても
+      // 最終的に正解を選ばないと進まない設計、抜け道防止)。
+      setWrongTaps((w) => (w.includes(idx) ? w : [...w, idx]));
       setCombo(0);
-      setTimeout(() => {
-        setSelected(null);
-        setShowFeedback(false);
-        setQIndex((i) => {
-          const next = i + 1;
-          if (next >= pool.length) { setPool(shuffle(pool)); return 0; }
-          return next;
-        });
-      }, 500);
     }
-  }, [selected, q, phase, combo, config, pool, earnAlt]);
+  }, [selected, q, phase, combo, config, pool, earnAlt, wrongTaps]);
 
   // ===== RENDER: Difficulty Select =====
   if (phase === 'select') {
@@ -379,27 +388,38 @@ export default function TimeAttackPage() {
           <div className="space-y-3">
             {q.choices.map((choice, i) => {
               const label = ['A', 'B', 'C', 'D'][i];
+              const isWronglyTapped = wrongTaps.includes(i);
               let bg = 'rgba(26,31,58,0.8)';
               let border = 'rgba(255,215,0,0.2)';
               let badgeBg = 'rgba(255,215,0,0.2)';
               let badgeColor = '#ffd700';
               let extra = '';
+              let opacity = 1;
 
               if (showFeedback) {
                 if (i === q.correctIndex) {
                   bg = 'rgba(34,197,94,0.3)'; border = '#22c55e';
                   badgeBg = '#22c55e'; badgeColor = '#fff'; extra = ' ✓';
                 } else if (i === selected && i !== q.correctIndex) {
+                  // Phase MG-2: 不正解時は selected を立てないので通常はこの分岐は
+                  // 到達しない (dead code)。再導入コスト低減のため残置。
                   bg = 'rgba(239,68,68,0.3)'; border = '#ef4444';
                   badgeBg = '#ef4444'; badgeColor = '#fff'; extra = ' ✗';
                 }
+              } else if (isWronglyTapped) {
+                // Phase MG-2: グレーアウトのみ。バツ・赤・効果音なし。
+                bg = 'rgba(60,60,70,0.4)';
+                border = 'rgba(100,100,110,0.3)';
+                badgeBg = 'rgba(100,100,110,0.3)';
+                badgeColor = 'rgba(255,255,255,0.4)';
+                opacity = 0.5;
               }
 
               return (
                 <button
                   key={i}
                   onClick={() => handleAnswer(i)}
-                  disabled={selected !== null}
+                  disabled={selected !== null || isWronglyTapped}
                   className="w-full flex items-center gap-3 text-left active:scale-[0.97] transition-all"
                   style={{
                     background: bg,
@@ -408,6 +428,7 @@ export default function TimeAttackPage() {
                     borderRadius: 12,
                     padding: '14px 18px',
                     boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                    opacity,
                   }}
                 >
                   <span className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-black shrink-0"
