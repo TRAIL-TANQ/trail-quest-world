@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'wouter';
 import { useUserStore } from '@/lib/stores';
-import { playSuccess, playError, playTap, playDefeat, playBattleStart } from '@/lib/sfx';
+import { playSuccess, playTap, playDefeat, playBattleStart } from '@/lib/sfx';
 import { finalizeAltGame, getGameDailyRemaining } from '@/lib/altGameService';
 import { useGameTimer } from '@/hooks/useGameTimer';
 
@@ -442,60 +442,82 @@ export default function BunsuBattlePage() {
     };
   }, []);
 
-  const submit = useCallback(() => {
+  // Phase MG-1: 自動進行 (β方式)。3 フィールド (整数/分子/分母) すべてが
+  // 正解と canonical 一致した瞬間に呼ばれる success 経路。不正解判定は廃止。
+  const triggerCorrect = useCallback(() => {
     if (phase !== 'playing' || !problem || feedback) return;
     const cfg = activeCfg;
-    const input: Frac = {
-      integer: inputInt === '' ? 0 : parseInt(inputInt, 10),
-      numerator: inputNum === '' ? 0 : parseInt(inputNum, 10),
-      denominator: inputDen === '' ? 0 : parseInt(inputDen, 10),
-    };
+    playSuccess();
+    setFeedback('correct');
+    const newCombo = combo + 1;
+    const mult = comboMult(newCombo, cfg.comboTiers);
+    altAccumRef.current += cfg.altPerCorrect * mult;
+    setCombo(newCombo);
+    setMaxCombo((m) => Math.max(m, newCombo));
+    setScore((s) => s + 1);
+    const tier = tierFor(newCombo, cfg.comboTiers);
+    if (tier) setComboFlash(tier.label);
+    feedbackTimerRef.current = window.setTimeout(() => {
+      setFeedback(null);
+      setShowAnswerFrac(null);
+      setComboFlash(null);
+      setInputInt(''); setInputNum(''); setInputDen('');
+      setActiveField(cfg.allowsMixed ? 'integer' : 'numerator');
+      setProblem((prev) => generateUnique(activeDiff, prev));
+    }, 300);
+  }, [phase, problem, feedback, combo, activeCfg, activeDiff]);
 
-    const ok = checkAnswer(input, problem.answer, cfg);
-    if (ok) {
-      playSuccess();
-      setFeedback('correct');
-      const newCombo = combo + 1;
-      const mult = comboMult(newCombo, cfg.comboTiers);
-      altAccumRef.current += cfg.altPerCorrect * mult;
-      setCombo(newCombo);
-      setMaxCombo((m) => Math.max(m, newCombo));
-      setScore((s) => s + 1);
-      const tier = tierFor(newCombo, cfg.comboTiers);
-      if (tier) setComboFlash(tier.label);
-      feedbackTimerRef.current = window.setTimeout(() => {
-        setFeedback(null);
-        setShowAnswerFrac(null);
-        setComboFlash(null);
-        setInputInt(''); setInputNum(''); setInputDen('');
-        setActiveField(cfg.allowsMixed ? 'integer' : 'numerator');
-        setProblem((prev) => generateUnique(activeDiff, prev));
-      }, 300);
-    } else {
-      playError();
-      setFeedback('wrong');
-      setShowAnswerFrac(problem.answer);
-      setCombo(0);
-      feedbackTimerRef.current = window.setTimeout(() => {
-        setFeedback(null);
-        setShowAnswerFrac(null);
-        setInputInt(''); setInputNum(''); setInputDen('');
-        setActiveField(cfg.allowsMixed ? 'integer' : 'numerator');
-        setProblem((prev) => generateUnique(activeDiff, prev));
-      }, 800);
+  // Phase MG-1: 「分からない」コンボリセットして次の問題へ。減点・バツ無し。
+  const handleGiveUp = useCallback(() => {
+    if (phase !== 'playing' || !problem || feedback) return;
+    const cfg = activeCfg;
+    playTap();
+    setCombo(0);
+    setInputInt(''); setInputNum(''); setInputDen('');
+    setActiveField(cfg.allowsMixed ? 'integer' : 'numerator');
+    setShowAnswerFrac(null);
+    setProblem((prev) => generateUnique(activeDiff, prev));
+  }, [phase, problem, feedback, activeCfg, activeDiff]);
+
+  // Phase MG-1: 入力 / フィールド切替後の自動判定。各フィールドの「次の値」を
+  // 引数で受けて Frac を組み立て、checkAnswer が true なら triggerCorrect。
+  // checkAnswer は分母 0 や needsReduce 違反を弾くため、未完成入力 (例: 分母空)
+  // は false となり誤発火しない。
+  const tryAdvance = (next: { i?: string; n?: string; d?: string }) => {
+    if (!problem) return;
+    const cfg = activeCfg;
+    const intStr = next.i ?? inputInt;
+    const numStr = next.n ?? inputNum;
+    const denStr = next.d ?? inputDen;
+    const candidate: Frac = {
+      integer: intStr === '' ? 0 : parseInt(intStr, 10),
+      numerator: numStr === '' ? 0 : parseInt(numStr, 10),
+      denominator: denStr === '' ? 0 : parseInt(denStr, 10),
+    };
+    if (checkAnswer(candidate, problem.answer, cfg)) {
+      triggerCorrect();
     }
-  }, [phase, problem, feedback, inputInt, inputNum, inputDen, activeCfg, combo, activeDiff]);
+  };
 
   const appendDigit = (d: string) => {
-    if (feedback) return;
+    if (phase !== 'playing' || !problem || feedback) return;
+    const cur =
+      activeField === 'integer' ? inputInt :
+      activeField === 'numerator' ? inputNum :
+      inputDen;
+    if (cur.length >= 3) return;
     playTap();
-    const apply = (cur: string, setter: (v: string) => void) => {
-      if (cur.length >= 3) return;
-      setter(cur + d);
-    };
-    if (activeField === 'integer') apply(inputInt, setInputInt);
-    else if (activeField === 'numerator') apply(inputNum, setInputNum);
-    else apply(inputDen, setInputDen);
+    const next = cur + d;
+    if (activeField === 'integer') {
+      setInputInt(next);
+      tryAdvance({ i: next });
+    } else if (activeField === 'numerator') {
+      setInputNum(next);
+      tryAdvance({ n: next });
+    } else {
+      setInputDen(next);
+      tryAdvance({ d: next });
+    }
   };
 
   const backspace = () => {
@@ -514,6 +536,8 @@ export default function BunsuBattlePage() {
     } else {
       setActiveField((f) => (f === 'numerator' ? 'denominator' : 'numerator'));
     }
+    // フィールド切替自体は入力値を変えないので auto-advance 判定は不要
+    // (typed digit 側で既にチェック済)。
   };
 
   // ===== Render =====
@@ -602,7 +626,7 @@ export default function BunsuBattlePage() {
         <div className="tqw-card-panel rounded-xl p-4 mt-4 text-[11px]" style={{ color: 'var(--tqw-text-gray)' }}>
           <div className="font-bold mb-1" style={{ color: 'var(--tqw-gold)' }}>ルール</div>
           <ul className="list-disc pl-4 space-y-0.5">
-            <li>分子と分母を入力して決定</li>
+            <li>分子と分母を入力すると自動で次の問題へ</li>
             <li>★3以上は約分必須（4/6ではなく2/3）</li>
             <li>★5は「整数」ボックスに帯分数の整数部を入力</li>
             <li>入力欄をタップ or 「切替」で入力先を変更</li>
@@ -780,18 +804,19 @@ export default function BunsuBattlePage() {
             ←
           </button>
         </div>
+        {/* Phase MG-1: 「決定」撤廃 → 「分からない」(コンボリセットのみ、減点なし) */}
         <button
-          onClick={submit}
-          disabled={!inputNum || !inputDen || !!feedback}
-          className="w-full mt-2 py-3 rounded-xl text-lg font-black active:scale-95 transition-all disabled:opacity-40"
+          onClick={handleGiveUp}
+          disabled={!!feedback}
+          className="w-full mt-2 py-3 rounded-xl text-sm font-bold active:scale-95 transition-all disabled:opacity-40"
           style={{
-            background: 'linear-gradient(180deg, var(--tqw-gold-light) 0%, var(--tqw-gold) 50%, var(--tqw-gold-dark) 100%)',
-            color: '#1a1000',
-            border: '2px solid var(--tqw-gold)',
+            background: 'rgba(100,116,139,0.35)',
+            color: '#cbd5e1',
+            border: '1.5px solid rgba(148,163,184,0.5)',
             minHeight: 48,
           }}
         >
-          決定
+          分からない
         </button>
       </div>
     );

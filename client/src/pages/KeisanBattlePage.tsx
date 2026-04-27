@@ -18,7 +18,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'wouter';
 import { useUserStore } from '@/lib/stores';
-import { playSuccess, playError, playTap, playDefeat, playBattleStart } from '@/lib/sfx';
+import { playSuccess, playTap, playDefeat, playBattleStart } from '@/lib/sfx';
 import { finalizeAltGame, getGameDailyRemaining } from '@/lib/altGameService';
 import { useGameTimer } from '@/hooks/useGameTimer';
 
@@ -293,61 +293,49 @@ export default function KeisanBattlePage() {
     });
   }, [phase, score, userId, activeDiff, maxLevel, maxCombo, addTotalAlt]);
 
-  const submitAnswer = useCallback(() => {
+  // Phase MG-1: 自動進行 (β方式) — 入力欄が正解と一致した瞬間に呼ばれる success 経路。
+  // 不正解判定は行わない (失敗体験を作らない設計、kk 教育方針)。
+  const triggerCorrect = useCallback(() => {
     if (phase !== 'playing' || !problem || feedback) return;
-    const parsed = parseInt(input, 10);
-    if (!Number.isFinite(parsed)) return;
-
     const cfg = activeCfg;
-    const isCorrect = parsed === problem.answer;
-    if (isCorrect) {
-      playSuccess();
-      setFeedback('correct');
-      const newCombo = combo + 1;
-      const mult = comboMult(newCombo, cfg.comboTiers);
-      const earned = cfg.altPerCorrect * mult;
-      altAccumRef.current += earned;
-      setCombo(newCombo);
-      setMaxCombo((m) => Math.max(m, newCombo));
-      setWrongStreak(0);
-      const newScore = score + 1;
-      setScore(newScore);
-      const nextLv = levelFor(newScore, cfg);
-      if (nextLv !== currentLevel) {
-        setCurrentLevel(nextLv);
-        setMaxLevel((m) => Math.max(m, nextLv));
-      }
-      const tier = tierFor(newCombo, cfg.comboTiers);
-      if (tier) setComboFlash(tier.label);
-
-      feedbackTimerRef.current = window.setTimeout(() => {
-        setFeedback(null);
-        setShowAnswer(null);
-        setComboFlash(null);
-        setInput('');
-        setProblem((prev) => generateUnique(nextLv, prev));
-      }, 250);
-    } else {
-      playError();
-      setFeedback('wrong');
-      setShowAnswer(problem.answer);
-      const newWrong = wrongStreak + 1;
-      setWrongStreak(newWrong);
-      setCombo(0);
-      let nextLv = currentLevel;
-      if (newWrong >= 2) {
-        nextLv = Math.max(cfg.startLv, currentLevel - 1);
-        setCurrentLevel(nextLv);
-        setWrongStreak(0);
-      }
-      feedbackTimerRef.current = window.setTimeout(() => {
-        setFeedback(null);
-        setShowAnswer(null);
-        setInput('');
-        setProblem((prev) => generateUnique(nextLv, prev));
-      }, 700);
+    playSuccess();
+    setFeedback('correct');
+    const newCombo = combo + 1;
+    const mult = comboMult(newCombo, cfg.comboTiers);
+    const earned = cfg.altPerCorrect * mult;
+    altAccumRef.current += earned;
+    setCombo(newCombo);
+    setMaxCombo((m) => Math.max(m, newCombo));
+    setWrongStreak(0);
+    const newScore = score + 1;
+    setScore(newScore);
+    const nextLv = levelFor(newScore, cfg);
+    if (nextLv !== currentLevel) {
+      setCurrentLevel(nextLv);
+      setMaxLevel((m) => Math.max(m, nextLv));
     }
-  }, [phase, problem, feedback, input, combo, score, currentLevel, wrongStreak, activeCfg]);
+    const tier = tierFor(newCombo, cfg.comboTiers);
+    if (tier) setComboFlash(tier.label);
+
+    feedbackTimerRef.current = window.setTimeout(() => {
+      setFeedback(null);
+      setShowAnswer(null);
+      setComboFlash(null);
+      setInput('');
+      setProblem((prev) => generateUnique(nextLv, prev));
+    }, 250);
+  }, [phase, problem, feedback, combo, score, currentLevel, activeCfg]);
+
+  // Phase MG-1: 「分からない」ボタン。コンボリセットだけして次の問題へ。
+  // ALT/スコア/バツ/減点/レベルダウンなど、ペナルティは一切無し。
+  const handleGiveUp = useCallback(() => {
+    if (phase !== 'playing' || !problem || feedback) return;
+    playTap();
+    setCombo(0);
+    setInput('');
+    setShowAnswer(null);
+    setProblem((prev) => generateUnique(currentLevel, prev));
+  }, [phase, problem, feedback, currentLevel]);
 
   useEffect(() => {
     return () => {
@@ -356,10 +344,19 @@ export default function KeisanBattlePage() {
     };
   }, []);
 
+  // Phase MG-1: 入力した瞬間に正解判定 (β方式: 「決定」ボタン撤廃)。
+  // 桁数が正解と同じになったらそれ以上の入力は受け付けない。
+  // 不一致の入力は何も起こさず保持 (子供は「←」で消して打ち直す)。
   const appendDigit = (d: string) => {
-    if (feedback) return;
+    if (phase !== 'playing' || !problem || feedback) return;
+    const expected = String(problem.answer);
+    if (input.length >= expected.length) return; // 桁数オーバーは無視
     playTap();
-    setInput((s) => (s.length >= 6 ? s : s + d));
+    const newInput = input + d;
+    setInput(newInput);
+    if (newInput === expected) {
+      triggerCorrect();
+    }
   };
   const backspace = () => {
     if (feedback) return;
@@ -601,18 +598,19 @@ export default function KeisanBattlePage() {
           >
             0
           </button>
+          {/* Phase MG-1: 「決定」撤廃 → 「分からない」(コンボリセットのみ、減点なし) */}
           <button
-            onClick={submitAnswer}
-            disabled={!input || !!feedback}
-            className="py-4 rounded-xl text-lg font-black active:scale-95 transition-all disabled:opacity-40"
+            onClick={handleGiveUp}
+            disabled={!!feedback}
+            className="py-4 rounded-xl text-sm font-bold active:scale-95 transition-all disabled:opacity-40"
             style={{
-              background: 'linear-gradient(180deg, var(--tqw-gold-light) 0%, var(--tqw-gold) 50%, var(--tqw-gold-dark) 100%)',
-              color: '#1a1000',
-              border: '2px solid var(--tqw-gold)',
+              background: 'rgba(100,116,139,0.35)',
+              color: '#cbd5e1',
+              border: '1.5px solid rgba(148,163,184,0.5)',
               minHeight: 56,
             }}
           >
-            決定
+            分からない
           </button>
         </div>
       </div>

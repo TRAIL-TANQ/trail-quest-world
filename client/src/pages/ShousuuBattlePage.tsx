@@ -16,7 +16,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'wouter';
 import { useUserStore } from '@/lib/stores';
-import { playSuccess, playError, playTap, playDefeat, playBattleStart } from '@/lib/sfx';
+import { playSuccess, playTap, playDefeat, playBattleStart } from '@/lib/sfx';
 import { finalizeAltGame, getGameDailyRemaining } from '@/lib/altGameService';
 import { useGameTimer } from '@/hooks/useGameTimer';
 
@@ -317,59 +317,69 @@ export default function ShousuuBattlePage() {
     };
   }, []);
 
-  const submit = useCallback(() => {
+  // Phase MG-1: 自動進行 (β方式)。入力が正解と TOLERANCE 内で一致した瞬間に
+  // 呼ばれる success 経路。不正解判定は廃止 (kk 教育方針: 失敗体験を作らない)。
+  const triggerCorrect = useCallback(() => {
     if (phase !== 'playing' || !problem || feedback) return;
-    const parsed = parseFloat(input);
-    if (!Number.isFinite(parsed)) return;
     const cfg = activeCfg;
-    const ok = Math.abs(parsed - problem.answer) < TOLERANCE;
-    if (ok) {
-      playSuccess();
-      setFeedback('correct');
-      const newCombo = combo + 1;
-      const mult = comboMult(newCombo, cfg.comboTiers);
-      altAccumRef.current += cfg.altPerCorrect * mult;
-      setCombo(newCombo);
-      setMaxCombo((m) => Math.max(m, newCombo));
-      setScore((s) => s + 1);
-      const tier = tierFor(newCombo, cfg.comboTiers);
-      if (tier) setComboFlash(tier.label);
-      feedbackTimerRef.current = window.setTimeout(() => {
-        setFeedback(null); setShowAnswer(null); setComboFlash(null);
-        setInput('');
-        setProblem((prev) => generateUnique(activeDiff, prev));
-      }, 250);
-    } else {
-      playError();
-      setFeedback('wrong');
-      setShowAnswer(problem.answer);
-      setCombo(0);
-      feedbackTimerRef.current = window.setTimeout(() => {
-        setFeedback(null); setShowAnswer(null);
-        setInput('');
-        setProblem((prev) => generateUnique(activeDiff, prev));
-      }, 700);
+    playSuccess();
+    setFeedback('correct');
+    const newCombo = combo + 1;
+    const mult = comboMult(newCombo, cfg.comboTiers);
+    altAccumRef.current += cfg.altPerCorrect * mult;
+    setCombo(newCombo);
+    setMaxCombo((m) => Math.max(m, newCombo));
+    setScore((s) => s + 1);
+    const tier = tierFor(newCombo, cfg.comboTiers);
+    if (tier) setComboFlash(tier.label);
+    feedbackTimerRef.current = window.setTimeout(() => {
+      setFeedback(null); setShowAnswer(null); setComboFlash(null);
+      setInput('');
+      setProblem((prev) => generateUnique(activeDiff, prev));
+    }, 250);
+  }, [phase, problem, feedback, combo, activeCfg, activeDiff]);
+
+  // Phase MG-1: 「分からない」コンボリセットして次の問題へ。減点・バツ無し。
+  const handleGiveUp = useCallback(() => {
+    if (phase !== 'playing' || !problem || feedback) return;
+    playTap();
+    setCombo(0);
+    setInput('');
+    setShowAnswer(null);
+    setProblem((prev) => generateUnique(activeDiff, prev));
+  }, [phase, problem, feedback, activeDiff]);
+
+  // Phase MG-1: 入力後に正解と TOLERANCE 内一致なら即進行。
+  // 数値ベースのため文字列長キャップは既存 7 文字を維持し、不一致は保持。
+  const tryAdvance = (candidate: string) => {
+    if (!problem) return;
+    const parsed = parseFloat(candidate);
+    if (!Number.isFinite(parsed)) return;
+    if (Math.abs(parsed - problem.answer) < TOLERANCE) {
+      triggerCorrect();
     }
-  }, [phase, problem, feedback, input, combo, activeCfg, activeDiff]);
+  };
 
   const appendDigit = (d: string) => {
-    if (feedback) return;
+    if (phase !== 'playing' || !problem || feedback) return;
+    if (input.length >= 7) return;
     playTap();
-    setInput((s) => {
-      if (s.length >= 7) return s;
-      return s + d;
-    });
+    const next = input + d;
+    setInput(next);
+    tryAdvance(next);
   };
 
   const appendDot = () => {
-    if (feedback) return;
+    if (phase !== 'playing' || !problem || feedback) return;
+    let next: string | null = null;
+    if (input.includes('.')) next = null;
+    else if (input === '') next = '0.';
+    else if (input.length >= 6) next = null;
+    else next = input + '.';
+    if (next === null) return;
     playTap();
-    setInput((s) => {
-      if (s.includes('.')) return s;
-      if (s === '') return '0.';
-      if (s.length >= 6) return s;
-      return s + '.';
-    });
+    setInput(next);
+    tryAdvance(next);
   };
 
   const backspace = () => {
@@ -601,18 +611,19 @@ export default function ShousuuBattlePage() {
             ←
           </button>
         </div>
+        {/* Phase MG-1: 「決定」撤廃 → 「分からない」(コンボリセットのみ、減点なし) */}
         <button
-          onClick={submit}
-          disabled={!input || !!feedback}
-          className="w-full mt-2 py-3 rounded-xl text-lg font-black active:scale-95 transition-all disabled:opacity-40"
+          onClick={handleGiveUp}
+          disabled={!!feedback}
+          className="w-full mt-2 py-3 rounded-xl text-sm font-bold active:scale-95 transition-all disabled:opacity-40"
           style={{
-            background: 'linear-gradient(180deg, var(--tqw-gold-light) 0%, var(--tqw-gold) 50%, var(--tqw-gold-dark) 100%)',
-            color: '#1a1000',
-            border: '2px solid var(--tqw-gold)',
+            background: 'rgba(100,116,139,0.35)',
+            color: '#cbd5e1',
+            border: '1.5px solid rgba(148,163,184,0.5)',
             minHeight: 48,
           }}
         >
-          決定
+          分からない
         </button>
       </div>
     );
