@@ -17,6 +17,7 @@ import { Link } from 'wouter';
 import { useUserStore } from '@/lib/stores';
 import { playSuccess, playError, playTap, playDefeat, playBattleStart } from '@/lib/sfx';
 import { finalizeAltGame, getGameDailyRemaining } from '@/lib/altGameService';
+import { useGameTimer } from '@/hooks/useGameTimer';
 
 type Phase = 'start' | 'playing' | 'result';
 type DiffId = 1 | 2 | 3 | 4 | 5;
@@ -369,12 +370,14 @@ export default function BunsuBattlePage() {
   const timerRef = useRef<number | null>(null);
   const feedbackTimerRef = useRef<number | null>(null);
   const savedRef = useRef(false);
+  const gameTimer = useGameTimer();
 
   const startGame = useCallback(() => {
     playBattleStart();
     const cfg = DIFF_CONFIGS[selectedDiff];
     altAccumRef.current = 0;
     savedRef.current = false;
+    gameTimer.start();
     setActiveDiff(selectedDiff);
     setScore(0);
     setCombo(0);
@@ -424,6 +427,7 @@ export default function BunsuBattlePage() {
       rawAltEarned: altAccumRef.current,
       score,
       maxCombo,
+      durationSeconds: gameTimer.getElapsedSeconds(),
     }).then(({ altEarned: granted, limited: wasLimited }) => {
       if (granted > 0) addTotalAlt(granted);
       setAltEarned(granted);

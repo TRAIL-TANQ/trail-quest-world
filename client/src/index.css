@@ -174,25 +174,27 @@
     background: linear-gradient(90deg, transparent, var(--tqw-gold-dark), transparent);
     opacity: 0.5;
   }
+  /* v12: 高級カードショップ風。彩度と明度を落とし、影を soft に。 */
   .tqw-btn-battle {
-    background: linear-gradient(180deg, #ee3344 0%, #cc1122 50%, #991122 100%);
+    background: linear-gradient(135deg, #8B1A1A 0%, #6B1212 50%, #5A0F0F 100%);
     color: var(--tqw-gold-light);
-    border: 2px solid var(--tqw-gold-dark);
-    box-shadow: var(--tqw-btn-shadow), inset 0 1px 0 rgba(255,255,255,0.2);
-    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+    border: 1.5px solid var(--tqw-gold-dark);
+    box-shadow: 0 4px 18px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08);
+    text-shadow: 0 1px 3px rgba(0,0,0,0.6);
   }
   .tqw-btn-quest {
-    background: linear-gradient(180deg, #2244aa 0%, #1a3388 50%, #112266 100%);
+    background: linear-gradient(135deg, #1A3A6B 0%, #13315A 50%, #0F2548 100%);
     color: var(--tqw-gold-light);
-    border: 2px solid var(--tqw-gold-dark);
-    box-shadow: var(--tqw-btn-shadow), inset 0 1px 0 rgba(255,255,255,0.2);
-    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+    border: 1.5px solid var(--tqw-gold-dark);
+    box-shadow: 0 4px 18px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08);
+    text-shadow: 0 1px 3px rgba(0,0,0,0.6);
   }
   .tqw-btn-gold {
-    background: linear-gradient(180deg, var(--tqw-gold-light) 0%, var(--tqw-gold) 50%, var(--tqw-gold-dark) 100%);
-    color: #1a1000;
-    border: 2px solid var(--tqw-gold);
-    box-shadow: var(--tqw-btn-shadow);
+    background: linear-gradient(135deg, #A58830 0%, #8B7020 50%, #6D5618 100%);
+    color: #f8ecd0;
+    border: 1.5px solid var(--tqw-gold);
+    box-shadow: 0 4px 18px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08);
+    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
   }
   .tqw-avatar-ring {
     border-radius: 50%;

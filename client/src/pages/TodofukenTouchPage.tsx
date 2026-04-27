@@ -16,6 +16,7 @@ import { Link } from 'wouter';
 import { useUserStore } from '@/lib/stores';
 import { playSuccess, playError, playTap, playDefeat, playBattleStart } from '@/lib/sfx';
 import { finalizeAltGame, getGameDailyRemaining } from '@/lib/altGameService';
+import { useGameTimer } from '@/hooks/useGameTimer';
 import JapanMap from '@/components/game/JapanMap';
 import { PREFECTURES, getPrefecturesByDifficulty, type Prefecture } from '@/data/prefectureData';
 
@@ -157,11 +158,14 @@ export default function TodofukenTouchPage() {
     }
   }, []);
 
+  const gameTimer = useGameTimer();
+
   const startGame = useCallback(() => {
     playBattleStart();
     const cfg = DIFF_CONFIGS[selectedDiff];
     altAccumRef.current = 0;
     savedRef.current = false;
+    gameTimer.start();
     setActiveDiff(selectedDiff);
     setScore(0); setQIndex(0); setMissCount(0);
     setCombo(0); setMaxCombo(0);
@@ -202,6 +206,7 @@ export default function TodofukenTouchPage() {
       rawAltEarned: altAccumRef.current,
       score,
       maxCombo,
+      durationSeconds: gameTimer.getElapsedSeconds(),
     }).then(({ altEarned: granted, limited: wasLimited }) => {
       if (granted > 0) addTotalAlt(granted);
       setAltEarned(granted);

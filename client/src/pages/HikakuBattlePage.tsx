@@ -17,6 +17,7 @@ import { Link } from 'wouter';
 import { useUserStore } from '@/lib/stores';
 import { playSuccess, playError, playDefeat, playBattleStart, playTap } from '@/lib/sfx';
 import { finalizeAltGame, getGameDailyRemaining } from '@/lib/altGameService';
+import { useGameTimer } from '@/hooks/useGameTimer';
 
 type Phase = 'start' | 'playing' | 'result';
 type Side = 'A' | 'B';
@@ -209,11 +210,13 @@ export default function HikakuBattlePage() {
   const timerRef = useRef<number | null>(null);
   const flashTimerRef = useRef<number | null>(null);
   const savedRef = useRef(false);
+  const gameTimer = useGameTimer();
 
   const startGame = useCallback(() => {
     playBattleStart();
     const cfg = DIFF_CONFIGS[selectedDiff];
     savedRef.current = false;
+    gameTimer.start();
     setActiveDiff(selectedDiff);
     setScore(0);
     setMissCount(0);
@@ -262,6 +265,7 @@ export default function HikakuBattlePage() {
       difficulty: activeDiff,
       rawAltEarned: raw,
       score,
+      durationSeconds: gameTimer.getElapsedSeconds(),
     }).then(({ altEarned: granted, limited: wasLimited }) => {
       if (granted > 0) addTotalAlt(granted);
       setAltEarned(granted);

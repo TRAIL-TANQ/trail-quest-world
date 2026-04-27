@@ -73,6 +73,7 @@ export interface AltGameScoreRecord {
   maxLevel?: number;
   maxCombo?: number;
   altEarned: number;
+  durationSeconds?: number; // スタート〜終了の秒数（保護者ダッシュボード集計用）
 }
 
 /** alt_game_scores にレコードを追加（ゲスト/管理者/モニターはスキップ） */
@@ -87,6 +88,7 @@ export async function saveAltGameScore(record: AltGameScoreRecord): Promise<void
       max_level: record.maxLevel ?? null,
       max_combo: record.maxCombo ?? null,
       alt_earned: record.altEarned,
+      duration_seconds: record.durationSeconds ?? 0,
     });
     if (error) {
       console.warn('[AltGameService] insert failed:', error.message);
@@ -111,8 +113,9 @@ export async function finalizeAltGame(params: {
   score: number;
   maxLevel?: number;
   maxCombo?: number;
+  durationSeconds?: number;
 }): Promise<{ altEarned: number; limited: boolean }> {
-  const { childId, gameType, difficulty, rawAltEarned, score, maxLevel, maxCombo } = params;
+  const { childId, gameType, difficulty, rawAltEarned, score, maxLevel, maxCombo, durationSeconds } = params;
   const canEarn = canEarnGameAlt(childId, gameType);
   const altEarned = canEarn ? Math.max(0, rawAltEarned) : 0;
 
@@ -122,7 +125,7 @@ export async function finalizeAltGame(params: {
     await updateChildStatus(childId, altEarned, 0);
   }
 
-  await saveAltGameScore({ childId, gameType, difficulty, score, maxLevel, maxCombo, altEarned });
+  await saveAltGameScore({ childId, gameType, difficulty, score, maxLevel, maxCombo, altEarned, durationSeconds });
 
   return { altEarned, limited: !canEarn };
 }

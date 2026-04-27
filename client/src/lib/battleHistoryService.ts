@@ -25,6 +25,7 @@ export interface BattleHistoryInsert {
   finisherCardId?: string | null;
   finisherCardName?: string | null;
   roundsPlayed?: number | null;
+  durationSeconds?: number | null; // バトル開始〜終了の秒数（保護者ダッシュボード集計用）
 }
 
 /** StarterDeck id（'starter-jeanne' 等）から DeckKey を逆引き。見つからなければ 'custom'。 */
@@ -51,6 +52,7 @@ export async function saveBattleHistory(input: BattleHistoryInsert): Promise<voi
       finisher_card_id:   input.finisherCardId ?? null,
       finisher_card_name: input.finisherCardName ?? null,
       rounds_played:      input.roundsPlayed ?? null,
+      duration_seconds:   input.durationSeconds ?? 0,
     });
     if (error) console.warn('[BattleHistory] insert failed:', error.message);
   } catch (err) {
@@ -76,6 +78,7 @@ export interface PvPBattleRecord {
   winnerFans?: number | null;
   loserFans?: number | null;
   roundsPlayed?: number | null;
+  durationSeconds?: number | null; // バトル開始〜終了の秒数（保護者ダッシュボード集計用）
 }
 
 export async function savePvPBattleHistory(rec: PvPBattleRecord): Promise<void> {
@@ -105,6 +108,7 @@ export async function savePvPBattleHistory(rec: PvPBattleRecord): Promise<void> 
       finisher_card_id:   rec.winnerFinisherId ?? null,
       finisher_card_name: rec.winnerFinisherName ?? null,
       rounds_played:      rec.roundsPlayed ?? null,
+      duration_seconds:   rec.durationSeconds ?? 0,
     },
     {
       child_id:           rec.loserId,
@@ -119,6 +123,7 @@ export async function savePvPBattleHistory(rec: PvPBattleRecord): Promise<void> 
       finisher_card_id:   rec.loserFinisherId ?? null,
       finisher_card_name: rec.loserFinisherName ?? null,
       rounds_played:      rec.roundsPlayed ?? null,
+      duration_seconds:   rec.durationSeconds ?? 0,
     },
   ];
   try {

@@ -4,7 +4,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useRoute } from 'wouter';
-import { QUEST_QUIZ_DATA, type QuestQuiz } from '@/lib/questQuizData';
+import { getQuizPoolForMode, shuffleQuizChoices, type QuestQuiz } from '@/lib/questQuizData';
 import { loadQuestProgress, isDeckUnlocked, isDeckAvailable, DECK_KEYS, type DeckKey, type QuestDifficulty } from '@/lib/questProgress';
 import { useUserStore } from '@/lib/stores';
 import { playSuccess, playError, playDefeat, playTap } from '@/lib/sfx';
@@ -78,17 +78,15 @@ function buildQuizPool(questDiff: QuestDifficulty): QuestQuiz[] {
   for (const dk of DECK_KEYS) {
     if (!isDeckAvailable(dk)) continue; // 準備中デッキからは出題しない
     if (!isDeckUnlocked(progress, dk)) continue;
-    const quizzes = QUEST_QUIZ_DATA[dk]?.[questDiff];
-    if (quizzes) pool.push(...quizzes);
+    pool.push(...getQuizPoolForMode(dk, questDiff));
   }
   if (pool.length === 0) {
     for (const dk of DECK_KEYS) {
       if (!isDeckAvailable(dk)) continue;
-      const quizzes = QUEST_QUIZ_DATA[dk]?.['beginner'];
-      if (quizzes) pool.push(...quizzes);
+      pool.push(...getQuizPoolForMode(dk, 'beginner'));
     }
   }
-  return pool;
+  return pool.map(shuffleQuizChoices);
 }
 
 function shuffle<T>(arr: T[]): T[] {

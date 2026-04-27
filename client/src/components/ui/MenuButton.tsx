@@ -30,33 +30,36 @@ function ButtonBody({
     <div
       className={`tappable relative overflow-hidden ${disabled ? '' : 'cursor-pointer'}`}
       style={{
-        borderRadius: 16,
-        padding: '12px 16px',
+        borderRadius: 14,
+        padding: '11px 14px',
         background: gradient,
-        border: disabled ? '2px solid rgba(120,120,140,0.35)' : '2px solid #c5a03f',
+        // v12: 高級カードショップ風トーン。彩度を抑え、影を柔らかく。
+        filter: disabled ? 'none' : 'brightness(0.88) saturate(0.85)',
+        border: disabled ? '1.5px solid rgba(120,120,140,0.3)' : '1.5px solid rgba(165,136,48,0.55)',
         boxShadow: disabled
-          ? '0 2px 8px rgba(0,0,0,0.3)'
-          : '0 4px 15px rgba(0,0,0,0.5), inset 0 0 28px rgba(255,215,0,0.08)',
+          ? '0 2px 10px rgba(0,0,0,0.35)'
+          : '0 6px 22px rgba(0,0,0,0.38), inset 0 0 24px rgba(255,215,0,0.04)',
         display: 'flex',
         alignItems: 'center',
-        gap: 14,
-        opacity: disabled ? 0.55 : 1,
-        transition: 'transform 0.15s ease, opacity 0.15s ease',
+        gap: 13,
+        opacity: disabled ? 0.5 : 1,
+        transition: 'transform 0.15s ease, opacity 0.15s ease, filter 0.15s ease',
+        letterSpacing: '0.02em',
       }}
     >
-      <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
+      <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
         style={{
-          background: 'rgba(0,0,0,0.35)',
-          border: disabled ? '1.5px solid rgba(120,120,140,0.35)' : '1.5px solid rgba(255,215,0,0.5)',
-          boxShadow: 'inset 0 0 10px rgba(0,0,0,0.5)',
+          background: 'rgba(0,0,0,0.4)',
+          border: disabled ? '1.5px solid rgba(120,120,140,0.3)' : '1.5px solid rgba(165,136,48,0.45)',
+          boxShadow: 'inset 0 0 10px rgba(0,0,0,0.55)',
         }}>
         <span className="text-2xl leading-none">{icon}</span>
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-lg font-black text-white" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.6)' }}>
+        <p className="text-[17px] font-black text-white leading-tight" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>
           {title}
         </p>
-        <p className="text-[11px] text-amber-100/85" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.6)' }}>
+        <p className="text-[10.5px] text-amber-100/75 mt-0.5 leading-snug" style={{ textShadow: '0 1px 1px rgba(0,0,0,0.5)' }}>
           {badge ?? subtitle}
         </p>
       </div>
