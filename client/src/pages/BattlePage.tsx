@@ -31,6 +31,7 @@ import { advancePhase, BOARD_MAX_SLOTS } from '@/lib/battle/battleEngine';
 import {
   fetchLeaders,
   fetchPresetDecks,
+  getCardEffectText,
   getCardName,
   resolveCardImage,
   startBattle,
@@ -52,6 +53,7 @@ import type {
   LeaderState,
   PendingTargetSelection,
   PlayerSlot,
+  TriggerType,
 } from '@/lib/battle/battleTypes';
 
 // アタッカー選択 ID の型: null=未選択 / 'leader'=リーダー / それ以外=character.instanceId
@@ -2314,6 +2316,175 @@ function BattleResultModal({
   );
 }
 
+// ---- CardDetailModal: カード詳細モーダル (Phase 6c-3) -----------------------
+
+/**
+ * 手札カードの 「?」ボタン (HandCard) クリック時に開くカード詳細モーダル。
+ * z-[70] で他モーダル (z-[60]) の上に重ねて表示する。背景クリックで閉じる。
+ *
+ * 表示内容:
+ *   - カード画像 (大、resolveCardImage + CardFallback)
+ *   - 名前 (getCardName)
+ *   - 種別ラベル (リボン色) + コスト
+ *   - atk/def (キャラのみ — 装備/イベント/カウンターは 0/0 で意味なし)
+ *   - counter 値 (カウンターカードのみ)
+ *   - 効果テキスト (BattleCardInstance.effectText 優先 / cache 補助)
+ *   - ライフトリガー説明 (キャラで非 null の時のみ)
+ */
+function CardDetailModal({
+  card,
+  onClose,
+}: {
+  card: BattleCardInstance;
+  onClose: () => void;
+}) {
+  const [imgErrored, setImgErrored] = useState(false);
+  const src = resolveCardImage(card.cardId);
+  const showImg = !imgErrored && Boolean(src);
+
+  const style = CARD_TYPE_STYLES[card.cardType];
+  const typeLabel: Record<CardType, string> = {
+    character: 'キャラクター',
+    equipment: '装備',
+    counter: 'カウンター',
+    event: 'イベント',
+    stage: 'ステージ',
+  };
+
+  // expandDeck で BattleCardInstance.effectText に DB の effect_text を
+  // コピー済のため通常はそれをそのまま使う。古い state や cache 経由のレア
+  // ケース用に getCardEffectText() でフォールバック。
+  const effectText = card.effectText || getCardEffectText(card.cardId);
+
+  const showAtkDef = card.cardType === 'character';
+  const showCounterValue =
+    card.cardType === 'counter' && (card.counterValue ?? 0) > 0;
+  const triggerText = describeTriggerType(card.triggerType);
+
+  return (
+    <div
+      className="fixed inset-0 z-[70] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className={`relative w-full max-w-sm max-h-[90vh] overflow-y-auto rounded-xl border-2 ${style.fallbackBorder} bg-gradient-to-br from-slate-900/95 to-slate-950/95 p-4 shadow-[0_8px_32px_rgba(0,0,0,0.7)]`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* カード画像 (大) */}
+        <div
+          className={`relative w-full aspect-[3/4] mb-3 rounded-lg overflow-hidden ${style.bg}`}
+        >
+          {showImg ? (
+            <img
+              src={src!}
+              alt=""
+              aria-hidden="true"
+              draggable={false}
+              onError={() => setImgErrored(true)}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <CardFallback card={card} className="w-full h-full" />
+          )}
+        </div>
+
+        {/* 名前 */}
+        <h2 className="text-xl font-bold text-yellow-300 mb-2 leading-tight">
+          {getCardName(card.cardId)}
+        </h2>
+
+        {/* 種別 + コスト */}
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
+          <span
+            className={`${style.ribbonBg || 'bg-slate-600'} text-white text-xs font-bold px-2 py-0.5 rounded`}
+          >
+            {typeLabel[card.cardType]}
+          </span>
+          <span className="text-cyan-300 text-sm">💎 コスト {card.cost}</span>
+        </div>
+
+        {/* atk / def (キャラのみ) */}
+        {showAtkDef && (
+          <div className="text-sm mb-3">
+            <span className="text-red-300 font-bold">⚔ {card.attackPower}</span>
+            <span className="mx-2 text-white/40">/</span>
+            <span className="text-blue-300 font-bold">
+              🛡 {card.defensePower}
+            </span>
+          </div>
+        )}
+
+        {/* counter 値 (カウンターカードのみ) */}
+        {showCounterValue && (
+          <div className="mb-3 px-3 py-2 rounded-md bg-blue-900/30 border border-blue-400/40">
+            <div className="text-blue-200 text-sm font-bold">
+              🛡 カウンター値 +{card.counterValue}
+            </div>
+            <div className="text-[11px] text-white/65 mt-0.5">
+              防御時に防御値へ加算されます
+            </div>
+          </div>
+        )}
+
+        {/* 効果テキスト */}
+        <div className="border-t border-white/10 pt-3 mt-3">
+          <div className="text-yellow-200/85 text-xs mb-1 font-bold">効果</div>
+          {effectText ? (
+            <div className="text-white text-sm leading-relaxed whitespace-pre-wrap">
+              {effectText}
+            </div>
+          ) : (
+            <div className="text-white/55 text-xs italic">
+              特殊効果はありません
+            </div>
+          )}
+        </div>
+
+        {/* ライフトリガー (非 null のキャラのみ) */}
+        {triggerText && (
+          <div className="border-t border-white/10 pt-3 mt-3">
+            <div className="text-purple-300/90 text-xs mb-1 font-bold">
+              ライフトリガー
+            </div>
+            <div className="text-white text-xs leading-relaxed">
+              {triggerText}
+            </div>
+          </div>
+        )}
+
+        {/* 閉じる */}
+        <button
+          onClick={onClose}
+          className="w-full mt-4 py-2.5 bg-slate-700 hover:bg-slate-600 active:bg-slate-800 text-white rounded-lg font-bold text-sm border border-white/20"
+        >
+          閉じる
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * ライフトリガー種別を子供向けの一行説明文に変換。null は空文字を返し、
+ * 呼び出し側で表示有無を判断する。
+ */
+function describeTriggerType(t: TriggerType): string {
+  switch (t) {
+    case 'draw':
+      return 'ドロー — リーダー被弾時、防御側がカードを 1 枚引く';
+    case 'mana':
+      return 'マナ — リーダー被弾時、防御側の次ターン コスト +2';
+    case 'destroy':
+      return '破壊 — リーダー被弾時、相手の最も弱いキャラを 1 体破壊';
+    case 'defense':
+      return '防御 — リーダー被弾時、その攻撃を完全無効化';
+    case 'revive':
+      return '復活 — リーダー被弾時、墓地から 1 枚を手札へ';
+    default:
+      return '';
+  }
+}
+
 function HandCard({
   card,
   playable,
@@ -2337,44 +2508,71 @@ function HandCard({
         style.glow || 'shadow-[0_0_8px_rgba(255,215,0,0.5)]'
       }`
     : `opacity-85 ${style.glow}`;
+
+  // Phase 6c-3: カード詳細モーダル開閉
+  const [showDetail, setShowDetail] = useState(false);
+
+  // 「?」ボタンと play ボタンを兄弟関係にするため、外側を div にして両者を
+  // 並置する (button 入れ子は HTML として無効)。
   return (
-    <button
-      onClick={onPlay}
-      disabled={!playable}
-      title={card.name}
-      className={`relative w-20 aspect-[3/4] rounded-md overflow-hidden flex-shrink-0 ${style.border} ${style.bg} ${playableExtras}`}
-    >
-      {showImg ? (
-        <img
-          src={src!}
-          alt=""
-          aria-hidden="true"
-          draggable={false}
-          onError={() => setImgErrored(true)}
-          className="w-full h-full object-cover"
-        />
-      ) : (
-        <CardFallback card={card} className="w-full h-full" />
-      )}
-      {/* cost (top-left) — 既存配置を維持 */}
-      <div className="absolute top-0 left-0 bg-black/80 text-yellow-300 text-[11px] font-bold w-5 h-5 flex items-center justify-center rounded-br">
-        {card.cost}
-      </div>
-      {/* 種別リボン (top-right) — character はリボン無し */}
-      {style.ribbonLabel && (
-        <div
-          className={`absolute top-0 right-0 ${style.ribbonBg} text-white text-[10px] font-bold leading-none px-1.5 py-[3px] rounded-bl-md shadow`}
+    <>
+      <div className="relative w-20 aspect-[3/4] flex-shrink-0">
+        <button
+          onClick={onPlay}
+          disabled={!playable}
+          title={card.name}
+          className={`absolute inset-0 rounded-md overflow-hidden ${style.border} ${style.bg} ${playableExtras}`}
         >
-          {style.ribbonLabel}
-        </div>
+          {showImg ? (
+            <img
+              src={src!}
+              alt=""
+              aria-hidden="true"
+              draggable={false}
+              onError={() => setImgErrored(true)}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <CardFallback card={card} className="w-full h-full" />
+          )}
+          {/* cost (top-left) — 既存配置を維持 */}
+          <div className="absolute top-0 left-0 bg-black/80 text-yellow-300 text-[11px] font-bold w-5 h-5 flex items-center justify-center rounded-br">
+            {card.cost}
+          </div>
+          {/* 種別リボン (top-right) — character はリボン無し */}
+          {style.ribbonLabel && (
+            <div
+              className={`absolute top-0 right-0 ${style.ribbonBg} text-white text-[10px] font-bold leading-none px-1.5 py-[3px] rounded-bl-md shadow`}
+            >
+              {style.ribbonLabel}
+            </div>
+          )}
+          {/* atk/def (キャラのみ — 装備/カウンター/イベントは 0/0 で意味なし) */}
+          {isCharacter && (
+            <div className="absolute bottom-0 right-0 bg-black/80 text-[9px] text-white px-1 flex gap-1">
+              <span className="text-red-300">⚔{card.attackPower}</span>
+              <span className="text-blue-300">🛡{card.defensePower}</span>
+            </div>
+          )}
+        </button>
+        {/* 詳細「?」ボタン (bottom-left)。play ボタンと兄弟。
+            非 playable 状態でも常時押せる (子供がプレイ前に効果を確認できる)。 */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowDetail(true);
+          }}
+          aria-label={`${card.name} のカード詳細を表示`}
+          title="カード詳細"
+          className="absolute bottom-0.5 left-0.5 w-5 h-5 rounded-full bg-slate-900/85 border border-white/40 text-white text-[11px] leading-none font-bold flex items-center justify-center hover:bg-slate-700 active:bg-slate-800 z-10 shadow"
+        >
+          ?
+        </button>
+      </div>
+      {showDetail && (
+        <CardDetailModal card={card} onClose={() => setShowDetail(false)} />
       )}
-      {/* atk/def (キャラのみ — 装備/カウンター/イベントは 0/0 で意味なし) */}
-      {isCharacter && (
-        <div className="absolute bottom-0 right-0 bg-black/80 text-[9px] text-white px-1 flex gap-1">
-          <span className="text-red-300">⚔{card.attackPower}</span>
-          <span className="text-blue-300">🛡{card.defensePower}</span>
-        </div>
-      )}
-    </button>
+    </>
   );
 }

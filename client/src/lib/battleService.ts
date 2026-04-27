@@ -426,6 +426,39 @@ export async function fetchCards(): Promise<BattleCardMetaRow[]> {
   return (data as BattleCardMetaRow[]) ?? [];
 }
 
+// ---- Phase 6c-3: カードメタの同期キャッシュ -------------------------------
+//
+// startBattle() で fetchCards() を一度走らせた直後に setCardMetaCache() で
+// 同期アクセス可能なキャッシュを構築する。CardDetailModal などが
+// instanceId に紐づかない情報 (effect_text など) を非同期なしで参照できる。
+// 注: BattleCardInstance.effectText は expandDeck で既にコピー済のため、
+// インスタンスを持つ UI は card.effectText を直接使えば足りる。本キャッシュは
+// 「インスタンスを介さず cardId で問い合わせたい」ケース用の補助路。
+
+let cardMetaCache: Map<string, BattleCardMetaRow> | null = null;
+
+/** fetchCards() の結果を同期キャッシュに登録する (idempotent)。 */
+export function setCardMetaCache(cards: BattleCardMetaRow[]): void {
+  cardMetaCache = new Map(cards.map((c) => [c.card_id, c]));
+}
+
+/** 同期取得: cardId → BattleCardMetaRow (未ロード or 未登録は null)。 */
+export function getCardMetaFromCache(
+  cardId: string,
+): BattleCardMetaRow | null {
+  return cardMetaCache?.get(cardId) ?? null;
+}
+
+/** 同期取得: cardId → effect_text (未ロード or 未登録は null)。 */
+export function getCardEffectText(cardId: string): string | null {
+  return cardMetaCache?.get(cardId)?.effect_text ?? null;
+}
+
+/** テスト用: キャッシュを破棄。 */
+export function clearCardMetaCache(): void {
+  cardMetaCache = null;
+}
+
 export interface PresetDeck {
   deck: BattleDeckRow;
   cards: BattleDeckCardRow[];
@@ -541,6 +574,9 @@ export async function startBattle(
   const leaderById = new Map(leaders.map((l) => [l.id, l]));
   const cardMetaById = new Map(cards.map((c) => [c.card_id, c]));
   const deckById = new Map(presetDecks.map((d) => [d.deck.id, d]));
+
+  // Phase 6c-3: 同期キャッシュ構築 (CardDetailModal 等が effect_text を参照するため)
+  setCardMetaCache(cards);
 
   const p1Leader = leaderById.get(params.p1LeaderId);
   const p2Leader = leaderById.get(params.p2LeaderId);
