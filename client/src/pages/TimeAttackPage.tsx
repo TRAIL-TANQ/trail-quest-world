@@ -21,8 +21,8 @@ const DIFFICULTY_CONFIG: Record<TADifficulty, {
   comboBonus5: number; comboBonus10: number;
   unlockLabel: string;
 }> = {
-  easy:   { label: 'かんたん',   icon: '🟢', color: '#22c55e', timeSeconds: 60, questDiff: 'beginner',   altPerCorrect: 1, comboBonus5: 3,  comboBonus10: 5,  unlockLabel: '' },
-  normal: { label: 'ふつう',     icon: '🟡', color: '#eab308', timeSeconds: 60, questDiff: 'challenger', altPerCorrect: 2, comboBonus5: 5,  comboBonus10: 10, unlockLabel: 'かんたんで10問正解で解放' },
+  easy:   { label: 'かんたん',   icon: '🟢', color: '#22c55e', timeSeconds: 30, questDiff: 'beginner',   altPerCorrect: 1, comboBonus5: 3,  comboBonus10: 5,  unlockLabel: '' },
+  normal: { label: 'ふつう',     icon: '🟡', color: '#eab308', timeSeconds: 30, questDiff: 'challenger', altPerCorrect: 2, comboBonus5: 5,  comboBonus10: 10, unlockLabel: 'かんたんで10問正解で解放' },
   hard:   { label: 'むずかしい', icon: '🔴', color: '#ef4444', timeSeconds: 45, questDiff: 'master',     altPerCorrect: 3, comboBonus5: 8,  comboBonus10: 15, unlockLabel: 'ふつうで15問正解で解放' },
   legend: { label: 'レジェンド', icon: '👑', color: '#ffd700', timeSeconds: 30, questDiff: 'legend',     altPerCorrect: 5, comboBonus5: 10, comboBonus10: 20, unlockLabel: 'むずかしいで15問正解で解放' },
 };
@@ -121,7 +121,7 @@ export default function TimeAttackPage() {
   const [combo, setCombo] = useState(0);
   const [maxCombo, setMaxCombo] = useState(0);
   const [altEarned, setAltEarned] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(60);
+  const [timeLeft, setTimeLeft] = useState(30);
   const [selected, setSelected] = useState<number | null>(null);
   const [showFeedback, setShowFeedback] = useState(false);
   const [isNewBest, setIsNewBest] = useState(false);

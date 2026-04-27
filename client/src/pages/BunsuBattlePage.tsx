@@ -55,11 +55,11 @@ const GAME_TYPE = 'bunsu_battle' as const;
 const BEST_KEY_PREFIX = 'bunsu_best_';
 
 const DIFF_CONFIGS: Record<DiffId, DiffConfig> = {
-  1: { id: 1, label: 'かんたん',   timeSeconds: 60, altPerCorrect: 1, comboTiers: [], needsReduce: false, allowsMixed: false, note: '同分母の足し引き' },
-  2: { id: 2, label: 'ふつう',     timeSeconds: 60, altPerCorrect: 1, comboTiers: [
+  1: { id: 1, label: 'かんたん',   timeSeconds: 30, altPerCorrect: 1, comboTiers: [], needsReduce: false, allowsMixed: false, note: '同分母の足し引き' },
+  2: { id: 2, label: 'ふつう',     timeSeconds: 30, altPerCorrect: 1, comboTiers: [
     { threshold: 5, multiplier: 2, label: '🔥 コンボ ×2' },
   ], needsReduce: true, allowsMixed: false, note: '約分して答える' },
-  3: { id: 3, label: 'むずかしい', timeSeconds: 60, altPerCorrect: 2, comboTiers: [
+  3: { id: 3, label: 'むずかしい', timeSeconds: 30, altPerCorrect: 2, comboTiers: [
     { threshold: 5, multiplier: 2, label: '🔥 コンボ ×2' },
     { threshold: 10, multiplier: 3, label: '⚡ スーパーコンボ ×3' },
   ], needsReduce: true, allowsMixed: false, note: '通分＋約分' },
@@ -354,7 +354,7 @@ export default function BunsuBattlePage() {
   const [maxCombo, setMaxCombo] = useState(0);
   const [altEarned, setAltEarned] = useState(0);
   const [limited, setLimited] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(60);
+  const [timeLeft, setTimeLeft] = useState(30);
   const [feedback, setFeedback] = useState<'correct' | 'wrong' | null>(null);
   const [showAnswerFrac, setShowAnswerFrac] = useState<Frac | null>(null);
   const [comboFlash, setComboFlash] = useState<string | null>(null);

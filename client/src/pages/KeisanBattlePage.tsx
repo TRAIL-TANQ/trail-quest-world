@@ -1,7 +1,7 @@
 /**
  * KeisanBattlePage — 🔢 計算バトル
  *
- * 60秒（または45/30秒）制限で計算問題を連続で解くスコアアタック。
+ * 30秒（ゲキむず★4のみ45秒）制限で計算問題を連続で解くスコアアタック。
  * 5段階の難易度（★1〜★5）により、制限時間・開始Lv・最大Lv・ALT単価・
  * コンボ倍率が変化する。
  *
@@ -51,11 +51,11 @@ const GAME_TYPE = 'keisan_battle' as const;
 const BEST_KEY_PREFIX = 'keisan_best_';
 
 const DIFF_CONFIGS: Record<DiffId, DiffConfig> = {
-  1: { id: 1, label: 'かんたん',   icon: '🟢', timeSeconds: 60, startLv: 1, maxLv: 1, altPerCorrect: 1, comboTiers: [] },
-  2: { id: 2, label: 'ふつう',     icon: '🟡', timeSeconds: 60, startLv: 1, maxLv: 2, altPerCorrect: 1, comboTiers: [
+  1: { id: 1, label: 'かんたん',   icon: '🟢', timeSeconds: 30, startLv: 1, maxLv: 1, altPerCorrect: 1, comboTiers: [] },
+  2: { id: 2, label: 'ふつう',     icon: '🟡', timeSeconds: 30, startLv: 1, maxLv: 2, altPerCorrect: 1, comboTiers: [
     { threshold: 5,  multiplier: 2, label: '🔥 コンボ ×2' },
   ] },
-  3: { id: 3, label: 'むずかしい', icon: '🟠', timeSeconds: 60, startLv: 2, maxLv: 3, altPerCorrect: 2, comboTiers: [
+  3: { id: 3, label: 'むずかしい', icon: '🟠', timeSeconds: 30, startLv: 2, maxLv: 3, altPerCorrect: 2, comboTiers: [
     { threshold: 5,  multiplier: 2, label: '🔥 コンボ ×2' },
     { threshold: 10, multiplier: 3, label: '⚡ スーパーコンボ ×3' },
   ] },
@@ -206,7 +206,7 @@ export default function KeisanBattlePage() {
   const [maxLevel, setMaxLevel] = useState(1);
   const [altEarned, setAltEarned] = useState(0);
   const [limited, setLimited] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(60);
+  const [timeLeft, setTimeLeft] = useState(30);
   const [feedback, setFeedback] = useState<'correct' | 'wrong' | null>(null);
   const [showAnswer, setShowAnswer] = useState<number | null>(null);
   const [comboFlash, setComboFlash] = useState<string | null>(null);
