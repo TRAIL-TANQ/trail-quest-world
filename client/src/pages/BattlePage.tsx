@@ -1521,6 +1521,7 @@ export default function BattlePage() {
       return;
     }
     // Phase 6c-4: 序盤攻撃ロック中は attacker 選択させない
+    // (Phase 6c-bug2 で turn 1 のみロックに短縮)
     if (state.turn < ATTACK_UNLOCK_TURN) {
       console.log('[UI] handleSelectAttacker: attack locked', { turn: state.turn });
       return;
@@ -1576,6 +1577,7 @@ export default function BattlePage() {
       return;
     }
     // Phase 6c-4: 序盤攻撃ロック中は attack 実行も弾く (selectedAttacker は null のはず)
+    // (Phase 6c-bug2 で turn 1 のみロックに短縮)
     if (state.turn < ATTACK_UNLOCK_TURN) {
       console.log('[UI] handleAttackTarget: attack locked', { turn: state.turn });
       return;
@@ -1758,7 +1760,7 @@ export default function BattlePage() {
             🔒 あと {ATTACK_UNLOCK_TURN - state.turn} ターンで攻撃できるよ
           </span>
           <div className="text-amber-200/70 text-[10px] mt-0.5">
-            最初の 2 ターンはお互い展開タイム
+            最初の 1 ターンはお互い展開タイム
           </div>
         </div>
       )}

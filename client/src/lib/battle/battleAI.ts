@@ -82,7 +82,7 @@ export function chooseAIAction(
   }
 
   // --- 2. アタック可能なリーダー / キャラで相手リーダーへ ---
-  // v2.0.2 Phase 6c-4: ターン 1, 2 は両者攻撃ロック中なので候補から除外
+  // v2.0.2 Phase 6c-4: ターン 1 は両者攻撃ロック中なので候補から除外 (Phase 6c-bug2 で 2→1 に短縮)
   if (state.turn >= ATTACK_UNLOCK_TURN) {
     if (!player.leader.isRested && player.leader.canAttackThisTurn) {
       const action: AttackAction = {

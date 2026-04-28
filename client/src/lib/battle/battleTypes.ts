@@ -460,7 +460,8 @@ export interface ActionResultError {
     | 'no_valid_targets'         // 効果対象が 0 件 (例: destroy_enemy_char で敵キャラ 0 体)
     | 'no_pending_selection'     // resume を呼んだが pendingTargetSelection が無い
     // ---- v2.0.2 Phase 6c-4 序盤攻撃ロック (子供向け展開保護) -------------
-    | 'attack_locked_early_turns'  // turn 1, 2 は両者攻撃不可 (turn 3 から解禁)
+    // Phase 6c-bug2 で 2→1 ターンに短縮 (ATTACK_UNLOCK_TURN=2)
+    | 'attack_locked_early_turns'  // turn 1 のみ両者攻撃不可 (turn 2 から解禁)
     | 'internal_error';
 }
 

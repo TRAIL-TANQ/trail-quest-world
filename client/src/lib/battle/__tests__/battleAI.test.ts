@@ -97,8 +97,9 @@ function makeState(overrides: Partial<BattleState> = {}): BattleState {
   const leader = makeLeader('l_default');
   return {
     sessionId: 's_test',
-    // Phase 6c-4: turn 1, 2 は両者攻撃ロック中のためデフォルトは 3 (=攻撃可能)
-    // turn=1/2 を要する個別テストは override で上書きする
+    // Phase 6c-4: turn 1 は両者攻撃ロック中のためデフォルトは 3 (=攻撃可能)
+    // (Phase 6c-bug2 で turn 2 から解禁。デフォルト 3 は維持して既存テストの安定性確保)
+    // turn=1 を要する個別テストは override で上書きする
     turn: 3,
     firstPlayer: 'p1',
     activePlayer: 'p1',
@@ -260,7 +261,8 @@ describe('battleAI.runAITurn (full turn loop)', () => {
     const cheapCard = makeCard('cheap', { cost: 1 });
 
     const state = makeState({
-      // Phase 6c-4: 攻撃解禁ターン 3 でテスト (元は turn 2 だったがロック導入で攻撃不可)
+      // Phase 6c-4: 攻撃解禁ターン (元は turn 2 だったがロック導入で turn 3 に変更)
+      // Phase 6c-bug2 で turn 2 から解禁になったが、既存テストは turn 3 のまま安定性維持
       turn: 3,
       activePlayer: 'p2',
       phase: 'main',
@@ -318,7 +320,8 @@ describe('battleAI.runAITurn (full turn loop)', () => {
 });
 
 // ============================================================================
-// Phase 6c-4: 序盤 (turn 1, 2) は AI が attack を候補に選ばないこと
+// Phase 6c-4: 序盤 (turn 1) は AI が attack を候補に選ばないこと
+// Phase 6c-bug2 (2026-04-28): turn 2 はロック解除で attack を候補に入れる
 // ============================================================================
 
 describe('battleAI.chooseAIAction (Phase 6c-4 early-turn lock)', () => {
@@ -345,7 +348,7 @@ describe('battleAI.chooseAIAction (Phase 6c-4 early-turn lock)', () => {
     expect(thought.chosenAction.type).toBe('end_turn');
   });
 
-  it('turn 2: 同じく attack を返さず end_turn', () => {
+  it('turn 2: ロック解除済 → AI リーダーで attack を選ぶ (Phase 6c-bug2 新仕様)', () => {
     const leader = makeLeader('l_ai');
     const c5 = makeCard('card_5', { cost: 5 });
     const state = makeState({
@@ -363,6 +366,7 @@ describe('battleAI.chooseAIAction (Phase 6c-4 early-turn lock)', () => {
     });
 
     const thought = chooseAIAction(state, 'p2');
-    expect(thought.chosenAction.type).toBe('end_turn');
+    // turn 2 で攻撃解禁。p2 に攻撃可能リーダーがあるので attack 選択。
+    expect(thought.chosenAction.type).toBe('attack');
   });
 });

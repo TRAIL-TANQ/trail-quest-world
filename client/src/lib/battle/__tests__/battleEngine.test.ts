@@ -272,8 +272,9 @@ describe('battleActions.applyAction (attack summoning sickness)', () => {
     const leader = makeLeader('l1');
     const card = makeCard('c_summoning', { cost: 1, attackPower: 5 });
     const state = makeState({
-      // Phase 6c-4: turn 3 から攻撃解禁。それ以前だと attack_locked_early_turns で
-      // 弾かれて summoning_sickness までたどり着かない
+      // Phase 6c-4: turn 2 から攻撃解禁 (Phase 6c-bug2 で 3→2 に短縮)。
+      // turn 1 だと attack_locked_early_turns で弾かれて summoning_sickness まで
+      // たどり着かないので turn 3 を採用 (解禁後で安定)
       turn: 3,
       phase: 'main',
       players: {
@@ -322,7 +323,7 @@ describe('battleActions.applyAction (attack leader)', () => {
     const lifeCard3 = makeCard('life_bot');
 
     const state = makeState({
-      // Phase 6c-4: turn 3 から攻撃解禁
+      // Phase 6c-4: turn 2 から攻撃解禁 (Phase 6c-bug2 で 3→2 に短縮)
       turn: 3,
       phase: 'main',
       players: {
@@ -470,7 +471,8 @@ describe('battleEngine.calcManaForTurn', () => {
 });
 
 // ============================================================================
-// Phase 6c-4: 序盤攻撃ロック (turn 1, 2 は両者攻撃不可、turn 3 から解禁)
+// Phase 6c-4: 序盤攻撃ロック (turn 1 のみ両者攻撃不可、turn 2 から解禁)
+// Phase 6c-bug2 (2026-04-28): 元は turn 1, 2 ロックだったが kk 実機確認で短縮
 // ============================================================================
 
 describe('Phase 6c-4: early-turn attack lock', () => {
@@ -519,18 +521,8 @@ describe('Phase 6c-4: early-turn attack lock', () => {
     };
   }
 
-  it('turn 1 で attack を試みると attack_locked_early_turns エラー', () => {
+  it('turn 1 で attack を試みると attack_locked_early_turns エラー (残り 1 ターン)', () => {
     const { state, attackerId } = setupAttackable(1);
-    const result = applyAction(state, attackAction(attackerId));
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.code).toBe('attack_locked_early_turns');
-      expect(result.reason).toContain('2 ターン');
-    }
-  });
-
-  it('turn 2 で attack を試みると attack_locked_early_turns エラー', () => {
-    const { state, attackerId } = setupAttackable(2);
     const result = applyAction(state, attackAction(attackerId));
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -539,7 +531,16 @@ describe('Phase 6c-4: early-turn attack lock', () => {
     }
   });
 
-  it('turn 3 で attack が正常解決される (ライフ 1 減 + life_damaged 発火)', () => {
+  it('turn 2 で attack 解禁 (ライフ 1 減 + life_damaged 発火、Phase 6c-bug2 で 2→1 に短縮)', () => {
+    const { state, attackerId } = setupAttackable(2);
+    const result = applyAction(state, attackAction(attackerId));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.newState.players.p2.lifeCards).toHaveLength(2);
+    expect(result.events.some((e) => e.type === 'life_damaged')).toBe(true);
+  });
+
+  it('turn 3 でも attack は引き続き正常解決される (回帰チェック)', () => {
     const { state, attackerId } = setupAttackable(3);
     const result = applyAction(state, attackAction(attackerId));
     expect(result.ok).toBe(true);

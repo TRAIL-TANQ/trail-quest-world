@@ -52,9 +52,11 @@ import type {
   TriggerType,
 } from './battleTypes';
 
-// v2.0.2 Phase 6c-4: ターン 1, 2 は両者攻撃不可 (子供向け TCG の展開保護)
-// turn は 1-indexed (state.turn=1 がゲーム最初のターン)。turn 3 から攻撃解禁。
-export const ATTACK_UNLOCK_TURN = 3;
+// v2.0.2 Phase 6c-4: ターン 1 は両者攻撃不可 (子供向け TCG の展開保護)
+// turn は 1-indexed (state.turn=1 がゲーム最初のターン)。turn 2 から攻撃解禁。
+// Phase 6c-bug2 (2026-04-28): kk 実機確認で「ターン 2 の展開タイム」が長すぎ、
+// 3 → 2 に短縮。ターン 1 のみロックする最小構成。
+export const ATTACK_UNLOCK_TURN = 2;
 
 // v2.0.2 Phase 6b-3: 人間プレイヤー時に対象選択 UI を介したい effect_type
 const TARGET_SELECTION_REQUIRED: ReadonlySet<PendingTargetSelection['type']> =
@@ -1842,7 +1844,7 @@ function applyAttack(state: BattleState, action: AttackAction): ActionResult {
   if (state.phase !== 'main') {
     return err('wrong_phase', 'メインフェイズでのみ攻撃できます');
   }
-  // v2.0.2 Phase 6c-4: ターン 1, 2 は両者攻撃不可 (展開保護)
+  // v2.0.2 Phase 6c-4: ターン 1 は両者攻撃不可 (展開保護、Phase 6c-bug2 で 2→1 に短縮)
   if (state.turn < ATTACK_UNLOCK_TURN) {
     const remaining = ATTACK_UNLOCK_TURN - state.turn;
     return err(
