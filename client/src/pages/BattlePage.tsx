@@ -966,9 +966,12 @@ export default function BattlePage() {
   const lastAttackLogLenRef = useRef(0);
 
   // Phase 6c-5: 攻防対面表示バナー (Phase A 800ms / Phase B 1200ms / fadeout 200ms)
+  // Phase 6c-bug3: runAITurn が複数攻撃を 1 つの state 更新にバッチングするため
+  // キューを併用し、すべての attack_declared を順次再生する。
   const [resolutionScene, setResolutionScene] = useState<AttackScene | null>(
     null,
   );
+  const [resolutionQueue, setResolutionQueue] = useState<AttackScene[]>([]);
   const lastResolutionLogLenRef = useRef(0);
 
   // URL params
@@ -1211,6 +1214,9 @@ export default function BattlePage() {
   // 同 batch 内に attack_declared 以降の関連イベント (counter_used /
   // attack_resolved / defense_blocked / card_destroyed / life_damaged /
   // game_over) を順に解釈して result を確定し、scene にスナップショット。
+  // Phase 6c-bug3: runAITurn は複数攻撃 (例: leader → leader、char → leader、…)
+  // を 1 回の state 更新にまとめるため、すべての attack_declared を昇順で拾って
+  // シーン化し、resolutionQueue に追記する。display 側でキューを順次ドレイン。
   useEffect(() => {
     if (!state) {
       lastResolutionLogLenRef.current = 0;
@@ -1224,108 +1230,126 @@ export default function BattlePage() {
     const newEvents = log.slice(lastResolutionLogLenRef.current);
     lastResolutionLogLenRef.current = log.length;
 
-    let declaredIdx = -1;
-    for (let i = newEvents.length - 1; i >= 0; i--) {
-      if (newEvents[i].type === 'attack_declared') {
-        declaredIdx = i;
-        break;
-      }
+    const declaredIndexes: number[] = [];
+    for (let i = 0; i < newEvents.length; i++) {
+      if (newEvents[i].type === 'attack_declared') declaredIndexes.push(i);
     }
-    if (declaredIdx < 0) return;
+    if (declaredIndexes.length === 0) return;
 
-    const declared = newEvents[declaredIdx];
-    const declP = declared.payload as Record<string, unknown>;
+    const newScenes: AttackScene[] = [];
+    const baseKey = Date.now();
+    for (let k = 0; k < declaredIndexes.length; k++) {
+      const startIdx = declaredIndexes[k];
+      const endIdx =
+        k + 1 < declaredIndexes.length
+          ? declaredIndexes[k + 1]
+          : newEvents.length;
 
-    let triggerHappened = false;
-    let counterDeclared = false;
-    let charDestroyed = false;
-    let lifeDamaged = false;
-    let leaderDestroyed = false;
-    let success = true;
-    let counterInstanceId: string | undefined;
-    let triggerInstanceId: string | undefined;
+      const declared = newEvents[startIdx];
+      const declP = declared.payload as Record<string, unknown>;
 
-    for (let i = declaredIdx + 1; i < newEvents.length; i++) {
-      const evt = newEvents[i];
-      if (evt.type === 'attack_declared') break; // 次の attack に切り替わる
-      if (evt.type === 'counter_used') {
-        const p = evt.payload as { mode?: string; instanceId?: string };
-        if (p.mode === 'declared_on_attack' && p.instanceId) {
-          counterDeclared = true;
-          counterInstanceId = p.instanceId;
+      let triggerHappened = false;
+      let counterDeclared = false;
+      let charDestroyed = false;
+      let lifeDamaged = false;
+      let leaderDestroyed = false;
+      let success = true;
+      let counterInstanceId: string | undefined;
+      let triggerInstanceId: string | undefined;
+
+      for (let i = startIdx + 1; i < endIdx; i++) {
+        const evt = newEvents[i];
+        if (evt.type === 'counter_used') {
+          const p = evt.payload as { mode?: string; instanceId?: string };
+          if (p.mode === 'declared_on_attack' && p.instanceId) {
+            counterDeclared = true;
+            counterInstanceId = p.instanceId;
+          }
+        } else if (evt.type === 'attack_resolved') {
+          const p = evt.payload as { success?: boolean };
+          success = p.success === true;
+        } else if (evt.type === 'defense_blocked') {
+          const p = evt.payload as { instanceId?: string };
+          triggerHappened = true;
+          triggerInstanceId = p.instanceId;
+        } else if (evt.type === 'card_destroyed') {
+          const p = evt.payload as { source?: string };
+          if (p.source !== 'trigger_destroy') charDestroyed = true;
+        } else if (evt.type === 'life_damaged') {
+          lifeDamaged = true;
+        } else if (evt.type === 'game_over') {
+          const p = evt.payload as { reason?: string };
+          if (p.reason === 'leader_destroyed') leaderDestroyed = true;
         }
-      } else if (evt.type === 'attack_resolved') {
-        const p = evt.payload as { success?: boolean };
-        success = p.success === true;
-      } else if (evt.type === 'defense_blocked') {
-        const p = evt.payload as { instanceId?: string };
-        triggerHappened = true;
-        triggerInstanceId = p.instanceId;
-      } else if (evt.type === 'card_destroyed') {
-        const p = evt.payload as { source?: string };
-        if (p.source !== 'trigger_destroy') charDestroyed = true;
-      } else if (evt.type === 'life_damaged') {
-        lifeDamaged = true;
-      } else if (evt.type === 'game_over') {
-        const p = evt.payload as { reason?: string };
-        if (p.reason === 'leader_destroyed') leaderDestroyed = true;
       }
+
+      let result: AttackResultKind;
+      if (triggerHappened) result = 'trigger';
+      else if (counterDeclared && !success) result = 'counter';
+      else if (charDestroyed) result = 'destroyed';
+      else if (lifeDamaged || leaderDestroyed) result = 'hit';
+      else if (!success) result = 'blocked';
+      else result = 'hit';
+
+      const attackerSide = declP.attackerSide as PlayerSlot;
+      const attackerKind = declP.attackerKind as 'leader' | 'character';
+      const attackerInstanceId = declP.attackerInstanceId as string | undefined;
+      const attackerName = (declP.attackerName as string) ?? '?';
+      const targetSide = declP.targetSide as PlayerSlot;
+      const targetKind = declP.targetKind as 'leader' | 'character';
+      const targetInstanceId = declP.targetInstanceId as string | undefined;
+      const targetName = (declP.targetName as string) ?? '?';
+      const attackPower = (declP.attackPower as number) ?? 0;
+      const defensePower = (declP.defensePower as number) ?? 0;
+
+      const attackerCard = makeResolutionCardData(
+        state,
+        attackerSide,
+        attackerKind,
+        attackerInstanceId,
+        attackerName,
+        leaderRowMap,
+      );
+      const defenderCard = makeResolutionCardData(
+        state,
+        targetSide,
+        targetKind,
+        targetInstanceId,
+        targetName,
+        leaderRowMap,
+      );
+      const counterCard = counterInstanceId
+        ? findInstanceById(state, counterInstanceId) ?? undefined
+        : undefined;
+      const triggerCard = triggerInstanceId
+        ? findInstanceById(state, triggerInstanceId) ?? undefined
+        : undefined;
+
+      newScenes.push({
+        phase: 'A',
+        attackerCard,
+        defenderCard,
+        attackPower,
+        defensePower,
+        result,
+        counterCard,
+        triggerCard,
+        key: baseKey + k,
+      });
     }
 
-    let result: AttackResultKind;
-    if (triggerHappened) result = 'trigger';
-    else if (counterDeclared && !success) result = 'counter';
-    else if (charDestroyed) result = 'destroyed';
-    else if (lifeDamaged || leaderDestroyed) result = 'hit';
-    else if (!success) result = 'blocked';
-    else result = 'hit';
-
-    const attackerSide = declP.attackerSide as PlayerSlot;
-    const attackerKind = declP.attackerKind as 'leader' | 'character';
-    const attackerInstanceId = declP.attackerInstanceId as string | undefined;
-    const attackerName = (declP.attackerName as string) ?? '?';
-    const targetSide = declP.targetSide as PlayerSlot;
-    const targetKind = declP.targetKind as 'leader' | 'character';
-    const targetInstanceId = declP.targetInstanceId as string | undefined;
-    const targetName = (declP.targetName as string) ?? '?';
-    const attackPower = (declP.attackPower as number) ?? 0;
-    const defensePower = (declP.defensePower as number) ?? 0;
-
-    const attackerCard = makeResolutionCardData(
-      state,
-      attackerSide,
-      attackerKind,
-      attackerInstanceId,
-      attackerName,
-      leaderRowMap,
-    );
-    const defenderCard = makeResolutionCardData(
-      state,
-      targetSide,
-      targetKind,
-      targetInstanceId,
-      targetName,
-      leaderRowMap,
-    );
-    const counterCard = counterInstanceId
-      ? findInstanceById(state, counterInstanceId) ?? undefined
-      : undefined;
-    const triggerCard = triggerInstanceId
-      ? findInstanceById(state, triggerInstanceId) ?? undefined
-      : undefined;
-
-    setResolutionScene({
-      phase: 'A',
-      attackerCard,
-      defenderCard,
-      attackPower,
-      defensePower,
-      result,
-      counterCard,
-      triggerCard,
-      key: Date.now(),
-    });
+    setResolutionQueue((prev) => [...prev, ...newScenes]);
   }, [state, leaderRowMap]);
+
+  // Phase 6c-bug3: キュードレイン — 表示中シーンが無くキューが空でなければ次を取り出す。
+  // 既存の Phase A→B / クリアタイマー (下) が scene を null に戻したタイミングで
+  // この effect が再走し、次の attack シーンを順次再生する。
+  useEffect(() => {
+    if (resolutionScene) return;
+    if (resolutionQueue.length === 0) return;
+    setResolutionScene(resolutionQueue[0]);
+    setResolutionQueue((prev) => prev.slice(1));
+  }, [resolutionScene, resolutionQueue]);
 
   // Phase 6c-5: 800ms で Phase A → B、2200ms で消去。
   // resolutionScene.key を依存にして、新 attack 到来で必ず両 timer をリセットする。
