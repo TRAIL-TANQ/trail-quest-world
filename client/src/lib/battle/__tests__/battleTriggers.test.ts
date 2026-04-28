@@ -370,6 +370,143 @@ describe('trigger: defense', () => {
 });
 
 // ============================================================================
+// Phase 6c-bug1: defense トリガー rotation — 永続発動防止
+// ============================================================================
+//
+// 真因: 旧実装では defense トリガー発動後も lifeCards[0] が同じ card_cross の
+// まま残り続け、攻撃の度に再発動 → 防御値が永続上昇したように見える症状。
+// 修正: 発動したライフカードを一番下に rotate する。length / leader.life は
+// 不変、上の既存テスト (toHaveLength(3) / hand 0 / life 3) は維持される。
+// ============================================================================
+
+describe('Phase 6c-bug1: defense trigger rotation', () => {
+  it('1回目の defense 発動後、lifeCards top が別カード (元の 2 枚目) に変わる', () => {
+    const { state, attackerInstanceId, topLifeCardId } = setupLeaderAttackState({
+      triggerType: 'defense',
+    });
+    // setup: lifeCards = [p2_life_0(defense), p2_life_1(null), p2_life_2(null)]
+
+    const result = applyAction(state, makeAttackAction(attackerInstanceId));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const p2After = result.newState.players.p2;
+    // 既存仕様維持: 枚数 / 手札 / life は不変
+    expect(p2After.lifeCards).toHaveLength(3);
+    expect(p2After.hand).toHaveLength(0);
+    expect(p2After.leader.life).toBe(3);
+
+    // 新仕様: top は元の 2 枚目 (p2_life_1) に変わり、defense カードは bottom へ
+    expect(p2After.lifeCards[0].cardId).toBe('p2_life_1');
+    expect(p2After.lifeCards[1].cardId).toBe('p2_life_2');
+    expect(p2After.lifeCards[2].cardId).toBe(topLifeCardId); // 'p2_life_0'
+  });
+
+  it('2回連続の攻撃で 2回目は別カードが top のため通常消費 → lifeCards 2 / hand 1', () => {
+    const { state, attackerInstanceId, topLifeCardId } = setupLeaderAttackState({
+      triggerType: 'defense',
+    });
+
+    // 1回目: defense → rotate
+    const result1 = applyAction(state, makeAttackAction(attackerInstanceId));
+    expect(result1.ok).toBe(true);
+    if (!result1.ok) return;
+
+    // アタッカーをアンレストして再攻撃可能状態にする (rest はテスト目的なので直接書き換え)
+    const stateAfter1 = result1.newState;
+    const refreshedAttacker = {
+      ...stateAfter1,
+      players: {
+        ...stateAfter1.players,
+        p1: {
+          ...stateAfter1.players.p1,
+          board: stateAfter1.players.p1.board.map((s) => ({
+            ...s,
+            isRested: false,
+            canAttackThisTurn: true,
+          })),
+        },
+      },
+    };
+
+    // 2回目: top は p2_life_1 (triggerType=null) なので通常消費
+    const result2 = applyAction(refreshedAttacker, makeAttackAction(attackerInstanceId));
+    expect(result2.ok).toBe(true);
+    if (!result2.ok) return;
+
+    const p2After2 = result2.newState.players.p2;
+    expect(p2After2.lifeCards).toHaveLength(2);
+    expect(p2After2.hand).toHaveLength(1);
+    expect(p2After2.hand[0].cardId).toBe('p2_life_1');
+    // bottom に rotate された defense カード (元 top) は健在
+    expect(p2After2.lifeCards.map((c) => c.cardId)).toContain(topLifeCardId);
+
+    const types2 = result2.events.map((e) => e.type);
+    expect(types2).toContain('life_damaged');
+    expect(types2).not.toContain('defense_blocked'); // 2 回目は trigger 発動しない
+  });
+
+  it('lifeCards 全カードが defense の場合、3 回攻撃で枚数は 3 のまま (1 周 rotate)', () => {
+    // 既存ヘルパは top のみに trigger を仕込むので、ここは手動セットアップ
+    const p1Leader = makeLeader('l_p1', { attackPower: 5 });
+    const p2Leader = makeLeader('l_p2', { defensePower: 3 });
+    const attacker = makeCard('c_att', { attackPower: 9 });
+    const allDefenseLife = [
+      makeCard('def_a', { triggerType: 'defense' }),
+      makeCard('def_b', { triggerType: 'defense' }),
+      makeCard('def_c', { triggerType: 'defense' }),
+    ];
+
+    let s = makeState({
+      turn: 3,
+      activePlayer: 'p1',
+      phase: 'main',
+      players: {
+        p1: makeEmptyPlayer('u1', p1Leader, {
+          board: [
+            { card: attacker, isRested: false, canAttackThisTurn: true, playedTurn: 2 },
+          ],
+          hasDrawnThisTurn: true,
+        }),
+        p2: makeEmptyPlayer('ai', p2Leader, { lifeCards: allDefenseLife }),
+      },
+    });
+
+    const expectedTops = ['def_a', 'def_b', 'def_c']; // 各攻撃時の top
+    for (let i = 0; i < 3; i++) {
+      expect(s.players.p2.lifeCards[0].cardId).toBe(expectedTops[i]);
+      const r = applyAction(s, makeAttackAction(attacker.instanceId));
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+
+      // 既存仕様: 枚数 / 手札 / life は不変
+      expect(r.newState.players.p2.lifeCards).toHaveLength(3);
+      expect(r.newState.players.p2.hand).toHaveLength(0);
+      expect(r.newState.players.p2.leader.life).toBe(3);
+
+      // アタッカーをアンレストして次の攻撃へ
+      s = {
+        ...r.newState,
+        players: {
+          ...r.newState.players,
+          p1: {
+            ...r.newState.players.p1,
+            board: r.newState.players.p1.board.map((sl) => ({
+              ...sl,
+              isRested: false,
+              canAttackThisTurn: true,
+            })),
+          },
+        },
+      };
+    }
+
+    // 3 回 rotate 後は元の順序に戻っている
+    expect(s.players.p2.lifeCards.map((c) => c.cardId)).toEqual(['def_a', 'def_b', 'def_c']);
+  });
+});
+
+// ============================================================================
 // シナリオ 5: revive トリガー — 墓地から 1 枚を手札へ
 // ============================================================================
 

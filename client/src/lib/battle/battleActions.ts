@@ -99,11 +99,15 @@ function commit(
 /**
  * ライフトリガーの効果適用結果。
  * blocksAttack=true の時のみ、呼び出し側はシールド消費 / 手札移動を行わない。
+ *
+ * Phase 6c-bug1: rotateLifeCard=true の時、呼び出し側は lifeCards top を
+ * 一番下に rotate する (defense トリガーの永続発動を防止)。length は維持。
  */
 interface TriggerResult {
   state: BattleState;
   events: BattleEvent[];
   blocksAttack: boolean;
+  rotateLifeCard?: boolean;
 }
 
 /**
@@ -224,9 +228,13 @@ function applyTriggerEffect(
         makeEvent('defense_blocked', state.turn, defenderSide, {
           cardId: triggeringCard.cardId,
           instanceId: triggeringCard.instanceId,
+          rotatedToBottom: true,
         }),
       );
-      return { state, events, blocksAttack: true };
+      // Phase 6c-bug1: 攻撃を無効化した上で、当該ライフカードを一番下に
+      // rotate するよう呼び出し側に指示。これがないと top に居座り続けて
+      // 毎ターン攻撃を無限ブロックしてしまう (kk 実機観察、容疑3 真因)。
+      return { state, events, blocksAttack: true, rotateLifeCard: true };
     }
 
     case 'revive': {
@@ -2137,9 +2145,35 @@ function applyAttack(state: BattleState, action: AttackAction): ActionResult {
 
     if (triggerResult.blocksAttack) {
       // defense: シールド消費ゼロ、完全無効化。手札にも移動しない。
-      console.log('[applyAttack] defense trigger blocked the attack', {
-        cardId: topLife.cardId,
-      });
+      // Phase 6c-bug1: 同じカードが top に居座って毎攻撃で再発動するのを防ぐため、
+      // rotateLifeCard=true なら当該ライフカードを一番下へ rotate する。
+      // length / leader.life は変えない (既存テストの toHaveLength(3) を維持)。
+      if (triggerResult.rotateLifeCard) {
+        const defenderForRotate = nextState.players[defenderSide];
+        const [topCard, ...restLife] = defenderForRotate.lifeCards;
+        if (topCard) {
+          const rotatedLife = [...restLife, topCard];
+          nextState = {
+            ...nextState,
+            players: {
+              ...nextState.players,
+              [defenderSide]: {
+                ...defenderForRotate,
+                lifeCards: rotatedLife,
+              },
+            },
+          };
+          console.log('[applyAttack] defense trigger rotated life card to bottom', {
+            blockedCardId: topCard.cardId,
+            newTopCardId: rotatedLife[0]?.cardId ?? null,
+            lifeCount: rotatedLife.length,
+          });
+        }
+      } else {
+        console.log('[applyAttack] defense trigger blocked the attack', {
+          cardId: topLife.cardId,
+        });
+      }
       const finalState = commit(nextState, state.log, events);
       return { ok: true, newState: finalState, events };
     }
